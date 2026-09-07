@@ -10,6 +10,7 @@ import type {
 	ChartBundle,
 	ChartBundleCore,
 	GlobalSlice,
+	RecordsBundle,
 	UserScope,
 } from "$lib/stats/types";
 
@@ -1031,6 +1032,22 @@ export const cloudApi = {
 		return res.json() as Promise<ChartBundle>;
 	},
 
+	// The same corpus's record boards, off the bundle: the Records tab fetches
+	// them when it opens rather than every stats load paying for rows only that
+	// tab reads. Same scope selection as the bundle above, and the Worker
+	// answers both from one build, so this is a cache read in the steady state.
+	getUserRecords: async (
+		userId: string,
+		opts?: CallOpts & { scope?: UserScope },
+	): Promise<RecordsBundle> => {
+		const qs =
+			opts?.scope != null && opts.scope !== "all"
+				? `?scope=${encodeURIComponent(String(opts.scope))}`
+				: "";
+		const res = await request(`/users/${userId}/stats/records${qs}`, opts);
+		return res.json() as Promise<RecordsBundle>;
+	},
+
 	// Aggregate ChartBundleCore over the whole public corpus — feeds /stats.
 	// Session-gated — 401 without one, which is why this goes through the
 	// credentialed `request` rather than a bare fetch. The payload is still the
@@ -1052,6 +1069,23 @@ export const cloudApi = {
 		const qs = params.toString();
 		const res = await request(`/stats${qs ? `?${qs}` : ""}`, opts);
 		return res.json() as Promise<ChartBundleCore>;
+	},
+
+	// The same selection's record boards, fetched when /stats' Records tab
+	// opens. The selection is spelled exactly as getGlobalStats spells it — the
+	// two share a cache key on the Worker, so a divergence here would be a
+	// second spelling of one entry.
+	getGlobalRecords: async (
+		opts?: CallOpts & { slice?: GlobalSlice; nation?: string | null },
+	): Promise<RecordsBundle> => {
+		const params = new URLSearchParams();
+		if (opts?.slice != null && opts.slice !== DEFAULT_GLOBAL_SLICE) {
+			params.set("slice", opts.slice);
+		}
+		if (opts?.nation) params.set("nation", opts.nation);
+		const qs = params.toString();
+		const res = await request(`/stats/records${qs ? `?${qs}` : ""}`, opts);
+		return res.json() as Promise<RecordsBundle>;
 	},
 
 	// Anonymous discovery feed for the marketing home (/). Returns the 20
@@ -1155,6 +1189,19 @@ export const cloudApi = {
 	): Promise<ChartBundleCore> => {
 		const res = await request(`/tournaments/${tournamentId}/stats/games`, opts);
 		return res.json() as Promise<ChartBundleCore>;
+	},
+
+	// The record boards over the same games, fetched when the tournament stats
+	// page's Records tab opens.
+	getTournamentRecords: async (
+		tournamentId: string,
+		opts?: CallOpts,
+	): Promise<RecordsBundle> => {
+		const res = await request(
+			`/tournaments/${tournamentId}/stats/records`,
+			opts,
+		);
+		return res.json() as Promise<RecordsBundle>;
 	},
 
 	// Admin-only CSV export — returns a zip Blob (standings.csv + matches.csv).

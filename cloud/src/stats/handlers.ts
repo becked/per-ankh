@@ -1,9 +1,16 @@
 // HTTP handlers for the stats endpoints.
 //
 //   GET /v1/users/:user_id/stats           — user corpus
+//   GET /v1/users/:user_id/stats/records   — user corpus, record boards
 //   GET /v1/stats                          — global (public) corpus
+//   GET /v1/stats/records                  — global corpus, record boards
 //
-// Resolve corpus → check cache → compute on miss → return bundle.
+// Resolve corpus → check cache → compute on miss → return the payload.
+//
+// Each corpus carries two payloads built in one pass and cached under two keys
+// (stats/cache.ts). The records are their own endpoint because they are
+// ~60-70 KB gzipped on a 154 KB bundle and only the Records tab reads them, so
+// a surface pays for them when that tab opens rather than on every load.
 
 import { CURRENT_PARSER_VERSION } from "../schemas/game";
 import { sessionFromRequest } from "../session";
@@ -19,10 +26,16 @@ import type { ReadBudget } from "../read-budget";
 import { logError } from "../log";
 import { buildChartBundle } from "./aggregate";
 import { getCached, getStaleGlobalCached, putCached } from "./cache";
+import type { StatsPayload } from "./cache";
 import { buildGlobalSelection } from "./precompute";
 import type { PrecomputeEnv } from "./precompute";
 import { resolveGlobalCorpus, resolveUserCorpus } from "./resolve";
-import type { ChartBundle, ChartBundleCore, UserStatsScope } from "./types";
+import type {
+	ChartBundle,
+	ChartBundleCore,
+	RecordsBundle,
+	UserStatsScope,
+} from "./types";
 import type { EventsEnv, QueryableD1 } from "../d1";
 
 export interface UserStatsEnv extends SessionEnv {
@@ -39,10 +52,20 @@ export interface GlobalStatsEnv extends PrecomputeEnv, EventsEnv {
 	GLOBAL_STATS_VIEW_PER_HOUR?: string;
 }
 
-export async function handleUserStats(
+// The user corpus answers two payloads at two endpoints — the chart bundle and
+// the records — off one preamble. Same id validation, same viewer scope, same
+// scope param, same cache key: a change to who may see which games has to land
+// on both, and here it can only land once.
+//
+// A miss on either payload builds both and writes both, because they come out
+// of one pass over the corpus (buildChartBundle). Answering only the payload
+// that missed would mean querying the same library twice to fill two keys that
+// were built together.
+async function handleUserStatsPayload(
 	userId: string,
 	request: Request,
 	env: UserStatsEnv,
+	payload: StatsPayload,
 ): Promise<Response> {
 	const cors = cloudCorsHeaders(env, request);
 
@@ -64,7 +87,11 @@ export async function handleUserStats(
 		scope,
 		parser_version: CURRENT_PARSER_VERSION,
 	};
-	const cached = await getCached<ChartBundle>(env, cacheKey);
+	const cached = await getCached<ChartBundle | RecordsBundle>(
+		env,
+		cacheKey,
+		payload,
+	);
 	if (cached) {
 		return jsonResponse(
 			cached as unknown as Record<string, unknown>,
@@ -78,14 +105,35 @@ export async function handleUserStats(
 		return errorResponse("User not found", 404, cors, "NOT_FOUND");
 	}
 
-	const bundle = await buildChartBundle(
+	const built = await buildChartBundle(
 		env,
 		corpus,
 		CURRENT_PARSER_VERSION,
 		"uploader",
 	);
-	await putCached(env, cacheKey, bundle);
-	return jsonResponse(bundle as unknown as Record<string, unknown>, 200, cors);
+	await putCached(env, cacheKey, built.bundle);
+	await putCached(env, cacheKey, built.records, "records");
+	const body = payload === "records" ? built.records : built.bundle;
+	return jsonResponse(body as unknown as Record<string, unknown>, 200, cors);
+}
+
+// GET /v1/users/:user_id/stats — the chart bundle over one user's library.
+export function handleUserStats(
+	userId: string,
+	request: Request,
+	env: UserStatsEnv,
+): Promise<Response> {
+	return handleUserStatsPayload(userId, request, env, "bundle");
+}
+
+// GET /v1/users/:user_id/stats/records — the same corpus's record boards, off
+// the bundle so the profile only pays for them when the Records tab opens.
+export function handleUserRecords(
+	userId: string,
+	request: Request,
+	env: UserStatsEnv,
+): Promise<Response> {
+	return handleUserStatsPayload(userId, request, env, "records");
 }
 
 // ---------- GET /v1/stats — the global corpus ----------
@@ -141,10 +189,10 @@ const GLOBAL_STATS_BUDGET: ReadBudget = {
 // for a single-flight lock, which the design defers until they measurably
 // don't.
 function globalStatsResponse(
-	bundle: ChartBundleCore,
+	body: ChartBundleCore | RecordsBundle,
 	cors: Record<string, string>,
 ): Response {
-	return new Response(JSON.stringify(bundle), {
+	return new Response(JSON.stringify(body), {
 		status: 200,
 		headers: {
 			"Content-Type": "application/json",
@@ -199,10 +247,18 @@ function globalStatsResponse(
 //
 // Step 2 is skipped where the selection resolves to no games — see the
 // resolve below.
-export async function handleGlobalStats(
+//
+// Both payloads are answered here, off one preamble: the session gate, the
+// budget, the selection parsing and the three-step lookup are the same
+// question for the bundle and for the records, and the records key is the
+// bundle's with a payload segment. A miss on either builds both — one pass
+// over the corpus — and writes both, which is also what makes the nightly
+// precompute and the hourly warm warm the records for free.
+async function handleGlobalStatsPayload(
 	request: Request,
 	env: GlobalStatsEnv,
 	ctx: ExecutionContext,
+	payload: StatsPayload,
 ): Promise<Response> {
 	const cors = cloudCorsHeaders(env, request);
 
@@ -234,7 +290,11 @@ export async function handleGlobalStats(
 		nations,
 		parser_version: CURRENT_PARSER_VERSION,
 	};
-	const cached = await getCached<ChartBundleCore>(env, cacheKey);
+	const cached = await getCached<ChartBundleCore | RecordsBundle>(
+		env,
+		cacheKey,
+		payload,
+	);
 	if (cached) return globalStatsResponse(cached, cors);
 
 	// Resolve before reaching for a stale entry, so a selection with no games
@@ -257,12 +317,18 @@ export async function handleGlobalStats(
 	const corpus = await resolveGlobalCorpus(env, slice, { nations });
 	const build = () =>
 		buildGlobalSelection(env, slice, nations, CURRENT_PARSER_VERSION, corpus);
+	const pick = (built: { bundle: ChartBundleCore; records: RecordsBundle }) =>
+		payload === "records" ? built.records : built.bundle;
 
 	if (corpus.gameIds.length === 0) {
-		return globalStatsResponse(await build(), cors);
+		return globalStatsResponse(pick(await build()), cors);
 	}
 
-	const stale = await getStaleGlobalCached<ChartBundleCore>(env, cacheKey);
+	const stale = await getStaleGlobalCached<ChartBundleCore | RecordsBundle>(
+		env,
+		cacheKey,
+		payload,
+	);
 	if (stale) {
 		ctx.waitUntil(
 			build().catch((e: unknown) => {
@@ -278,5 +344,27 @@ export async function handleGlobalStats(
 		return globalStatsResponse(stale, cors);
 	}
 
-	return globalStatsResponse(await build(), cors);
+	return globalStatsResponse(pick(await build()), cors);
+}
+
+// GET /v1/stats — the chart bundle over the whole public corpus.
+export function handleGlobalStats(
+	request: Request,
+	env: GlobalStatsEnv,
+	ctx: ExecutionContext,
+): Promise<Response> {
+	return handleGlobalStatsPayload(request, env, ctx, "bundle");
+}
+
+// GET /v1/stats/records — the same selection's record boards, fetched when the
+// Records tab opens. Spends the same per-IP budget as its bundle sibling: it is
+// the same corpus, the same cost to compute on a miss, and the same surface
+// asking, so a separate ceiling would only let one of the two page's reads
+// starve the other.
+export function handleGlobalRecords(
+	request: Request,
+	env: GlobalStatsEnv,
+	ctx: ExecutionContext,
+): Promise<Response> {
+	return handleGlobalStatsPayload(request, env, ctx, "records");
 }

@@ -11,6 +11,7 @@
 	import { page } from "$app/state";
 	import ChartContainer from "$lib/ChartContainer.svelte";
 	import YieldsStatsPanel from "./YieldsStatsPanel.svelte";
+	import RecordsPanel from "./RecordsPanel.svelte";
 	import FamilyStatsPanel from "./FamilyStatsPanel.svelte";
 	import LawsStatsPanel from "./LawsStatsPanel.svelte";
 	import TechStatsPanel from "./TechStatsPanel.svelte";
@@ -26,7 +27,7 @@
 	} from "./charts/leaders";
 	import { wonderOverviewOption } from "./charts/wonders";
 	import { expansionWinRateOption } from "./charts/cities";
-	import type { ChartBundleCore, StatsCategory } from "./types";
+	import type { ChartBundleCore, RecordsBundle, StatsCategory } from "./types";
 
 	// showNationSelect — whether the per-nation panels (Families, Laws, Tech)
 	// carry their own nation dropdown. /stats passes false: that page has a
@@ -41,12 +42,20 @@
 	// has a seat per human player ("Players"), where a one-duel corpus counts 2.
 	// Forwarded to YieldsStatsPanel, which is where the tournament stats page
 	// passes its own.
+	//
+	// loadRecords — the Records tab's own fetch, since its payload is not in the
+	// bundle. The caller owns it because only the caller knows which corpus it
+	// is looking at (a slice + nation on /stats, a user + scope on the profile).
+	// Build it with $derived.by reading that selection eagerly, so a change
+	// hands the panel a new closure and it refetches.
 	let {
 		bundle,
+		loadRecords,
 		showNationSelect = true,
 		countLabel,
 	}: {
 		bundle: ChartBundleCore;
+		loadRecords: () => Promise<RecordsBundle>;
 		showNationSelect?: boolean;
 		countLabel?: string;
 	} = $props();
@@ -63,11 +72,20 @@
 		}
 		return map;
 	})();
+	// A category earns its tab by having charts, except Records — one bespoke
+	// panel with no specs of its own, so it is listed unconditionally.
+	//
+	// Unconditional and not data-gated: its payload is no longer in the bundle
+	// (it is fetched when the tab opens), so there is nothing here to count, and
+	// asking the Worker up front just to decide whether to draw a tab would
+	// spend the read the split exists to avoid. Yields is already the same
+	// bargain — its tab shows over an empty corpus and the panel says so — and
+	// RecordsPanel carries the matching empty state.
 	const sections = CATEGORIES.map((c) => ({
 		id: c.id,
 		label: c.label,
 		specs: SPEC_GROUPS.get(c.id) ?? [],
-	})).filter((s) => s.specs.length > 0);
+	})).filter((s) => s.specs.length > 0 || s.id === "records");
 
 	const validIds = new Set(sections.map((s) => s.id));
 	const activeCategory = $derived.by<StatsCategory>(() => {
@@ -152,6 +170,13 @@
 		<Tabs.Content value={section.id} class="px-4 pb-4">
 			{#if section.id === "yields"}
 				<YieldsStatsPanel {bundle} {countLabel} toolbarFlush />
+			{:else if section.id === "records"}
+				<RecordsPanel
+					load={loadRecords}
+					active={activeCategory === "records"}
+					{countLabel}
+					toolbarFlush
+				/>
 			{:else if section.id === "families"}
 				<FamilyStatsPanel {bundle} {showNationSelect} toolbarFlush />
 			{:else if section.id === "laws"}

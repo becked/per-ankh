@@ -12,12 +12,25 @@
 
 	import { navigating } from "$app/state";
 	import { autohideScroll } from "$lib/actions/autohideScroll";
+	import { cloudApi } from "$lib/api-cloud";
 	import GlobalFacetRow from "$lib/stats/GlobalFacetRow.svelte";
 	import { parseGlobalSlice, parseNationFacet } from "$lib/stats/global-facets";
 	import StatsView from "$lib/stats/StatsView.svelte";
 	import type { PageData } from "./$types";
 
 	let { data }: { data: PageData } = $props();
+
+	// The Records tab's own fetch — its payload is not in the bundle, so it is
+	// spent when that tab opens rather than on every load of this page.
+	//
+	// $derived.by reading the selection *eagerly*: that is what gives this a
+	// dependency on the facet row. An arrow that read data.slice when called
+	// would be a closure this page never rebuilds, and the panel would keep
+	// showing the records of the slice you arrived on.
+	const loadRecords = $derived.by(() => {
+		const { slice, nation } = data;
+		return () => cloudApi.getGlobalRecords({ slice, nation });
+	});
 
 	// Not displayed — this is the empty-state gate. A selection narrows the
 	// games as well as the focal seats, so a facet the corpus has no game for
@@ -75,6 +88,7 @@
 						     per-nation panels drop their own. -->
 						<StatsView
 							bundle={data.bundle}
+							{loadRecords}
 							showNationSelect={false}
 							countLabel="Players"
 						/>

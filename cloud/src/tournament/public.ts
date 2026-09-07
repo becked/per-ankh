@@ -57,8 +57,9 @@ import {
 import { CURRENT_PARSER_VERSION } from "../schemas/game";
 import { buildChartBundle, chunk, CHUNK_SIZE } from "../stats/aggregate";
 import { getCached, putCached } from "../stats/cache";
+import type { StatsPayload } from "../stats/cache";
 import { resolveTournamentCorpus } from "../stats/resolve";
-import type { ChartBundleCore } from "../stats/types";
+import type { ChartBundleCore, RecordsBundle } from "../stats/types";
 import { getVideosCached } from "../video/cache";
 import {
 	dedupeById,
@@ -1226,14 +1227,21 @@ export async function handleTournamentStats(
 	return jsonResponse(body, 200, cors);
 }
 
-// GET /v1/tournaments/:id/stats/games — Plane B1 ChartBundleCore over the
-// tournament's completed-match saves. Cached (KV, keyed on tournament_id +
-// updated_at); pinned to CURRENT_PARSER_VERSION like handleUserStats. The
-// "humans" focal widens the aggregator to every human player.
-export async function handleTournamentGamesStats(
+// Plane B1 over the tournament's completed-match saves, in two payloads at two
+// endpoints: the ChartBundleCore and the record boards. One preamble, because
+// the viewability gate, the budget and the cache key are the same question for
+// both — and a miss on either builds both (one pass over the corpus) and writes
+// both, so opening the Records tab costs a KV read rather than a second
+// aggregation.
+//
+// Cached (KV, keyed on tournament_id + updated_at); pinned to
+// CURRENT_PARSER_VERSION like handleUserStats. The "humans" focal widens the
+// aggregator to every human player.
+async function handleTournamentGamesPayload(
 	tournamentId: string,
 	request: Request,
 	env: TournamentPublicEnv,
+	payload: StatsPayload,
 ): Promise<Response> {
 	const cors = cloudCorsHeaders(env, request);
 	const session = await sessionFromRequest(env, request);
@@ -1252,7 +1260,11 @@ export async function handleTournamentGamesStats(
 		updated_at: tournament.updated_at,
 		parser_version: CURRENT_PARSER_VERSION,
 	};
-	const cached = await getCached<ChartBundleCore>(env, cacheKey);
+	const cached = await getCached<ChartBundleCore | RecordsBundle>(
+		env,
+		cacheKey,
+		payload,
+	);
 	if (cached) {
 		return jsonResponse(
 			cached as unknown as Record<string, unknown>,
@@ -1262,14 +1274,37 @@ export async function handleTournamentGamesStats(
 	}
 
 	const corpus = await resolveTournamentCorpus(env, tournament.tournament_id);
-	const bundle = await buildChartBundle(
+	const built = await buildChartBundle(
 		env,
 		corpus,
 		CURRENT_PARSER_VERSION,
 		"humans",
 	);
-	await putCached(env, cacheKey, bundle);
-	return jsonResponse(bundle as unknown as Record<string, unknown>, 200, cors);
+	await putCached(env, cacheKey, built.bundle);
+	await putCached(env, cacheKey, built.records, "records");
+	const body = payload === "records" ? built.records : built.bundle;
+	return jsonResponse(body as unknown as Record<string, unknown>, 200, cors);
+}
+
+// GET /v1/tournaments/:id/stats/games — the chart bundle over the tournament's
+// games.
+export function handleTournamentGamesStats(
+	tournamentId: string,
+	request: Request,
+	env: TournamentPublicEnv,
+): Promise<Response> {
+	return handleTournamentGamesPayload(tournamentId, request, env, "bundle");
+}
+
+// GET /v1/tournaments/:id/stats/records — the same games' record boards, off
+// the bundle so the tournament stats page only pays for them when the Records
+// tab opens.
+export function handleTournamentGamesRecords(
+	tournamentId: string,
+	request: Request,
+	env: TournamentPublicEnv,
+): Promise<Response> {
+	return handleTournamentGamesPayload(tournamentId, request, env, "records");
 }
 
 export async function handleTournamentBracket(

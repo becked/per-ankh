@@ -67,6 +67,7 @@ import {
 	handleGameTournamentLink,
 	handleTournamentBracket,
 	handleTournamentDetail,
+	handleTournamentGamesRecords,
 	handleTournamentGamesStats,
 	handleTournamentList,
 	handleTournamentMatchDetail,
@@ -89,7 +90,12 @@ import {
 	handleTournamentWithdraw,
 	handleUncastMatchPart,
 } from "./tournament/player";
-import { handleGlobalStats, handleUserStats } from "./stats/handlers";
+import {
+	handleGlobalRecords,
+	handleGlobalStats,
+	handleUserRecords,
+	handleUserStats,
+} from "./stats/handlers";
 import type { GlobalStatsEnv } from "./stats/handlers";
 import {
 	STATS_PRECOMPUTE_CRONS,
@@ -517,6 +523,19 @@ const ROUTES: RouteSpec[] = [
 		route: "GET /v1/tournaments/:id/stats/games",
 		handler: (r, e, m) => handleTournamentGamesStats(m![1], r, e),
 	},
+	// The record boards over the same games — its own read, spent when the
+	// stats page's Records tab opens rather than on every render, because the
+	// rows are ~60-70 KB gzipped that only that tab uses. Same preamble, same
+	// gates and the same `tournament_view` budget as its bundle sibling above.
+	{
+		method: "GET",
+		match: {
+			kind: "regex",
+			regex: /^\/v1\/tournaments\/([A-Za-z0-9_-]{21})\/stats\/records$/,
+		},
+		route: "GET /v1/tournaments/:id/stats/records",
+		handler: (r, e, m) => handleTournamentGamesRecords(m![1], r, e),
+	},
 	{
 		method: "GET",
 		match: {
@@ -861,7 +880,7 @@ const ROUTES: RouteSpec[] = [
 		},
 		route: "GET /v1/users/:user_id/stats",
 		handler: (r, e, m) => handleUserStats(m![1], r, e),
-		// The one route with no D1 write anywhere in its call graph:
+		// One of two routes with no D1 write anywhere in its call graph:
 		// stats/resolve.ts and stats/aggregate.ts are SELECT-only and the
 		// bundle cache lives in KV (stats/cache.ts), not D1. Its 11 query
 		// sites all ride the one session: two sequential in resolveUserCorpus,
@@ -869,6 +888,21 @@ const ROUTES: RouteSpec[] = [
 		// itself two). The KV cache is a reason for care rather than
 		// comfort: a bundle is stored for 24h, so whatever this route reads is
 		// served for a day, which is why the session anchors first-primary.
+		staleTolerant: true,
+	},
+	// The record boards over the same corpus — the profile's Records tab, which
+	// fetches when it opens rather than riding the bundle every load. Same
+	// handler preamble, same visibility rules, and on a miss the same one build
+	// that fills both cache keys — so it is the same SELECT-only call graph and
+	// carries the same flag.
+	{
+		method: "GET",
+		match: {
+			kind: "regex",
+			regex: /^\/v1\/users\/([A-Za-z0-9_-]{21})\/stats\/records$/,
+		},
+		route: "GET /v1/users/:user_id/stats/records",
+		handler: (r, e, m) => handleUserRecords(m![1], r, e),
 		staleTolerant: true,
 	},
 	// Public recent videos merged across the user's linked channels — feeds
@@ -910,6 +944,17 @@ const ROUTES: RouteSpec[] = [
 		match: { kind: "path", path: "/v1/stats" },
 		route: "GET /v1/stats",
 		handler: (r, e, _m, c) => handleGlobalStats(r, e, c),
+	},
+	// The record boards over the same selection. Everything above applies —
+	// same gate, same `global_stats_view` budget, same ?slice= / ?nation=, same
+	// serve-stale — because it is the same corpus answered from a second cache
+	// key. Its own read so /stats pays for the rows when the Records tab opens
+	// instead of on every page load.
+	{
+		method: "GET",
+		match: { kind: "path", path: "/v1/stats/records" },
+		route: "GET /v1/stats/records",
+		handler: (r, e, _m, c) => handleGlobalRecords(r, e, c),
 	},
 	// Cross-creator home feed — newest uploads across all users' linked
 	// channels, merged newest-first for the home page's "Latest from creators"

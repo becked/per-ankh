@@ -87,17 +87,17 @@ Counters live in the D1 `events` table and are keyed per-user, per-IP, or global
 Two things shape what "per IP" means for traffic that arrives through `per-ankh.app`'s server-side rendering, since those subrequests leave Cloudflare's SSR egress rather than the visitor's connection:
 
 - **The visitor is the bucket.** The frontend Worker forwards the visitor's edge address and authenticates itself with the `SSR_TRUSTED_KEY` shared secret; `adoptTrustedFrontend` (`cloud/src/util.ts`) verifies it once at the Worker's entry and swaps the address in before any handler reads it. Without a valid key those headers are stripped, so a caller can't claim an address it doesn't have — and with the secret unset on either Worker, nothing is forwarded and every counter behaves as it did before. The address is all that travels: the visitor's User-Agent is deliberately **not** forwarded, because it would extend the scraper exemption below to anyone who types `Discordbot/2.0` into a header.
-- **The address is the only thing the key buys.** Every read is gated and charged the same for every caller — there is no cheaper class of read and no discount for being our own SSR Worker. A cold `/tournaments/[slug]` costs four slots (the tournament, then standings, bracket and matches) whether it was server-rendered or reached by a hydrated navigation, and the stats page costs six. That is why the ceilings below are stated in **reads**, and why the tournament-page one is four times the others: converting to page loads is the operator's job, and the fan-out is the conversion factor.
+- **The address is the only thing the key buys.** Every read is gated and charged the same for every caller — there is no cheaper class of read and no discount for being our own SSR Worker. A cold `/tournaments/[slug]` costs four slots (the tournament, then standings, bracket and matches) whether it was server-rendered or reached by a hydrated navigation, and the stats page costs six, or seven once its Records tab is opened. That is why the ceilings below are stated in **reads**, and why the tournament-page one is four times the others: converting to page loads is the operator's job, and the fan-out is the conversion factor.
 
 The three tournament read buckets are split by the *surface that spends them*, not by feature: a read a busy page makes on every render must not share a budget with the pages it could otherwise take down (see `cloud/src/tournament/limits.ts`).
 
 | Bucket | Limit | Applies to |
 | --- | --- | --- |
 | `anon_read` | 200 / hr per IP | anonymous game reads (`GET /v1/games/:id`, `public-recent`) |
-| `tournament_view` | 2400 reads / hr per IP | the tournament page reads: detail, standings, bracket, rounds, matches, match detail, both stats endpoints, and the profile Tournaments tab. ~4 reads per page load (6 on stats), so ~600 page loads an hour. The ceiling is the `TOURNAMENT_VIEW_PER_HOUR` var, so it can be retuned mid-event with `wrangler secret put` instead of a redeploy — until the next deploy restores the `wrangler.toml` value |
+| `tournament_view` | 2400 reads / hr per IP | the tournament page reads: detail, standings, bracket, rounds, matches, match detail, all three stats endpoints, and the profile Tournaments tab. ~4 reads per page load (6 on stats, 7 with the Records tab open), so ~600 page loads an hour. The ceiling is the `TOURNAMENT_VIEW_PER_HOUR` var, so it can be retuned mid-event with `wrangler secret put` instead of a redeploy — until the next deploy restores the `wrangler.toml` value |
 | `tournament_list_view` | 600 reads / hr per IP | `GET /v1/tournaments`. Its own budget, not `tournament_view`'s: the **home page** fetches the list on every render, so sharing would let ordinary landing-page traffic decide when `/tournaments/[slug]` starts refusing. Own ceiling var (`TOURNAMENT_LIST_VIEW_PER_HOUR`), retuned the same way |
 | `tournament_link_view` | 600 reads / hr per IP | `GET /v1/games/:id/tournament-link`. Its own budget for the same reason: every game-page render calls it, and sharing let a `/games/*` crawl 429 the tournament pages. Own ceiling var too (`TOURNAMENT_LINK_VIEW_PER_HOUR`) |
-| `global_stats_view` | 600 reads / hr per IP | `GET /v1/stats`. Per IP even though the endpoint requires a session, matching the other read budgets — the session is the door, this is the throughput. Its own budget rather than a share of `anon_read`: the two never overlap now that `/stats` is signed-in only, and pooling them would still tie `/stats`'s abuse ceiling to the cold-start ceiling, two knobs that want to move independently. One read per page load, so 600 is 600 page loads an hour. Own ceiling var (`GLOBAL_STATS_VIEW_PER_HOUR`), retuned like the tournament ones |
+| `global_stats_view` | 600 reads / hr per IP | `GET /v1/stats` and `GET /v1/stats/records`. Per IP even though the endpoint requires a session, matching the other read budgets — the session is the door, this is the throughput. Its own budget rather than a share of `anon_read`: the two never overlap now that `/stats` is signed-in only, and pooling them would still tie `/stats`'s abuse ceiling to the cold-start ceiling, two knobs that want to move independently. One read per page load — two when the Records tab is opened, which fetches its own payload — so 600 is 600 page loads an hour. The records endpoint shares this budget rather than taking its own: it is the same corpus, the same cost on a miss and the same page asking, so a separate ceiling would only let one of the page's two reads starve the other. Own ceiling var (`GLOBAL_STATS_VIEW_PER_HOUR`), retuned like the tournament ones |
 | `tournament_export` | 30 / hr per user | `GET /v1/tournaments/:id/export` |
 | `tournament_admin` | 30 / hr per user | tournament admin mutations |
 | `tournament_schedule` | 60 / hr per user | match schedule + caster self-service |
@@ -346,6 +346,14 @@ User-corpus aggregate stats bundle.
 - **Errors:** `400 INVALID_USER_ID`, `404 NOT_FOUND`.
 - **Notes:** KV-cached, keyed on `{ user_id, viewerScope, scope, parser_version }`.
 
+### `GET /v1/users/:user_id/stats/records`
+The record boards over the same corpus — feeds the profile Stats view's "Records" tab, which fetches when it opens.
+
+- **Auth / Path / Query:** identical to `GET /v1/users/:user_id/stats` — one handler preamble serves both, so the owner/visitor rules and `?scope=` can't drift between them.
+- **Response 200:** `RecordsBundle` — `records` (series → board → the top ten rows, biggest first), `recordGames` (per game: `turns` and the record holders' seats, nation + the handle the save records — no other seat, and never `online_id`), `recordCounts` (how many seats each board drew on).
+- **Errors:** `400 INVALID_USER_ID`, `404 NOT_FOUND`.
+- **Notes:** Its own KV entry under the bundle's key plus a `:records` segment, so both expire together and one prefix walk invalidates both. Off the bundle because the rows are ~60-70 KB gzipped on top of a 154 KB payload that every stats request pays for, and only this tab reads them. A miss on either key builds both — the records are folded out of the same pass over `game_player_turn` that builds the yield bands — so the second fetch is a KV read, not a second aggregation.
+
 ### `GET /v1/users/:user_id/videos`
 Recent videos merged across the user's linked channels (newest first) — feeds the profile "Videos" tab.
 
@@ -398,7 +406,16 @@ The chart bundle over the **whole public corpus** — the same catalog `GET /v1/
 - **Query:** `slice` (default `duel`; `all`|`duel`|`ffa`|`single_player`) and `nation` (a nation zType, e.g. `NATION_ROME`; default none). Both parse forgivingly like `?scope=` elsewhere — an unknown slice falls back to the default and an unknown nation to no facet, so a stale bookmark degrades to a neighbouring view instead of `400`ing.
 - **Response 200:** `ChartBundleCore` — the same shape `GET /v1/tournaments/:id/stats/games` returns. No `win_rate` / `top_nation`: this corpus counts every human seat, where those fields assume one focal player per game and would read ~50% by construction. No `save_dates` either, for a different reason — a calendar of every save on the site is not a chart, and it was the one bundle field whose size grew with the corpus rather than with the turn axis.
 - **Errors:** `401 UNAUTHORIZED`, `429 RATE_LIMIT_GLOBAL_STATS`.
-- **Notes:** The slices are roster **compositions** — `duel` is exactly two players both human, `ffa` three or more humans, `single_player` exactly one — and they do **not** partition the corpus: a game with two humans and any AI matches none of them, so it appears only under `all`. A `nation` selection narrows twice, the games *and* the seats within them, so a Rome facet over a Rome-vs-Greece duel bands only the Roman's rows. KV-cached, keyed on `{ slice, nations, parser_version }`, with all 56 selections warmed nightly by cron (one pattern per slice). A miss computes in the request and never refuses; across a parser-version bump the previous entry is served stale while the new one rebuilds in the background, but never across a `BUNDLE_SCHEMA_VERSION` bump — that changes the bundle's shape. Edge-cached 60s (`s-maxage`), no browser cache.
+- **Notes:** The record boards are **not** in this payload — they have their own endpoint below. The slices are roster **compositions** — `duel` is exactly two players both human, `ffa` three or more humans, `single_player` exactly one — and they do **not** partition the corpus: a game with two humans and any AI matches none of them, so it appears only under `all`. A `nation` selection narrows twice, the games *and* the seats within them, so a Rome facet over a Rome-vs-Greece duel bands only the Roman's rows. KV-cached, keyed on `{ slice, nations, parser_version }`, with all 56 selections warmed nightly by cron (one pattern per slice). A miss computes in the request and never refuses; across a parser-version bump the previous entry is served stale while the new one rebuilds in the background, but never across a `BUNDLE_SCHEMA_VERSION` bump — that changes the bundle's shape. Edge-cached 60s (`s-maxage`), no browser cache.
+
+### `GET /v1/stats/records`
+
+The record boards over the same selection — feeds the `/stats` "Records" tab, which fetches when it opens.
+
+- **Auth / Query:** identical to `GET /v1/stats` — same session gate ahead of the budget, same `?slice=` / `?nation=` parsed the same forgiving way, and the same `global_stats_view` budget. One preamble serves both payloads, so a change to who may spend a whole-corpus aggregation lands on both.
+- **Response 200:** `RecordsBundle` — the shape `GET /v1/users/:user_id/stats/records` returns, over the public corpus.
+- **Errors:** `401 UNAUTHORIZED`, `429 RATE_LIMIT_GLOBAL_STATS`.
+- **Notes:** Its own KV entry (the bundle's key plus a `:records` segment) and its own edge-cache entry, warmed by the same nightly precompute and hourly warm — `buildGlobalSelection` writes both payloads or neither, so the Records tab is served from cache in the steady state like every other tab. Serve-stale across a parser bump works the same way and reaches only entries carrying the same payload segment. Edge-cached 60s (`s-maxage`), no browser cache.
 
 ---
 
@@ -484,9 +501,16 @@ Competition stats (standings + caster leaderboard + player picks).
 ### `GET /v1/tournaments/:id/stats/games`
 Aggregate game/chart stats over the tournament's completed matches.
 
-- **Response 200:** `ChartBundleCore` (same core fields as user stats, "humans" focal — every human player; no `save_dates` or the other user-only Overview fields).
+- **Response 200:** `ChartBundleCore` (same core fields as user stats, "humans" focal — every human player; no `save_dates` or the other user-only Overview fields, and no record boards — those are the endpoint below).
 - **Errors:** `404 TOURNAMENT_NOT_FOUND`, `429 RATE_LIMIT_TOURNAMENT_VIEW`.
 - **Notes:** KV-cached, keyed on `{ tournament_id, updated_at, parser_version }`.
+
+### `GET /v1/tournaments/:id/stats/records`
+The record boards over the same completed-match games — feeds the tournament stats page's "Records" tab, which fetches when it opens.
+
+- **Response 200:** `RecordsBundle` — the shape the user and global records endpoints return, over the tournament's games.
+- **Errors:** `404 TOURNAMENT_NOT_FOUND`, `429 RATE_LIMIT_TOURNAMENT_VIEW`.
+- **Notes:** Same viewability preamble and the same `tournament_view` budget as `/stats/games`. KV-cached under that endpoint's key plus a `:records` segment, so a tournament mutation drifts both at once; a miss on either builds both from one pass over the games.
 
 ### `GET /v1/tournaments/:id/rounds`
 Round structure.

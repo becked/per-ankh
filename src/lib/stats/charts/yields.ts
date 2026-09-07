@@ -31,54 +31,115 @@ import {
 // the two meet. Military Power is the one series with no YIELD_* token at all:
 // it is a derived stat, not a yield, so it borrows the combat rating's colour
 // (see src/lib/generated/yield-colors.ts).
+//
+// `cumulative` says what this series' cumulative column means, and is the one
+// place that fact lives: the Records card reads its badge from here, and the
+// aggregator's prose points at it rather than restating a list — which is what
+// had already drifted between four copies. Settled on the corpus rather than
+// from the manual: over the local game_player_turn rows the cumulative column
+// falls at least once for money, food, iron, stone, wood, training, civics,
+// maintenance, happiness and discontent (wood 34,287 times, civics 816,
+// training 474) and never falls for science, culture, orders and growth. A
+// column that can fall is a stockpile *held* at that turn; one that only
+// climbs is lifetime *production*. null for the two levels, which carry no
+// cumulative column to mean either — and which therefore get no cumulative
+// record board at all, so nothing reads their null.
 export const YIELD_SERIES = [
 	{
 		key: "science_per_turn",
 		label: "Science",
 		color: YIELD_COLORS.YIELD_SCIENCE,
+		cumulative: "produced",
 	},
-	{ key: "money_per_turn", label: "Money", color: YIELD_COLORS.YIELD_MONEY },
+	{
+		key: "money_per_turn",
+		label: "Money",
+		color: YIELD_COLORS.YIELD_MONEY,
+		cumulative: "held",
+	},
 	{
 		key: "training_per_turn",
 		label: "Training",
 		color: YIELD_COLORS.YIELD_TRAINING,
+		cumulative: "held",
 	},
-	{ key: "civics_per_turn", label: "Civics", color: YIELD_COLORS.YIELD_CIVICS },
+	{
+		key: "civics_per_turn",
+		label: "Civics",
+		color: YIELD_COLORS.YIELD_CIVICS,
+		cumulative: "held",
+	},
 	{
 		key: "culture_per_turn",
 		label: "Culture",
 		color: YIELD_COLORS.YIELD_CULTURE,
+		cumulative: "produced",
 	},
-	{ key: "orders_per_turn", label: "Orders", color: YIELD_COLORS.YIELD_ORDERS },
-	{ key: "food_per_turn", label: "Food", color: YIELD_COLORS.YIELD_FOOD },
-	{ key: "growth_per_turn", label: "Growth", color: YIELD_COLORS.YIELD_GROWTH },
+	{
+		key: "orders_per_turn",
+		label: "Orders",
+		color: YIELD_COLORS.YIELD_ORDERS,
+		cumulative: "produced",
+	},
+	{
+		key: "food_per_turn",
+		label: "Food",
+		color: YIELD_COLORS.YIELD_FOOD,
+		cumulative: "held",
+	},
+	{
+		key: "growth_per_turn",
+		label: "Growth",
+		color: YIELD_COLORS.YIELD_GROWTH,
+		cumulative: "produced",
+	},
 	{
 		key: "happiness_per_turn",
 		label: "Happiness",
 		color: YIELD_COLORS.YIELD_HAPPINESS,
+		cumulative: "held",
 	},
 	{
 		key: "discontent_per_turn",
 		label: "Discontent",
 		color: YIELD_COLORS.YIELD_DISCONTENT,
+		cumulative: "held",
 	},
-	{ key: "iron_per_turn", label: "Iron", color: YIELD_COLORS.YIELD_IRON },
-	{ key: "stone_per_turn", label: "Stone", color: YIELD_COLORS.YIELD_STONE },
-	{ key: "wood_per_turn", label: "Wood", color: YIELD_COLORS.YIELD_WOOD },
+	{
+		key: "iron_per_turn",
+		label: "Iron",
+		color: YIELD_COLORS.YIELD_IRON,
+		cumulative: "held",
+	},
+	{
+		key: "stone_per_turn",
+		label: "Stone",
+		color: YIELD_COLORS.YIELD_STONE,
+		cumulative: "held",
+	},
+	{
+		key: "wood_per_turn",
+		label: "Wood",
+		color: YIELD_COLORS.YIELD_WOOD,
+		cumulative: "held",
+	},
 	{
 		key: "maintenance_per_turn",
 		label: "Maintenance",
 		color: YIELD_COLORS.YIELD_MAINTENANCE,
+		cumulative: "held",
 	},
 	{
 		key: "military_power",
 		label: "Military Power",
 		color: MILITARY_POWER_COLOR,
+		cumulative: null,
 	},
 	{
 		key: "legitimacy",
 		label: "Legitimacy",
 		color: YIELD_COLORS.YIELD_LEGITIMACY,
+		cumulative: null,
 	},
 ] as const;
 
