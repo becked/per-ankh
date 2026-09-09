@@ -4,8 +4,9 @@
 	//   2. Web Worker parses → FullGameData + rawZip (transferable)
 	//   3. Picker is always shown (even for single-human saves) — radio
 	//      buttons over the human players plus a "None / observer" option.
-	//      Default selection: a human whose online_id is in the user's
-	//      knownOnlineIds set; otherwise null (observer).
+	//      Default selection: the save owner, else a human whose online_id
+	//      is in the user's knownOnlineIds set; otherwise null (observer).
+	//      See defaultSelection in parser/upload-helpers.
 	//   4. Gzip the FullGameData JSON in-browser (CompressionStream).
 	//   5. POST multipart to /v1/games. On 201, navigate to /games/{id}.
 	//      On 200 with reimported:true, the caller's `onDone` decides
@@ -23,6 +24,7 @@
 	import ParserWorker from "$lib/parser/worker?worker";
 	import type { FullGameData, PlayerRosterEntry } from "$lib/parser/types";
 	import type { WorkerMessage } from "$lib/parser/worker";
+	import { defaultSelection } from "$lib/parser/upload-helpers";
 	import { cloudApi, ApiError, DuplicateUploadError } from "$lib/api-cloud";
 	import { nationName } from "$lib/utils/formatting";
 	import RadioGroup from "$lib/ui/RadioGroup.svelte";
@@ -165,17 +167,6 @@
 		}
 	});
 
-	// Pick a sensible default: if exactly one human's online_id matches the
-	// uploader's known ids, pre-select that human. Anything else (zero
-	// matches, or ambiguous multiple matches) defaults to observer so we
-	// never make an auto-claim that's wrong.
-	function defaultSelection(humans: PlayerRosterEntry[]): number | null {
-		const matches = humans.filter(
-			(h) => h.online_id && knownOnlineIds.has(h.online_id),
-		);
-		return matches.length === 1 ? matches[0].player_index : OBSERVER;
-	}
-
 	function onParsed(data: FullGameData, rawZip: ArrayBuffer, fileName: string) {
 		const humans = data.player_roster.filter((p) => p.is_human);
 		// Note: we don't error on humans.length === 0 anymore — an all-AI
@@ -185,7 +176,7 @@
 			data,
 			rawZip,
 			humans,
-			selected: defaultSelection(humans),
+			selected: defaultSelection(humans, knownOnlineIds),
 			fileName,
 		};
 	}
