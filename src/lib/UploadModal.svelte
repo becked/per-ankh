@@ -2,11 +2,15 @@
 	// Cloud upload flow:
 	//   1. User picks a save .zip (or `prefilled` prop is set for re-import)
 	//   2. Web Worker parses → FullGameData + rawZip (transferable)
-	//   3. Picker is always shown (even for single-human saves) — radio
-	//      buttons over the human players plus a "None / observer" option.
-	//      Default selection: the save owner, else a human whose online_id
-	//      is in the user's knownOnlineIds set; otherwise null (observer).
-	//      See defaultSelection in parser/upload-helpers.
+	//   3. Picker is always shown (even for single-human saves), in one of
+	//      two steps. When the save names the seat it was written from
+	//      (is_save_owner), the "confirm" step asks about that one seat and
+	//      offers "not me" — observer — as its equal. Otherwise, and when the
+	//      uploader says they're a different player, the "choose" step is the
+	//      full roster: radio buttons over the human players plus a
+	//      "None / observer" option, pre-checked with a human whose online_id
+	//      is in the user's knownOnlineIds set. See defaultSelection in
+	//      parser/upload-helpers.
 	//   4. Gzip the FullGameData JSON in-browser (CompressionStream).
 	//   5. POST multipart to /v1/games. On 201, navigate to /games/{id}.
 	//      On 200 with reimported:true, the caller's `onDone` decides
@@ -73,6 +77,11 @@
 		| { kind: "parsing"; phase: string; percent: number }
 		| {
 				kind: "picker";
+				// "confirm" asks about one seat — the one the save says it was
+				// written from — with an equally weighted "not me". "choose" is
+				// the full roster, reached when the save named nobody or when
+				// the uploader says they're a different player.
+				step: "confirm" | "choose";
 				data: FullGameData;
 				rawZip: ArrayBuffer;
 				humans: PlayerRosterEntry[];
@@ -171,19 +180,59 @@
 		const humans = data.player_roster.filter((p) => p.is_human);
 		// Note: we don't error on humans.length === 0 anymore — an all-AI
 		// save is technically valid for archival upload (observer mode).
+		const selected = defaultSelection(humans, knownOnlineIds);
+		// Open on the confirmation only when the save itself named the seat.
+		// A known-id match is a guess about the uploader and stays a
+		// pre-checked roster row; the save owner is a claim about the file,
+		// and asking it out loud is what keeps a wrong one from riding in on
+		// the same click that dismisses the modal.
+		const fromSave = humans.some(
+			(h) => h.is_save_owner && h.player_index === selected,
+		);
 		status = {
 			kind: "picker",
+			step: fromSave ? "confirm" : "choose",
 			data,
 			rawZip,
 			humans,
-			selected: defaultSelection(humans, knownOnlineIds),
+			selected,
 			fileName,
 		};
+	}
+
+	// "I'm a different player" — drop the one-seat question for the roster.
+	// The saver has just been ruled out, so the roster opens on what the
+	// known ids say about the seats that are left (the multiplayer case where
+	// the save's answer and the uploader's own history disagree), or on
+	// observer when they say nothing.
+	function openRoster() {
+		if (status.kind !== "picker") return;
+		const picker = status;
+		const others = picker.humans.filter((h) => !h.is_save_owner);
+		status = {
+			...picker,
+			step: "choose",
+			selected: defaultSelection(others, knownOnlineIds),
+		};
+	}
+
+	// "No, someone else's save" — the answer to the confirmation is observer
+	// mode, which is the whole reason the question is worth asking.
+	async function declineSaveOwner() {
+		if (status.kind !== "picker") return;
+		const picker = status;
+		await doUpload(picker.data, picker.rawZip, picker.fileName, OBSERVER);
 	}
 
 	function selectPlayer(value: number | null) {
 		if (status.kind !== "picker") return;
 		status = { ...status, selected: value };
+	}
+
+	// Single-player saves leave player_name empty for every player, so the
+	// nation is what names the seat there.
+	function playerLabel(human: PlayerRosterEntry): string {
+		return human.player_name || nationName(human.nation) || "player";
 	}
 
 	const submitLabel = $derived.by(() => {
@@ -193,8 +242,14 @@
 		if (picker.selected === OBSERVER) return "Upload as observer";
 		const human = picker.humans.find((h) => h.player_index === picker.selected);
 		if (!human) return "Upload";
-		const label = human.player_name || nationName(human.nation) || "player";
-		return `Upload as ${label}`;
+		return `Upload as ${playerLabel(human)}`;
+	});
+
+	// Who the save says wrote it — the subject of the confirmation step.
+	const saveOwnerLabel = $derived.by(() => {
+		if (status.kind !== "picker") return "";
+		const owner = status.humans.find((h) => h.is_save_owner);
+		return owner ? playerLabel(owner) : "";
 	});
 
 	async function submitPicker() {
@@ -296,6 +351,52 @@
 			{status.phase} — {status.percent}%
 		</p>
 		<progress value={status.percent} max={100} class="w-full"></progress>
+	{:else if status.kind === "picker" && status.step === "confirm"}
+		<h2 class="mb-1 text-lg font-bold" style="color: rgb(var(--color-bright));">
+			Saved by {saveOwnerLabel} — is that you?
+		</h2>
+		<p class="mb-4 text-xs text-gray-400">
+			The save records the player it was written from.
+			{#if isReimportMode}
+				Re-import it as {saveOwnerLabel}, or pick a different player.
+			{:else}
+				Say yes and the game is filed as yours; say no if you're uploading
+				someone else's save (a friend's game, a tournament match you're
+				archiving).
+			{/if}
+		</p>
+		<div class="mb-4 flex flex-col gap-2">
+			<button
+				type="button"
+				onclick={submitPicker}
+				class="rounded bg-orange px-4 py-2 text-sm font-bold text-white hover:bg-orange/80"
+			>
+				Yes, that's me
+			</button>
+			<button
+				type="button"
+				onclick={declineSaveOwner}
+				class="rounded bg-brown/40 px-4 py-2 text-sm font-bold text-tan hover:bg-brown"
+			>
+				No — someone else's save
+			</button>
+		</div>
+		<div class="flex items-center justify-between">
+			<button
+				type="button"
+				onclick={reset}
+				class="rounded bg-brown/40 px-3 py-1 text-sm text-tan hover:bg-brown"
+			>
+				Cancel
+			</button>
+			<button
+				type="button"
+				onclick={openRoster}
+				class="text-sm font-bold text-orange underline hover:text-orange/80"
+			>
+				I'm a different player →
+			</button>
+		</div>
 	{:else if status.kind === "picker"}
 		<h2 class="mb-1 text-lg font-bold" style="color: rgb(var(--color-bright));">
 			{isReimportMode ? "Confirm your player" : "Which player is you?"}
