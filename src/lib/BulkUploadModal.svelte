@@ -51,8 +51,9 @@
 				humans: PlayerChoice[];
 				// Total game turns (match_metadata.total_turns), shown per option.
 				totalTurns: number;
-				// The heuristic's pre-selected player_index (matched against the
-				// user's past-upload online_ids), or null when there was no
+				// The heuristic's pre-selected player_index (the seat the save was
+				// written from, else a match against the user's past-upload
+				// online_ids — see defaultSelection), or null when there was no
 				// confident guess. Drives the "Suggested" badge independently of
 				// `selected`.
 				suggested: number | null;
@@ -471,6 +472,16 @@
 		return p.player_name || nationName(p.nation) || "—";
 	}
 
+	// Which of defaultSelection's two sources produced the suggestion: the
+	// seat the save was written from, or a match against the uploader's past
+	// claims. The hint under the picker names the one that fired.
+	function suggestedFromSave(
+		humans: PlayerChoice[],
+		suggested: number | null,
+	): boolean {
+		return humans.some((p) => p.is_save_owner && p.player_index === suggested);
+	}
+
 	// "3 cities · 95 turns · Winner" — the per-option stats line.
 	function statsLine(p: PlayerChoice, totalTurns: number): string {
 		const parts = [
@@ -638,10 +649,12 @@
 								Which nation were you?
 							</h3>
 							<p class="mb-2 mt-0.5 text-xs text-gray-400">
-								{#if ready.suggested !== null}
-									Based on your past uploads. Change it if its wrong.
-								{:else}
+								{#if ready.suggested === null}
 									Select the player you controlled, or choose observer.
+								{:else if suggestedFromSave(ready.humans, ready.suggested)}
+									The save was written from their seat. Change it if its wrong.
+								{:else}
+									Based on your past uploads. Change it if its wrong.
 								{/if}
 							</p>
 

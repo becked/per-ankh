@@ -14,14 +14,27 @@ export async function gzipJson(obj: unknown): Promise<Blob> {
 	return new Response(stream).blob();
 }
 
-// Pick a sensible default uploader: if exactly one human's online_id matches
-// the user's known ids, pre-select that human. Anything else (zero matches,
-// or ambiguous multiple matches) defaults to observer (null) so we never
-// auto-claim incorrectly.
+// Pick a sensible default uploader. The save itself answers the question
+// first: `is_save_owner` marks the seat the file was written from, which is
+// the uploader on every ordinary upload and is available on the very first
+// one — before `user_online_ids` holds anything to match against. Failing
+// that (a multi-human save with no `<?ActivePlayer?>` names no owner), a
+// human whose online_id is one of the user's known ids. Anything else (zero
+// matches, or ambiguous multiple matches) defaults to observer (null) so we
+// never auto-claim incorrectly.
+//
+// A default, not an identity: the save owner is who SAVED the file, which
+// differs from who is uploading it exactly on observer uploads (a TO
+// archiving a match, a friend's save), so the picker still asks.
 export function defaultSelection(
-	humans: readonly Pick<PlayerRosterEntry, "player_index" | "online_id">[],
+	humans: readonly Pick<
+		PlayerRosterEntry,
+		"player_index" | "online_id" | "is_save_owner"
+	>[],
 	knownOnlineIds: Set<string>,
 ): number | null {
+	const owner = humans.find((h) => h.is_save_owner);
+	if (owner) return owner.player_index;
 	const matches = humans.filter(
 		(h) => h.online_id && knownOnlineIds.has(h.online_id),
 	);
@@ -36,6 +49,7 @@ export interface PlayerChoice {
 	player_name: string;
 	nation: string | null;
 	online_id: string | null;
+	is_save_owner: boolean;
 	city_count: number;
 	is_winner: boolean;
 }
@@ -62,6 +76,7 @@ export function playerChoices(data: FullGameData): PlayerChoice[] {
 			player_name: p.player_name,
 			nation: p.nation,
 			online_id: p.online_id,
+			is_save_owner: p.is_save_owner,
 			city_count: p.nation ? (cityCountByNation.get(p.nation) ?? 0) : 0,
 			is_winner: winnerIndex !== null && p.player_index === winnerIndex,
 		}));

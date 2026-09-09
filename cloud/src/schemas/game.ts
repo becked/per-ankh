@@ -199,6 +199,12 @@ export const MAX_DISABLED_IMPROVEMENTS = 1_000;
 //         anyone has seen. The same correction is applied at read time to the
 //         map turn slider and the Economy tab's territory curve, which need no
 //         reparse.
+// 2.20.0 — player_roster[].is_save_owner, the flag the parser has resolved
+//         from `<?ActivePlayer?>` since 2.5.0 and then spent on the headline
+//         difficulty alone. It says which seat the save was written from, so
+//         the upload picker can pre-select a seat on a first upload — before
+//         user_online_ids holds anything to match against. Purely additive;
+//         older blobs lack it and the picker falls back to the known-id match.
 export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.0.0",
 	"2.1.0",
@@ -225,13 +231,14 @@ export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.17.0",
 	"2.18.0",
 	"2.19.0",
+	"2.20.0",
 ]);
 
 // The latest accepted version. Echoed back on stats responses and
 // embedded in stats cache keys so a parser bump (after the matching
 // extraction code lands) naturally orphans every old entry. Bump in
 // lockstep with the `KNOWN_PARSER_VERSIONS` addition above.
-export const CURRENT_PARSER_VERSION = "2.19.0";
+export const CURRENT_PARSER_VERSION = "2.20.0";
 
 // ----- Reusable atoms -----
 
@@ -241,6 +248,10 @@ const PlayerRosterEntrySchema = v.object({
 	nation: v.nullable(v.string()),
 	is_human: v.boolean(),
 	online_id: v.nullable(v.string()),
+	// Which seat the save was written from (2.20.0+). `v.optional` tolerates
+	// the deploy gap where the Worker is updated but the frontend still emits
+	// ≤2.15.0 blobs, and keeps older R2 blobs passing if they're re-validated.
+	is_save_owner: v.optional(v.boolean()),
 });
 
 const PlayerInfoSchema = v.object({
