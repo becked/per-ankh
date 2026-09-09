@@ -472,14 +472,40 @@
 		return p.player_name || nationName(p.nation) || "—";
 	}
 
-	// Which of defaultSelection's two sources produced the suggestion: the
-	// seat the save was written from, or a match against the uploader's past
-	// claims. The hint under the picker names the one that fired.
-	function suggestedFromSave(
+	// The suggested row when it came from the save naming its own player,
+	// rather than from a match against the uploader's known online ids.
+	function saveOwnerSuggestion(
 		humans: PlayerChoice[],
 		suggested: number | null,
-	): boolean {
-		return humans.some((p) => p.is_save_owner && p.player_index === suggested);
+	): PlayerChoice | undefined {
+		return humans.find((p) => p.is_save_owner && p.player_index === suggested);
+	}
+
+	// The row's question. A save-owner suggestion is a claim about the file,
+	// not about the uploader — the two part company on exactly the uploads
+	// observer mode exists for — so it gets asked by name instead of arriving
+	// as a pre-checked row that a wrong answer can ride through.
+	function suggestionQuestion(
+		humans: PlayerChoice[],
+		suggested: number | null,
+	): string {
+		const saver = saveOwnerSuggestion(humans, suggested);
+		return saver
+			? `Saved by ${displayName(saver)} — is that you?`
+			: "Which nation were you?";
+	}
+
+	// The line under it, naming the answer that isn't the pre-checked one.
+	function suggestionHint(
+		humans: PlayerChoice[],
+		suggested: number | null,
+	): string {
+		if (saveOwnerSuggestion(humans, suggested)) {
+			return "Their seat is pre-selected — choose the observer option below if you're uploading it on their behalf.";
+		}
+		return suggested === null
+			? "Select the player you controlled, or choose observer."
+			: "Based on your past uploads. Change it if its wrong.";
 	}
 
 	// "3 cities · 95 turns · Winner" — the per-option stats line.
@@ -646,16 +672,10 @@
 							{/if}
 						{:else}
 							<h3 class="mt-4 text-xs font-bold text-white">
-								Which nation were you?
+								{suggestionQuestion(ready.humans, ready.suggested)}
 							</h3>
 							<p class="mb-2 mt-0.5 text-xs text-gray-400">
-								{#if ready.suggested === null}
-									Select the player you controlled, or choose observer.
-								{:else if suggestedFromSave(ready.humans, ready.suggested)}
-									The save was written from their seat. Change it if its wrong.
-								{:else}
-									Based on your past uploads. Change it if its wrong.
-								{/if}
+								{suggestionHint(ready.humans, ready.suggested)}
 							</p>
 
 							<RadioGroup
