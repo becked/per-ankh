@@ -1,15 +1,17 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-	applyBroadcastStarts,
+	applyVideoFacts,
 	decodeXmlEntities,
+	fetchYouTubePlaylistVideosViaApi,
 	parsePlaylistItemsPage,
+	parseIsoDuration,
 	parseVideosListPage,
 	parseYouTubeChannelUrl,
 	parseYouTubeFeed,
 	parseYouTubePlaylistFeed,
 	parseYouTubePlaylistUrl,
 } from "./youtube";
-import type { Video } from "./types";
+import { UncacheableVideos, type Video } from "./types";
 
 // A syntactically valid channel id: UC + 22 url-safe chars.
 const CHANNEL_ID = "UCabcdefghijklmnopqrstuv";
@@ -158,6 +160,7 @@ describe("parseYouTubeFeed", () => {
 		expect(videos).toHaveLength(2);
 		expect(videos[0]).toEqual({
 			id: "VID0000001",
+			duration_seconds: null,
 			title: "First & Best",
 			url: "https://www.youtube.com/watch?v=VID0000001",
 			thumbnail_url: "https://i.ytimg.com/vi/VID0000001/hqdefault.jpg",
@@ -260,6 +263,7 @@ describe("parsePlaylistItemsPage", () => {
 		expect(videos).toHaveLength(1);
 		expect(videos[0]).toEqual({
 			id: "VID0000001",
+			duration_seconds: null,
 			title: "Round 1: Carthage vs Rome",
 			url: "https://www.youtube.com/watch?v=VID0000001",
 			thumbnail_url: "https://i.ytimg.com/high.jpg",
@@ -312,10 +316,86 @@ describe("parsePlaylistItemsPage", () => {
 	});
 });
 
+describe("fetchYouTubePlaylistVideosViaApi — degraded enrichment", () => {
+	const playlistPage = {
+		items: [
+			{
+				contentDetails: {
+					videoId: "VID0000001",
+					videoPublishedAt: "2026-07-31T15:27:03Z",
+				},
+				snippet: { title: "Cast", thumbnails: {}, resourceId: {} },
+			},
+		],
+	};
+
+	afterEach(() => vi.unstubAllGlobals());
+
+	// The enrichment must never throw: it improves a date and a runtime we can
+	// live without, and discarding a feed already fetched would be worse. What
+	// it must do is refuse to be cached, or the degradation is held for the TTL.
+	it("serves the feed's own dates and null runtimes, uncacheable", async () => {
+		vi.stubGlobal(
+			"fetch",
+			vi.fn((url: URL) =>
+				Promise.resolve(
+					String(url).includes("/videos")
+						? // videos.list is the call that fails
+							new Response("quota", { status: 403 })
+						: new Response(JSON.stringify(playlistPage), { status: 200 }),
+				),
+			),
+		);
+		await expect(
+			fetchYouTubePlaylistVideosViaApi("PL1", "key"),
+		).rejects.toBeInstanceOf(UncacheableVideos);
+		try {
+			await fetchYouTubePlaylistVideosViaApi("PL1", "key");
+		} catch (e) {
+			const { videos } = e as UncacheableVideos;
+			expect(videos).toHaveLength(1);
+			// The feed's VOD date, un-corrected — that is the bug being served.
+			expect(videos[0].published_at).toBe("2026-07-31T15:27:03Z");
+			// And the runtime the failed batch cost us.
+			expect(videos[0].duration_seconds).toBeNull();
+		}
+	});
+
+	it("does not throw when the enrichment succeeds", async () => {
+		vi.stubGlobal(
+			"fetch",
+			vi.fn((url: URL) =>
+				Promise.resolve(
+					String(url).includes("/videos")
+						? new Response(
+								JSON.stringify({
+									items: [
+										{
+											id: "VID0000001",
+											liveStreamingDetails: {
+												actualStartTime: "2026-07-31T01:04:43Z",
+											},
+											contentDetails: { duration: "PT1H51M54S" },
+										},
+									],
+								}),
+								{ status: 200 },
+							)
+						: new Response(JSON.stringify(playlistPage), { status: 200 }),
+				),
+			),
+		);
+		const videos = await fetchYouTubePlaylistVideosViaApi("PL1", "key");
+		expect(videos[0].published_at).toBe("2026-07-31T01:04:43Z");
+		expect(videos[0].duration_seconds).toBe(6714);
+	});
+});
+
 describe("parseVideosListPage", () => {
-	// Shapes taken from a real videos.list?part=liveStreamingDetails response:
-	// an archived broadcast, an ordinary upload (no liveStreamingDetails at all),
-	// and a broadcast that was scheduled but never aired.
+	// Shapes taken from a real
+	// videos.list?part=liveStreamingDetails,contentDetails response: an archived
+	// broadcast, an ordinary upload (no liveStreamingDetails at all), a
+	// broadcast scheduled but never aired, and one still running (P0D).
 	const page = {
 		items: [
 			{
@@ -324,26 +404,51 @@ describe("parseVideosListPage", () => {
 					actualStartTime: "2026-07-31T01:04:43Z",
 					actualEndTime: "2026-07-31T02:56:37Z",
 				},
+				contentDetails: { duration: "PT1H51M54S" },
 			},
-			{ id: "VID0000001" },
+			{ id: "VID0000001", contentDetails: { duration: "PT58M" } },
 			{
 				id: "VID0000002",
 				liveStreamingDetails: { scheduledStartTime: "2026-08-09T00:00:00Z" },
+			},
+			{
+				id: "VID0000003",
+				liveStreamingDetails: { actualStartTime: "2026-09-11T01:30:00Z" },
+				contentDetails: { duration: "P0D" },
 			},
 		],
 	};
 
 	it("maps an archived broadcast to the instant it started", () => {
-		expect(parseVideosListPage(page).get("e5eFJgzYz3Q")).toBe(
+		expect(parseVideosListPage(page).get("e5eFJgzYz3Q")?.started_at).toBe(
 			"2026-07-31T01:04:43Z",
 		);
 	});
 
-	it("omits ordinary uploads and never-aired broadcasts", () => {
-		const starts = parseVideosListPage(page);
-		expect(starts.has("VID0000001")).toBe(false);
-		expect(starts.has("VID0000002")).toBe(false);
-		expect(starts.size).toBe(1);
+	it("carries the runtime alongside the air time", () => {
+		expect(parseVideosListPage(page).get("e5eFJgzYz3Q")?.duration_seconds).toBe(
+			1 * 3600 + 51 * 60 + 54,
+		);
+	});
+
+	it("keeps an ordinary upload for its duration alone", () => {
+		const f = parseVideosListPage(page).get("VID0000001");
+		expect(f?.started_at).toBeUndefined();
+		expect(f?.duration_seconds).toBe(58 * 60);
+	});
+
+	it("omits an entry that carries neither fact", () => {
+		const facts = parseVideosListPage(page);
+		expect(facts.has("VID0000002")).toBe(false);
+		// Pinned as a count, not just a has(): the admit-on-either-fact rule is
+		// exactly the kind of change that starts letting extra ids in.
+		expect(facts.size).toBe(3);
+	});
+
+	it("omits the zero duration a still-running broadcast reports", () => {
+		const f = parseVideosListPage(page).get("VID0000003");
+		expect(f?.started_at).toBe("2026-09-11T01:30:00Z");
+		expect(f?.duration_seconds).toBeUndefined();
 	});
 
 	it("tolerates a malformed/empty response", () => {
@@ -352,7 +457,36 @@ describe("parseVideosListPage", () => {
 	});
 });
 
-describe("applyBroadcastStarts", () => {
+describe("parseIsoDuration", () => {
+	it("reads hours, minutes and seconds", () => {
+		expect(parseIsoDuration("PT1H23M45S")).toBe(5025);
+		expect(parseIsoDuration("PT58M")).toBe(3480);
+		expect(parseIsoDuration("PT45S")).toBe(45);
+		expect(parseIsoDuration("PT2H")).toBe(7200);
+	});
+
+	it("reads the day component a very long stream can carry", () => {
+		expect(parseIsoDuration("P1DT2H")).toBe(86400 + 7200);
+	});
+
+	it("treats a plausible-but-unsupported form as unknown", () => {
+		// videos.list does not emit fractional seconds today. If it ever starts,
+		// this documents that the runtime goes missing rather than rounding, and
+		// fails loudly if someone decides to handle it.
+		expect(parseIsoDuration("PT1H23M45.5S")).toBeNull();
+		expect(parseIsoDuration("P1W")).toBeNull();
+	});
+
+	it("returns null for zero, absent and malformed values", () => {
+		expect(parseIsoDuration("P0D")).toBeNull();
+		expect(parseIsoDuration(undefined)).toBeNull();
+		expect(parseIsoDuration("")).toBeNull();
+		expect(parseIsoDuration("1h23m")).toBeNull();
+		expect(parseIsoDuration("PT1H23M45")).toBeNull();
+	});
+});
+
+describe("applyVideoFacts", () => {
 	const video = (id: string, published_at: string): Video => ({
 		id,
 		title: id,
@@ -360,15 +494,16 @@ describe("applyBroadcastStarts", () => {
 		thumbnail_url: null,
 		published_at,
 		platform: "youtube",
+		duration_seconds: null,
 	});
 
 	it("re-dates a broadcast to its air time and leaves uploads alone", () => {
-		const out = applyBroadcastStarts(
+		const out = applyVideoFacts(
 			[
 				video("BROADCAST01", "2026-07-31T15:27:03Z"),
 				video("UPLOAD00001", "2026-07-30T09:00:00Z"),
 			],
-			new Map([["BROADCAST01", "2026-07-31T01:04:43Z"]]),
+			new Map([["BROADCAST01", { started_at: "2026-07-31T01:04:43Z" }]]),
 		);
 		expect(out.map((v) => v.published_at)).toEqual([
 			"2026-07-31T01:04:43Z",
@@ -380,9 +515,9 @@ describe("applyBroadcastStarts", () => {
 	// its VOD was published 14h later on Jul 31, so the feed dated it Jul 31 and
 	// the home page rendered it as ~18h newer than it was.
 	it("moves a cast back to the day it actually aired", () => {
-		const [corrected] = applyBroadcastStarts(
+		const [corrected] = applyVideoFacts(
 			[video("e5eFJgzYz3Q", "2026-07-31T15:27:03Z")],
-			new Map([["e5eFJgzYz3Q", "2026-07-31T01:04:43Z"]]),
+			new Map([["e5eFJgzYz3Q", { started_at: "2026-07-31T01:04:43Z" }]]),
 		);
 		const skewHours =
 			(Date.parse("2026-07-31T15:27:03Z") -
@@ -393,6 +528,6 @@ describe("applyBroadcastStarts", () => {
 
 	it("returns dates untouched when nothing is a broadcast", () => {
 		const videos = [video("UPLOAD00001", "2026-07-30T09:00:00Z")];
-		expect(applyBroadcastStarts(videos, new Map())).toEqual(videos);
+		expect(applyVideoFacts(videos, new Map())).toEqual(videos);
 	});
 });

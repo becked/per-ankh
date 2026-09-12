@@ -12,6 +12,7 @@ function vid(
 		url: `https://youtu.be/${over.id}`,
 		thumbnail_url: null,
 		platform: "youtube",
+		duration_seconds: null,
 		user_id: "u1",
 		display_name: "Creator One",
 		slug: null,

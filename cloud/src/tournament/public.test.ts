@@ -14,6 +14,7 @@ function vid(
 		url: `https://youtu.be/${over.id}`,
 		thumbnail_url: null,
 		platform: "youtube",
+		duration_seconds: null,
 		uploader_channel_id: "UCcaster",
 		uploader_name: "Caster One",
 		...over,

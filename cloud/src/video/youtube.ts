@@ -7,7 +7,7 @@
 // (`/feeds/videos.xml?channel_id=UC…`).
 //
 // The feed alone misdates live content, so a keyed build spends one more quota
-// unit per refresh correcting it (see fetchBroadcastStarts). The hot path still
+// unit per refresh correcting it (see fetchVideoFacts). The hot path still
 // works without a key — it just falls back to the feed's own dates.
 
 import { logError, logWarn } from "../log";
@@ -266,6 +266,9 @@ function videoFromEntry(entry: string): Video | null {
 	if (!id) return null;
 	return {
 		id,
+		// The feed says nothing about length; videos.list fills this in later
+		// where a key allows it (see withVideoFacts).
+		duration_seconds: null,
 		title: decodeXmlEntities(matchTag(entry, "title") ?? ""),
 		url: `https://www.youtube.com/watch?v=${id}`,
 		thumbnail_url:
@@ -330,34 +333,86 @@ interface VideosListResponse {
 	items?: {
 		id?: string;
 		liveStreamingDetails?: { actualStartTime?: string };
+		contentDetails?: { duration?: string };
 	}[];
 }
 
-// Map video id → the instant its broadcast actually started, for those ids that
-// are live broadcasts. An ordinary upload carries no liveStreamingDetails at
-// all, so it is simply absent from the map — that absence is the discriminator,
-// not a sentinel. A broadcast scheduled but never aired has liveStreamingDetails
-// without actualStartTime, and is likewise absent. Pure — exported for unit
-// tests.
-export function parseVideosListPage(data: unknown): Map<string, string> {
-	const page = (data ?? {}) as VideosListResponse;
-	const starts = new Map<string, string>();
-	for (const item of page.items ?? []) {
-		const start = item.liveStreamingDetails?.actualStartTime;
-		if (item.id && start) starts.set(item.id, start);
-	}
-	return starts;
+// What videos.list can tell us about one video beyond what the feed already
+// said. Both fields are optional and independently absent: an ordinary upload
+// has no liveStreamingDetails, and a broadcast still running reports no usable
+// contentDetails.duration.
+export interface VideoFacts {
+	/** When the broadcast actually started, for live content only. */
+	started_at?: string;
+	/** Runtime in seconds. */
+	duration_seconds?: number;
 }
 
-// Re-date live broadcasts to when they aired. A video with no entry in `starts`
-// keeps its feed date. Pure — exported for unit tests.
-export function applyBroadcastStarts<T extends Video>(
+// YouTube states durations as ISO 8601 (`PT1H23M45S`, `PT58M`, `P1DT2H`).
+// Returns null for the zero-length `P0D` a still-running broadcast reports, so
+// a caller can tell "not known yet" from "known to be nothing". Pure —
+// exported for unit tests.
+export function parseIsoDuration(iso: string | undefined): number | null {
+	if (!iso) return null;
+	const m = /^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/.exec(iso);
+	if (!m) {
+		// A shape we don't recognise would otherwise vanish into the same null as
+		// "still running", so if YouTube ever changes the format every runtime
+		// disappears with no signal. Log it; the module reports its other upstream
+		// trouble the same way.
+		logWarn("youtube_duration_unparsed", { duration: iso.slice(0, 32) });
+		return null;
+	}
+	const [, d, h, min, sec] = m;
+	const total =
+		Number(d ?? 0) * 86400 +
+		Number(h ?? 0) * 3600 +
+		Number(min ?? 0) * 60 +
+		Number(sec ?? 0);
+	return total > 0 ? total : null;
+}
+
+// Map video id → whatever videos.list could tell us about it. An id is present
+// if it yielded EITHER an air time or a runtime, so an ordinary upload (no
+// liveStreamingDetails at all) is in the map for its duration alone, while a
+// broadcast scheduled but never aired — liveStreamingDetails without
+// actualStartTime, and no duration yet — is absent. Absence therefore means
+// "nothing to apply", not "not a broadcast". Pure — exported for unit tests.
+export function parseVideosListPage(data: unknown): Map<string, VideoFacts> {
+	const page = (data ?? {}) as VideosListResponse;
+	const facts = new Map<string, VideoFacts>();
+	for (const item of page.items ?? []) {
+		if (!item.id) continue;
+		const started_at = item.liveStreamingDetails?.actualStartTime;
+		const duration_seconds = parseIsoDuration(item.contentDetails?.duration);
+		// An item that told us nothing stays out of the map, so absence keeps
+		// meaning "nothing to apply" for every consumer.
+		if (started_at === undefined && duration_seconds === null) continue;
+		facts.set(item.id, {
+			...(started_at !== undefined ? { started_at } : {}),
+			...(duration_seconds !== null ? { duration_seconds } : {}),
+		});
+	}
+	return facts;
+}
+
+// Fold videos.list facts onto the feed's videos: re-date live broadcasts to
+// when they aired, and attach runtimes. A video with no entry keeps its feed
+// date and its null duration. Pure — exported for unit tests.
+export function applyVideoFacts<T extends Video>(
 	videos: T[],
-	starts: Map<string, string>,
+	facts: Map<string, VideoFacts>,
 ): T[] {
 	return videos.map((v) => {
-		const start = starts.get(v.id);
-		return start ? { ...v, published_at: start } : v;
+		const f = facts.get(v.id);
+		if (!f) return v;
+		return {
+			...v,
+			...(f.started_at != null ? { published_at: f.started_at } : {}),
+			...(f.duration_seconds != null
+				? { duration_seconds: f.duration_seconds }
+				: {}),
+		};
 	});
 }
 
@@ -372,15 +427,15 @@ export function applyBroadcastStarts<T extends Video>(
 // fetched successfully. Each batch is independent, so one bad page doesn't cost
 // the others. What the caller must not do is let a degraded result be cached;
 // that is what `degraded` is for.
-async function fetchBroadcastStarts(
+async function fetchVideoFacts(
 	ids: string[],
 	apiKey: string,
-): Promise<{ starts: Map<string, string>; degraded: boolean }> {
-	const starts = new Map<string, string>();
+): Promise<{ facts: Map<string, VideoFacts>; degraded: boolean }> {
+	const facts = new Map<string, VideoFacts>();
 	let degraded = false;
 	for (let i = 0; i < ids.length; i += VIDEOS_LIST_BATCH) {
 		const url = new URL("https://www.googleapis.com/youtube/v3/videos");
-		url.searchParams.set("part", "liveStreamingDetails");
+		url.searchParams.set("part", "liveStreamingDetails,contentDetails");
 		url.searchParams.set("id", ids.slice(i, i + VIDEOS_LIST_BATCH).join(","));
 		url.searchParams.set("key", apiKey);
 		try {
@@ -394,15 +449,15 @@ async function fetchBroadcastStarts(
 				degraded = true;
 				continue;
 			}
-			for (const [id, start] of parseVideosListPage(await res.json())) {
-				starts.set(id, start);
+			for (const [id, f] of parseVideosListPage(await res.json())) {
+				facts.set(id, f);
 			}
 		} catch (e) {
 			logError("youtube_videos_list_failed", e);
 			degraded = true;
 		}
 	}
-	return { starts, degraded };
+	return { facts, degraded };
 }
 
 // Correct the feed's dates for live content, where a key allows it. Without one
@@ -414,7 +469,7 @@ async function fetchBroadcastStarts(
 // push it past a video published after it — and must throw UncacheableVideos
 // with the finished list when `degraded`, once the rest of their pipeline has
 // run.
-async function withBroadcastStarts<T extends Video>(
+async function withVideoFacts<T extends Video>(
 	videos: T[],
 	apiKey: string | undefined,
 ): Promise<{ videos: T[]; degraded: boolean }> {
@@ -422,8 +477,8 @@ async function withBroadcastStarts<T extends Video>(
 	// Distinct ids only — a playlist may list one video twice (see dedupeById),
 	// and a repeat would otherwise burn a slot in the 50-id batch.
 	const ids = [...new Set(videos.map((v) => v.id))];
-	const { starts, degraded } = await fetchBroadcastStarts(ids, apiKey);
-	return { videos: applyBroadcastStarts(videos, starts), degraded };
+	const { facts, degraded } = await fetchVideoFacts(ids, apiKey);
+	return { videos: applyVideoFacts(videos, facts), degraded };
 }
 
 async function fetchYouTubeRecent(
@@ -445,7 +500,7 @@ async function fetchYouTubeRecent(
 	// one of the ~3 entries past the cap can be newer than a kept broadcast and
 	// go unsurfaced anyway. Then re-sort — that same shift can move a broadcast
 	// past a video published after it.
-	const { videos, degraded } = await withBroadcastStarts(
+	const { videos, degraded } = await withVideoFacts(
 		parseYouTubeFeed(xml).slice(0, MAX_VIDEOS),
 		env.YOUTUBE_API_KEY,
 	);
@@ -537,6 +592,8 @@ function playlistItemToVideo(
 	const thumbs = snippet.thumbnails ?? {};
 	return {
 		id,
+		// playlistItems.list carries no duration; the videos.list pass adds it.
+		duration_seconds: null,
 		title: snippet.title ?? "",
 		url: `https://www.youtube.com/watch?v=${id}`,
 		thumbnail_url:
@@ -617,7 +674,7 @@ export async function fetchYouTubePlaylistVideosViaApi(
 	// Enrich before sorting so the order reflects when casts aired, not when
 	// their VODs went public — two casts from one evening can otherwise land in
 	// the order their VODs were published the next day.
-	const { videos, degraded } = await withBroadcastStarts(all, apiKey);
+	const { videos, degraded } = await withVideoFacts(all, apiKey);
 	const listed = dedupeById(videos.sort(byPublishedDesc)).slice(
 		0,
 		MAX_PLAYLIST_VIDEOS,

@@ -28,6 +28,7 @@ import {
 	computeStandingsResponse,
 	loadMatchesWithRound,
 	loadUserIdentitiesForMatches,
+	matchOccupant,
 	type UserIdentity,
 } from "./public";
 import type { EventsEnv } from "../d1";
@@ -118,21 +119,6 @@ function nameForSlot(
 	return snapshot ?? slotNames.get(slotId) ?? "";
 }
 
-// Display label for a report-time occupant snapshot: the snapshot user's
-// current display name when they have an account, else the username snapshot
-// itself (never-claimed occupants). Mirrors serializeMatch in public.ts so
-// the CSV shows the same names as the site.
-function snapshotDisplayName(
-	userId: string | null,
-	usernameSnapshot: string | null,
-	identityByUserId: Map<string, UserIdentity>,
-): string | null {
-	const resolved = userId
-		? identityByUserId.get(userId)?.display_name
-		: undefined;
-	return resolved ?? usernameSnapshot;
-}
-
 export function buildMatchesCsv(
 	rows: MatchWithRound[],
 	slotNames: Map<string, string | null>,
@@ -155,22 +141,16 @@ export function buildMatchesCsv(
 	];
 	const out: (string | number | null)[][] = [];
 	for (const { match: m, round: r } of rows) {
+		// Snapshot occupants through the one owner of that precedence (see
+		// matchOccupant), so the CSV shows the same names as the site.
 		const nameA = nameForSlot(
 			m.slot_a_id,
-			snapshotDisplayName(
-				m.slot_a_user_id,
-				m.slot_a_username,
-				identityByUserId,
-			),
+			matchOccupant(m, "a", identityByUserId).name,
 			slotNames,
 		);
 		const nameB = nameForSlot(
 			m.slot_b_id,
-			snapshotDisplayName(
-				m.slot_b_user_id,
-				m.slot_b_username,
-				identityByUserId,
-			),
+			matchOccupant(m, "b", identityByUserId).name,
 			slotNames,
 		);
 		// Winner is whichever participant slot won; resolve via the same

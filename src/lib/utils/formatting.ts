@@ -606,6 +606,31 @@ export function formatGameTitle(game: {
 }
 
 /**
+ * A day in the short "4 Sep" form, on the pinned locale so the month never
+ * arrives translated and server and client agree across hydration.
+ *
+ * `timeZone` names the clock the day is read on. The tournament header needs
+ * UTC for `starts_at` and the viewer's own zone for `completed_at`, because the
+ * two columns are written differently (see migration 0020); callers that do not
+ * care omit it.
+ *
+ * Returns null for a missing or unparseable instant rather than "Invalid Date".
+ */
+export function formatShortDate(
+	iso: string | null | undefined,
+	timeZone?: string,
+): string | null {
+	if (!iso) return null;
+	const d = new Date(iso);
+	if (Number.isNaN(d.getTime())) return null;
+	return d.toLocaleDateString(TIME_LOCALE, {
+		timeZone,
+		month: "short",
+		day: "numeric",
+	});
+}
+
+/**
  * Relative "in X" / "X ago" string for a scheduled instant, matching Discord's
  * `<t:…:R>` style: "in 2 days", "in 5 hours", "in 30 minutes", "3 days ago".
  * Computed at render time from the current clock — not a live-ticking countdown

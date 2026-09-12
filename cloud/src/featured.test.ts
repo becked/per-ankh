@@ -31,6 +31,9 @@ describe("attributeFeaturedVideo", () => {
 			thumbnail_url: "https://i.ytimg.com/vi/vid1/hq.jpg",
 			published_at: "2026-07-01T12:00:00Z",
 			platform: "youtube",
+			// The featured table has no duration column, so this is null for every
+			// featured video rather than unknown for some — see attributeFeaturedVideo.
+			duration_seconds: null,
 		});
 	});
 
