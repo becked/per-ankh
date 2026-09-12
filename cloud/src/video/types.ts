@@ -31,6 +31,14 @@ export interface Video {
 	// runs hours late, so the two are worth keeping straight.
 	published_at: string;
 	platform: VideoPlatform;
+	// Runtime in seconds, or null when unknown. Only videos.list carries this,
+	// so it is null on every keyless path (the free RSS feeds say nothing about
+	// length) and on a broadcast still running. See fetchVideoFacts in
+	// youtube.ts — it rides along on the call that already re-dates broadcasts,
+	// so it costs no extra quota. Every null case except the keyless one heals
+	// itself: a broadcast still running picks up its runtime on the next refresh
+	// past the 1h soft TTL, and a degraded batch is never cached.
+	duration_seconds: number | null;
 }
 
 // A video from a playlist feed, which — unlike a channel feed — can mix
@@ -86,12 +94,13 @@ export class ChannelResolutionError extends Error {
 
 // Thrown by a fetch path that produced usable videos it does not want
 // persisted: the list is serve-able but degraded, so caching it would hold the
-// degradation for the whole TTL. Today's one source is a failed broadcast-date
-// enrichment (see fetchBroadcastStarts in youtube.ts), which leaves live
-// content dated by its VOD publish instant — the very bug the enrichment
-// exists to fix. The cache layer serves `videos` and skips the write, so a
-// warm entry keeps its prior good dates and a cold miss simply retries next
-// request.
+// degradation for the whole TTL. Today's one source is a failed videos.list
+// enrichment (see fetchVideoFacts in youtube.ts), which costs those videos two
+// things: live content stays dated by its VOD publish instant — the very bug
+// the enrichment exists to fix — and every video in the failed batch keeps a
+// null duration_seconds. The cache layer serves `videos` and skips the write,
+// so a warm entry keeps its prior good dates and runtimes, and a cold miss
+// simply retries next request.
 export class UncacheableVideos extends Error {
 	constructor(readonly videos: Video[]) {
 		super("video fetch degraded — serve, do not cache");

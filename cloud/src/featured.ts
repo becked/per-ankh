@@ -18,6 +18,7 @@ import { displayNameSql } from "./identity";
 import { logError } from "./log";
 import { FeatureVideoSchema } from "./schemas/featured";
 import { sessionFromRequest, type SessionEnv } from "./session";
+import type { Video } from "./video/types";
 import {
 	cloudCorsHeaders,
 	errorResponse,
@@ -73,13 +74,19 @@ export interface FeaturedVideoRow {
 // or avatar to render without it, so a row whose join came back empty falls
 // through to the next branch rather than producing a nameless card.
 export function attributeFeaturedVideo(row: FeaturedVideoRow) {
-	const base = {
+	const base: Video = {
 		id: row.video_id,
 		title: row.title,
 		url: row.url,
 		thumbnail_url: row.thumbnail_url,
 		published_at: row.published_at,
 		platform: row.platform,
+		// Featured rows are D1 snapshots taken when a video was starred, and the
+		// table has no duration column — so this is null for every featured
+		// video, not merely unknown for some. Typed as Video rather than left
+		// inferred so the next field added to Video fails here instead of
+		// silently shipping a featured card that is missing it.
+		duration_seconds: null,
 	};
 	if (
 		row.user_id != null &&
