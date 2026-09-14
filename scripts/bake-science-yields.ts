@@ -64,6 +64,11 @@ interface ResourceYieldPair {
 	zIndex?: string;
 	SubPair?: SubPair | SubPair[];
 }
+// A <Pair> mapping one type to another rather than to a number.
+interface TypePair {
+	zIndex?: string;
+	zValue?: string;
+}
 interface Entry {
 	zType?: string;
 	Class?: string;
@@ -74,6 +79,16 @@ interface Entry {
 	TechPrereq?: string;
 	LawClass?: string;
 	Specialist?: string;
+	// project.xml — the one-off Bonus a completed project pays, the umbrella
+	// CityProject the blob records the completion under, and the culture level
+	// the tier needs.
+	Bonus?: string;
+	CityProject?: string;
+	RequiresCulture?: string;
+	// project.xml — the tier below this one on a ladder (Archive II needs I).
+	ProjectPrereq?: string;
+	// improvement.xml — the religion a religious building belongs to.
+	ReligionPrereq?: string;
 	zIconName?: string;
 	iCost?: string;
 	iValue?: string;
@@ -84,6 +99,7 @@ interface Entry {
 	bNoDamage?: string;
 	bNoAssimilate?: string;
 	LeaderEffectPlayer?: string;
+	aiGlobalYields?: { Pair?: YieldPair | YieldPair[] };
 	aiYieldOutput?: { Pair?: YieldPair | YieldPair[] };
 	aiYieldRate?: { Pair?: YieldPair | YieldPair[] };
 	aiYieldModifier?: { Pair?: YieldPair | YieldPair[] };
@@ -130,7 +146,30 @@ async function loadProjects(infosDir: string): Promise<Entry[]> {
 	return loaded.flat();
 }
 
+// Bonus definitions: the base table plus the event bonuses, whose DLC
+// variants are hyphenated — the same shape the project files use, and the
+// event projects' bonuses live in them.
+function isBonusDefFile(name: string): boolean {
+	return name === "bonus.xml" || /^bonus-event(-.*)?\.xml$/.test(name);
+}
+
+async function loadBonuses(infosDir: string): Promise<Entry[]> {
+	const files = (await readdir(infosDir)).filter(isBonusDefFile).sort();
+	const loaded = await Promise.all(
+		files.map((f) => loadEntries(resolve(infosDir, f))),
+	);
+	return loaded.flat();
+}
+
 function pairs(block?: { Pair?: YieldPair | YieldPair[] }): YieldPair[] {
+	const p = block?.Pair;
+	if (p == null) return [];
+	return Array.isArray(p) ? p : [p];
+}
+
+// The <Pair> list of a type→type table (<aeTheologyCityEffect>), which maps a
+// key type to another type rather than to a number.
+function typePairs(block?: { Pair?: TypePair | TypePair[] }): TypePair[] {
 	const p = block?.Pair;
 	if (p == null) return [];
 	return Array.isArray(p) ? p : [p];
@@ -188,6 +227,7 @@ async function main(): Promise<void> {
 		projects,
 		knowledges,
 		traits,
+		bonuses,
 	] = await Promise.all([
 		loadEntries(resolve(infosDir, "improvement.xml")),
 		loadEntries(resolve(infosDir, "improvementClass.xml")),
@@ -206,6 +246,7 @@ async function main(): Promise<void> {
 		loadProjects(infosDir),
 		loadEntries(resolve(infosDir, "knowledge.xml")),
 		loadEntries(resolve(infosDir, "trait.xml")),
+		loadBonuses(infosDir),
 	]);
 
 	const effectByType = new Map(effects.map((e) => [e.zType, e]));
@@ -369,6 +410,59 @@ async function main(): Promise<void> {
 		if (v > 0) theologySciencePerReligion[t.zType] = v / 10;
 	}
 
+	// A theology's science can hang off a BUILDING rather than the theology
+	// itself: improvementClass.xml <aeTheologyCityEffect> reads "a building of
+	// this class, of a religion that established this theology, puts this
+	// effect in the city" (Tile.changeImprovementYieldEffectCity). Gnosticism
+	// is the science one — a Temple of a Gnostic religion pays +1 per URBAN
+	// specialist in its city — and it is invisible to a sweep of theology.xml,
+	// which carries no YIELD_SCIENCE at all.
+	const theologyBuildingSciencePerUrbanSpecialist: Record<
+		string,
+		Record<string, number>
+	> = {};
+	for (const cls of improvementClasses) {
+		if (!cls.zType) continue;
+		for (const pair of typePairs(cls.aeTheologyCityEffect)) {
+			if (!pair.zIndex || !pair.zValue) continue;
+			const e = effectByType.get(pair.zValue);
+			if (!e) continue;
+			const v = yieldValue(
+				pairs(e.aiYieldRateSpecialistUrban),
+				"YIELD_SCIENCE",
+			);
+			if (v > 0) {
+				(theologyBuildingSciencePerUrbanSpecialist[pair.zIndex] ??= {})[
+					cls.zType
+				] = v / 10;
+			}
+		}
+	}
+
+	// The religion a building of one of those classes belongs to, so a city's
+	// Temple can be matched against the theologies its religion established.
+	// Only the classes the table above names, which keeps this to the handful
+	// of religious buildings that can pay science.
+	const theologyClasses = new Set(
+		Object.values(theologyBuildingSciencePerUrbanSpecialist).flatMap(
+			(byClass) => Object.keys(byClass),
+		),
+	);
+	const improvementReligion: Record<
+		string,
+		{ religion: string; class: string }
+	> = {};
+	for (const imp of improvements) {
+		if (!imp.zType || !imp.ReligionPrereq || !imp.Class) continue;
+		if (!theologyClasses.has(imp.Class)) continue;
+		// Carries its own class: a Temple pays no science of its own, so it is
+		// not in IMPROVEMENT_CLASS and the lookup would otherwise miss it.
+		improvementReligion[imp.zType] = {
+			religion: imp.ReligionPrereq,
+			class: imp.Class,
+		};
+	}
+
 	// Every city effect a completed project puts in the city — its <EffectCity>
 	// and <EffectCityExtra>. Both the conditional-grant tables and the city-HP
 	// table below key on these, because the XML expresses "a city holding an
@@ -469,6 +563,76 @@ async function main(): Promise<void> {
 		if (Object.keys(grants).length > 0) {
 			archetypeProjectScience[trait.zType] = grants;
 		}
+	}
+
+	// ─── One-off project science (Inquiries) ─────────────────────────────
+	//
+	// A few projects pay a LUMP of science on completion rather than a rate:
+	// project.xml <Bonus> → bonus.xml <aiGlobalYields> YIELD_SCIENCE, paid
+	// through Player.processYieldWhole (Player.cs:17199), which multiplies by
+	// YIELDS_MULTIPLIER — so unlike every other value in this file these are
+	// already WHOLE science and are NOT divided by 10.
+	//
+	// The Inquiry line is the one that matters: four repeatable tiers, each
+	// gated on the city's culture level and worth 40/80/120/160. A save
+	// records completions under the hidden umbrella <CityProject>
+	// (PROJECT_INQUIRY) with no tier and no turn, so the table keys by that
+	// umbrella and carries each tier's culture gate — enough to bound what a
+	// city's completions were worth.
+	const bonusScience = new Map<string, number>();
+	for (const b of bonuses) {
+		if (!b.zType) continue;
+		const science = yieldValue(pairs(b.aiGlobalYields), "YIELD_SCIENCE");
+		if (science > 0) bonusScience.set(b.zType, science);
+	}
+	const projectByType = new Map(
+		projects.filter((p) => p.zType != null).map((p) => [p.zType as string, p]),
+	);
+	// What one recorded completion is WORTH, which is not always what the tier
+	// itself pays. A ladder (Archive II needs I, III needs II) leaves only its
+	// highest rung in the save: City.finishProject zeroes the count of every
+	// project the finished one invalidates (City.cs), and <abInvalidBy> on the
+	// Archive line lists every higher tier. So a city recorded at Archive III
+	// built I and II on the way and was paid for all three — 10 + 20 + 30.
+	// Walking <ProjectPrereq> back down the ladder recovers that.
+	const cumulativeScience = (
+		zType: string,
+		seen = new Set<string>(),
+	): number => {
+		if (seen.has(zType)) return 0;
+		seen.add(zType);
+		const p = projectByType.get(zType);
+		if (!p?.Bonus) return 0;
+		const own = bonusScience.get(p.Bonus) ?? 0;
+		return (
+			own + (p.ProjectPrereq ? cumulativeScience(p.ProjectPrereq, seen) : 0)
+		);
+	};
+	const projectOneOffScience: Record<
+		string,
+		{ project: string; science: number; culture: string | null }[]
+	> = {};
+	for (const p of projects) {
+		if (!p.zType || !p.Bonus) continue;
+		if (bonusScience.get(p.Bonus) == null) continue;
+		// Completions are recorded under the umbrella project when there is
+		// one, and under the project itself when there isn't.
+		const key = p.CityProject ?? p.zType;
+		(projectOneOffScience[key] ??= []).push({
+			project: p.zType,
+			science: cumulativeScience(p.zType),
+			culture: p.RequiresCulture ?? null,
+		});
+	}
+	for (const tiers of Object.values(projectOneOffScience)) {
+		tiers.sort(
+			(a, b) => a.science - b.science || a.project.localeCompare(b.project),
+		);
+	}
+	if (projectOneOffScience["PROJECT_INQUIRY"] == null) {
+		throw new Error(
+			"bake-science-yields: no one-off science found for PROJECT_INQUIRY — the project/bonus shape changed",
+		);
 	}
 
 	// City HP a completed project adds (effectCity <iCityHP>), the denominator
@@ -865,6 +1029,31 @@ async function main(): Promise<void> {
 	);
 	lines.push("");
 	lines.push(
+		"// Theology → improvement class → science per URBAN specialist, paid in",
+	);
+	lines.push(
+		"// every city holding a building of that class whose religion established",
+	);
+	lines.push(
+		"// the theology (Gnosticism's Temples). The theology entry itself carries",
+	);
+	lines.push("// no science — the rule lives on the improvement class.");
+	lines.push(
+		`export const THEOLOGY_BUILDING_SCIENCE_PER_URBAN_SPECIALIST: Readonly<Record<string, Readonly<Record<string, number>>>> = ${JSON.stringify(sortedDeep(theologyBuildingSciencePerUrbanSpecialist))};`,
+	);
+	lines.push("");
+	lines.push(
+		"// Religious building → the religion it belongs to (<ReligionPrereq>),",
+	);
+	lines.push(
+		"// for the classes the theology table above names. Lets a city's Temple",
+	);
+	lines.push("// be matched against the theologies its religion established.");
+	lines.push(
+		`export const IMPROVEMENT_RELIGION: Readonly<Record<string, { readonly religion: string; readonly class: string }>> = ${JSON.stringify(sorted(improvementReligion as unknown as Record<string, unknown>))};`,
+	);
+	lines.push("");
+	lines.push(
 		"// City project → flat science: `single` effects (bSingle — Archives)",
 	);
 	lines.push("// pay once regardless of count; the rest multiply (Convoys).");
@@ -936,6 +1125,40 @@ async function main(): Promise<void> {
 	lines.push("// was completed.");
 	lines.push(
 		`export const PROJECT_CITY_HP: Readonly<Record<string, number>> = ${JSON.stringify(sorted(projectCityHp))};`,
+	);
+	lines.push("");
+	lines.push(
+		"// City project → the tiers that pay a ONE-OFF lump of science when",
+	);
+	lines.push(
+		"// completed, cheapest first. Keyed by the umbrella <CityProject> the",
+	);
+	lines.push(
+		"// save records completions under (PROJECT_INQUIRY), because a blob",
+	);
+	lines.push(
+		"// carries neither the tier nor the turn — only how many a city ran.",
+	);
+	lines.push(
+		"// `culture` is the tier's RequiresCulture gate, which bounds what a",
+	);
+	lines.push(
+		"// given city's completions can have been worth. `science` is CUMULATIVE",
+	);
+	lines.push(
+		"// down a prereq ladder — an Archive III city was paid for I and II on",
+	);
+	lines.push(
+		"// the way up, and the save keeps only the highest rung (abInvalidBy).",
+	);
+	lines.push(
+		"// given city's completions can have been worth. Values are WHOLE",
+	);
+	lines.push(
+		"// science, not the file's usual ÷10 (Player.processYieldWhole).",
+	);
+	lines.push(
+		`export const PROJECT_ONE_OFF_SCIENCE: Readonly<Record<string, readonly { readonly project: string; readonly science: number; readonly culture: string | null }[]>> = ${JSON.stringify(sorted(projectOneOffScience as unknown as Record<string, unknown>))};`,
 	);
 	lines.push("");
 	lines.push(

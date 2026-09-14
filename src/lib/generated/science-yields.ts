@@ -539,6 +539,46 @@ export const THEOLOGY_SCIENCE_PER_RELIGION: Readonly<Record<string, number>> = {
 	THEOLOGY_DUALISM: 1,
 };
 
+// Theology → improvement class → science per URBAN specialist, paid in
+// every city holding a building of that class whose religion established
+// the theology (Gnosticism's Temples). The theology entry itself carries
+// no science — the rule lives on the improvement class.
+export const THEOLOGY_BUILDING_SCIENCE_PER_URBAN_SPECIALIST: Readonly<
+	Record<string, Readonly<Record<string, number>>>
+> = { THEOLOGY_GNOSTICISM: { IMPROVEMENTCLASS_TEMPLE: 1 } };
+
+// Religious building → the religion it belongs to (<ReligionPrereq>),
+// for the classes the theology table above names. Lets a city's Temple
+// be matched against the theologies its religion established.
+export const IMPROVEMENT_RELIGION: Readonly<
+	Record<string, { readonly religion: string; readonly class: string }>
+> = {
+	IMPROVEMENT_TEMPLE_BUDDHISM: {
+		religion: "RELIGION_BUDDHISM",
+		class: "IMPROVEMENTCLASS_TEMPLE",
+	},
+	IMPROVEMENT_TEMPLE_CHRISTIANITY: {
+		religion: "RELIGION_CHRISTIANITY",
+		class: "IMPROVEMENTCLASS_TEMPLE",
+	},
+	IMPROVEMENT_TEMPLE_HINDUISM: {
+		religion: "RELIGION_HINDUISM",
+		class: "IMPROVEMENTCLASS_TEMPLE",
+	},
+	IMPROVEMENT_TEMPLE_JUDAISM: {
+		religion: "RELIGION_JUDAISM",
+		class: "IMPROVEMENTCLASS_TEMPLE",
+	},
+	IMPROVEMENT_TEMPLE_MANICHAEISM: {
+		religion: "RELIGION_MANICHAEISM",
+		class: "IMPROVEMENTCLASS_TEMPLE",
+	},
+	IMPROVEMENT_TEMPLE_ZOROASTRIANISM: {
+		religion: "RELIGION_ZOROASTRIANISM",
+		class: "IMPROVEMENTCLASS_TEMPLE",
+	},
+};
+
 // City project → flat science: `single` effects (bSingle — Archives)
 // pay once regardless of count; the rest multiply (Convoys).
 export const PROJECT_SCIENCE: Readonly<
@@ -603,6 +643,54 @@ export const PROJECT_CITY_HP: Readonly<Record<string, number>> = {
 	PROJECT_MOAT: 10,
 	PROJECT_TOWERS: 10,
 	PROJECT_WALLS: 10,
+};
+
+// City project → the tiers that pay a ONE-OFF lump of science when
+// completed, cheapest first. Keyed by the umbrella <CityProject> the
+// save records completions under (PROJECT_INQUIRY), because a blob
+// carries neither the tier nor the turn — only how many a city ran.
+// `culture` is the tier's RequiresCulture gate, which bounds what a
+// given city's completions can have been worth. `science` is CUMULATIVE
+// down a prereq ladder — an Archive III city was paid for I and II on
+// the way up, and the save keeps only the highest rung (abInvalidBy).
+// given city's completions can have been worth. Values are WHOLE
+// science, not the file's usual ÷10 (Player.processYieldWhole).
+export const PROJECT_ONE_OFF_SCIENCE: Readonly<
+	Record<
+		string,
+		readonly {
+			readonly project: string;
+			readonly science: number;
+			readonly culture: string | null;
+		}[]
+	>
+> = {
+	PROJECT_ARCHIVE_1: [
+		{ project: "PROJECT_ARCHIVE_1", science: 10, culture: null },
+	],
+	PROJECT_ARCHIVE_2: [
+		{ project: "PROJECT_ARCHIVE_2", science: 30, culture: null },
+	],
+	PROJECT_ARCHIVE_3: [
+		{ project: "PROJECT_ARCHIVE_3", science: 60, culture: null },
+	],
+	PROJECT_ARCHIVE_4: [
+		{ project: "PROJECT_ARCHIVE_4", science: 100, culture: null },
+	],
+	PROJECT_INQUIRY: [
+		{ project: "PROJECT_INQUIRY_1", science: 40, culture: "CULTURE_WEAK" },
+		{
+			project: "PROJECT_INQUIRY_2",
+			science: 80,
+			culture: "CULTURE_DEVELOPING",
+		},
+		{ project: "PROJECT_INQUIRY_3", science: 120, culture: "CULTURE_STRONG" },
+		{
+			project: "PROJECT_INQUIRY_4",
+			science: 160,
+			culture: "CULTURE_LEGENDARY",
+		},
+	],
 };
 
 // ─── Knowledge tiers (Player.calculateKnowledgeOf) ──────────────────

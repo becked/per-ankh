@@ -56,9 +56,12 @@ import {
 	COMPETITIVE_SCIENCE_STIPEND,
 	KNOWLEDGE_TIERS,
 	FAMILY_CLASS_SCIENCE_PER_SPECIALIST,
+	THEOLOGY_BUILDING_SCIENCE_PER_URBAN_SPECIALIST,
+	IMPROVEMENT_RELIGION,
 	NATION_CITY_SCIENCE,
 	THEOLOGY_SCIENCE_PER_RELIGION,
 	PROJECT_SCIENCE,
+	PROJECT_ONE_OFF_SCIENCE,
 	LAW_PROJECT_SCIENCE,
 	ARCHETYPE_PROJECT_SCIENCE,
 	PROJECT_CITY_HP,
@@ -918,7 +921,9 @@ export function scienceBreakdown(
 		const specialists = citySpecialists.get(city.city_name) ?? 0;
 		if (familyRate > 0 && specialists > 0 && city.family_class != null) {
 			addEffect(
-				`${formatEnum(city.family_class, "FAMILYCLASS_")} cities`,
+				// Named for what it scales with, not just whose perk it is —
+				// a reader hunting for specialist science looks here last.
+				`${formatEnum(city.family_class, "FAMILYCLASS_")} per specialist`,
 				city.city_name,
 				familyRate * specialists,
 				specialists,
@@ -927,6 +932,39 @@ export function scienceBreakdown(
 					value: `ARCHETYPE_${city.family_class.slice("FAMILYCLASS_".length)}`,
 				},
 			);
+		}
+		// Gnosticism: a Temple of a religion that established the theology puts
+		// an effect in its city paying science per URBAN specialist
+		// (improvementClass aeTheologyCityEffect → aiYieldRateSpecialistUrban).
+		// The theology entry itself carries no science, so this is invisible to
+		// anyone reading theology.xml — the rule lives on the building.
+		const urban = cityUrban.get(city.city_name) ?? 0;
+		if (urban > 0) {
+			for (const [theology, byClass] of Object.entries(
+				THEOLOGY_BUILDING_SCIENCE_PER_URBAN_SPECIALIST,
+			)) {
+				for (const [cls, rate] of Object.entries(byClass)) {
+					// A building of that class in this city whose own religion
+					// established the theology.
+					const holds = improvements.some((i) => {
+						if (i.city_name !== city.city_name) return false;
+						const building = IMPROVEMENT_RELIGION[i.improvement];
+						if (building?.class !== cls) return false;
+						return (
+							cityContext.theologiesByReligion
+								.get(building.religion)
+								?.includes(theology) ?? false
+						);
+					});
+					if (!holds) continue;
+					addEffect(
+						`${formatEnum(theology, "THEOLOGY_")} per urban specialist`,
+						city.city_name,
+						rate * urban,
+						urban,
+					);
+				}
+			}
 		}
 		// Babylonia: flat science in every city, from the nation's player
 		// effect.
@@ -1179,6 +1217,83 @@ export function scienceBreakdown(
 	};
 }
 
+// ─── One-off project science (Inquiries, Archives) ───────────────────
+
+/**
+ * A repeatable project a player completed that paid a LUMP of science each
+ * time — the Inquiry line above all, four culture-gated tiers worth
+ * 40/80/120/160 apiece.
+ *
+ * `count` is exact: a save records how many of each project every city
+ * completed. The science is a BAND, not a number, because the save records
+ * neither which tier each completion was nor the turn it landed on. The floor
+ * assumes every completion was the cheapest tier; the ceiling gives each city
+ * the dearest tier its culture allowed. Culture only ever climbs, so a city's
+ * final level is a true upper bound on what was available earlier.
+ */
+export type OneOffProject = {
+	project: string;
+	label: string;
+	count: number;
+	byCity: NamedCount[];
+	min: number;
+	max: number;
+	// The distinct per-completion values in play, ascending — what one
+	// completion was worth, for the caption's explanation of the band.
+	//
+	// Deliberately NOT used to attribute a turn's one-off science gain to
+	// this project: the generic event rewards (BONUS_SCIENCE_GAIN_SMALL and
+	// friends) pay base + per-city, so with four cities SMALL pays exactly
+	// 40 and AVERAGE exactly 80 — the same numbers an Inquiry pays. Matching
+	// on value would assert a source the save never records, which is the
+	// defect #212 already reports against this rail.
+	values: number[];
+};
+
+export function oneOffProjectScience(
+	cities: CityInfo[],
+	projectLabel: (zType: string) => string,
+): OneOffProject[] {
+	const out = new Map<string, OneOffProject>();
+	for (const city of cities) {
+		const level = CULTURE_LEVELS.indexOf(city.culture_level ?? "");
+		for (const pc of city.project_counts ?? []) {
+			const tiers = PROJECT_ONE_OFF_SCIENCE[pc.project];
+			if (!tiers || pc.count <= 0) continue;
+			// Tiers this city could have run: ungated ones, plus every tier
+			// whose culture gate its culture had reached. An unknown culture
+			// level (index -1) leaves only the ungated tiers, which floors the
+			// ceiling rather than inventing one.
+			const reachable = tiers.filter(
+				(t) => t.culture == null || CULTURE_LEVELS.indexOf(t.culture) <= level,
+			);
+			const usable = reachable.length > 0 ? reachable : [tiers[0]];
+			const row = out.get(pc.project) ?? {
+				project: pc.project,
+				label: projectLabel(pc.project),
+				count: 0,
+				byCity: [],
+				min: 0,
+				max: 0,
+				values: [],
+			};
+			row.count += pc.count;
+			row.byCity.push({ name: city.city_name, count: pc.count });
+			row.min += pc.count * usable[0].science;
+			row.max += pc.count * usable[usable.length - 1].science;
+			for (const t of usable) {
+				if (!row.values.includes(t.science)) row.values.push(t.science);
+			}
+			out.set(pc.project, row);
+		}
+	}
+	for (const row of out.values()) {
+		row.values.sort((a, b) => a - b);
+		row.byCity.sort((a, b) => b.count - a.count);
+	}
+	return [...out.values()].sort((a, b) => b.max - a.max);
+}
+
 // ─── One-off science gains ───────────────────────────────────────────
 
 export type ScienceSpike = {
@@ -1233,11 +1348,12 @@ export function scienceSpikes(
 		const bonus = cur.cumulative - prev.cumulative - cur.rate;
 		if (bonus < SCIENCE_SPIKE_MIN) continue;
 		const sources: string[] = [];
+		const amount = Math.round(bonus);
 		if (steals.has(cur.turn)) sources.push("Steal Research mission");
 		sources.push(...(storiesByTurn.get(cur.turn) ?? []));
 		spikes.push({
 			turn: cur.turn,
-			amount: Math.round(bonus),
+			amount,
 			sources: sources.slice(0, SPIKE_SOURCES_MAX),
 		});
 	}
