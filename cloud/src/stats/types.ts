@@ -217,6 +217,56 @@ export interface ChartBundleCore {
 		}>;
 	};
 
+	// --- Records -----------------------------------------------------
+	// The leaderboard behind the yield bands: per series, the top few
+	// player-games on each board. Keyed series → board → rows, where a board
+	// is "peak" (the best turn of the game), "final" (the last turn) or
+	// "t20" / "t40" / "t60" / "t80" / "t100" (the value at a fixed
+	// checkpoint — the only length-blind comparisons of the seven).
+	//
+	// A cumulative series is keyed "<series>:cum", and means one of two things.
+	// Science, culture, orders and growth never decrease over a game, so for
+	// them it is lifetime production; money, food, iron, stone, wood, training
+	// and civics all have turns where the total falls, so for them it is the
+	// stockpile held at that turn. Presentation has to name the two apart.
+	// Levels (military_power, legitimacy) get no ":cum" key at all.
+	//
+	// One row per match per seat: the two uploads of a duel are collapsed on
+	// the save's own xml_game_id before anything is ranked.
+	records: Record<
+		string,
+		Record<
+			string,
+			Array<{
+				game_id: string;
+				player_index: number;
+				turn: number;
+				value: number;
+			}>
+		>
+	>;
+
+	// Identity for the games appearing in `records`, as a lookup rather than
+	// repeated on every row: one game commonly holds several records, and the
+	// rows outnumber the games several times over.
+	//
+	// Per seat: the nation and the handle the SAVE records — the same pair
+	// every public game page already prints. Never online_id, which is the
+	// platform identifier the share blob strips for anonymous viewers, and
+	// never discord_id or username, which stay in D1 metadata.
+	recordGames: Record<
+		string,
+		{
+			turns: number;
+			seats: Record<number, { nation: string | null; name: string | null }>;
+		}
+	>;
+
+	// Player-games each board could draw on. The late checkpoints are a
+	// fraction of the corpus (T100 is ~18% of it), and a board that doesn't
+	// say so reads as a record over everyone.
+	recordCounts: Record<string, number>;
+
 	// --- Laws --------------------------------------------------------
 	// Per (nation, law) with an extra "__all__" aggregate row per law
 	// (frontend ALL_NATIONS), like the tech charts.

@@ -85,6 +85,11 @@ const SPRITE_FALLBACKS = [
 
 // Military Power's stand-in, and where it comes from.
 const MILITARY_POWER_SOURCE = "COLOR_RATING_COURAGE";
+// GDP is likewise not a yield — no yield.xml entry, no token in the game XML
+// at all. It borrows the charisma rating's colour, which is the rating Old
+// World ties to money, rather than YIELD_MONEY's own: GDP and money are two
+// charts on the same tab and sharing a colour would merge them by eye.
+const GDP_SOURCE = "COLOR_RATING_CHARISMA";
 
 interface Entry {
 	zType?: string;
@@ -375,6 +380,12 @@ async function main(): Promise<void> {
 	}
 	const militaryLift = liftToFloor(militarySourceHex, DEFAULT_FLOOR);
 
+	const gdpSourceHex = hexByColor.get(GDP_SOURCE);
+	if (!gdpSourceHex) {
+		throw new Error(`bake-yield-colors: ${GDP_SOURCE} not found in color.xml`);
+	}
+	const gdpLift = liftToFloor(gdpSourceHex, DEFAULT_FLOOR);
+
 	// Nothing may ship below its floor — the lift is the whole point of the bake.
 	for (const r of resolved) {
 		const floor = FLOOR_OVERRIDES[r.key] ?? DEFAULT_FLOOR;
@@ -448,6 +459,22 @@ async function main(): Promise<void> {
 		`export const MILITARY_POWER_COLOR = "${militaryLift.hex}"; // ${note(militaryLift, `color.xml ${militarySourceHex}`)}`,
 	);
 	lines.push("");
+	lines.push("// GDP is not a yield either: the game does not model it, so no");
+	lines.push(
+		"// yield.xml entry and no token of its own. It is per-ankh's own",
+	);
+	lines.push(
+		"// series — money income plus commodity income at market price —",
+	);
+	lines.push(`// and it borrows ${GDP_SOURCE}, the rating Old World ties to`);
+	lines.push(
+		"// money. Not YIELD_MONEY's colour: GDP and money are two charts",
+	);
+	lines.push("// on one tab, and sharing a colour would merge them by eye.");
+	lines.push(
+		`export const GDP_COLOR = "${gdpLift.hex}"; // ${note(gdpLift, `color.xml ${gdpSourceHex}`)}`,
+	);
+	lines.push("");
 
 	const config = await resolveConfig(OUTPUT_TS);
 	const formatted = await prettierFormat(lines.join("\n"), {
@@ -466,7 +493,7 @@ async function main(): Promise<void> {
 	await writeFile(OUTPUT_TS, formatted);
 	const liftedCount = resolved.filter((r) => r.lift.lifted).length;
 	console.log(
-		`bake-yield-colors: ${resolved.length} yields (${liftedCount} lifted) + Military Power → ${OUTPUT_TS.replace(REPO_ROOT + "/", "")}`,
+		`bake-yield-colors: ${resolved.length} yields (${liftedCount} lifted) + Military Power + GDP → ${OUTPUT_TS.replace(REPO_ROOT + "/", "")}`,
 	);
 }
 

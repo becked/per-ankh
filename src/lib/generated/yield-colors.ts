@@ -35,3 +35,11 @@ export const YIELD_COLORS = {
 // Kept out of YIELD_COLORS so the map above stays exactly the
 // game's yield palette, keyed by tokens the game actually has.
 export const MILITARY_POWER_COLOR = "#dc5a43"; // color.xml #dc5a43 · 4.57:1
+
+// GDP is not a yield either: the game does not model it, so no
+// yield.xml entry and no token of its own. It is per-ankh's own
+// series — money income plus commodity income at market price —
+// and it borrows COLOR_RATING_CHARISMA, the rating Old World ties to
+// money. Not YIELD_MONEY's colour: GDP and money are two charts
+// on one tab, and sharing a colour would merge them by eye.
+export const GDP_COLOR = "#dcaf43"; // color.xml #dcaf43 · 8.40:1

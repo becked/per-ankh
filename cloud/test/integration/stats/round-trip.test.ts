@@ -296,7 +296,12 @@ describe("chart bundle round-trip", () => {
 					: await bundleFor("humans");
 			expect(b.yieldCurves.turns, focal).toHaveLength(SEEDED_TURNS);
 			expect(b.yieldCurves.outcome, focal).not.toBeNull();
-			expect(Object.keys(b.yieldCurves.series), focal).toHaveLength(16);
+			// 17: the 14 yields, the two stock levels, and GDP. GDP's band is
+			// present but all-null here — the fixture blobs carry no
+			// yield_price_history, so there is nothing to price — which is the
+			// ordinary state the Yields panel drops a card for rather than
+			// drawing an empty axis.
+			expect(Object.keys(b.yieldCurves.series), focal).toHaveLength(17);
 			for (const field of [
 				"nations",
 				"nationWinRate",

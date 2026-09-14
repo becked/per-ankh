@@ -40,6 +40,8 @@ const BUNDLE_SCHEMA_CHANGELOG: Record<number, string> = {
 	7: "per-wonder build rate, builder win rate, and build-turn distribution",
 	8: "capital family class win rate, plus avg_share / share_samples / slot_counts on familyByNation (per-class city footprint and founding order)",
 	9: "favorite_day_of_week dropped (no consumer — the profile card reads its own copy from GET /v1/users/:user_id), and save_dates moved from ChartBundleCore to the user-only ChartBundle: only the profile Overview calendar renders it, and it was the one field whose size grew with the corpus rather than with the turn axis",
+	10: "records — per yield series, the top player-games on each of seven boards (peak, end-of-game, and the T20/T40/T60/T80/T100 checkpoints), for both the rate and the cumulative column. Folded into the pass that already builds the bands, so no new query",
+	11: "gdp — a per-turn GDP series on yieldCurves and a GDP record board, from the game_player_turn columns migration 0044 adds. A new key inside an existing Record rather than a new declared field, so nothing dereferences it blind, but a bundle cached before the deploy would draw an empty GDP chart on the Yields tab for up to a TTL. A flush is cheaper than that",
 };
 
 export const BUNDLE_SCHEMA_VERSION = Math.max(

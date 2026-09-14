@@ -47,6 +47,23 @@
 		showCount = v.includes("count");
 	}
 
+	// A series the corpus has no data for is dropped rather than drawn empty.
+	// Every column here is nullable and some are only populated for part of the
+	// corpus — gdp_per_turn needs a save that recorded market prices, and needs
+	// the game to have been indexed since migration 0044 — so an all-null band
+	// is an ordinary state, not a bug, and an axis with no line on it says
+	// nothing a missing card doesn't say better.
+	const drawable = $derived(
+		YIELD_SERIES.filter((ys) => {
+			const band = bundle.yieldCurves.series[ys.key];
+			if (!band) return false;
+			return (
+				band.rate.p50.some((v) => v != null) ||
+				band.cumulative.p50.some((v) => v != null)
+			);
+		}),
+	);
+
 	// Shared toggle-item tokens (matches the game-detail ToggleGroup).
 	const itemClass =
 		"px-2.5 py-1 text-xs text-tan transition-colors data-[state=off]:bg-surface data-[state=on]:bg-surface-raised";
@@ -104,7 +121,7 @@
 		{/if}
 	</Toolbar.Root>
 
-	{#each YIELD_SERIES as ys (ys.key)}
+	{#each drawable as ys (ys.key)}
 		<ChartContainer
 			option={yieldChartOption(bundle, ys.key, ys.label, {
 				mode,
