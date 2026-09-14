@@ -12,13 +12,13 @@
 // those cases resolve a corpus and run the aggregator over it.
 
 import { applyD1Migrations, env } from "cloudflare:test";
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { buildChartBundle } from "../../../src/stats/aggregate";
 import {
 	resolveGlobalCorpus,
 	type StatsCorpus,
 } from "../../../src/stats/resolve";
-import type { GlobalSlice } from "../../../src/stats/types";
+import type { GlobalPeriod, GlobalSlice } from "../../../src/stats/types";
 import { makeUser } from "../../helpers/builders";
 import { postMultipart } from "../../helpers/requests";
 import {
@@ -95,12 +95,29 @@ const expected = (...labels: Label[]): Set<string> => new Set(labels.map(idOf));
 const resolve = (
 	slice: GlobalSlice,
 	nations: string[] = [],
-): Promise<StatsCorpus> => resolveGlobalCorpus(env, slice, { nations });
+	period: GlobalPeriod = "all",
+): Promise<StatsCorpus> => resolveGlobalCorpus(env, slice, { nations, period });
 
 const gamesIn = async (
 	slice: GlobalSlice,
 	nations: string[] = [],
-): Promise<Set<string>> => new Set((await resolve(slice, nations)).gameIds);
+	period: GlobalPeriod = "all",
+): Promise<Set<string>> =>
+	new Set((await resolve(slice, nations, period)).gameIds);
+
+// Date a fixture's save, so the recency window has something to cut on.
+// save_date is what the window reads — when the game was PLAYED — not
+// created_at, which is when it happened to be uploaded.
+const setSaveDate = (label: Label, date: string | null) =>
+	env.SHARE_DB.prepare("UPDATE games SET save_date = ? WHERE game_id = ?")
+		.bind(date, idOf(label))
+		.run();
+
+const monthsAgo = (n: number): string => {
+	const d = new Date();
+	d.setUTCMonth(d.getUTCMonth() - n);
+	return d.toISOString().slice(0, 10);
+};
 
 describe("global corpus", () => {
 	it("takes every public game and no private one", async () => {
@@ -133,6 +150,60 @@ describe("global corpus", () => {
 		expect(await gamesIn("all", [EGYPT, GREECE])).toEqual(
 			expected("duel", "ffa", "ai_rome"),
 		);
+	});
+
+	describe("the recency window", () => {
+		// Restored after each case so the window tests don't reorder the rest.
+		let saved: Array<[Label, string | null]> = [];
+		beforeEach(async () => {
+			const rows = await env.SHARE_DB.prepare(
+				"SELECT game_id, save_date FROM games",
+			).all<{ game_id: string; save_date: string | null }>();
+			const byId = new Map(
+				(rows.results ?? []).map((r) => [r.game_id, r.save_date]),
+			);
+			saved = (["duel", "ffa", "ai_rome"] as Label[]).map((l) => [
+				l,
+				byId.get(idOf(l)) ?? null,
+			]);
+		});
+		afterEach(async () => {
+			for (const [label, date] of saved) await setSaveDate(label, date);
+		});
+
+		it("keeps a game played inside the window and drops one outside it", async () => {
+			// Every fixture dated explicitly: the blobs carry their own save_date
+			// and a test that leaned on it would pass or fail by fixture vintage.
+			await setSaveDate("duel", monthsAgo(1));
+			await setSaveDate("ffa", monthsAgo(9));
+			await setSaveDate("ai_rome", monthsAgo(1));
+			expect(await gamesIn("all", [], "6m")).toEqual(
+				expected("duel", "ai_rome"),
+			);
+			expect(await gamesIn("all", [], "12m")).toEqual(
+				expected("duel", "ffa", "ai_rome"),
+			);
+		});
+
+		it("drops an undatable game from every window but keeps it in all-time", async () => {
+			await setSaveDate("duel", null);
+			expect((await gamesIn("all")).has(idOf("duel"))).toBe(true);
+			expect((await gamesIn("all", [], "6m")).has(idOf("duel"))).toBe(false);
+		});
+
+		it("ANDs the window with the slice and the nation", async () => {
+			await setSaveDate("duel", monthsAgo(9));
+			await setSaveDate("ffa", monthsAgo(1));
+			// In the Rome corpus all-time, out of it once the window closes.
+			expect(await gamesIn("duel", [ROME])).toEqual(expected("duel"));
+			expect(await gamesIn("duel", [ROME], "6m")).toEqual(new Set());
+		});
+
+		it("leaves the focal seats alone — a window narrows games, not seats", async () => {
+			// Every seat of a recent game is a recent seat, so unlike a nation
+			// selection the window says nothing about which rows are focal.
+			expect((await resolve("all", [], "6m")).focalNations).toBeUndefined();
+		});
 	});
 
 	it("ANDs the nation with the slice", async () => {
