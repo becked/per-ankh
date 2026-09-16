@@ -278,6 +278,7 @@ export function extractAllGameData(
 		nation: p.nation,
 		is_human: p.isHuman,
 		online_id: p.onlineId,
+		is_save_owner: p.isSaveOwner,
 	}));
 
 	return {

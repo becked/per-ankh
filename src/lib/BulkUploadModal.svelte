@@ -51,8 +51,9 @@
 				humans: PlayerChoice[];
 				// Total game turns (match_metadata.total_turns), shown per option.
 				totalTurns: number;
-				// The heuristic's pre-selected player_index (matched against the
-				// user's past-upload online_ids), or null when there was no
+				// The heuristic's pre-selected player_index (the seat the save was
+				// written from, else a match against the user's past-upload
+				// online_ids — see defaultSelection), or null when there was no
 				// confident guess. Drives the "Suggested" badge independently of
 				// `selected`.
 				suggested: number | null;
@@ -471,6 +472,42 @@
 		return p.player_name || nationName(p.nation) || "—";
 	}
 
+	// The suggested row when it came from the save naming its own player,
+	// rather than from a match against the uploader's known online ids.
+	function saveOwnerSuggestion(
+		humans: PlayerChoice[],
+		suggested: number | null,
+	): PlayerChoice | undefined {
+		return humans.find((p) => p.is_save_owner && p.player_index === suggested);
+	}
+
+	// The row's question. A save-owner suggestion is a claim about the file,
+	// not about the uploader — the two part company on exactly the uploads
+	// observer mode exists for — so it gets asked by name instead of arriving
+	// as a pre-checked row that a wrong answer can ride through.
+	function suggestionQuestion(
+		humans: PlayerChoice[],
+		suggested: number | null,
+	): string {
+		const saver = saveOwnerSuggestion(humans, suggested);
+		return saver
+			? `Saved by ${displayName(saver)} — is that you?`
+			: "Which nation were you?";
+	}
+
+	// The line under it, naming the answer that isn't the pre-checked one.
+	function suggestionHint(
+		humans: PlayerChoice[],
+		suggested: number | null,
+	): string {
+		if (saveOwnerSuggestion(humans, suggested)) {
+			return "Their seat is pre-selected — choose the observer option below if you're uploading it on their behalf.";
+		}
+		return suggested === null
+			? "Select the player you controlled, or choose observer."
+			: "Based on your past uploads. Change it if its wrong.";
+	}
+
 	// "3 cities · 95 turns · Winner" — the per-option stats line.
 	function statsLine(p: PlayerChoice, totalTurns: number): string {
 		const parts = [
@@ -635,14 +672,10 @@
 							{/if}
 						{:else}
 							<h3 class="mt-4 text-xs font-bold text-white">
-								Which nation were you?
+								{suggestionQuestion(ready.humans, ready.suggested)}
 							</h3>
 							<p class="mb-2 mt-0.5 text-xs text-gray-400">
-								{#if ready.suggested !== null}
-									Based on your past uploads. Change it if its wrong.
-								{:else}
-									Select the player you controlled, or choose observer.
-								{/if}
+								{suggestionHint(ready.humans, ready.suggested)}
 							</p>
 
 							<RadioGroup
