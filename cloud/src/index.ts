@@ -10,9 +10,11 @@
 //
 // Besides `fetch`, the Worker exports a `scheduled` handler running three
 // jobs, dispatched by cron pattern (crons in wrangler.toml): the nightly
-// events-retention sweep (policy in retention.ts), the public /stats bundle
-// precompute, one pattern per slice, and the hourly warm that rebuilds any
-// missing unfaceted /stats bundle (both in stats/precompute.ts).
+// events-retention sweep (policy in retention.ts), which the
+// opponent-recommendation rebuild runs after (cloud/src/ratings/rebuild.ts),
+// the public /stats bundle precompute, one pattern per slice, and the hourly
+// warm that rebuilds any missing unfaceted /stats bundle (both in
+// stats/precompute.ts).
 
 import {
 	adoptTrustedFrontend,
@@ -153,6 +155,9 @@ import {
 	handleWithdrawSlot,
 } from "./tournament/admin";
 import type { TournamentAdminEnv } from "./tournament/admin";
+import { handleMyOpponents, handleRebuildRatings } from "./ratings/handlers";
+import type { OpponentsEnv, RatingsAdminEnv } from "./ratings/handlers";
+import { rebuildRatings } from "./ratings/rebuild";
 
 // The per-request env handlers receive. `SHARE_DB` is a `QueryableD1` because
 // `routeEnv` may substitute a Sessions API handle for the raw binding, and
@@ -171,6 +176,8 @@ interface Env
 		GlobalStatsEnv,
 		HomeSummaryEnv,
 		PlayerLeaderboardEnv,
+		OpponentsEnv,
+		RatingsAdminEnv,
 		SecurityEventsEnv,
 		TrustedFrontendEnv {
 	SHARE_BUCKET: R2Bucket;
@@ -442,6 +449,15 @@ const ROUTES: RouteSpec[] = [
 		},
 		route: "DELETE /v1/admin/featured-videos/:platform/:video_id",
 		handler: (r, e, m) => handleUnfeatureVideo(m![1], m![2], r, e),
+	},
+
+	// Site-admin: run the opponent-recommendation rebuild now instead of
+	// waiting for tonight's cron. Same 404-to-everyone-else gate.
+	{
+		method: "POST",
+		match: { kind: "path", path: "/v1/admin/ratings/rebuild" },
+		route: "POST /v1/admin/ratings/rebuild",
+		handler: (r, e) => handleRebuildRatings(r, e),
 	},
 
 	// Cloud rewrite: /v1/collections
@@ -988,6 +1004,16 @@ const ROUTES: RouteSpec[] = [
 		route: "GET /v1/users/me/admin-tournaments",
 		handler: (r, e) => handleMyAdminTournaments(r, e),
 	},
+	// The viewer's own suggested opponents. There is deliberately no
+	// /v1/users/:user_id/opponents — a player sees only their own list, and
+	// the route table is where that is enforced. The profile's Opponents tab
+	// is gated on isOwner too, but this is the gate that matters.
+	{
+		method: "GET",
+		match: { kind: "path", path: "/v1/users/me/opponents" },
+		route: "GET /v1/users/me/opponents",
+		handler: (r, e) => handleMyOpponents(r, e),
+	},
 	{
 		method: "POST",
 		match: {
@@ -1235,11 +1261,11 @@ export default {
 	},
 
 	// Not a dispatch path, so it never goes through `routeEnv`, and every job
-	// runs on the primary binding. That is automatic for the sweep, which is a
-	// DELETE, and deliberate for the read-only stats jobs: `routeEnv` is the
-	// only place allowed to derive a replica handle (d1.ts), and a cron with no
-	// client waiting on it has no latency budget worth a second replication
-	// policy for.
+	// runs on the primary binding. That is automatic for the writers — the
+	// sweep's DELETEs and the ratings rebuild — and deliberate for the
+	// read-only stats jobs: `routeEnv` is the only place allowed to derive a
+	// replica handle (d1.ts), and a cron with no client waiting on it has no
+	// latency budget worth a second replication policy for.
 	async scheduled(
 		controller: ScheduledController,
 		env: RawBindings,
@@ -1322,6 +1348,28 @@ export default {
 			// Rethrow so the run records as failed in the Workers dashboard's
 			// cron history — there's no client awaiting a response, and a
 			// swallowed error would leave no signal beyond the log line.
+			throw err;
+		}
+
+		// Rebuild the ratings and the suggested-opponent lists. Sequential
+		// rather than parallel with the sweep above: both touch SHARE_DB, and a
+		// nightly job has no deadline worth the contention. Its failure is
+		// logged and rethrown for the same reason the sweep's is — but only
+		// after the sweep has run, so a bad rating rebuild can never cost the
+		// site its retention pass.
+		logEvent("info", "ratings_rebuild_started", { cron: controller.cron });
+		try {
+			const result = await rebuildRatings(env.SHARE_DB);
+			logEvent("info", "ratings_rebuild_completed", {
+				trigger: "cron",
+				users: result.users,
+				ratable_duels: result.ratableDuels,
+				recommended: result.recommended,
+				unresolved_opponent: result.stats.unresolvedOpponent,
+				ambiguous_online_id: result.stats.ambiguousOnlineId,
+			});
+		} catch (err) {
+			logError("ratings_rebuild_failed", err);
 			throw err;
 		}
 	},
