@@ -13,6 +13,17 @@
 //   stats:v{BUNDLE_SCHEMA_VERSION}-p{parser_version}:tournament:{tournament_id}:{updated_at}
 //   stats:v{BUNDLE_SCHEMA_VERSION}-p{parser_version}:global:{slice}:{nations}
 //
+// Each corpus stores two payloads: the chart bundle at the key above, and the
+// records at that same key with a ":records" segment appended. They are built
+// together (one pass over the corpus) and stored apart, because only one tab of
+// one surface reads the records and they are ~60-70 KB gzipped on top of a
+// 154 KB bundle. The payload segment goes last rather than beside the version
+// so the two suffixes stay disjoint — getStaleGlobalCached matches on a key's
+// tail, and a marker in front of `global:` would have the bundle's walk find a
+// records entry. Everything ahead of it is shared, so both payloads expire on
+// the same TTL, drift on the same version bumps, and are caught by the one
+// prefix walk in invalidateStatsCache.
+//
 // We reuse the existing SESSIONS_KV binding (no new infra) — the
 // `stats:` prefix keeps these distinct from `session:` and `oauth:`
 // keys.
@@ -40,6 +51,7 @@ const BUNDLE_SCHEMA_CHANGELOG: Record<number, string> = {
 	7: "per-wonder build rate, builder win rate, and build-turn distribution",
 	8: "capital family class win rate, plus avg_share / share_samples / slot_counts on familyByNation (per-class city footprint and founding order)",
 	9: "favorite_day_of_week dropped (no consumer — the profile card reads its own copy from GET /v1/users/:user_id), and save_dates moved from ChartBundleCore to the user-only ChartBundle: only the profile Overview calendar renders it, and it was the one field whose size grew with the corpus rather than with the turn axis",
+	10: "records moved to their own entry — per yield series, the top seats on each of seven boards (peak, end-of-game, and the T20/T40/T60/T80/T100 checkpoints), for both the rate and the cumulative column. Folded into the pass that already builds the bands, so no new query, but stored and served separately (the ':records' payload segment above) because only the Records tab reads them",
 };
 
 export const BUNDLE_SCHEMA_VERSION = Math.max(
@@ -97,19 +109,33 @@ function globalKeySuffix(
 	return `global:${key.slice}:${[...new Set(key.nations)].sort().join(",")}`;
 }
 
-export function cacheKeyToString(key: StatsCacheKey): string {
+// Which of a corpus's two payloads an entry holds. Defaulting to the bundle
+// keeps every existing caller reading what it always read; the records path is
+// the one that says so.
+export type StatsPayload = "bundle" | "records";
+
+function payloadSuffix(payload: StatsPayload): string {
+	return payload === "records" ? ":records" : "";
+}
+
+export function cacheKeyToString(
+	key: StatsCacheKey,
+	payload: StatsPayload = "bundle",
+): string {
 	const v = `v${BUNDLE_SCHEMA_VERSION}-p${key.parser_version}`;
+	const tail = payloadSuffix(payload);
 	if (key.kind === "tournament") {
-		return `stats:${v}:tournament:${key.tournament_id}:${key.updated_at}`;
+		return `stats:${v}:tournament:${key.tournament_id}:${key.updated_at}${tail}`;
 	}
 	if (key.kind === "global") {
 		// The empty nation set leaves a trailing colon, so the unfaceted slice
 		// can't be a prefix of a faceted one — what the suffix match relies on.
-		return `stats:${v}:${globalKeySuffix(key)}`;
+		return `stats:${v}:${globalKeySuffix(key)}${tail}`;
 	}
 	// The `:user:{id}:` anchor stays early so the prefix walk in
-	// invalidateStatsCache matches every viewerScope × scope variant.
-	return `stats:${v}:user:${key.user_id}:${key.viewerScope}:${key.scope}`;
+	// invalidateStatsCache matches every viewerScope × scope variant — both
+	// payloads with it.
+	return `stats:${v}:user:${key.user_id}:${key.viewerScope}:${key.scope}${tail}`;
 }
 
 // Generic over the cached bundle shape: the user corpus caches a ChartBundle,
@@ -117,8 +143,9 @@ export function cacheKeyToString(key: StatsCacheKey): string {
 export async function getCached<T>(
 	env: StatsCacheEnv,
 	key: StatsCacheKey,
+	payload: StatsPayload = "bundle",
 ): Promise<T | null> {
-	const raw = await env.SESSIONS_KV.get(cacheKeyToString(key));
+	const raw = await env.SESSIONS_KV.get(cacheKeyToString(key, payload));
 	if (!raw) return null;
 	try {
 		return JSON.parse(raw) as T;
@@ -149,9 +176,10 @@ export async function getCached<T>(
 export async function getStaleGlobalCached<T>(
 	env: StatsCacheEnv,
 	key: Extract<StatsCacheKey, { kind: "global" }>,
+	payload: StatsPayload = "bundle",
 ): Promise<T | null> {
 	const prefix = `stats:v${BUNDLE_SCHEMA_VERSION}-p`;
-	const suffix = `:${globalKeySuffix(key)}`;
+	const suffix = `:${globalKeySuffix(key)}${payloadSuffix(payload)}`;
 
 	// Every entry carries putCached's 24h TTL, so the greatest expiration is
 	// the most recently written — the freshest of the stale, when the parser
@@ -187,13 +215,16 @@ export async function putCached<T>(
 	env: StatsCacheEnv,
 	key: StatsCacheKey,
 	bundle: T,
+	payload: StatsPayload = "bundle",
 ): Promise<void> {
 	// 24h TTL. Explicit invalidation (KV delete) handles the common
 	// mutation cases; the TTL is the safety net for bugs in the
 	// invalidation chain.
-	await env.SESSIONS_KV.put(cacheKeyToString(key), JSON.stringify(bundle), {
-		expirationTtl: 24 * 60 * 60,
-	});
+	await env.SESSIONS_KV.put(
+		cacheKeyToString(key, payload),
+		JSON.stringify(bundle),
+		{ expirationTtl: 24 * 60 * 60 },
+	);
 }
 
 // Invalidate every cache entry for the given user. Every viewerScope
@@ -207,6 +238,9 @@ export async function invalidateStatsCache(
 	env: StatsCacheEnv,
 	target: { kind: "user"; user_id: string },
 ): Promise<void> {
+	// Both payloads: the records entry is the bundle's key with ":records"
+	// appended, so it carries the same `:user:{id}:` anchor and this walk
+	// catches it without knowing it exists.
 	const prefix = `stats:v${BUNDLE_SCHEMA_VERSION}-p`;
 	// Walk the prefix; KV list paginates implicitly via cursor. Volume
 	// here is tiny (one entry per corpus) so we don't worry about cursor

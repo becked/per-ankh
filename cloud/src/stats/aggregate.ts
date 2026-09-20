@@ -21,6 +21,7 @@ import type {
 	ChartBundle,
 	ChartBundleCore,
 	Nullable,
+	RecordsBundle,
 	YieldCohort,
 } from "./types";
 import type { QueryableD1 } from "../d1";
@@ -93,6 +94,7 @@ interface BaseRow {
 type YieldRawRow = {
 	turn: number;
 	game_id: string;
+	player_index: number;
 	is_winner: number;
 } & Record<string, number | string | null>;
 
@@ -279,6 +281,268 @@ async function loadDecidedGames(
 	return decided;
 }
 
+// ─── Records ─────────────────────────────────────────────────────────
+//
+// The leaderboard behind the bands: for each series, who posted the biggest
+// number, and in which game.
+//
+// Two things make a naive "max per series" board useless, both measured on
+// the corpus rather than guessed (becked/per-ankh#211):
+//
+//   Yields compound, so a raw whole-game max is a LONGEST-GAME board — 14 of
+//   16 series records belonged to one game, the longest in the corpus. The
+//   fixed-turn checkpoints are the answer: everyone who reached T40 is
+//   compared at T40, which is length-blind without needing a normaliser the
+//   reader then has to interpret.
+//
+//   "Cumulative" is the stockpile held, not lifetime production, for every
+//   series whose total can fall. Which series those are is one exported list —
+//   the `cumulative` field on YIELD_SERIES (src/lib/stats/charts/yields.ts),
+//   which is also what labels the card — so it is not restated here. The two
+//   claims share a column; the bundle just carries both and the UI names them
+//   apart.
+//
+// Ranking is per SEAT — one player's run through one game — not per row: a
+// long game would otherwise take all three places on one board with three
+// adjacent turns.
+// Checkpoint turns, chosen from the corpus rather than by eye. Share of games
+// reaching each, on the 813-game local corpus (median game 74 turns):
+// T20 99%, T40 92%, T60 71%, T80 42%, T100 18%. T20 earns its place — an
+// opening board asks a different question from a late one — and T100 stays
+// despite the thin field because each board ships its own sample count, so a
+// reader can see it is a fifth of the corpus rather than all of it.
+const RECORD_CHECKPOINTS = [20, 40, 60, 80, 100] as const;
+const RECORD_TOP_N = 10;
+
+// Series with no record board. A leaderboard asserts "biggest is best", and
+// for these three the biggest number is a burden, not an achievement — the
+// largest maintenance bill and the most unrest are not records anyone set out
+// to break, and happiness only reads against the discontent it offsets. They
+// still get bands, which make no such claim.
+const RECORD_EXCLUDED = new Set([
+	"maintenance_per_turn",
+	"happiness_per_turn",
+	"discontent_per_turn",
+]);
+
+type RecordWhen = "peak" | "final" | `t${(typeof RECORD_CHECKPOINTS)[number]}`;
+
+// One seat's whole run through one game, folded turn by turn.
+export interface SeatRecord {
+	gameId: string;
+	playerIndex: number;
+	// Per series key: the best value seen and the turn it happened.
+	peak: Map<string, { value: number; turn: number }>;
+	// The latest turn seen, and that turn's values — the end-of-game board.
+	lastTurn: number;
+	final: Map<string, number>;
+	// Values at each checkpoint turn, when the game reached it.
+	at: Map<number, Map<string, number>>;
+}
+
+export function emptySeatRecord(
+	gameId: string,
+	playerIndex: number,
+): SeatRecord {
+	return {
+		gameId,
+		playerIndex,
+		peak: new Map(),
+		lastTurn: -1,
+		final: new Map(),
+		at: new Map(),
+	};
+}
+
+// Fold one row into its seat's accumulator, for one measure.
+export function foldRecordRow(
+	acc: SeatRecord,
+	turn: number,
+	values: Map<string, number>,
+): void {
+	for (const [key, value] of values) {
+		const best = acc.peak.get(key);
+		if (!best || value > best.value) acc.peak.set(key, { value, turn });
+	}
+	if (turn > acc.lastTurn) {
+		acc.lastTurn = turn;
+		acc.final = new Map(values);
+	}
+	if ((RECORD_CHECKPOINTS as readonly number[]).includes(turn)) {
+		acc.at.set(turn, new Map(values));
+	}
+}
+
+// Both sides of a duel upload the same save, so one match arrives as two
+// game_ids carrying the same seats. Collapse them here, before any ranking:
+// deduping per board instead would let one match's "peak" come from one upload
+// and its "final" from the other, and would leave recordCounts advertising a
+// population twice the size of the one the boards actually rank.
+//
+// The survivor is the upload that saw more turns — same match, more of it.
+export function dedupeSeatRecords(
+	accs: Map<string, SeatRecord>,
+	xmlGameId: Map<string, string>,
+): SeatRecord[] {
+	const best = new Map<string, SeatRecord>();
+	for (const acc of accs.values()) {
+		const key = `${xmlGameId.get(acc.gameId) ?? acc.gameId}|${acc.playerIndex}`;
+		const held = best.get(key);
+		if (!held || acc.lastTurn > held.lastTurn) best.set(key, acc);
+	}
+	return [...best.values()];
+}
+
+// Rank the deduped seats into a top-N per series per board.
+export function rankRecords(
+	accs: readonly SeatRecord[],
+	seatOf: Map<string, { nation: string | null; name: string | null }>,
+	turnsOf: Map<string, number>,
+): RecordsBundle {
+	const boards: RecordsBundle["records"] = {};
+	// How many seats each board could draw on — the T100 board is a fifth of
+	// the corpus, and saying so is the difference between a record and a
+	// misleading one.
+	const counts: Record<string, number> = {};
+	const push = (
+		key: string,
+		when: RecordWhen,
+		row: { game_id: string; player_index: number; turn: number; value: number },
+	) => {
+		const series = (boards[key] ??= {});
+		(series[when] ??= []).push(row);
+	};
+	for (const acc of accs) {
+		counts.peak = (counts.peak ?? 0) + 1;
+		counts.final = (counts.final ?? 0) + 1;
+		for (const cp of RECORD_CHECKPOINTS) {
+			if (acc.at.has(cp)) counts[`t${cp}`] = (counts[`t${cp}`] ?? 0) + 1;
+		}
+		for (const [key, best] of acc.peak) {
+			push(key, "peak", {
+				game_id: acc.gameId,
+				player_index: acc.playerIndex,
+				turn: best.turn,
+				value: best.value,
+			});
+		}
+		for (const [key, value] of acc.final) {
+			push(key, "final", {
+				game_id: acc.gameId,
+				player_index: acc.playerIndex,
+				turn: acc.lastTurn,
+				value,
+			});
+		}
+		for (const cp of RECORD_CHECKPOINTS) {
+			const at = acc.at.get(cp);
+			if (!at) continue;
+			for (const [key, value] of at) {
+				push(key, `t${cp}` as RecordWhen, {
+					game_id: acc.gameId,
+					player_index: acc.playerIndex,
+					turn: cp,
+					value,
+				});
+			}
+		}
+	}
+	for (const series of Object.values(boards)) {
+		for (const when of Object.keys(series)) {
+			series[when] = series[when]
+				.sort((a, b) => b.value - a.value)
+				.slice(0, RECORD_TOP_N);
+		}
+	}
+
+	// Identity for the games that actually made a board, as a lookup rather
+	// than repeated on every row — the same game holds many records, and the
+	// rows outnumber the games several times over.
+	//
+	// The record holder's seat and no other. A row names the seat that posted
+	// the number, so the five AI a single-player game was won against, and an
+	// FFA's other players, are payload nothing reads.
+	const recordGames: RecordsBundle["recordGames"] = {};
+	for (const series of Object.values(boards)) {
+		for (const rows of Object.values(series)) {
+			for (const r of rows) {
+				const entry = (recordGames[r.game_id] ??= {
+					turns: turnsOf.get(r.game_id) ?? 0,
+					seats: {},
+				});
+				entry.seats[r.player_index] ??= seatOf.get(
+					`${r.game_id}|${r.player_index}`,
+				) ?? { nation: null, name: null };
+			}
+		}
+	}
+	return { records: boards, recordGames, recordCounts: counts };
+}
+
+// Everything the record rows need beyond the numbers: (game_id|player_index) →
+// seat, game_id → total turns, and game_id → the save's own id (which is what
+// collapses the two uploads of one match). All three are small — one row per
+// seat, one per game — so they are read once rather than carried on every turn
+// row.
+async function loadRecordIdentity(
+	env: AggregateEnv,
+	gameIds: string[],
+): Promise<{
+	seat: Map<string, { nation: string | null; name: string | null }>;
+	turns: Map<string, number>;
+	xmlGameId: Map<string, string>;
+}> {
+	const seat = new Map<
+		string,
+		{ nation: string | null; name: string | null }
+	>();
+	const turns = new Map<string, number>();
+	const xmlGameId = new Map<string, string>();
+	for (const ids of chunk(gameIds, CHUNK_SIZE)) {
+		// Human seats only. A record holder is always one — both focal clauses
+		// (is_human / is_uploader) select human rows — so an AI seat is a row
+		// this would read and then throw away.
+		//
+		// player_name is the handle the SAVE records, and is what every public
+		// game page already prints beside the nation. online_id is the platform
+		// identifier and is the field stripped for anonymous share viewers
+		// (src/CLAUDE.md § Game / user identity & PII) — it is deliberately not
+		// selected here, and must never enter a cached payload.
+		const seats = await env.SHARE_DB.prepare(
+			`SELECT game_id, player_index, nation, player_name FROM player_summaries
+			 WHERE game_id IN (${placeholders(ids.length)}) AND is_human = 1`,
+		)
+			.bind(...ids)
+			.all<{
+				game_id: string;
+				player_index: number;
+				nation: string | null;
+				player_name: string | null;
+			}>();
+		for (const row of seats.results ?? []) {
+			seat.set(`${row.game_id}|${row.player_index}`, {
+				nation: row.nation,
+				name: row.player_name,
+			});
+		}
+		const games = await env.SHARE_DB.prepare(
+			`SELECT game_id, total_turns, xml_game_id FROM games
+			 WHERE game_id IN (${placeholders(ids.length)})`,
+		)
+			.bind(...ids)
+			.all<{
+				game_id: string;
+				total_turns: number | null;
+				xml_game_id: string | null;
+			}>();
+		for (const row of games.results ?? []) {
+			if (row.total_turns != null) turns.set(row.game_id, row.total_turns);
+			if (row.xml_game_id != null) xmlGameId.set(row.game_id, row.xml_game_id);
+		}
+	}
+	return { seat, turns, xmlGameId };
+}
+
 // Per-turn yield distribution curves. Restricted to the corpus's focal rows so
 // the curves represent the focal players, not enemy AI. Returns the median +
 // P25/P75 band per turn for each series (rate and cumulative), plus the sample
@@ -288,9 +552,15 @@ async function loadYieldCurves(
 	gameIds: string[],
 	focal: Focal,
 	focalNations: string[] | null,
-): Promise<ChartBundleCore["yieldCurves"]> {
+): Promise<{
+	curves: ChartBundleCore["yieldCurves"];
+	records: RecordsBundle;
+}> {
 	if (gameIds.length === 0)
-		return { turns: [], counts: [], series: {}, outcome: null };
+		return {
+			curves: { turns: [], counts: [], series: {}, outcome: null },
+			records: emptyRecords(),
+		};
 
 	// Columns to pull: each series' rate column plus its cumulative column
 	// (deduped — stocks share their single column).
@@ -331,6 +601,8 @@ async function loadYieldCurves(
 	const undecided: Cohort = new Map();
 
 	const decided = await loadDecidedGames(env, gameIds);
+	// One accumulator per seat, folded in the same pass as the bands.
+	const bySeat = new Map<string, SeatRecord>();
 
 	// Fold one row into one cohort, creating the turn's bucket on first sight.
 	const accumulate = (cohort: Cohort, turn: number, row: YieldRawRow) => {
@@ -355,7 +627,7 @@ async function loadYieldCurves(
 
 	for (const ids of chunk(gameIds, CHUNK_SIZE)) {
 		const res = await env.SHARE_DB.prepare(
-			`SELECT gpt.turn, gpt.game_id, ps.is_winner, ${selectList}
+			`SELECT gpt.turn, gpt.game_id, gpt.player_index, ps.is_winner, ${selectList}
 			 FROM game_player_turn gpt
 			 JOIN player_summaries ps ON ps.game_id = gpt.game_id
 			                          AND ps.player_index = gpt.player_index
@@ -366,6 +638,30 @@ async function loadYieldCurves(
 			.all<YieldRawRow>();
 
 		for (const row of (res.results ?? []) as YieldRawRow[]) {
+			// Records ride the same rows the bands are built from: one pass,
+			// no second query.
+			const seatKey = `${row.game_id}|${row.player_index}`;
+			let seat = bySeat.get(seatKey);
+			if (!seat) {
+				seat = emptySeatRecord(row.game_id, row.player_index);
+				bySeat.set(seatKey, seat);
+			}
+			const values = new Map<string, number>();
+			for (const [key, rateCol, cumCol] of YIELD_COLUMNS) {
+				if (RECORD_EXCLUDED.has(key)) continue;
+				const rateVal = row[rateCol];
+				if (typeof rateVal === "number") values.set(key, rateVal);
+				// A level has no cumulative column. The bands mirror the level
+				// into the cumulative series to keep their shape uniform; a
+				// record board can't borrow that, because mirroring would ship
+				// a second leaderboard identical to the first under a name that
+				// claims otherwise.
+				if (!cumCol) continue;
+				const cumVal = row[cumCol];
+				if (typeof cumVal === "number") values.set(`${key}:cum`, cumVal);
+			}
+			foldRecordRow(seat, row.turn, values);
+
 			// Undecided games stay out of the outcome split — their all-zero
 			// is_winner would read as a clean sweep of losses — but they are
 			// still part of the pooled merge.
@@ -417,15 +713,25 @@ async function loadYieldCurves(
 		};
 	};
 
+	const identity = await loadRecordIdentity(env, gameIds);
+	const records = rankRecords(
+		dedupeSeatRecords(bySeat, identity.xmlGameId),
+		identity.seat,
+		identity.turns,
+	);
+
 	const all = bandsFor(winners, losers, undecided);
 	return {
-		turns,
-		counts: all.counts,
-		series: all.series,
-		outcome:
-			decided.size === 0
-				? null
-				: { winners: bandsFor(winners), losers: bandsFor(losers) },
+		curves: {
+			turns,
+			counts: all.counts,
+			series: all.series,
+			outcome:
+				decided.size === 0
+					? null
+					: { winners: bandsFor(winners), losers: bandsFor(losers) },
+		},
+		records,
 	};
 }
 
@@ -672,36 +978,46 @@ export function boundOpeningLaws(rows: OpeningLawRow[]): OpeningLawRow[] {
 // further to corpus.focalNations when the corpus carries one; the per-game
 // facts (meta.game_count, summary.total_games, avg_total_turns) stay the
 // corpus's own and don't move with it.
+//
+// Both payloads come back together — the bundle and the records — because the
+// records are folded out of the same pass over game_player_turn the bands are
+// built from. They are cached and served separately (one KV entry and one
+// endpoint each), so a caller that only wants one still builds both rather than
+// querying the corpus twice; see stats/cache.ts.
 export function buildChartBundle(
 	env: AggregateEnv,
 	corpus: StatsCorpus,
 	parserVersion: string,
 	focal: "uploader",
-): Promise<ChartBundle>;
+): Promise<{ bundle: ChartBundle; records: RecordsBundle }>;
 export function buildChartBundle(
 	env: AggregateEnv,
 	corpus: StatsCorpus,
 	parserVersion: string,
 	focal: "humans",
-): Promise<ChartBundleCore>;
+): Promise<{ bundle: ChartBundleCore; records: RecordsBundle }>;
 export async function buildChartBundle(
 	env: AggregateEnv,
 	corpus: StatsCorpus,
 	parserVersion: string,
 	focal: Focal,
-): Promise<ChartBundle | ChartBundleCore> {
+): Promise<{ bundle: ChartBundle | ChartBundleCore; records: RecordsBundle }> {
 	// Short-circuit: empty corpus returns a fully-shaped empty bundle.
 	if (corpus.gameIds.length === 0) {
 		const core = emptyCore(parserVersion);
-		return focal === "humans"
-			? core
-			: withOverview(core, {
-					top_nation: null,
-					top_archetype: null,
-					win_rate: null,
-					games_with_outcome: 0,
-					save_dates: [],
-				});
+		return {
+			bundle:
+				focal === "humans"
+					? core
+					: withOverview(core, {
+							top_nation: null,
+							top_archetype: null,
+							win_rate: null,
+							games_with_outcome: 0,
+							save_dates: [],
+						}),
+			records: emptyRecords(),
+		};
 	}
 
 	// A faceted global corpus restricts the focal set to its nations' seats;
@@ -711,7 +1027,7 @@ export async function buildChartBundle(
 
 	const [
 		baseRows,
-		yieldCurves,
+		yieldData,
 		techEvents,
 		lawEvents,
 		wonderEvents,
@@ -730,6 +1046,8 @@ export async function buildChartBundle(
 			? loadSaveDates(env, corpus.gameIds)
 			: Promise.resolve<SaveDateRow[]>([]),
 	]);
+
+	const { curves: yieldCurves, records } = yieldData;
 
 	const selfMembership = buildSelfMembership(baseRows, focal, focalNations);
 	const selfRows = baseRows.filter((r) =>
@@ -1331,14 +1649,17 @@ export async function buildChartBundle(
 	};
 	// The tournament corpus stops at the core; the broken-by-widening Overview
 	// fields are excluded by the return type, not carried as misleading values.
-	if (focal === "humans") return core;
-	return withOverview(core, {
-		top_nation: topNation,
-		top_archetype: topArchetype,
-		win_rate: winRate,
-		games_with_outcome: gamesWithOutcome,
-		save_dates: saveDates,
-	});
+	if (focal === "humans") return { bundle: core, records };
+	return {
+		bundle: withOverview(core, {
+			top_nation: topNation,
+			top_archetype: topArchetype,
+			win_rate: winRate,
+			games_with_outcome: gamesWithOutcome,
+			save_dates: saveDates,
+		}),
+		records,
+	};
 }
 
 // Extend a core bundle with the user-only Overview fields (the "most X" summary
@@ -1380,6 +1701,13 @@ function topEntry<T extends "nation" | "archetype">(
 		T,
 		string
 	>;
+}
+
+// The records payload for a corpus with nothing in it. Its own helper beside
+// emptyCore for the same reason that one exists: the shape is required, and an
+// empty corpus must produce it without a query.
+function emptyRecords(): RecordsBundle {
+	return { records: {}, recordGames: {}, recordCounts: {} };
 }
 
 function emptyCore(parserVersion: string): ChartBundleCore {

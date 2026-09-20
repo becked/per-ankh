@@ -23,6 +23,7 @@ import { buildChartBundle } from "../../../src/stats/aggregate";
 import type {
 	ChartBundle,
 	ChartBundleCore,
+	RecordsBundle,
 	YieldCohort,
 } from "../../../src/stats/types";
 import { canonicalizeBundle } from "../../helpers/chart-bundle";
@@ -244,14 +245,27 @@ let gameIds: string[] = [];
 // Per-run game ids → stable placeholders, the one redaction the bundle needs.
 let redactions: Record<string, string> = {};
 
+async function builtFor(focal: "uploader" | "humans") {
+	return focal === "uploader"
+		? await buildChartBundle(env, { gameIds }, PARSER_VERSION, "uploader")
+		: await buildChartBundle(env, { gameIds }, PARSER_VERSION, "humans");
+}
+
 async function bundleFor(focal: "uploader"): Promise<ChartBundle>;
 async function bundleFor(focal: "humans"): Promise<ChartBundleCore>;
 async function bundleFor(
 	focal: "uploader" | "humans",
 ): Promise<ChartBundleCore> {
-	return focal === "uploader"
-		? buildChartBundle(env, { gameIds }, PARSER_VERSION, "uploader")
-		: buildChartBundle(env, { gameIds }, PARSER_VERSION, "humans");
+	return (await builtFor(focal)).bundle;
+}
+
+// The records ride the same build. Pinned separately from the bundle because
+// they are their own cached payload and their own endpoint — a snapshot of the
+// bundle would no longer say a word about them.
+async function recordsFor(
+	focal: "uploader" | "humans",
+): Promise<RecordsBundle> {
+	return (await builtFor(focal)).records;
 }
 
 beforeAll(async () => {
@@ -281,6 +295,80 @@ describe("chart bundle round-trip", () => {
 	it("builds the all-humans bundle from the same corpus", async () => {
 		const bundle = await bundleFor("humans");
 		expect(canonicalizeBundle(bundle, redactions)).toMatchSnapshot();
+	});
+
+	it("builds the records payload from the same corpus", async () => {
+		const records = await recordsFor("humans");
+		expect(canonicalizeBundle(records, redactions)).toMatchSnapshot();
+	});
+
+	// The records are no longer in the bundle snapshot, so their own shape is
+	// asserted here rather than inferred from it. 24 keys: 16 series, less the
+	// three with no board at all (maintenance, happiness, discontent), plus a
+	// ":cum" board for the 11 of the remaining 13 that have a cumulative column
+	// — the two levels have none.
+	it("boards every series that has a record board, and only those", async () => {
+		const records = await recordsFor("humans");
+		const keys = Object.keys(records.records);
+		expect(keys).toHaveLength(24);
+		for (const excluded of [
+			"maintenance_per_turn",
+			"happiness_per_turn",
+			"discontent_per_turn",
+		]) {
+			expect(keys, excluded).not.toContain(excluded);
+			expect(keys, excluded).not.toContain(`${excluded}:cum`);
+		}
+		expect(keys).toContain("military_power");
+		expect(keys).not.toContain("military_power:cum");
+		expect(keys).not.toContain("legitimacy:cum");
+	});
+
+	// The fixture's three turns never reach T20, so the two length-sensitive
+	// boards are the only ones any seat can be on. A checkpoint board appearing
+	// here would mean a turn was captured that the game never played.
+	it("ships only the boards the corpus reached", async () => {
+		const records = await recordsFor("humans");
+		expect(Object.keys(records.records.science_per_turn).sort()).toEqual([
+			"final",
+			"peak",
+		]);
+		expect(records.recordCounts).toEqual({ peak: 6, final: 6 });
+	});
+
+	// One seat per row, and it is the seat that posted the number — the whole
+	// point of the display: a single-player game names one player, not the five
+	// AI it was played against.
+	it("names the record holder's seat and no other", async () => {
+		const records = await recordsFor("humans");
+		for (const [gameId, game] of Object.entries(records.recordGames)) {
+			expect(game.turns, gameId).toBeGreaterThan(0);
+			for (const [index, seat] of Object.entries(game.seats)) {
+				expect(seat.nation, `${gameId}#${index}`).toBeTruthy();
+			}
+		}
+		// Every seat named is one that holds a record somewhere on the boards.
+		const holders = new Set<string>();
+		for (const series of Object.values(records.records)) {
+			for (const rows of Object.values(series)) {
+				for (const row of rows) {
+					holders.add(`${row.game_id}|${row.player_index}`);
+				}
+			}
+		}
+		for (const [gameId, game] of Object.entries(records.recordGames)) {
+			for (const index of Object.keys(game.seats)) {
+				expect(holders, `${gameId}|${index}`).toContain(`${gameId}|${index}`);
+			}
+		}
+	});
+
+	// The uploader corpus ranks one seat per game where the humans corpus ranks
+	// both, so the population the boards advertise moves with the focal mode
+	// rather than being the corpus's game count either way.
+	it("counts the seats the focal mode actually ranks", async () => {
+		const uploaderRecords = await recordsFor("uploader");
+		expect(uploaderRecords.recordCounts).toEqual({ peak: 3, final: 3 });
 	});
 
 	// Guards the snapshots against going vacuous: every one of these is empty
@@ -413,7 +501,7 @@ describe("yield cohorts", () => {
 	});
 
 	it("splits a wholly decided corpus with nothing left over", async () => {
-		const decidedOnly = await buildChartBundle(
+		const { bundle: decidedOnly } = await buildChartBundle(
 			env,
 			{ gameIds: gameIds.slice(0, 2) },
 			PARSER_VERSION,
