@@ -16,7 +16,10 @@ import { applyD1Migrations, env, SELF } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
 import { expectErrorCode, expectOk } from "../../helpers/assertions";
 import { CURRENT_PARSER_VERSION } from "../../../src/schemas/game";
-import { cacheKeyToString } from "../../../src/stats/cache";
+import {
+	BUNDLE_SCHEMA_VERSION,
+	cacheKeyToString,
+} from "../../../src/stats/cache";
 import {
 	HOME_ARCHETYPE_MIN_GAMES,
 	HOME_SUMMARY_VIEW_PER_HOUR,
@@ -27,13 +30,17 @@ beforeAll(async () => {
 	await applyD1Migrations(env.SHARE_DB, env.TEST_MIGRATIONS);
 });
 
-// The entry every case here seeds or clears: the unfaceted `duel` slice, which
-// is the one selection this endpoint can read and the /stats default.
+// The entry every case here seeds or clears: the unfaceted `duel` slice over
+// the all-time window, which is the one selection this endpoint can read and
+// the /stats default. Spelled out rather than defaulted, because a key field
+// this file gets wrong is one both the seed and the read get wrong together —
+// which is a green suite over an endpoint that finds nothing in production.
 const duelKey = (parser_version = CURRENT_PARSER_VERSION): string =>
 	cacheKeyToString({
 		kind: "global",
 		slice: "duel",
 		nations: [],
+		period: "all",
 		parser_version,
 	});
 
@@ -87,6 +94,19 @@ const summary = async (ip: string): Promise<HomeSummaryResponse> =>
 	expectOk<HomeSummaryResponse>(await fetchSummary(ip));
 
 describe("GET /v1/home-summary answers", () => {
+	// Every other case here seeds through duelKey and reads through the
+	// endpoint, so a key this file spells wrong is one both halves spell wrong
+	// together and the suite stays green over an endpoint that finds nothing in
+	// production. Pinning the literal is what breaks that symmetry: the same
+	// string is asserted from the other end by src/stats/cache.test.ts, whose
+	// unfaceted case is this exact selection, so the two cannot drift apart
+	// without one of them failing.
+	it("reads the key the crons write", () => {
+		expect(duelKey("2.15.0")).toBe(
+			`stats:v${BUNDLE_SCHEMA_VERSION}-p2.15.0:global:duel::all`,
+		);
+	});
+
 	it("serves the precomputed entry, trimmed to the fields home draws", async () => {
 		await putBundle(duelKey(), seedBundle());
 

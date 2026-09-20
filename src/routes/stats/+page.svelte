@@ -13,7 +13,11 @@
 	import { navigating } from "$app/state";
 	import { autohideScroll } from "$lib/actions/autohideScroll";
 	import GlobalFacetRow from "$lib/stats/GlobalFacetRow.svelte";
-	import { parseGlobalSlice, parseNationFacet } from "$lib/stats/global-facets";
+	import {
+		parseGlobalPeriod,
+		parseGlobalSlice,
+		parseNationFacet,
+	} from "$lib/stats/global-facets";
 	import StatsView from "$lib/stats/StatsView.svelte";
 	import type { PageData } from "./$types";
 
@@ -44,7 +48,8 @@
 		if (!to) return false;
 		return (
 			parseGlobalSlice(to.url.searchParams.get("slice")) !== data.slice ||
-			parseNationFacet(to.url.searchParams.get("nation")) !== data.nation
+			parseNationFacet(to.url.searchParams.get("nation")) !== data.nation ||
+			parseGlobalPeriod(to.url.searchParams.get("period")) !== data.period
 		);
 	});
 </script>
@@ -58,7 +63,11 @@
 			<div class="mx-auto max-w-screen-2xl">
 				<div class="mb-4 flex flex-wrap items-center justify-between gap-3">
 					<h1 class="text-2xl font-bold text-gray-200">Global Stats</h1>
-					<GlobalFacetRow slice={data.slice} nation={data.nation} />
+					<GlobalFacetRow
+						slice={data.slice}
+						nation={data.nation}
+						period={data.period}
+					/>
 				</div>
 
 				<div

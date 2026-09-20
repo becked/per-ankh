@@ -47,7 +47,7 @@ Four, each `is_public = 1`. Counts are from the 2026-08-25 corpus snapshot; §15
 
 ## 4. Facets
 
-One facet: **nations**, single-select, ANDed with the slice.
+Two facets: **nations** and a **recency window**, both single-select, both ANDed with the slice.
 
 Eight bundle fields are already nation-keyed (§4.3), so the unfaceted bundle puts every nation side by side and cross-nation *comparison* needs no control at all. What the facet adds is the other eight fields — `yieldCurves` above all — narrowed to one nation. That is a single-select question, and answering it single-select is what keeps the whole selection space precomputable.
 
@@ -55,7 +55,7 @@ Eight bundle fields are already nation-keyed (§4.3), so the unfaceted bundle pu
 
 ### 4.1 The selection space is precomputable
 
-13 playable nations in the public corpus, single-select, across 4 slices: **52 faceted bundles plus the 4 unfaceted slices, 56 in all.** Every one is precomputed nightly (§5).
+13 playable nations in the public corpus, single-select, across 4 slices: **52 faceted bundles plus the 4 unfaceted slices, 56 in all.** Every one is precomputed nightly (§5). This section is about the nation facet: the recency window (§4.4) is deliberately outside the precompute table, so "every selection" here means every all-time selection, and a narrowed window is served by the compute-on-miss path §5 keeps for exactly that reason.
 
 A faceted selection is a subset of its slice, so it costs `ceil(N/50) × 9` against its own smaller N rather than the slice's:
 
@@ -89,6 +89,16 @@ Consequence: the focal convention gains a third form. It currently lives in exac
 ### 4.3 Rejected: nation as a client-side display filter
 
 Eight bundle fields are already nation-keyed (`nationWinRate`, `nationAvgPoints`, `nations`, `familyByNation`, `lawTiming`, `openingLaws`, `techFirst`, `techTiming`), so a nation filter could be a free client-side row filter over data already in the payload. But the other eight are not nation-keyed (`yieldCurves`, `wonderStats`, `capitalFamilyWinRate`, `expansionWinRate`, `startingArchetypeWinRate`, `startingTraitWinRate`, `summary`, `favorite_day_of_week`) and would silently ignore the filter. Half the page quietly not respecting a control is worse than not offering the control. Rejected.
+
+### 4.4 The recency window narrows the games only
+
+`period` — `all` (default), `12m`, `6m` — filters on `games.save_date`: when the game was **played**, not when it was uploaded. That distinction is the whole point of the facet. An eight-year-old save someone dragged in last week is evidence about an old meta whatever its `created_at` says, and the question the window answers is "what does the game look like now". `save_date` is an ISO date string, so the comparison is a plain string one; 3 of the 816 games in the local corpus carry no `save_date`, are therefore not datable, and drop out of every window while still counting under `all`.
+
+Unlike a nation selection (§4.2) it narrows **once**. A nation narrows the games and the focal seats because a Rome facet over a Rome-vs-Greece duel must not band the Greek's rows; a window has no such second half, because every seat of a recent game is a recent seat. `focalNations` is untouched by it.
+
+**The nightly warms the all-time window only.** Tripling a cron whose cost is denominated in the unfaceted slice's game count, to warm views most visits never open, buys less than the serve-stale path already gives them (§5): a narrowed window computes on the first request that asks for it and is then a 24h entry. This is the same "never refuse on a miss" property the nation facet leans on, applied to a facet that did not earn a place in the precompute table.
+
+**The cache key carries the token, not the cutoff.** `periodCutoff` resolves `6m` to a date at build time, but the key holds `6m`. Keying on the resolved date would roll the key daily — and `getStaleGlobalCached` matches candidates by suffix, so yesterday's entry would never answer today's lookup, killing serve-stale for exactly the selections that most need it. The cost is that a window's opening edge can trail the clock by up to a cache lifetime, which is not a distinction "the last six months" is making.
 
 ## 5. Architecture: precompute every selection, compute on a miss
 
@@ -256,7 +266,9 @@ The facet UI is a sibling of `ScopeRow.svelte` — a slice selector plus a singl
 
 **Built:** `src/lib/stats/GlobalFacetRow.svelte`, on `ScopeRow`'s markup — two hand-rolled popovers, one open at a time, each writing its own param. Both drop their param at the default rather than spelling it out, so the default view has one canonical URL and therefore one edge-cache entry (§11) instead of several spellings of the same bundle.
 
-Selection lives in the URL as `?slice=` and `?nation=`, parsed the way `parseScopeParam` parses `?scope=`: known values pass through, anything else falls back to the default, so a stale or hand-edited URL degrades instead of 400ing. The default slice is **Multiplayer duels**: 94% of the corpus is duels, so the all-public numbers *are* the duel numbers, and landing on the label that describes the distribution beats landing on a superset whose name implies breadth it does not have.
+**Since:** the recency window (§4.4) is the third popover, `?period=`, and cost the row nothing structural — `menus` is a data-driven array, so the control is one more entry in it and the drop-the-default rule already covered it. What follows holds for all three.
+
+Selection lives in the URL as `?slice=`, `?nation=` and `?period=`, parsed the way `parseScopeParam` parses `?scope=`: known values pass through, anything else falls back to the default, so a stale or hand-edited URL degrades instead of 400ing. The default slice is **Multiplayer duels**: 94% of the corpus is duels, so the all-public numbers *are* the duel numbers, and landing on the label that describes the distribution beats landing on a superset whose name implies breadth it does not have.
 
 **Built:** parsed a second time client-side, in `src/lib/stats/global-facets.ts`, the way `profileScope` mirrors `parseScopeParam`. The page has to land on the answer the Worker landed on, or the controls light a selection the payload is not for. The client parse is *stricter* on `?nation=`: the Worker only shape-checks, so a token naming no nation passes and then selects nothing, which would leave the control reading "All nations" over an empty bundle.
 

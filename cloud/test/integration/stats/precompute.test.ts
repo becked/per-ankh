@@ -40,7 +40,11 @@ import {
 	warmGlobalSlices,
 } from "../../../src/stats/precompute";
 import { resolveGlobalCorpus } from "../../../src/stats/resolve";
-import type { ChartBundleCore, GlobalSlice } from "../../../src/stats/types";
+import type {
+	ChartBundleCore,
+	GlobalPeriod,
+	GlobalSlice,
+} from "../../../src/stats/types";
 import { makeUser } from "../../helpers/builders";
 import { postMultipart } from "../../helpers/requests";
 import {
@@ -103,7 +107,10 @@ const globalKey = (
 	slice: GlobalSlice,
 	nations: string[],
 	parser_version: string,
-) => ({ kind: "global", slice, nations, parser_version }) as const;
+	// The nightly and the request path both key on the all-time window;
+	// a narrowed one is only ever built on demand (precompute.ts).
+	period: GlobalPeriod = "all",
+) => ({ kind: "global", slice, nations, period, parser_version }) as const;
 
 const cachedBundle = (
 	slice: GlobalSlice,
@@ -179,7 +186,10 @@ describe("precomputeGlobalSlice", () => {
 // find. Built through the real path rather than hand-written, so what
 // serve-stale hands back is a bundle and not a stand-in shaped like one.
 const cacheStaleFfaRome = async (): Promise<ChartBundleCore> => {
-	const corpus = await resolveGlobalCorpus(env, "ffa", { nations: [ROME] });
+	const corpus = await resolveGlobalCorpus(env, "ffa", {
+		nations: [ROME],
+		period: "all",
+	});
 	const bundle = (await buildChartBundle(
 		env,
 		corpus,

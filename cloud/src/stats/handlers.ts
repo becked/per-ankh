@@ -18,7 +18,9 @@ import { cloudCorsHeaders, errorResponse, jsonResponse } from "../util";
 import { buildAvatarUrl } from "../auth";
 import { displayNameSql } from "../identity";
 import {
+	DEFAULT_GLOBAL_PERIOD,
 	parseNationParam,
+	parsePeriodParam,
 	parseScopeParam,
 	parseSliceParam,
 } from "../games-scope";
@@ -232,6 +234,7 @@ export async function handleGlobalStats(
 	const url = new URL(request.url);
 	const slice = parseSliceParam(url.searchParams.get("slice"));
 	const nation = parseNationParam(url.searchParams.get("nation"));
+	const period = parsePeriodParam(url.searchParams.get("period"));
 	// The resolver and the cache key both take a set, even though the UI is
 	// single-select, so widening the facet to multi-select later costs the
 	// nightly precompute table rather than this call chain.
@@ -241,6 +244,7 @@ export async function handleGlobalStats(
 		kind: "global" as const,
 		slice,
 		nations,
+		period,
 		parser_version: CURRENT_PARSER_VERSION,
 	};
 	const cached = await getCached<ChartBundleCore>(env, cacheKey);
@@ -263,9 +267,16 @@ export async function handleGlobalStats(
 	// written under any parser version, so there is no stale entry to find. The
 	// cost is one D1 query ahead of a stale response, which already pays for the
 	// walk itself.
-	const corpus = await resolveGlobalCorpus(env, slice, { nations });
+	const corpus = await resolveGlobalCorpus(env, slice, { nations, period });
 	const build = () =>
-		buildGlobalSelection(env, slice, nations, CURRENT_PARSER_VERSION, corpus);
+		buildGlobalSelection(
+			env,
+			slice,
+			nations,
+			period,
+			CURRENT_PARSER_VERSION,
+			corpus,
+		);
 
 	if (corpus.gameIds.length === 0) {
 		return globalStatsResponse(await build(), cors);
@@ -281,6 +292,7 @@ export async function handleGlobalStats(
 				logError("global_stats_refresh_failed", e, {
 					slice,
 					nation: nation ?? "",
+					period,
 				});
 			}),
 		);
@@ -860,6 +872,10 @@ export async function handleHomeSummary(
 		kind: "global" as const,
 		slice: "duel" as const,
 		nations: [],
+		// The all-time window, which is the only one the crons warm — and this
+		// endpoint can only ever read what a cron built. A narrowed window is
+		// keyed separately (stats/cache.ts) and has no entry to find here.
+		period: DEFAULT_GLOBAL_PERIOD,
 		parser_version: CURRENT_PARSER_VERSION,
 	};
 	const bundle =
