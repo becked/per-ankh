@@ -304,6 +304,41 @@ function isDifferentYear(d: Date, timeZone: string | undefined): boolean {
 }
 
 /**
+ * The calendar day an instant falls on in the chosen zone, as "YYYY-MM-DD"
+ * ("en-CA" yields ISO date order). The zone is the whole point: a 23:00 UTC
+ * instant is already tomorrow for a viewer east of it, so anything that buckets
+ * or counts days has to be told which calendar it is counting on.
+ *
+ * @param d - the instant
+ * @param zone - "utc" for the canonical UTC calendar, "local" for the viewer's
+ */
+export function zonedDayKey(d: Date, zone: "utc" | "local"): string {
+	return d.toLocaleDateString("en-CA", {
+		timeZone: zone === "utc" ? "UTC" : undefined,
+		year: "numeric",
+		month: "2-digit",
+		day: "2-digit",
+	});
+}
+
+// A day key as a whole-day index, so two of them can be subtracted. Going
+// through Date.UTC of the key's own parts keeps the arithmetic clear of the
+// zone's offsets and DST shifts — those were already spent producing the key.
+function dayIndex(key: string): number {
+	const [y, m, d] = key.split("-").map(Number);
+	return Date.UTC(y, m - 1, d) / 86_400_000;
+}
+
+// Whole calendar days from `from` to `to` on `zone`'s calendar — what a person
+// means by "tomorrow" or "in 2 days". Counting day boundaries crossed rather
+// than elapsed 24-hour blocks is the distinction that matters: 23:00 tonight →
+// 22:00 tomorrow is 23 hours but one sleep, while 23:00 tonight → 01:00 the day
+// after is 26 hours and two.
+function calendarDayDiff(from: Date, to: Date, zone: "utc" | "local"): number {
+	return dayIndex(zonedDayKey(to, zone)) - dayIndex(zonedDayKey(from, zone));
+}
+
+/**
  * The short name of the viewer's local timezone for a given instant, e.g.
  * "PDT" / "EST" — the same abbreviation the scheduled-time helpers append to a
  * local clock. It is DST-dependent, so it resolves for a specific instant
@@ -613,22 +648,47 @@ export function formatGameTitle(game: {
  * The unit steps up as the gap widens (minutes → hours → days → months →
  * years), always picking the coarsest unit that still reads naturally.
  *
+ * Days are counted on `zone`'s CALENDAR, not as elapsed 24-hour blocks (see
+ * {@link calendarDayDiff}). Bucketing the raw duration made "in 2 days" mean
+ * "36 to 60 hours away" — a band wide enough that two matches 23 hours apart,
+ * on different days, both landed in it, while the nearer one was in fact
+ * tomorrow. The zone is the caller's because this line sits under an absolute
+ * time: it has to count on the same calendar that time is printed in, or the
+ * subtext contradicts the date directly above it.
+ *
+ * The locale is pinned to {@link TIME_LOCALE} like every other time surface.
+ * Following the device's instead meant a viewer whose locale ships no CLDR
+ * relative-time data (bm, ig, oc, xh, su, …) fell through to the CLDR root
+ * pattern and read a bare "+2 d" / "+17 h".
+ *
  * @param iso - ISO-8601 instant string, or null/undefined
+ * @param zone - the calendar to count days on: "utc" for the canonical UTC
+ *   clock, "local" for the viewer's
  * @returns e.g. "in 2 days", or "" when the input is empty/invalid
  */
-export function formatRelativeToNow(iso: string | null | undefined): string {
+export function formatRelativeToNow(
+	iso: string | null | undefined,
+	zone: "utc" | "local",
+): string {
 	if (!iso) return "";
 	const d = new Date(iso);
 	if (Number.isNaN(d.getTime())) return "";
-	const diffMs = d.getTime() - Date.now();
+	const now = new Date();
+	const diffMs = d.getTime() - now.getTime();
 	const abs = Math.abs(diffMs);
 	const MIN = 60_000;
 	const HOUR = 60 * MIN;
 	const DAY = 24 * HOUR;
-	const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+	const rtf = new Intl.RelativeTimeFormat(TIME_LOCALE, { numeric: "auto" });
 	if (abs < HOUR) return rtf.format(Math.round(diffMs / MIN), "minute");
 	if (abs < DAY) return rtf.format(Math.round(diffMs / HOUR), "hour");
-	if (abs < 30 * DAY) return rtf.format(Math.round(diffMs / DAY), "day");
+	if (abs < 30 * DAY) {
+		const days = calendarDayDiff(now, d, zone);
+		// A DST fall-back day runs 25 hours, so it can hold two instants a full
+		// day apart on one calendar date. "today" would be absurd for something
+		// past the 24-hour handoff, so step off zero in the gap's own direction.
+		return rtf.format(days === 0 ? Math.sign(diffMs) : days, "day");
+	}
 	if (abs < 365 * DAY)
 		return rtf.format(Math.round(diffMs / (30 * DAY)), "month");
 	return rtf.format(Math.round(diffMs / (365 * DAY)), "year");

@@ -117,7 +117,7 @@
 		<span
 			class="ml-auto shrink-0 rounded bg-amber-700/40 px-1.5 py-0.5 text-xs text-amber-300"
 		>
-			{formatRelativeToNow(video.published_at)}
+			{formatRelativeToNow(video.published_at, "local")}
 		</span>
 		{#if canFeature}
 			<!-- Above the stretched-link overlay (z-20, the escape hatch the
