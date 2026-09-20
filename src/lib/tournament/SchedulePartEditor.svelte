@@ -357,6 +357,7 @@
 			<span class="text-[11px] text-tan/60">
 				= {formatScheduledUtc(previewIso)} UTC · {formatRelativeToNow(
 					previewIso,
+					"local",
 				)}
 			</span>
 		{/if}

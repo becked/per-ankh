@@ -372,7 +372,10 @@
 										{/if}
 									</div>
 									<div class="text-xs opacity-75">
-										{formatRelativeToNow(row.part.scheduled_at)}{#if row.split}
+										{formatRelativeToNow(
+											row.part.scheduled_at,
+											zone,
+										)}{#if row.split}
 											· Pt {row.partNumber}{/if}
 									</div>
 								{:else}
@@ -380,7 +383,7 @@
 									{@const instant = matchSortInstant(m)}
 									{@const t = formatScheduledInZone(instant, zone, use12Hour)}
 									{#if instant}
-										{@const rel = formatRelativeToNow(instant)}
+										{@const rel = formatRelativeToNow(instant, zone)}
 										<!-- A real instant (scheduled or overdue): show it with the same
 										     relative subtext the part rows carry. An overdue (in-progress)
 										     match keeps its last-started time visible; the relative subtext
