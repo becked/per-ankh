@@ -656,6 +656,11 @@ export function formatGameTitle(game: {
  * time: it has to count on the same calendar that time is printed in, or the
  * subtext contradicts the date directly above it.
  *
+ * The locale is pinned to {@link TIME_LOCALE} like every other time surface.
+ * Following the device's instead meant a viewer whose locale ships no CLDR
+ * relative-time data (bm, ig, oc, xh, su, …) fell through to the CLDR root
+ * pattern and read a bare "+2 d" / "+17 h".
+ *
  * @param iso - ISO-8601 instant string, or null/undefined
  * @param zone - the calendar to count days on: "utc" for the canonical UTC
  *   clock, "local" for the viewer's
@@ -674,7 +679,7 @@ export function formatRelativeToNow(
 	const MIN = 60_000;
 	const HOUR = 60 * MIN;
 	const DAY = 24 * HOUR;
-	const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+	const rtf = new Intl.RelativeTimeFormat(TIME_LOCALE, { numeric: "auto" });
 	if (abs < HOUR) return rtf.format(Math.round(diffMs / MIN), "minute");
 	if (abs < DAY) return rtf.format(Math.round(diffMs / HOUR), "hour");
 	if (abs < 30 * DAY) {
