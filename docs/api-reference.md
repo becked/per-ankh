@@ -362,8 +362,8 @@ Recent videos merged across the user's linked channels (newest first) — feeds 
 
 - **Auth:** Public — channels and their videos are user-published; no PII, same for every viewer.
 - **Path:** `user_id` (21-char).
-- **Response 200:** `{ videos: { id, title, url, thumbnail_url: string|null, published_at, platform }[] }` (empty when the user has no linked channels). For live content `published_at` is when the broadcast aired, not when its VOD was later published — see the note below.
-- **Notes:** Per-channel KV cache, stale-while-revalidate (serves cached instantly, refreshes in the background past a 1h soft TTL). YouTube videos come from the unauthenticated channel RSS feed. That feed dates live content by its VOD publish instant, which runs hours (routinely a calendar day) after the broadcast, so when `YOUTUBE_API_KEY` is configured each refresh spends one further quota unit on `videos.list` to re-date broadcasts to `liveStreamingDetails.actualStartTime` and re-sorts. Without the key the feed's own dates stand. A refresh whose `videos.list` call fails is served but not cached, so the feed dates never persist past that one response.
+- **Response 200:** `{ videos: { id, title, url, thumbnail_url: string|null, published_at, platform, duration_seconds: number|null }[] }` (empty when the user has no linked channels). For live content `published_at` is when the broadcast aired, not when its VOD was later published — see the note below. `duration_seconds` is the runtime; see [Video runtimes](#video-runtimes) for when it is null.
+- **Notes:** Per-channel KV cache, stale-while-revalidate (serves cached instantly, refreshes in the background past a 1h soft TTL). YouTube videos come from the unauthenticated channel RSS feed. That feed dates live content by its VOD publish instant, which runs hours (routinely a calendar day) after the broadcast, so when `YOUTUBE_API_KEY` is configured each refresh spends one further quota unit on `videos.list` (`part=liveStreamingDetails,contentDetails`) to re-date broadcasts to `liveStreamingDetails.actualStartTime` and re-sorts. The same call returns each video's runtime, so `duration_seconds` costs no extra quota. Without the key the feed's own dates stand. A refresh whose `videos.list` call fails is served but not cached, so the feed dates never persist past that one response.
 
 ### `GET /v1/users/:user_id/tournaments`
 One player's whole tournament record — played + upcoming matches, and cast appearances — for the profile "Tournaments" tab.
@@ -378,7 +378,7 @@ One player's whole tournament record — played + upcoming matches, and cast app
 Cross-creator home feed — the newest uploads across all users' linked channels, merged newest-first for the home page's "Latest from creators" strip.
 
 - **Auth:** Public — channels and their videos are user-published; no PII, same for every viewer.
-- **Response 200:** `{ videos: { id, title, url, thumbnail_url: string|null, published_at, platform, user_id, display_name, slug: string|null, avatar_url }[] }` (each video carries its creator; empty only when no channel has recent uploads).
+- **Response 200:** `{ videos: { id, title, url, thumbnail_url: string|null, published_at, platform, duration_seconds: number|null, user_id, display_name, slug: string|null, avatar_url }[] }` (each video carries its creator; empty only when no channel has recent uploads).
 - **Notes:** Cached as one pre-assembled KV entry, stale-while-revalidate (mirrors the per-channel cache): fresh served as-is, stale served instantly while a background task re-assembles it, cold miss built synchronously and cached so the first request already returns the feed. The cold build's per-channel fetches run in parallel over mostly-warm caches (at worst one RSS fetch per channel, plus one `videos.list` call where a key is configured). Capped at 12, matching the home strip (which merges this feed with `GET /v1/tournament-videos`, capped to match). Underlying per-channel data is the same SWR cache as `GET /v1/users/:user_id/videos`, including its broadcast-date correction — so a cast is placed and labelled by when it aired.
 
 ### `GET /v1/tournament-videos`
@@ -386,8 +386,21 @@ Cross-creator home feed — the newest uploads across all users' linked channels
 Cross-tournament home feed — the newest uploads across every visible tournament's admin-set playlist, merged newest-first. The home page interleaves these with `GET /v1/creator-videos` into one strip.
 
 - **Auth:** Public — the same admin-set playlists each tournament's own Videos tab already serves to anyone; no PII, same for every viewer. Outside the per-IP tournament-view budget (no `429` here): every home page load would otherwise spend a slot on a strip nobody navigated to.
-- **Response 200:** `{ videos: … }` — entries carry the same three-way uploader attribution as `GET /v1/tournaments/:id/videos` (linked Per-Ankh user → `user_id`/`display_name`/`slug`/`avatar_url`; unlinked YouTube channel → `uploader_name`/`uploader_url`; neither → the bare video). Empty when no visible tournament has a playlist.
+- **Response 200:** `{ videos: … }` — entries carry the same three-way uploader attribution the per-tournament archive puts on each angle (linked Per-Ankh user → `user_id`/`display_name`/`slug`/`avatar_url`; unlinked YouTube channel → `uploader_name`/`uploader_url`; neither → the bare video). Empty when no visible tournament has a playlist.
 - **Notes:** Which tournaments contribute is read from D1 per request, so a newly-set playlist appears without an invalidation step; visibility is viewer-independent (anything past `setup`, plus `setup` with `signups_open=1`) because the response is shared-cacheable. Playlist videos come from the same per-playlist KV entries (SWR) as the per-tournament read, so a home request is one D1 read plus mostly-warm KV reads. Distinct playlist ids only — two tournaments sharing a playlist fetch it once — and a video listed on two playlists collapses to one entry. Capped at 12, matching the strip. **Unfiltered**, unlike the creator feed's Old World title filter: an admin curated the playlist for that tournament, and match VODs rarely name the game. Edge-cached 60s (`s-maxage`), no browser cache.
+
+### Video runtimes
+
+Every video payload carries `duration_seconds: number | null` — the runtime, or null when it isn't known.
+
+It is null in four cases, and they are worth telling apart:
+
+- **No `YOUTUBE_API_KEY`.** The free RSS feeds state no length, so every keyless path returns null for every video.
+- **A broadcast still running.** `videos.list` reports `P0D` for these; that is parsed as null rather than 0, so "not over yet" never reads as "zero length".
+- **A degraded enrichment.** A `videos.list` batch that fails leaves its videos with feed dates and null runtimes. Such a response is served but never cached (`UncacheableVideos`), so the null does not persist past that one request.
+- **Featured videos.** `GET /v1/featured-videos` and `GET /v1/admin/featured-videos` serve D1 snapshots taken when a video was starred, and that table has no duration column — so these are null for every featured video, not merely unknown for some.
+
+The value costs no extra quota: it rides on the `videos.list` call that already runs to re-date live broadcasts to their air time.
 
 ### `GET /v1/featured-videos`
 
@@ -530,10 +543,23 @@ Single match detail.
 - **Errors:** `404 MATCH_NOT_FOUND` (missing, or the match's round isn't in this tournament), `404 TOURNAMENT_NOT_FOUND`, `429 RATE_LIMIT_TOURNAMENT_VIEW`.
 
 ### `GET /v1/tournaments/:id/videos`
-Uploads from the tournament's admin-set YouTube playlist (`youtube_playlist_url`) — feeds the Videos tab, whose search filters the returned list client-side. KV-cached (stale-while-revalidate), same as the profile videos read. When `YOUTUBE_API_KEY` is configured the whole playlist is enumerated via the Data API (`playlistItems.list`, paged, capped at 500) so search can reach every video, and broadcasts are re-dated to when they aired (`videos.list`, one further unit per 50 videos — same correction as the profile videos read); without the key it falls back to the free RSS feed's ~15 most-recent entries, dated as the feed gave them.
+Uploads from the tournament's admin-set YouTube playlist (`youtube_playlist_url`) — feeds the Videos tab, whose search filters the returned list client-side. KV-cached (stale-while-revalidate), same as the profile videos read. When `YOUTUBE_API_KEY` is configured the whole playlist is enumerated via the Data API (`playlistItems.list`, paged, capped at 500) so search can reach every video, and broadcasts are re-dated to when they aired (`videos.list` with `part=liveStreamingDetails,contentDetails`, one further unit per 50 videos — same correction as the profile videos read); without the key it falls back to the free RSS feed's ~15 most-recent entries, dated as the feed gave them.
 
-- **Response 200:** `{ videos: [{ id, title, url, thumbnail_url, published_at, platform, …uploader }] }`, newest first (on the keyed path, by air time for live content). Each video carries uploader attribution: a linked Per-Ankh uploader adds `{ user_id, display_name, slug, avatar_url }` (Discord identity, like the creator feed); an unlinked YouTube uploader adds `{ uploader_name, uploader_url }`; a feed without an author adds neither. Empty when no playlist is configured or the stored value no longer parses.
+- **Response 200:** `{ videos: [{ id, title, url, thumbnail_url, published_at, platform, duration_seconds, …uploader }] }`, newest first (on the keyed path, by air time for live content). Each video carries uploader attribution: a linked Per-Ankh uploader adds `{ user_id, display_name, slug, avatar_url }` (Discord identity, like the creator feed); an unlinked YouTube uploader adds `{ uploader_name, uploader_url }`; a feed without an author adds neither. Empty when no playlist is configured or the stored value no longer parses.
 - **Errors:** `404 TOURNAMENT_NOT_FOUND`, `429 RATE_LIMIT_TOURNAMENT_VIEW`.
+
+### `GET /v1/tournaments/:id/video-archive`
+The tournament's recorded games, grouped **match → part → angle** — the shape the Videos tab browses. A match is one game, played across one or more **parts** (its `parts[]` sittings), each of which may have been filmed from several **angles**: a caster's broadcast, or a player's own point of view.
+
+Videos come from the admin-set playlist (`youtube_playlist_url`), KV-cached stale-while-revalidate like the profile videos read. With `YOUTUBE_API_KEY` configured the whole playlist is enumerated via the Data API (`playlistItems.list`, paged, capped at 500), and `videos.list` (`part=liveStreamingDetails,contentDetails`, one further unit per 50 videos) re-dates broadcasts to when they aired and supplies each runtime. Without the key the RSS fallback's recent entries are still attributed and listed, but none carries a runtime, so every part is priced at zero and dated by its VOD publish instant.
+
+- **Response 200:** `{ source: "api" | "feed" | "none", matches: ArchiveMatch[], unattributed: Video[] }`. `source` says where the videos came from — the keyed Data API read, the keyless RSS fallback, or nothing because no playlist is configured — so a client can tell "no key" from "no footage" from "no playlist", which are otherwise the same empty list.
+  - `ArchiveMatch` — `{ match_id, match_number, round_number, phase, division, status, slot_a_id, slot_b_id, slot_a_display_name, slot_b_display_name, slot_a_nation, slot_b_nation, winner_slot_id, map_script, total_turns, parts, gaps }`. Occupants are resolved the way every match surface resolves them: the report-time snapshot for a decided match so a substitution never rewrites who played, the live slot for a pending one. Nations come from the linked game's player summaries, so a crest here matches the one `GET /v1/tournaments/:id/matches` draws. `gaps` counts scheduled sittings with no surviving footage — when it is non-zero the time below is a **floor**, not a total.
+  - `parts[]` — `{ n, aired, seconds, angles }`, in the order they aired. `seconds` is the **union** of every angle's broadcast window, so several cameras on the same hours collapse to those hours while cameras that relayed one long session between them add up.
+  - `angles[]` — `{ video, channel, angle: "cast"|"pov", seconds: number|null, aired }`. `video` carries the same three-way uploader attribution as the cross-tournament feed. `seconds` is null for a broadcast still running and on the keyless path; such an angle is listed but adds nothing to its part's time.
+  - `unattributed` — playlist videos no match claimed, returned rather than dropped so the gaps stay visible.
+- **Errors:** `404 TOURNAMENT_NOT_FOUND`, `429 RATE_LIMIT_TOURNAMENT_VIEW`.
+- **Notes:** Matches sort by `match_number`. Byes are excluded, and a pending match nobody filmed is omitted; a **decided** match (complete or forfeit) with no footage is kept, because that is a gap in the archive rather than a match that never happened. Attribution is computed per request, over the KV-cached playlist; only the playlist fetch is cached. A stored `parts[].streams[]` link naming a video wins outright; otherwise the title is matched against the tournament's own roster — the two names around a "vs" when the title has one, else the one pairing its names fit, and nothing when they fit more than one. The match *number* printed in titles is deliberately not used — see `cloud/src/tournament/video-archive.ts` for why.
 
 ---
 

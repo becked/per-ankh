@@ -31,7 +31,10 @@ import {
 // v5: live content is dated by when the broadcast aired rather than when its
 //     VOD was published; orphan the v4 entries so a warmed feed doesn't keep
 //     serving dates that are hours-to-a-day too recent.
-const CACHE_VERSION = 5;
+// v6: every video carries duration_seconds; orphan the v5 entries so a warmed
+//     feed doesn't keep serving videos with the field absent entirely (not
+//     null), which a consumer reading it would see as undefined.
+const CACHE_VERSION = 6;
 // Serve a cached entry without refetching under this age.
 const SOFT_TTL_MS = 60 * 60 * 1000; // 1h
 // KV hard expiry — a safety net far past the soft TTL.
@@ -42,7 +45,10 @@ interface CachedVideos {
 	videos: Video[];
 }
 
-function cacheKey(platform: string, cacheId: string): string {
+// Exported for the integration tests that seed an entry directly: they must
+// write the key this module reads, or a CACHE_VERSION bump turns their seed
+// into an orphan and the handler under test into one reading nothing.
+export function cacheKey(platform: string, cacheId: string): string {
 	return `videos:v${CACHE_VERSION}:${platform}:${cacheId}`;
 }
 
