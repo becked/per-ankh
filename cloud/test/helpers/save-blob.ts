@@ -137,6 +137,18 @@ export interface UploadFixtureOpts {
 		// offset clear of the yields.
 		readonly values: readonly number[];
 	}>;
+	// Market prices → yield_price_history, which the indexer prices the GDP
+	// basket from. Omitted, the blob carries none and gdp_per_turn stays NULL —
+	// which is a save the game recorded no prices for, not a GDP of zero.
+	//
+	// Prices are raw, as the save stores them: money ×10,000 (PRICE_SCALE), so
+	// 40_000 is 4 money. Only turns where a price moved need an entry; the
+	// pricer forward-fills.
+	readonly prices?: ReadonlyArray<{
+		readonly turn: number;
+		readonly yieldType: string;
+		readonly price: number;
+	}>;
 	// Law adoptions → law_events, behind both lawTiming and openingLaws.
 	// Succession laws are accepted and worth passing: the aggregator drops them
 	// from both charts, which is only observable if a fixture supplies one.
@@ -341,6 +353,11 @@ function buildMinimalGameBlob(
 		},
 		player_history: playerHistory,
 		yield_history: yieldHistory,
+		yield_price_history: (opts.prices ?? []).map((p) => ({
+			turn: p.turn,
+			yield_type: p.yieldType,
+			price: p.price,
+		})),
 		event_logs: [],
 		law_adoption_history: lawAdoptionHistory,
 		current_laws: [],

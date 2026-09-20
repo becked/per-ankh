@@ -22,6 +22,9 @@ export const CATEGORIES: Array<{ id: StatsCategory; label: string }> = [
 	{ id: "laws", label: "Laws" },
 	{ id: "cities", label: "Cities" },
 	{ id: "tech", label: "Tech" },
+	// Records has no chart specs — it's one bespoke panel fetching its own
+	// payload, so StatsView lists it unconditionally rather than by spec count.
+	{ id: "records", label: "Records" },
 ];
 
 export const CHART_SPECS: ChartSpec[] = [

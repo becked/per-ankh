@@ -14,6 +14,7 @@
 	import { resolve } from "$app/paths";
 	import { page } from "$app/state";
 	import { autohideScroll } from "$lib/actions/autohideScroll";
+	import { cloudApi } from "$lib/api-cloud";
 	import Breadcrumb, { type Crumb } from "$lib/Breadcrumb.svelte";
 	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
 	import UserTournamentsTab from "$lib/tournament/UserTournamentsTab.svelte";
@@ -29,6 +30,17 @@
 
 	const bundle = $derived(data.bundle);
 	const profile = $derived(data.profile);
+
+	// The Records tab's own fetch — its payload is not in the bundle, so the
+	// profile only pays for it when that tab opens. The scope row drives it like
+	// every other tab, so the selection is read eagerly here: a closure that
+	// read data.scope when called would never be rebuilt, and the panel would
+	// keep showing the scope you arrived on.
+	const loadRecords = $derived.by(() => {
+		const userId = data.profile.user_id;
+		const scope = data.scope;
+		return () => cloudApi.getUserRecords(userId, { scope });
+	});
 	const nationOptions = $derived(data.bundle.nations.map((n) => n.nation));
 
 	// Canonical trail: Home › this user. The avatar stays alongside as
@@ -264,7 +276,7 @@
 							{#if hasNoGames}
 								{@render noGames()}
 							{:else}
-								<StatsView {bundle} countLabel="Games" />
+								<StatsView {bundle} {loadRecords} countLabel="Games" />
 							{/if}
 						</Tabs.Content>
 					</div>

@@ -179,7 +179,7 @@ Alternatives considered and rejected: **t-digest / reservoir sampling** (constan
 
 **Decision: one bundle per corpus, as today. Not split per category.**
 
-The deciding fact is that the bundle is **size-stable as the corpus grows**. `yieldCurves` is 16 series × 2 (rate/cumulative) × 3 bands × 3 cohorts = 288 arrays of length `turns.length` — that is `O(max_turn)`, not `O(games)`. The per-nation/law/tech rows are `O(nations × laws)`. On the current 152-turn axis the all-public bundle is 622 KB of JSON, 154 KB gzipped, and it stays there as games accumulate. The 10-game single-player slice is 385 KB / 94 KB on the same axis — 57× fewer games for 62% of the payload — which is the property this section rests on.
+The deciding fact is that the bundle is **size-stable as the corpus grows**. `yieldCurves` is 17 series × 2 (rate/cumulative) × 3 bands × 3 cohorts = 306 arrays of length `turns.length` — that is `O(max_turn)`, not `O(games)`. The per-nation/law/tech rows are `O(nations × laws)`. On the current 152-turn axis the all-public bundle is 622 KB of JSON, 154 KB gzipped, and it stays there as games accumulate. The 10-game single-player slice is 385 KB / 94 KB on the same axis — 57× fewer games for 62% of the payload — which is the property this section rests on.
 
 Two fields scale with game count rather than turn count: `save_dates`, which the global bundle drops (§8.1), and `openingLaws`, which §8.2 bounds. With both handled the size-stability above holds.
 
