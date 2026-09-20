@@ -1,4 +1,5 @@
 import type { TournamentMatch } from "$lib/api-cloud";
+import { zonedDayKey } from "$lib/utils/formatting";
 import {
 	scheduledParts,
 	partInstant,
@@ -59,9 +60,11 @@ export function liveAndUpcoming(
 	return { live, upcoming };
 }
 
-// Calendar bucketing key: the day an instant falls on in the active zone, as
-// "YYYY-MM-DD". A 23:00 UTC match lands on a different local day for a western
-// viewer, so the key must follow the toggle. "en-CA" yields ISO date order.
+// Calendar bucketing key: the day a scheduled instant falls on in the active
+// zone, as "YYYY-MM-DD". A 23:00 UTC match lands on a different local day for a
+// western viewer, so the key must follow the toggle. The zone-aware day itself
+// is zonedDayKey's, shared with the relative-time subtext so the calendar and
+// the "in 2 days" under a match agree on where a day ends.
 export function scheduledDayKey(
 	iso: string | null | undefined,
 	zone: ScheduleZone,
@@ -69,10 +72,5 @@ export function scheduledDayKey(
 	if (!iso) return null;
 	const d = new Date(iso);
 	if (Number.isNaN(d.getTime())) return null;
-	return d.toLocaleDateString("en-CA", {
-		timeZone: zone === "utc" ? "UTC" : undefined,
-		year: "numeric",
-		month: "2-digit",
-		day: "2-digit",
-	});
+	return zonedDayKey(d, zone);
 }
