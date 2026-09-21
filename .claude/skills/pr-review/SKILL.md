@@ -26,7 +26,7 @@ The checks derive from `CLAUDE.md` § "Contributing — making PRs that merge cl
 
 1. **Read the whole diff first, then the surrounding code.** Correctness you can mostly judge from the diff; fit you cannot — it only shows up against what already exists. So once the correctness read is done, spend the rest of the pass in the files the diff *doesn't* touch.
 
-2. **Grep before every negative claim.** "There's no existing helper for this", "this term isn't used elsewhere", "nothing else reads this field" — each is a claim about the whole repo, and each is wrong often enough to matter. Search the repo *and* `main` before asserting it (`CLAUDE.md` rule 10). An unverified negative is worse than a missed finding: it sends the contributor to rewrite working code.
+2. **Grep before every negative claim.** "There's no existing helper for this", "this term isn't used elsewhere", "nothing else reads this field" — each is a claim about the whole repo, and each is wrong often enough to matter. Search the repo *and* `main` before asserting it (`CLAUDE.md` rule 12). An unverified negative is worse than a missed finding: it sends the contributor to rewrite working code.
 
 3. **Report findings, not verdicts.** Cite `file:line` and state the concrete problem — for a fit finding, name the existing pattern it should match instead. Report correctness and fit findings in one list; the contributor shouldn't have to guess which pass produced what. Skip severity rankings and merge/don't-merge calls unless asked.
 
