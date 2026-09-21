@@ -1,5 +1,5 @@
 <script lang="ts">
-	// Ten players the profile's owner should get a close game against.
+	// Twelve players the profile's owner should get a close game against.
 	//
 	// Owner-only, and the only tab that is: the others are facts about the
 	// profile (it has channels, it holds a tournament slot), this one is about
@@ -68,15 +68,38 @@
 {#snippet opponentCard(o: RecommendedOpponent)}
 	<!-- Bottom-aligned, not centred: the badge row is the last thing in the
 	     identity column, so its baseline is the column's bottom edge — ending the
-	     row there puts the Discord chip on the same line as the badges. -->
-	<div class="flex items-end gap-2 rounded-lg bg-surface p-3">
+	     row there puts the Discord chip on the same line as the badges. And
+	     wrapping, because the chip is shrink-0 and the identity column is
+	     not: on a card too narrow for both, an unwrapped row spends its width
+	     on the chip and leaves the column a name clipped to a few characters
+	     and a badge broken across two lines. Wrapped, the chip takes its own
+	     line below and the name gets the card. Which card that is depends on
+	     the column count as much as the screen — a phone and a three-column
+	     desktop grid are about the same width — so the break is left to the
+	     content rather than pinned to a breakpoint. -->
+	<div class="flex flex-wrap items-end gap-2 rounded-lg bg-surface p-3">
 		<!-- Identity: the avatar and the name link, and nothing else in the card
 		     does — the badges state facts about the pair, so they are not a way to
 		     reach anyone. Two anchors rather than one around the pair, because the
 		     badges sit under the name and inside that anchor they would be
 		     clickable too. The Discord link is their sibling, not a child: an
-		     anchor inside an anchor is not markup. -->
-		<div class="flex min-w-0 flex-1 items-center gap-3">
+		     anchor inside an anchor is not markup.
+
+		     The basis is the wrap threshold, so it is set from the chip and not
+		     from the name: chip (157px) plus gap (8px) is 165px, so a card with
+		     less than basis + 165px inside its padding keeps the two on one
+		     line and pays for it out of the name. The narrowest card the grid
+		     below makes is the xl column at a 1280 viewport: the page's px-4,
+		     the tab panel's p-4 and the scroll gutter leave 1211px for three
+		     columns and two gaps, so the column is 396px and 372 inside the
+		     card's own padding — which leaves 207px for this column. basis-56
+		     (224) is comfortably past that, so there the chip drops to its own
+		     line instead of clipping the name to ~154px; from 1333px up the
+		     column has the 389px both need and this changes nothing. Measured,
+		     not derived: the chain above is easy to get wrong by one wrapper.
+		     min-w-0 keeps the truncate working on the line where the column is
+		     alone. -->
+		<div class="flex min-w-0 grow basis-56 items-center gap-3">
 			<ProfileLink
 				userId={o.user_id}
 				slug={o.slug}
@@ -164,10 +187,13 @@
 
 {#if opponents.length > 0}
 	<!-- Third column at xl, not lg like the video grid: these cards are
-	     horizontal, and the Discord chip is shrink-0, so a column narrower
-	     than ~400px pushes the badge row under the name instead of beside
-	     the chip. xl lands each card near the ~430px the card was laid out
-	     at, back when the list was its own max-w-4xl page. -->
+	     horizontal, and a narrow column drops the Discord chip onto its own
+	     line. That is a fair card and not a broken one, but three per row
+	     reads best when it doesn't happen, and from 1333px up the column is
+	     wide enough that it doesn't — on its way to the ~430px the card was
+	     laid out at, back when the list was its own max-w-4xl page. At 1280
+	     exactly the column is 396px and the chip does wrap, which is the case
+	     the basis above is set for. -->
 	<div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
 		{#each opponents as o (o.user_id)}
 			{@render opponentCard(o)}
@@ -183,8 +209,8 @@
 	</p>
 {:else}
 	<p class="p-8 text-center text-sm text-tan opacity-60">
-		Nothing to suggest right now — everyone close enough to give you a good game
-		is either already busy or away.
+		Nothing to suggest right now — there's nobody else both listed and around at
+		the moment.
 	</p>
 {/if}
 

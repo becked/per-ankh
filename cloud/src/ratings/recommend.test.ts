@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
 	buildRecommendations,
 	MAX_APPEARANCES,
-	MIN_RECOMMENDATION_COUNT,
 	RECOMMENDATION_COUNT,
 	type RecommendationCandidate,
 } from "./recommend";
@@ -54,80 +53,99 @@ describe("buildRecommendations", () => {
 	});
 
 	it("never suggests a game one side would walk", () => {
-		// Eight players at the same strength, so the floor below is nowhere near
-		// binding and the band is free to do its job.
-		const players = [
-			...pool(8),
-			player("hopeless", { r: 2400 }),
-			player("outclassed", { r: 700 }),
-		];
-		const lists = buildRecommendations({ players, duels: [], today: TODAY });
+		// The stomp has to be the better-scoring name, or this test is not about
+		// the band. A pack of equals rejects a far outlier on closeness alone —
+		// the score *is* closeness, so the outlier sorts to the bottom and the
+		// band is never consulted — and an assertion that still passes with the
+		// band deleted pins nothing.
+		//
+		// So: exactly a page of close games, every one of them discounted. The
+		// viewer has played each peer three times this quarter, which takes them
+		// to 0.5 / (1 + 0.6·3) = 0.18. The stomp is a first meeting at full
+		// novelty, and 26/74 scores 0.25 — above the entire page. Score alone
+		// would seat it; only the band keeps it off.
+		const viewer = player("viewer");
+		const peers = pool(RECOMMENDATION_COUNT, "peer");
+		const duels: Duel[] = peers.flatMap((p) =>
+			Array.from({ length: 3 }, (_, i) => ({
+				date: `2026-0${6 + i}-01`,
+				p1: viewer.userId,
+				p2: p.userId,
+				winner: viewer.userId,
+			})),
+		);
+		const lists = buildRecommendations({
+			players: [viewer, ...peers, player("stomp", { r: 1690 })],
+			duels,
+			today: TODAY,
+		});
 
-		for (const p of pool(8)) {
-			const ids = idsFor(lists, p.userId);
-			expect(ids).not.toContain("hopeless");
-			expect(ids).not.toContain("outclassed");
+		const ids = idsFor(lists, "viewer");
+		expect(ids).toHaveLength(RECOMMENDATION_COUNT);
+		expect(ids).not.toContain("stomp");
+
+		// The same promise at the ends of the ladder, where closeness settles it
+		// without the band having to: a healthy pack is offered neither outlier.
+		const ends = buildRecommendations({
+			players: [
+				...pool(20),
+				player("hopeless", { r: 2400 }),
+				player("outclassed", { r: 700 }),
+			],
+			duels: [],
+			today: TODAY,
+		});
+		for (const p of pool(20)) {
+			const packIds = idsFor(ends, p.userId);
+			expect(packIds).not.toContain("hopeless");
+			expect(packIds).not.toContain("outclassed");
 		}
 		// …and symmetrically: the strong player is not offered the weak one
 		// while anyone closer is left.
-		expect(idsFor(lists, "hopeless")).not.toContain("outclassed");
+		expect(idsFor(ends, "hopeless")).not.toContain("outclassed");
 	});
 
-	it("gives the ends of the ladder a floor rather than a dead end", () => {
+	it("fills the ends of the ladder from whoever is nearest", () => {
 		// One player far above a settled pack: nobody is a close game for them,
-		// so the band has to give way — down to the floor, and no further.
-		const players = [player("champion", { r: 2100 }), ...pool(12)];
+		// so the band gives way entirely rather than hand them the one-name
+		// page this floor exists to replace. What they get is not twelve close
+		// games — there are none — but the twelve closest there are.
+		const players = [player("champion", { r: 2100 }), ...pool(14)];
 		const lists = buildRecommendations({ players, duels: [], today: TODAY });
 
 		const ids = idsFor(lists, "champion");
-		expect(ids).toHaveLength(MIN_RECOMMENDATION_COUNT);
+		expect(ids).toHaveLength(RECOMMENDATION_COUNT);
 		expect(new Set(ids).size).toBe(ids.length);
 		// The pack still gets full lists off each other.
 		expect(idsFor(lists, "p0")).toHaveLength(RECOMMENDATION_COUNT);
 	});
 
 	it("widens the band when either side is a player it barely knows", () => {
-		// Everyone here sits at a conservative rating (r - 2·RD) of 1500 or
-		// 1340. The 160-point gap predicts about 29/71: outside the band a
-		// settled pair is held to, inside the one a pair with a barely-known
-		// player on either side gets. Six same-strength players sit alongside
-		// so the floor is already satisfied and the band is what decides.
-		const near = pool(6, "near").map((p) => ({ ...p, r: 1660 }));
-		const far = pool(3, "far");
+		// Two candidates exactly as far from the viewer as each other: a
+		// conservative rating (r − 2·RD) of 1520 against the viewer's 1340,
+		// which predicts about 26/74. That sits outside the band a settled pair
+		// is held to and inside the one a pair with a barely-known player gets,
+		// so the deviation is the only thing between them — same closeness,
+		// same recency, same page slot. Eleven peers take the rest of the page,
+		// so the band decides who has the twelfth rather than the fill does.
+		//
+		// The viewer was seen today, which puts them first in the pass: nobody
+		// has spent an appearance yet, so the two are tied on score as well and
+		// the settled one — first by the id tiebreak, so first down a scored
+		// list — is what a recommender that had forgotten the deviation would
+		// hand back.
+		const players = [
+			player("viewer", { lastActive: TODAY }),
+			...pool(11, "peer"),
+			player("settled_far", { r: 1680 }),
+			player("unplaced_far", { r: 1920, rd: 200, publicGames: 1 }),
+		];
+		const lists = buildRecommendations({ players, duels: [], today: TODAY });
 
-		// A settled player finds none of the three close enough.
-		const settled = buildRecommendations({
-			players: [player("settled", { r: 1660 }), ...near, ...far],
-			duels: [],
-			today: TODAY,
-		});
-		expect(idsFor(settled, "settled").sort()).toEqual(
-			near.map((p) => p.userId).sort(),
-		);
-
-		// The same conservative rating with a wide deviation reaches all nine.
-		const unsettled = buildRecommendations({
-			players: [
-				player("newcomer", { r: 1900, rd: 200, publicGames: 1 }),
-				...near,
-				...far,
-			],
-			duels: [],
-			today: TODAY,
-		});
-		expect(idsFor(unsettled, "newcomer")).toHaveLength(9);
-
-		// ...and so does a settled player looking at a barely-known candidate.
-		const candidate = buildRecommendations({
-			players: [
-				player("settled", { r: 1660 }),
-				...near,
-				player("unplaced", { r: 1740, rd: 200, publicGames: 1 }),
-			],
-			duels: [],
-			today: TODAY,
-		});
-		expect(idsFor(candidate, "settled")).toContain("unplaced");
+		const ids = idsFor(lists, "viewer");
+		expect(ids).toHaveLength(RECOMMENDATION_COUNT);
+		expect(ids).toContain("unplaced_far");
+		expect(ids).not.toContain("settled_far");
 	});
 
 	it("leaves out anyone who opted out, and still gives them their own list", () => {
@@ -156,13 +174,27 @@ describe("buildRecommendations", () => {
 	});
 
 	it("spreads the load instead of sending everyone to the same player", () => {
-		// Twice as many receivers as candidates: forty in the pool, and forty
-		// more who read a list without being on anyone's. Eight hundred picks
-		// over forty names is exactly the ceiling, so it binds on every
-		// candidate and still leaves every list full — the case it is meant
-		// to hold in.
+		// The cap has to be what stops the pile-up, or this test is not about
+		// the cap. A pool of equals spreads itself: the soft 1 / (1 + picked)
+		// penalty alone lands every candidate on exactly the same count, and an
+		// assertion that still passes with the ceiling deleted pins nothing.
+		//
+		// So: three players seen this week, and thirty-seven last seen two and
+		// a half months ago. Same strength, so every game is as close as every
+		// other and recency is the only thing between them — a 1.0 against a
+		// 0.7, for every viewer alike. Twice as many receivers as candidates:
+		// forty in the pool and forty more who read a list without being on
+		// anyone's, nine hundred and sixty picks in all. Left to the soft
+		// penalty the three would each be handed to over thirty people; the
+		// ceiling holds them at two dozen, and every list is still full.
+		const fresh = pool(3, "fresh").map((p) => ({ ...p, lastActive: TODAY }));
+		const stale = pool(37, "stale").map((p) => ({
+			...p,
+			lastActive: "2026-06-10",
+		}));
 		const players = [
-			...pool(40),
+			...fresh,
+			...stale,
 			...pool(40, "reader").map((p) => ({ ...p, openToMatches: false })),
 		];
 		const lists = buildRecommendations({ players, duels: [], today: TODAY });
@@ -174,6 +206,9 @@ describe("buildRecommendations", () => {
 			for (const id of ids) {
 				appearances.set(id, (appearances.get(id) ?? 0) + 1);
 			}
+		}
+		for (const p of fresh) {
+			expect(appearances.get(p.userId)).toBe(MAX_APPEARANCES);
 		}
 		for (const [, count] of appearances) {
 			expect(count).toBeLessThanOrEqual(MAX_APPEARANCES);
@@ -240,9 +275,9 @@ describe("buildRecommendations", () => {
 		// discount, not a ban.
 		expect(idsFor(lists, "me").sort()).toEqual(["again", "fresh"]);
 
-		// With ten rivals competing for the slots, the rematch loses its place.
+		// With more rivals than slots, the rematch loses its place.
 		const crowded = buildRecommendations({
-			players: [...players, ...pool(10, "other")],
+			players: [...players, ...pool(12, "other")],
 			duels,
 			today: TODAY,
 		});
@@ -258,7 +293,7 @@ describe("buildRecommendations", () => {
 		const newcomers = Array.from({ length: 12 }, (_, i) =>
 			player(`new${i}`, { rd: 300, publicGames: 1 }),
 		);
-		const known = Array.from({ length: 8 }, (_, i) =>
+		const known = Array.from({ length: 11 }, (_, i) =>
 			player(`known${i}`, { r: 1480 + i * 5 }),
 		);
 		const proven = player("proven", { r: 1900, rd: 300, publicGames: 2 });
@@ -275,11 +310,11 @@ describe("buildRecommendations", () => {
 	});
 
 	it("fills a thin pool rather than handing anyone a short list", () => {
-		// Eleven candidates for ninety lists: the appearance ceiling cannot be
-		// honoured and still fill them, and a page with three names on it is
-		// the feature not working, so the ceiling is what gives.
+		// Thirteen candidates for ninety-two lists: the appearance ceiling
+		// cannot be honoured and still fill them, and a page with three names
+		// on it is the feature not working, so the ceiling is what gives.
 		const players = [
-			...pool(11, "few"),
+			...pool(13, "few"),
 			...pool(79, "reader").map((p) => ({ ...p, openToMatches: false })),
 		];
 		const lists = buildRecommendations({ players, duels: [], today: TODAY });

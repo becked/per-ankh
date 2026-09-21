@@ -43,10 +43,10 @@ interface OpponentRow {
 	badges: string;
 }
 
-// GET /v1/users/me/opponents — the signed-in viewer's ten suggested opponents,
-// most recently active first. Identity, a link to their Discord profile, and
-// the pair's history: no rating, no probability, no score, because the numbers
-// stop at this line.
+// GET /v1/users/me/opponents — the signed-in viewer's twelve suggested
+// opponents, most recently active first. Identity, a link to their Discord
+// profile, and the pair's history: no rating, no probability, no score,
+// because the numbers stop at this line.
 //
 // `rated` is what separates the two empty lists: a player with no rated
 // multiplayer game yet has nothing the model can reason from and needs to be

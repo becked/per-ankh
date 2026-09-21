@@ -1,6 +1,6 @@
 // Who should I play next?
 //
-// Picks ten opponents per player: the people the model is most confident
+// Picks twelve opponents per player: the people the model is most confident
 // would give them a close game. The score is closeness and nothing else —
 // how far the predicted result sits from even odds — and the prediction is
 // made from each side's conservative rating, r - 2·RD, the same estimate the
@@ -16,12 +16,16 @@
 //   - Novelty and activity. The tenth rematch this month is neither fun nor
 //     informative, and someone who stopped playing in March is not an
 //     opponent.
-//   - Load. The naive version — everyone's top ten computed independently —
+//   - Load. The naive version — everyone's top twelve computed independently —
 //     piles up, because the best opponent for many people is the same person.
 //     Lists are built in one pass with a running count of how often each
 //     candidate has been picked, as a soft penalty and then a hard cap.
-//   - A floor. At the ends of the ladder there are only a handful of close
-//     games to be had, and a page with one name on it is not a recommendation.
+//   - A full page. At the ends of the ladder there are only a handful of
+//     close games to be had, so the load cap and the closeness band are
+//     preferences rather than gates: each gives way in turn rather than let
+//     the page run short. What never gives way is who is in the pool at all —
+//     an opt-out is an opt-out, and someone nobody has seen in months is not
+//     an opponent however short the page would otherwise be.
 //
 // Nothing numeric survives this file. What gets written down is a name, how
 // many times the pair has already played, and badges the viewer could have
@@ -29,18 +33,17 @@
 
 import { conservative, SCALE, winProbability, type Duel } from "./glicko2";
 
-// Ten. Enough that the list survives a few of them being busy, few enough to
-// read in one go and to keep any single player from being everyone's answer.
-export const RECOMMENDATION_COUNT = 10;
-
-// ...and never fewer than six, whatever the model thinks.
+// Twelve. Enough that the list survives several of them being busy, few
+// enough to read in one go and to keep any single player from being everyone's
+// answer.
 //
-// At the ends of the ladder there are genuinely only a handful of people who
-// would give you a close game — the strongest player in the community had one
-// name on their page — and a page with one name on it is not a recommendation,
-// it is a dead end. Below this floor the no-stomp band is the last thing to
-// give way, and it gives way in order of how close the game would still be.
-export const MIN_RECOMMENDATION_COUNT = 6;
+// It is a floor as much as a target: the load cap and the closeness band both
+// give way before the page does, so nobody is handed the dead end the
+// strongest player in the community used to get — one name and a lot of white
+// space. Only the pool can make a list shorter than this, and it is the same
+// pool for everybody, so a short page means the community had fewer than
+// thirteen listed, active players that night.
+export const RECOMMENDATION_COUNT = 12;
 
 // A candidate must have been seen — logged in, or finished a rated game —
 // within this many days. Wide, because Old World games take weeks: a player
@@ -66,7 +69,7 @@ const NOVELTY_WINDOW_DAYS = 90;
 
 // Hard ceiling on how many lists one player may appear on, on top of the soft
 // 1 / (1 + picked) penalty. Twice the list length: by the time a candidate has
-// been chosen twenty times the soft penalty has already made them a last
+// been chosen two dozen times the soft penalty has already made them a last
 // resort, and the cap is there so a thin pool cannot route the whole community
 // to one person. Exported so the test pins the real ceiling rather than a copy
 // of the number.
@@ -268,13 +271,15 @@ export function buildRecommendations(args: {
 		// most want this feature a list of three, the ceiling having been spent
 		// on whoever was processed before them.
 		//
-		// The last pass gives up the no-stomp band itself, and only down to the
-		// floor: at the ends of the ladder there really are only a handful of
-		// close games available, and six names — the last of them not quite even
-		// — beat one name and a lot of white space. The score is closeness
-		// discounted by rematches, staleness and load, so the order this pass
-		// admits people in is closest-game-first with those three having had
-		// their say.
+		// The last pass gives up the no-stomp band itself. Since the page is
+		// twelve names or the pool, whichever is smaller, the band decides who
+		// is on a list rather than how long it is: it only keeps anyone off a
+		// page that twelve close games can fill. At the ends of the ladder
+		// there are not twelve, and the honest reading of the last names there
+		// is not "close" but "the closest there are" — which still beats the
+		// one-name page this replaced. The score is closeness discounted by
+		// rematches, staleness and load, so the order this pass admits people
+		// in is closest-game-first with those three having had their say.
 		//
 		// Descending score, ties by id. The tiebreak is what makes the purity
 		// above true of a rebuild and not only of a call: two candidates can
@@ -290,16 +295,16 @@ export function buildRecommendations(args: {
 		const taken = new Set<number>();
 		const passes = [
 			// Every rule honoured.
-			{ target: RECOMMENDATION_COUNT, cap: true, band: true },
+			{ cap: true, band: true },
 			// Someone may be on one list too many.
-			{ target: RECOMMENDATION_COUNT, cap: false, band: true },
-			// And finally, the game need not be even — but only to the floor.
-			{ target: MIN_RECOMMENDATION_COUNT, cap: false, band: false },
+			{ cap: false, band: true },
+			// And finally, the game need not be even.
+			{ cap: false, band: false },
 		];
 		for (const pass of passes) {
-			if (chosen.length >= pass.target) continue;
+			if (chosen.length >= RECOMMENDATION_COUNT) break;
 			for (const [index, candidate] of scored.entries()) {
-				if (chosen.length >= pass.target) break;
+				if (chosen.length >= RECOMMENDATION_COUNT) break;
 				if (taken.has(index)) continue;
 				if (pass.band && !candidate.inBand) continue;
 				if (pass.cap && candidate.appearances >= MAX_APPEARANCES) continue;

@@ -770,7 +770,7 @@ Tournaments you administer.
 - **Errors:** `401 UNAUTHORIZED`.
 
 ### `GET /v1/users/me/opponents`
-Your ten suggested opponents — players you should get a close game against.
+Your twelve suggested opponents — players you should get a close game against.
 
 - **Auth:** Session.
 - **Response 200:** `{ opponents: [{ user_id, display_name, slug, avatar_url, discord_url, meetings, badges }], rated }`. `discord_url` is their Discord profile, built from the snowflake `avatar_url` already carries — no `discord_*` field is serialized, and the handle never is. `meetings` is how many rated games the pair has already played; `badges` is a subset of `active_this_week` / `new_here`; `rated` is whether the viewer has any rated multiplayer game at all, which is what separates "nothing yet" from "nothing this week".

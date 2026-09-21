@@ -342,7 +342,7 @@
 					>
 						<p class="mb-3 text-xs text-tan">
 							Re-fit the rating model over every duel D1 can reconstruct, and
-							re-pick each player's ten suggested opponents. This runs on its
+							re-pick each player's twelve suggested opponents. This runs on its
 							own in the nightly cron; the button is for the first run after a
 							deploy, and for after a reindex sweep has backfilled
 							<code class="text-orange">player_summaries.online_id</code> — which

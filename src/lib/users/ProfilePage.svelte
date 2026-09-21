@@ -304,7 +304,7 @@
 
 <style>
 	/* Always reserve the scrollbar's gutter, so switching to a tab short enough
-	   not to overflow — Suggested, at ten cards — doesn't widen the centred
+	   not to overflow — Suggested, at twelve cards — doesn't widen the centred
 	   content and shove the scope selector sideways. Same fix, and scoped for the
 	   same reason, as the tournament layout's .view-scroll. */
 	.profile-scroll {
