@@ -162,8 +162,8 @@
 		void goto(url, { noScroll: true });
 	}
 
-	// The board switch, as the segmented control the tournament and stats
-	// pages use: a lit thumb that slides between two fixed-width cells.
+	// The board switch, as the segmented control the tournament pages use:
+	// a lit thumb that slides between two fixed-width cells.
 	// Switching to Season returns to whichever season the stepper last
 	// selected — the load keeps `selected` meaningful on the career board
 	// for exactly this, which is also why the stepper below can go inert
