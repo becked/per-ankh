@@ -480,7 +480,7 @@ Error codes: `FILE_TOO_LARGE`, `EMPTY_FILE`, `INVALID_ARCHIVE`, `NO_XML`, `ZIP_B
 
 Three sources of save files for parser development and parity testing:
 
-- `test-data/saves/` — checked into the repo for unit tests. Empty in fresh clones; populate locally with a representative subset before running tests.
+- `test-data/saves/` — a hand-populated local corpus, empty in fresh clones. No test suite reads it; it is for checking a parser or derivation change against real saves. See [`test-data/saves/README.md`](../test-data/saves/README.md).
 - `~/Library/Application Support/OldWorld/Saves/Completed/` — the developer's personal completed-saves library on macOS, containing hundreds of real games across all nations and many game versions. Realistic single-player corpus. Path differs on Windows / Linux; macOS path is the relevant one for the primary developer.
 - `~/Projects/Old World/prospector/saves/` — the multiplayer save files from the last tournament (~60 saves, two-human-player matches). The realistic two-player tournament corpus, which exercises code paths that single-player saves don't (e.g., multiple human players, online IDs, distinct shapes of `is_human` distribution).
 

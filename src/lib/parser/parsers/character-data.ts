@@ -95,8 +95,8 @@ export function parseCharacterTraits(
 				characterXmlId,
 				traitName: name,
 				acquiredTurn: value,
-				// Hardcoded null in the Rust parser — would require historical
-				// tracking to populate.
+				// Hardcoded null — populating it would require historical
+				// tracking of trait removal that the parser doesn't do.
 				removedTurn: null,
 			});
 		}

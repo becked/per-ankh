@@ -10,8 +10,8 @@ import type { FullGameData } from "./types.js";
  * Single completion gate: reject saves without `<Game><GameOver/>`. A null
  * `winner` is allowed — pre-1.0.62443 saves end with `<GameOver/>` but
  * record no winner XML at all (the game's runtime decided the outcome and
- * never persisted it). Those games surface as "Ended" in the UI rather
- * than failing import.
+ * never persisted it). Those games import rather than failing; the UI
+ * omits the winner row and renders victory type as `—`.
  */
 export function validateCompletedGame(data: FullGameData): void {
 	if (!data.match_metadata.game_over) {

@@ -51,16 +51,17 @@ npm run bake:science-yields    # science-yields.ts (from Reference/XML)
 npm run bake:unit-stats        # unit-stats.ts (from Reference/XML)
 npm run bake:map-caveats       # map-caveats.ts (needs an owtournamentatlas checkout)
 npm run bake:owtt              # owtt.ts (needs a local owtt checkout, OWTT_DIR)
+npm run bake:momentum          # momentum.ts (src/ AND cloud/src/; fits on a local blob corpus)
 ```
 
 Then:
 
 ```bash
 npm run bake:finalize          # Emits committed manifest TS modules + reconciles orphans
-npm run bake:all               # Every baker above except unit-stats + owtt, then finalize
+npm run bake:all               # Every baker above except unit-stats, owtt + momentum, then finalize
 ```
 
-`bake:all` deliberately omits `bake:unit-stats` and `bake:owtt` — rerun those by hand when their sources change. Separately, `bake:favicon` / `bake:og` generate site icons and OG images, `bake:screenshots` drives Playwright capture for the home-page shots, and the UX-review bundle under `docs/ux-review/` is captured by `./per-ankh ux-review` (a CLI command, not an npm script).
+`bake:all` deliberately omits `bake:unit-stats`, `bake:owtt` and `bake:momentum` — rerun those by hand when their sources change. Separately, `bake:favicon` / `bake:og` generate site icons and OG images, `bake:screenshots` drives Playwright capture for the home-page shots, and the UX-review bundle under `docs/ux-review/` is captured by `./per-ankh ux-review` (a CLI command, not an npm script).
 
 ## Adding a name-override table
 
