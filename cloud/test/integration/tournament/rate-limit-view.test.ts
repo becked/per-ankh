@@ -27,6 +27,7 @@ import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { nanoid } from "nanoid";
 import { expectErrorCode, expectOk } from "../../helpers/assertions";
 import { makeTournament } from "../../helpers/builders";
+import { seedEvents, type ReadEventType } from "../../helpers/rate-limit";
 import {
 	TOURNAMENT_LINK_VIEW_PER_HOUR,
 	TOURNAMENT_LIST_VIEW_PER_HOUR,
@@ -37,34 +38,6 @@ import {
 beforeAll(async () => {
 	await applyD1Migrations(env.SHARE_DB, env.TEST_MIGRATIONS);
 });
-
-type ReadEventType =
-	| "tournament_view"
-	| "tournament_list_view"
-	| "tournament_link_view";
-
-// Fill an IP's hourly bucket for one event type without firing N real reads.
-//
-// One statement, not a row-per-await loop: this file seeds several full
-// buckets, and per-row seeding puts enough extra work through the shared test
-// runtime to start tipping already-marginal timing-sensitive tests in *other*
-// files into timeouts. Same recursive CTE, and the same reason, as the sibling
-// anon_read test (games/anon-read-rate-limit.test.ts seedAnonReads).
-async function seedEvents(
-	eventType: ReadEventType,
-	ip: string,
-	count: number,
-): Promise<void> {
-	await env.SHARE_DB.prepare(
-		`INSERT INTO events (event_type, ip_address)
-		 WITH RECURSIVE seq(i) AS (
-		   SELECT 1 UNION ALL SELECT i + 1 FROM seq WHERE i < ?
-		 )
-		 SELECT ?, ? FROM seq`,
-	)
-		.bind(count, eventType, ip)
-		.run();
-}
 
 async function countEvents(
 	eventType: ReadEventType,

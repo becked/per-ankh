@@ -9,6 +9,7 @@ const video = (id: string, published_at: string): Video => ({
 	thumbnail_url: null,
 	published_at,
 	platform: "youtube",
+	duration_seconds: null,
 });
 
 const AIRED = [video("BROADCAST01", "2026-07-31T01:04:43Z")];
@@ -58,6 +59,71 @@ function makeStale(store: Map<string, string>): void {
 }
 
 describe("getVideosCached", () => {
+	// The bug this guards: CACHE_VERSION is what orphans entries written before a
+	// shape change. Miss the bump and a warm entry is read back through
+	// `cached.videos as T[]` and served with the new field absent from the JSON
+	// entirely — not null — for up to the 24h hard TTL. This repo has been bitten
+	// by exactly that once already: the `!= null` guard in tournament/public.ts
+	// exists only because a v1 entry had no uploader ids on its videos.
+	it("orphans entries written under an older cache version", async () => {
+		// Learn the live key rather than rebuilding it, so this never pins the
+		// number — it only asserts that the PREVIOUS one is not served.
+		const probe = fakeEnv();
+		await getVideosCached(probe.env, "youtube", "UC1", () =>
+			Promise.resolve(AIRED),
+		);
+		const [liveKey] = [...probe.store.keys()];
+		const version = Number(/videos:v(\d+):/.exec(liveKey)?.[1]);
+		expect(version).toBeGreaterThan(1);
+
+		const { env, store } = fakeEnv();
+		// An entry in the shape that shipped before the current version: fresh
+		// enough to serve, and missing the field the current shape requires.
+		store.set(
+			liveKey.replace(`videos:v${version}:`, `videos:v${version - 1}:`),
+			JSON.stringify({
+				fetched_at: Date.now(),
+				videos: [
+					{
+						id: "BROADCAST01",
+						title: "BROADCAST01",
+						url: "https://www.youtube.com/watch?v=BROADCAST01",
+						thumbnail_url: null,
+						published_at: "2026-07-31T01:04:43Z",
+						platform: "youtube",
+					},
+				],
+			}),
+		);
+
+		let fetched = 0;
+		const videos = await getVideosCached(env, "youtube", "UC1", () => {
+			fetched++;
+			return Promise.resolve(AIRED);
+		});
+		expect(fetched).toBe(1);
+		expect(videos[0].duration_seconds).toBeNull();
+	});
+
+	// A degraded batch now costs two things, not one: the dates stay as the feed
+	// gave them AND those videos keep a null runtime. A list carrying a mix of
+	// both must still be served and still not cached.
+	it("serves a degraded list carrying mixed runtimes without caching it", async () => {
+		const { env, puts } = fakeEnv();
+		const mixed = [
+			{
+				...video("ENRICHED001", "2026-07-31T01:04:43Z"),
+				duration_seconds: 6714,
+			},
+			video("DEGRADED001", "2026-07-31T15:27:03Z"),
+		];
+		const videos = await getVideosCached(env, "youtube", "UC1", () =>
+			Promise.reject(new UncacheableVideos(mixed)),
+		);
+		expect(videos.map((v) => v.duration_seconds)).toEqual([6714, null]);
+		expect(puts).toHaveLength(0);
+	});
+
 	it("caches a clean fetch", async () => {
 		const { env, puts } = fakeEnv();
 		const videos = await getVideosCached(env, "youtube", "UC1", () =>

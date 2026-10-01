@@ -71,6 +71,12 @@ import {
 	type PlaylistVideo,
 	type Video,
 } from "../video/types";
+import {
+	attributeVideos,
+	groupIntoParts,
+	type ArchiveMatchInput,
+	type TimedVideo,
+} from "./video-archive";
 import type { EventsEnv } from "../d1";
 
 export interface TournamentPublicEnv
@@ -610,19 +616,12 @@ export async function handleTournamentDetail(
 	);
 }
 
-// GET /v1/tournaments/:id/videos — public. The uploads from the tournament's
-// admin-set YouTube playlist, newest first, KV-cached (SWR) like the profile
-// videos read. Same view gate + rate-limit as the other per-tournament reads.
-// Returns an empty list when no playlist is configured (or a stored value that
-// no longer parses) — the Videos tab is normally hidden in that case, but a
-// direct visit still gets a clean empty payload rather than an error.
-//
-// The whole (capped) playlist is returned so the tab's client-side search can
-// reach every video, not just the recent ones on screen: with a Data API key we
-// enumerate the full playlist; without one we fall back to the free RSS feed's
-// ~15 most-recent entries (search then only spans those). Both produce the same
-// PlaylistVideo shape, so the cache and attribution below are identical.
-export async function handleTournamentPlaylistVideos(
+// GET /v1/tournaments/:id/video-archive — public. The tournament's playlist
+// videos, attributed to matches and grouped match → part → angle (see
+// video-archive.ts). Same view gate + rate-limit as the other per-tournament
+// reads. The playlist itself is the same KV-cached (SWR) read the home feed
+// makes; the attribution and grouping run per request on top of it.
+export async function handleTournamentVideoArchive(
 	tournamentId: string,
 	request: Request,
 	env: TournamentPublicEnv,
@@ -641,11 +640,130 @@ export async function handleTournamentPlaylistVideos(
 	const parsed = tournament.youtube_playlist_url
 		? parseYouTubePlaylistUrl(tournament.youtube_playlist_url)
 		: null;
-	if (!parsed) return jsonResponse({ videos: [] }, 200, cors);
-	const videos = await getPlaylistVideosCached(env, parsed.playlistId, ctx);
+	if (!parsed)
+		return jsonResponse(
+			{ source: "none", matches: [], unattributed: [] },
+			200,
+			cors,
+		);
+	// Where the videos came from, so the tab can say the true thing when a list
+	// is empty or unpriced: "api" is the keyed Data API read (whole playlist,
+	// runtimes, air times); "feed" is the keyless RSS fallback (recent entries
+	// only, no runtimes, VOD dates). Without this the three empty states —
+	// no playlist, no key, no footage — are the same empty array.
+	const source: "api" | "feed" = env.YOUTUBE_API_KEY ? "api" : "feed";
+
+	const [videos, matchesWithRound, slots] = await Promise.all([
+		getPlaylistVideosCached(env, parsed.playlistId, ctx),
+		loadMatchesWithRound(env, tournament.tournament_id),
+		loadSlots(env, tournament.tournament_id),
+	]);
 	const usersByChannel = await loadPlaylistUploaders(env, videos);
+	const attributed = attributePlaylistVideos(videos, usersByChannel);
+
+	// Occupants through the one owner of that precedence — see matchOccupant.
+	const liveBySlotId = {
+		name: new Map(slots.map((s) => [s.slot_id, slotDisplayName(s)])),
+		user: new Map(slots.map((s) => [s.slot_id, s.user_id])),
+	};
+
+	// Byes were never played, so they can claim nothing and contribute no roster
+	// entry that a title could match against.
+	const playable = matchesWithRound.filter(
+		({ match }) => match.status !== "bye",
+	);
+	const partsByMatchId = new Map(
+		playable.map(({ match }) => [match.match_id, parseParts(match)]),
+	);
+	const identityByUserId = await loadUserIdentitiesForMatches(
+		env,
+		playable.map(({ match }) => match),
+		partsByMatchId,
+	);
+	const inputs: ArchiveMatchInput[] = playable.map(({ match }) => {
+		const a = matchOccupant(match, "a", identityByUserId, liveBySlotId);
+		const b = matchOccupant(match, "b", identityByUserId, liveBySlotId);
+		const parts = partsByMatchId.get(match.match_id) ?? [];
+		return {
+			match_id: match.match_id,
+			players: [a.name, b.name],
+			playerUserIds: [a.userId, b.userId],
+			scheduledAt: parts.map((p) => p.scheduled_at),
+			streamUrls: parts.flatMap((p) => p.streams.map((st) => st.url)),
+		};
+	});
+
+	// Every video goes in, priced or not: attribution reads the title, and a
+	// broadcast still running (null runtime) is the one video the tab must show.
+	const timed: TimedVideo[] = attributed.map((v) => ({
+		video: v,
+		channel:
+			"display_name" in v
+				? v.display_name
+				: "uploader_name" in v
+					? v.uploader_name
+					: "",
+		uploaderUserId: "user_id" in v ? v.user_id : null,
+		aired: v.published_at,
+		seconds: v.duration_seconds,
+	}));
+	const { byMatch, unattributed } = attributeVideos(timed, inputs);
+
+	const playableRows = playable.map(({ match }) => match);
+	const [turnsByGame, summaryByGamePlayer] = await Promise.all([
+		loadTurnsForMatches(env, playableRows),
+		loadPlayerSummaryFieldsForMatches(env, playableRows),
+	]);
+	const inputById = new Map(inputs.map((i) => [i.match_id, i]));
+	const body = playable
+		.map(({ match, round }) => {
+			const input = inputById.get(match.match_id);
+			const mine = byMatch.get(match.match_id) ?? [];
+			const { parts, gaps } = groupIntoParts(
+				mine,
+				input?.players ?? [null, null],
+				input?.playerUserIds ?? [null, null],
+				input?.scheduledAt ?? [],
+			);
+			return {
+				match_id: match.match_id,
+				match_number: match.match_number,
+				round_number: round.round_number,
+				phase: round.phase,
+				division: round.division,
+				status: match.status,
+				slot_a_id: match.slot_a_id,
+				slot_b_id: match.slot_b_id,
+				slot_a_display_name: input?.players[0] ?? null,
+				slot_b_display_name: input?.players[1] ?? null,
+				// The same read serializeMatch makes, so a crest here matches the one
+				// the matches table draws for the same match.
+				slot_a_nation:
+					sideSummary(match, "a", summaryByGamePlayer)?.nation ?? null,
+				slot_b_nation:
+					sideSummary(match, "b", summaryByGamePlayer)?.nation ?? null,
+				winner_slot_id: match.winner_slot_id,
+				map_script: match.map_script,
+				total_turns: match.game_id
+					? (turnsByGame.get(match.game_id) ?? null)
+					: null,
+				parts,
+				gaps,
+			};
+		})
+		// A decided match with no footage still belongs here — that is a gap in
+		// the archive, and dropping it would make it indistinguishable from a
+		// match that never happened. A pending match nobody filmed is simply not
+		// news. (Byes were filtered above.)
+		.filter((m) => m.parts.length > 0 || m.status !== "pending")
+		.sort((x, y) => (x.match_number ?? 0) - (y.match_number ?? 0));
+
 	return jsonResponse(
-		{ videos: attributePlaylistVideos(videos, usersByChannel) },
+		{
+			source,
+			matches: body,
+			unattributed: unattributed.map((v) => v.video),
+		},
 		200,
 		cors,
 	);
@@ -694,6 +812,7 @@ function attributePlaylistVideos(
 	return videos.map((v) => {
 		const base: Video = {
 			id: v.id,
+			duration_seconds: v.duration_seconds,
 			title: v.title,
 			url: v.url,
 			thumbnail_url: v.thumbnail_url,
@@ -1304,23 +1423,7 @@ export async function handleTournamentBracket(
 	// Linked-game turn counts for matches that have a reported game. The
 	// complete-tournament header renders "won the final … in N turns" off the
 	// championship final's count; one batched lookup covers every match here.
-	const gameIds = [
-		...new Set(
-			matches.map((m) => m.game_id).filter((id): id is string => id !== null),
-		),
-	];
-	const turnsByGame = new Map<string, number>();
-	if (gameIds.length > 0) {
-		const res = await env.SHARE_DB.prepare(
-			`SELECT game_id, total_turns FROM games
-			 WHERE game_id IN (${gameIds.map(() => "?").join(",")})`,
-		)
-			.bind(...gameIds)
-			.all<{ game_id: string; total_turns: number }>();
-		for (const row of res.results ?? []) {
-			turnsByGame.set(row.game_id, row.total_turns);
-		}
-	}
+	const turnsByGame = await loadTurnsForMatches(env, matches);
 
 	const partsByMatchId = new Map(
 		matches.map((m) => [m.match_id, parseParts(m)]),
@@ -1998,14 +2101,8 @@ function serializeMatch(
 	// slot↔player_index mapping (migration 0007) against player_summaries. Null
 	// when no save is linked or the index/field is unknown (bye, forfeit,
 	// admin-set, legacy match).
-	const slotASummary =
-		m.game_id && m.slot_a_player_index !== null
-			? summaryByGamePlayer?.get(`${m.game_id}:${m.slot_a_player_index}`)
-			: undefined;
-	const slotBSummary =
-		m.game_id && m.slot_b_player_index !== null
-			? summaryByGamePlayer?.get(`${m.game_id}:${m.slot_b_player_index}`)
-			: undefined;
+	const slotASummary = sideSummary(m, "a", summaryByGamePlayer);
+	const slotBSummary = sideSummary(m, "b", summaryByGamePlayer);
 	return {
 		match_id: m.match_id,
 		slot_a_id: m.slot_a_id,
@@ -2023,7 +2120,7 @@ function serializeMatch(
 		// to the report-time username snapshot for occupants who never claimed
 		// an account. Null for pending matches (no snapshot yet) — the client
 		// falls through to its live slot-identity maps, same shape as avatars.
-		slot_a_display_name: slotAIdentity?.display_name ?? m.slot_a_username,
+		slot_a_display_name: matchOccupant(m, "a", identityByUserId).name,
 		slot_a_user_id: m.slot_a_user_id,
 		// Profile slug of the snapshot occupant, resolved from the same identity
 		// map the name and avatar are — so the link a renderer builds points at
@@ -2036,7 +2133,7 @@ function serializeMatch(
 		slot_a_avatar_url: slotAIdentity?.avatar_url ?? null,
 		slot_a_nation: slotASummary?.nation ?? null,
 		slot_a_archetype: slotASummary?.archetype ?? null,
-		slot_b_display_name: slotBIdentity?.display_name ?? m.slot_b_username,
+		slot_b_display_name: matchOccupant(m, "b", identityByUserId).name,
 		slot_b_user_id: m.slot_b_user_id,
 		slot_b_slug: slotBIdentity?.slug ?? null,
 		slot_b_avatar_url: slotBIdentity?.avatar_url ?? null,
@@ -2143,6 +2240,54 @@ export interface UserIdentity {
 // follows that user's current profile, matching how the rest of the site
 // renders people. For pending matches (snapshot user_ids are NULL) callers can
 // pass an empty match list — no users → no query.
+// One side's pick summary (nation, archetype) from the linked game, keyed the
+// way loadPlayerSummaryFieldsForMatches keys it. serializeMatch and the video
+// archive both read crests through here, so they cannot disagree about one.
+function sideSummary(
+	m: MatchRow,
+	side: "a" | "b",
+	summaryByGamePlayer: Map<string, PickSummary> | undefined,
+): PickSummary | undefined {
+	const idx = side === "a" ? m.slot_a_player_index : m.slot_b_player_index;
+	if (!m.game_id || idx === null) return undefined;
+	return summaryByGamePlayer?.get(`${m.game_id}:${idx}`);
+}
+
+// Who to show for one side of a match, and which account that is.
+//
+// Identity is pinned, presentation follows the profile: a decided match keeps
+// the occupant captured at report time (`slot_a_user_id`), but renders their
+// CURRENT display name, so a rename shows through while a substitution never
+// reassigns a played match. The frozen `slot_a_username` is the fallback for an
+// occupant who never claimed an account, and a pending match has no snapshot at
+// all, so it falls through to whoever holds the seat now.
+//
+// This precedence is easy to get backwards — preferring the frozen handle looks
+// equally reasonable and is wrong — so it lives here, and serializeMatch, the
+// CSV export and the video archive all call it rather than restating it.
+export function matchOccupant(
+	m: MatchRow,
+	side: "a" | "b",
+	identityByUserId: Map<string, UserIdentity> | undefined,
+	liveBySlotId?: {
+		name: Map<string, string | null>;
+		user: Map<string, string | null>;
+	},
+): { name: string | null; userId: string | null } {
+	const snapUserId = side === "a" ? m.slot_a_user_id : m.slot_b_user_id;
+	const snapName = side === "a" ? m.slot_a_username : m.slot_b_username;
+	const slotId = side === "a" ? m.slot_a_id : m.slot_b_id;
+	const resolved = snapUserId ? identityByUserId?.get(snapUserId) : undefined;
+	const snapshotName = resolved?.display_name ?? snapName;
+	if (snapshotName != null || snapUserId != null)
+		return { name: snapshotName, userId: snapUserId };
+	if (!liveBySlotId || slotId === null) return { name: null, userId: null };
+	return {
+		name: liveBySlotId.name.get(slotId) ?? null,
+		userId: liveBySlotId.user.get(slotId) ?? null,
+	};
+}
+
 export async function loadUserIdentitiesForMatches(
 	env: TournamentEnv,
 	matches: MatchRow[],
@@ -2256,6 +2401,31 @@ function splitMatchWithRound(row: MatchWithRoundRow): MatchWithRound {
 			completed_at: row.completed_at,
 		},
 	};
+}
+
+// game_id -> end turn, for every match that reported a save. One batched
+// lookup; shared by the bracket header and the video archive so the two can't
+// disagree about a match's length.
+async function loadTurnsForMatches(
+	env: TournamentPublicEnv,
+	matches: MatchRow[],
+): Promise<Map<string, number>> {
+	const gameIds = [
+		...new Set(
+			matches.map((m) => m.game_id).filter((id): id is string => id !== null),
+		),
+	];
+	const out = new Map<string, number>();
+	for (const ids of chunk(gameIds, CHUNK_SIZE)) {
+		const res = await env.SHARE_DB.prepare(
+			`SELECT game_id, total_turns FROM games
+			 WHERE game_id IN (${ids.map(() => "?").join(",")})`,
+		)
+			.bind(...ids)
+			.all<{ game_id: string; total_turns: number }>();
+		for (const row of res.results ?? []) out.set(row.game_id, row.total_turns);
+	}
+	return out;
 }
 
 async function loadMatchesWithRound(
