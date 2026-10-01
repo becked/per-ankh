@@ -17,6 +17,7 @@ import { redirect } from "@sveltejs/kit";
 import { cloudApi } from "$lib/api-cloud";
 import {
 	globalSelectionLabel,
+	parseGlobalPeriod,
 	parseGlobalSlice,
 	parseNationFacet,
 } from "$lib/stats/global-facets";
@@ -37,14 +38,21 @@ export const load: PageLoad = async ({ fetch, url }) => {
 	// leaving the row pointing at a selection the bundle isn't for.
 	const slice = parseGlobalSlice(url.searchParams.get("slice"));
 	const nation = parseNationFacet(url.searchParams.get("nation"));
+	const period = parseGlobalPeriod(url.searchParams.get("period"));
 
 	try {
-		const bundle = await cloudApi.getGlobalStats({ fetch, slice, nation });
-		const selection = globalSelectionLabel(slice, nation);
+		const bundle = await cloudApi.getGlobalStats({
+			fetch,
+			slice,
+			nation,
+			period,
+		});
+		const selection = globalSelectionLabel(slice, nation, period);
 		return {
 			bundle,
 			slice,
 			nation,
+			period,
 			meta: {
 				// Constant, unlike the sibling stats surfaces: their varying
 				// segment names the entity the page belongs to (a tournament, a

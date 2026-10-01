@@ -11,14 +11,19 @@
 // Key shape:
 //   stats:v{BUNDLE_SCHEMA_VERSION}-p{parser_version}:user:{user_id}:{viewerScope}:{scope}
 //   stats:v{BUNDLE_SCHEMA_VERSION}-p{parser_version}:tournament:{tournament_id}:{updated_at}
-//   stats:v{BUNDLE_SCHEMA_VERSION}-p{parser_version}:global:{slice}:{nations}
+//   stats:v{BUNDLE_SCHEMA_VERSION}-p{parser_version}:global:{slice}:{nations}:{period}
 //
 // We reuse the existing SESSIONS_KV binding (no new infra) — the
 // `stats:` prefix keeps these distinct from `session:` and `oauth:`
 // keys.
 
 import type { SessionEnv } from "../session";
-import type { GlobalSlice, UserScope, UserStatsScope } from "./types";
+import type {
+	GlobalPeriod,
+	GlobalSlice,
+	UserScope,
+	UserStatsScope,
+} from "./types";
 
 // What each version of the bundle shape changed. This table *is* the version:
 // BUNDLE_SCHEMA_VERSION below is its highest key, so a bump can't happen
@@ -85,6 +90,9 @@ export type StatsCacheKey =
 			// however the caller ordered it — which is what keeps widening the
 			// facet to multi-select a UI change rather than a key migration.
 			nations: string[];
+			// Recency window, by token rather than by resolved date — see
+			// periodCutoff in games-scope.ts for why the date is not in here.
+			period: GlobalPeriod;
 			parser_version: string;
 	  };
 
@@ -94,7 +102,8 @@ export type StatsCacheKey =
 function globalKeySuffix(
 	key: Extract<StatsCacheKey, { kind: "global" }>,
 ): string {
-	return `global:${key.slice}:${[...new Set(key.nations)].sort().join(",")}`;
+	const nations = [...new Set(key.nations)].sort().join(",");
+	return `global:${key.slice}:${nations}:${key.period}`;
 }
 
 export function cacheKeyToString(key: StatsCacheKey): string {
