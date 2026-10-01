@@ -15,6 +15,7 @@ import { applyD1Migrations, env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
 import { buildChartBundle } from "../../../src/stats/aggregate";
 import {
+	listGlobalSliceNations,
 	resolveGlobalCorpus,
 	type StatsCorpus,
 } from "../../../src/stats/resolve";
@@ -141,6 +142,38 @@ describe("global corpus", () => {
 		expect((await resolve("duel", [GREECE])).gameIds).toEqual([]);
 	});
 
+	// The nations the nightly precompute builds a faceted bundle for. Every one
+	// of them ends up in a cache key, and the request path's own parser is what
+	// keeps that key spellable — so this list asks the same question of the same
+	// vocabulary, and a seat the parser wouldn't accept never reaches a key.
+	it("offers only the nations the facet could select", async () => {
+		expect(await listGlobalSliceNations(env, "duel")).toEqual([EGYPT, ROME]);
+
+		// The upload schema takes any string for a seat's nation, so a doctored
+		// save can seat one carrying the cache key's own punctuation. Restored
+		// in place, because the cases below read these rows.
+		const restore = async (nation: string) =>
+			env.SHARE_DB.prepare(
+				"UPDATE player_summaries SET nation = ? WHERE game_id = ? AND player_index = 1",
+			)
+				.bind(nation, idOf("duel"))
+				.run();
+		try {
+			// Every token ending in the payload segment collides, not only a bare
+			// one: ":records" spells the unfaceted slice's records key and
+			// "NATION_ROME:records" the Rome facet's, which is a key the request
+			// path really does ask for.
+			for (const doctored of [":records", `${ROME}:records`]) {
+				await restore(doctored);
+				expect(await listGlobalSliceNations(env, "duel")).toEqual([EGYPT]);
+			}
+		} finally {
+			// finally, so a regression here fails this case alone instead of
+			// leaving a doctored seat for every case below it.
+			await restore(ROME);
+		}
+	});
+
 	it("carries one canonical form of the nation set", async () => {
 		// Sorted and deduped, so a single-select value is a one-element list and
 		// the cache key that stringifies it has one spelling per selection.
@@ -153,7 +186,7 @@ describe("global corpus", () => {
 });
 
 const bundleFor = async (corpus: StatsCorpus) =>
-	buildChartBundle(env, corpus, PARSER_VERSION, "humans");
+	(await buildChartBundle(env, corpus, PARSER_VERSION, "humans")).bundle;
 
 describe("the nation facet narrows the focal set", () => {
 	it("keeps only the selected nation's seats", async () => {

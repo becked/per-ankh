@@ -1,0 +1,36 @@
+-- Per-turn GDP for game_player_turn.
+--
+-- Why: GDP is the one economic number that puts the yields on a common scale —
+-- money income at face value plus food/wood/stone/iron income valued at that
+-- turn's market price — and it is the thing all the separate yield charts are
+-- individually about. The Economy tab has charted it since it shipped, but
+-- only in the browser, from the R2 blob: the stats corpus could not rank a
+-- game on it, because the market prices it needs (yield_price_history) live in
+-- the blob and nothing derived from them was ever persisted.
+--
+-- So it is computed once at index time and stored, rather than per render.
+-- Both callers price the basket through the same module
+-- (src/lib/game-detail/gdp-basket.ts), so a game page and that game's record
+-- cannot disagree about the number.
+--
+-- gdp_cumulative is the running sum of the per-turn rate — lifetime output.
+-- That is a different quantity from every other *_cumulative column here,
+-- which the save reports directly; GDP has no save-side total because the game
+-- does not model it. It is a flow, so its total is production and never a
+-- stockpile.
+--
+-- REAL, not INTEGER: a commodity's contribution is a rate times a price in
+-- money, and prices are bounded to 2..100 money in tenths, so the product is
+-- routinely fractional. The neighbouring rate columns are declared INTEGER but
+-- hold REAL values already (SQLite affinity, and the parser reports rates in
+-- tenths) — declaring the truth here rather than inheriting that.
+--
+-- Nullable, no default — absence means "this game predates the GDP ingest and
+-- hasn't been reindexed yet", the same contract migration 0021 gave `points`.
+-- Readers must treat NULL as no-data, never as zero: a zero GDP is a claim
+-- about a game, and an un-backfilled row is not making it. Backfill is the
+-- admin reindex, which re-runs the D1 pivot from each game's existing R2 blob
+-- without re-parsing or touching R2. Forward-only.
+
+ALTER TABLE game_player_turn ADD COLUMN gdp_per_turn REAL;
+ALTER TABLE game_player_turn ADD COLUMN gdp_cumulative REAL;

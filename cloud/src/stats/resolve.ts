@@ -13,6 +13,7 @@
 import {
 	buildGlobalSliceWhere,
 	buildUserScopeWhere,
+	parseNationParam,
 	TOURNAMENT_GAME_IDS_SQL,
 } from "../games-scope";
 import type { GlobalSlice, UserScope, UserStatsScope } from "./types";
@@ -156,6 +157,17 @@ export async function resolveGlobalCorpus(
 // Human seats only, matching the game half of the narrowing above: a slice
 // whose only Rome is an AI's has no Rome bundle to build, because no focal set
 // could hold that seat.
+//
+// And only tokens shaped like a nation, through the facet's own parser. Two
+// things ride on that. A token the parser rejects is one no ?nation= can ask
+// for, so its bundle would be warmed and never read. And these tokens reach a
+// cache key: the upload schema takes any string for player_summaries.nation,
+// where the request path validates before the key is spelled, so a token
+// carrying the key's own punctuation could otherwise spell a neighbouring
+// entry. Any token ending ":records" does it, not just a bare one — it gives a
+// faceted bundle the key its own facet's records payload lives at, so
+// ":records" collides with the unfaceted slice and "NATION_ROME:records" with
+// the Rome facet, which is one a reader actually clicks (stats/cache.ts).
 export async function listGlobalSliceNations(
 	env: ResolveEnv,
 	slice: GlobalSlice,
@@ -167,5 +179,7 @@ export async function listGlobalSliceNations(
 		 ORDER BY nation`,
 	).all<{ nation: string }>();
 
-	return (rows.results ?? []).map((r) => r.nation);
+	return (rows.results ?? [])
+		.map((r) => parseNationParam(r.nation))
+		.filter((n): n is string => n !== null);
 }

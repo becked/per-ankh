@@ -307,6 +307,69 @@ export interface ChartBundle extends ChartBundleCore {
 	}>;
 }
 
+// The records payload — its own cached entry beside the bundle, not a field on
+// it. The rows are ~60-70 KB gzipped on top of a 154 KB bundle, paid on every
+// stats request across all three surfaces, and only one tab of one surface
+// reads them; they are fetched when that tab opens instead.
+//
+// Computed in the same pass as the yield bands (stats/aggregate.ts), so a miss
+// on either key builds both and writes both — the split is in what is stored
+// and shipped, not in what is queried.
+export interface RecordsBundle {
+	// The leaderboard behind the yield bands: per series, the top few seats on
+	// each board. Keyed series → board → rows, where a board is "peak" (the
+	// best turn of the game), "final" (the last turn) or "t20" / "t40" / "t60"
+	// / "t80" / "t100" (the value at a fixed checkpoint — the only
+	// length-blind comparisons of the seven).
+	//
+	// A cumulative series is keyed "<series>:cum", and means one of two things
+	// depending on whether the series is ever spent. Which is which is one
+	// exported list — the `cumulative` field on YIELD_SERIES
+	// (src/lib/stats/charts/yields.ts), which is also what labels the card —
+	// and is deliberately not restated here. Levels (military_power,
+	// legitimacy) have no cumulative column and so get no ":cum" key at all.
+	//
+	// One row per match per seat: the two uploads of a duel are collapsed on
+	// the save's own xml_game_id before anything is ranked.
+	records: Record<
+		string,
+		Record<
+			string,
+			Array<{
+				game_id: string;
+				player_index: number;
+				turn: number;
+				value: number;
+			}>
+		>
+	>;
+
+	// Identity for the games appearing in `records`, as a lookup rather than
+	// repeated on every row: one game commonly holds several records, and the
+	// rows outnumber the games several times over.
+	//
+	// `seats` carries the record holders and nobody else. A row names the seat
+	// that posted the number, so an FFA's other five players and a
+	// single-player game's AI are payload no reader has a use for.
+	//
+	// Per seat: the nation and the handle the SAVE records — the same pair
+	// every public game page already prints. Never online_id, which is the
+	// platform identifier the share blob strips for anonymous viewers, and
+	// never discord_id or username, which stay in D1 metadata.
+	recordGames: Record<
+		string,
+		{
+			turns: number;
+			seats: Record<number, { nation: string | null; name: string | null }>;
+		}
+	>;
+
+	// Seats each board could draw on. The late checkpoints are a fraction of
+	// the corpus (T100 is ~18% of it), and a board that doesn't say so reads as
+	// a record over everyone.
+	recordCounts: Record<string, number>;
+}
+
 // The single scope selection for the user corpus — one mutually-exclusive
 // slice of a user's library, presented as one dropdown. "all" = entire
 // library; "public" = the is_public=1 subset; "vs_ai" / "mp" /

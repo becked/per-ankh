@@ -1,4 +1,5 @@
-// Canonicalize a chart bundle so two runs over the same fixture compare equal.
+// Canonicalize a stats payload — a chart bundle or a records bundle — so two
+// runs over the same fixture compare equal.
 //
 // Two things stop a bundle from being stable on its own.
 //
@@ -8,9 +9,12 @@
 // order is not part of the bundle's contract — the frontend ranks and filters
 // these itself — so it must not be part of a snapshot either.
 //
-// And a few fields carry per-run identifiers: save_dates repeats each game's
-// nanoid. The caller supplies the mapping from those to fixture-stable
-// placeholders, since only the fixture knows which id is which.
+// And a few fields carry per-run identifiers: the bundle's save_dates repeats
+// each game's nanoid, and the records payload is full of them — every row names
+// a game_id and recordGames is *keyed* by one. The caller supplies the mapping
+// from those to fixture-stable placeholders, since only the fixture knows
+// which id is which; it is applied to object keys as well as values, because
+// an id is no more stable for being used as a key.
 //
 // Only arrays *of objects* are sorted. Arrays of primitives are either
 // index-aligned against yieldCurves.turns (every band and count array) or
@@ -43,8 +47,11 @@ export function canonicalizeBundle(
 		// Keys sorted so the snapshot doesn't move when a field is declared in a
 		// different place. Object key order carries no meaning in JSON.
 		const out: Record<string, unknown> = {};
-		for (const key of Object.keys(value).sort()) {
-			out[key] = canonicalizeBundle(value[key], redactions);
+		const keys = Object.keys(value)
+			.map((key) => [redactions[key] ?? key, key] as const)
+			.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+		for (const [canonical, key] of keys) {
+			out[canonical] = canonicalizeBundle(value[key], redactions);
 		}
 		return out;
 	}

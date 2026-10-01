@@ -112,6 +112,18 @@ const cachedBundle = (
 ): Promise<ChartBundleCore | null> =>
 	getCached<ChartBundleCore>(env, globalKey(slice, nations, parser_version));
 
+// Both of a selection's keys. buildGlobalSelection writes the bundle and the
+// records together or not at all — one pass over the corpus fills both — so a
+// case that asserts on what an invocation added has to name both.
+const bothKeys = (
+	slice: GlobalSlice,
+	nations: string[],
+	parser_version: string,
+): string[] => [
+	cacheKeyToString(globalKey(slice, nations, parser_version)),
+	cacheKeyToString(globalKey(slice, nations, parser_version), "records"),
+];
+
 // Every stats key currently in KV, so a case can assert on what an invocation
 // added rather than on the whole namespace.
 const statsKeys = async (): Promise<Set<string>> => {
@@ -134,8 +146,8 @@ describe("precomputeGlobalSlice", () => {
 		const added = [...(await statsKeys())].filter((k) => !before.has(k));
 		expect(new Set(added)).toEqual(
 			new Set(
-				[[], [EGYPT], [ROME]].map((nations) =>
-					cacheKeyToString(globalKey("duel", nations, PARSER)),
+				[[], [EGYPT], [ROME]].flatMap((nations) =>
+					bothKeys("duel", nations, PARSER),
 				),
 			),
 		);
@@ -167,8 +179,8 @@ describe("precomputeGlobalSlice", () => {
 		const added = [...(await statsKeys())].filter((k) => !before.has(k));
 		expect(new Set(added)).toEqual(
 			new Set(
-				[[], [EGYPT]].map((nations) =>
-					cacheKeyToString(globalKey("single_player", nations, PARSER)),
+				[[], [EGYPT]].flatMap((nations) =>
+					bothKeys("single_player", nations, PARSER),
 				),
 			),
 		);
@@ -180,12 +192,12 @@ describe("precomputeGlobalSlice", () => {
 // serve-stale hands back is a bundle and not a stand-in shaped like one.
 const cacheStaleFfaRome = async (): Promise<ChartBundleCore> => {
 	const corpus = await resolveGlobalCorpus(env, "ffa", { nations: [ROME] });
-	const bundle = (await buildChartBundle(
+	const { bundle } = await buildChartBundle(
 		env,
 		corpus,
 		STALE_PARSER,
 		"humans",
-	)) as ChartBundleCore;
+	);
 	await putCached(env, globalKey("ffa", [ROME], STALE_PARSER), bundle);
 	return bundle;
 };
@@ -262,9 +274,7 @@ describe("warmGlobalSlices", () => {
 		const added = [...(await statsKeys())].filter((k) => !before.has(k));
 		expect(new Set(added)).toEqual(
 			new Set(
-				UNFACETED.map((slice) =>
-					cacheKeyToString(globalKey(slice, [], WARM_COLD_PARSER)),
-				),
+				UNFACETED.flatMap((slice) => bothKeys(slice, [], WARM_COLD_PARSER)),
 			),
 		);
 
@@ -356,28 +366,40 @@ describe("cron dispatch", () => {
 		// CURRENT_PARSER_VERSION, which nothing above writes under — so these
 		// are the keys this invocation created.
 		const added = [...(await statsKeys())].filter((k) => !before.has(k));
-		expect(added).toHaveLength(3);
+		// Three selections, two payloads each.
+		expect(added).toHaveLength(6);
 		expect(added.every((k) => k.includes(":global:duel:"))).toBe(true);
 	});
 
 	it("warms the unfaceted bundles on the warm pattern", async () => {
-		const unfaceted = Object.values(STATS_PRECOMPUTE_CRONS).map((slice) =>
-			cacheKeyToString(globalKey(slice, [], CURRENT_PARSER_VERSION)),
+		const unfaceted = Object.values(STATS_PRECOMPUTE_CRONS).flatMap((slice) =>
+			bothKeys(slice, [], CURRENT_PARSER_VERSION),
 		);
 
 		const before = await statsKeys();
 		await fire(STATS_WARM_CRON);
 		const after = await statsKeys();
 
-		// Every unfaceted key is present afterwards however many were already —
-		// the duel case above fired its own pattern, so that one may not have
-		// been missing.
-		for (const key of unfaceted) expect(after.has(key)).toBe(true);
+		// Every unfaceted bundle key is present afterwards however many were
+		// already — the duel case above fired its own pattern, so that one may
+		// not have been missing.
+		for (const key of unfaceted.filter((k) => !k.endsWith(":records"))) {
+			expect(after.has(key), key).toBe(true);
+		}
 		// And whatever it did add was unfaceted: the nation bundles belong to
 		// the nightly patterns, which is what keeps this invocation's query
 		// count at ~200 rather than ~856.
 		const added = [...after].filter((k) => !before.has(k));
 		expect(added.every((k) => unfaceted.includes(k))).toBe(true);
+		// Every slice it did build got both payloads. The warm decides on the
+		// bundle key alone, which is the whole check in production because
+		// buildGlobalSelection writes the pair — a case above hand-wrote one
+		// slice's bundle as a sentinel, and that slice is skipped records and
+		// all, which is why this is stated over what was built rather than over
+		// every key.
+		for (const key of added.filter((k) => !k.endsWith(":records"))) {
+			expect(after.has(`${key}:records`), key).toBe(true);
+		}
 	});
 
 	it("writes nothing on the sweep's pattern or an unknown one", async () => {

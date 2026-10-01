@@ -22,6 +22,10 @@ const REVIEWED: Record<string, string> = {
 	// the session anchors first-primary and not first-unconstrained: whatever
 	// this route reads is then served for a day.
 	"GET /v1/users/:user_id/stats": "SELECT-only call graph",
+	// The same corpus and the same call graph — one handler preamble serves
+	// both payloads, and a miss on either runs the one SELECT-only build that
+	// writes both KV keys.
+	"GET /v1/users/:user_id/stats/records": "SELECT-only call graph",
 };
 
 // `events` is both audit log and rate-limit counter, so it always runs on the

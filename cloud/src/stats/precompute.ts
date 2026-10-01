@@ -19,7 +19,7 @@ import { getCached, putCached } from "./cache";
 import type { StatsCacheEnv } from "./cache";
 import { listGlobalSliceNations, resolveGlobalCorpus } from "./resolve";
 import type { ResolveEnv, StatsCorpus } from "./resolve";
-import type { ChartBundleCore, GlobalSlice } from "./types";
+import type { ChartBundleCore, GlobalSlice, RecordsBundle } from "./types";
 
 // Cron pattern → the slice that pattern precomputes.
 //
@@ -89,6 +89,13 @@ export interface PrecomputeSliceResult {
 // of a corpus where both sides of a duel are someone's game. It returns a
 // ChartBundleCore; the cache is opaque JSON either way.
 //
+// Two entries, one build. The records come out of the same pass over the
+// corpus as the bands (stats/aggregate.ts) and are written to their own key
+// beside the bundle's, so the nightly precompute and the hourly warm warm both
+// payloads and the Records tab is served from cache in the steady state like
+// every other tab. Building one without the other would mean querying the
+// corpus twice to answer one page.
+//
 // An empty corpus is built but not cached. buildChartBundle short-circuits it
 // to a fully-shaped empty bundle without a single query, so the entry would
 // save nothing — and on the request path the selection that resolves to
@@ -106,23 +113,21 @@ export async function buildGlobalSelection(
 	nations: string[],
 	parserVersion: string,
 	resolved?: StatsCorpus,
-): Promise<ChartBundleCore> {
+): Promise<{ bundle: ChartBundleCore; records: RecordsBundle }> {
 	const corpus =
 		resolved ?? (await resolveGlobalCorpus(env, slice, { nations }));
-	const bundle = (await buildChartBundle(
-		env,
-		corpus,
-		parserVersion,
-		"humans",
-	)) as ChartBundleCore;
+	const built = await buildChartBundle(env, corpus, parserVersion, "humans");
 	if (corpus.gameIds.length > 0) {
-		await putCached(
-			env,
-			{ kind: "global", slice, nations, parser_version: parserVersion },
-			bundle,
-		);
+		const key = {
+			kind: "global" as const,
+			slice,
+			nations,
+			parser_version: parserVersion,
+		};
+		await putCached(env, key, built.bundle);
+		await putCached(env, key, built.records, "records");
 	}
-	return bundle;
+	return built;
 }
 
 // Build and cache every selection of one slice.
@@ -147,7 +152,7 @@ export async function precomputeGlobalSlice(
 
 	let games = 0;
 	for (const selection of selections) {
-		const bundle = await buildGlobalSelection(
+		const { bundle } = await buildGlobalSelection(
 			env,
 			slice,
 			selection,
@@ -192,6 +197,10 @@ export interface WarmResult {
 // event that orphans a key at once is a Worker deploy, and the worst case this
 // leaves open is one interval of cold keys. Steady state is four KV reads an
 // hour.
+//
+// The bundle key alone is what it looks at, and that is the whole check:
+// buildGlobalSelection writes both payloads or neither, so a present bundle
+// entry means a present records entry.
 //
 // getCached rather than a lighter existence check: it reads the whole entry
 // and parses it, which is wasteful for a question this cheap to ask, but four

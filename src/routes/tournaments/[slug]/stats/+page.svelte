@@ -1,9 +1,10 @@
 <script lang="ts">
-	// Tournament stats page. Eight tabs — Matches (the sortable match list,
+	// Tournament stats page. Nine tabs — Matches (the sortable match list,
 	// each row linking to its uploaded game), Players (standings + nation
 	// picks), Nations (nation win rate), Leaders (starting archetype and
 	// traits), Wonders (build timing and builder win rate), Families (capital
-	// family + per-nation picks), Yields (per-turn curves) and Casters (caster
+	// family + per-nation picks), Yields (per-turn curves), Records (the
+	// biggest numbers on each yield) and Casters (caster
 	// leaderboard) — spanning both stats
 	// subsystems: Plane A tournament-native (standings + casters) and Plane B1
 	// (the ChartBundle pointed at the tournament's games). Renders the charts
@@ -12,6 +13,7 @@
 	import { Tabs } from "bits-ui";
 	import { goto } from "$app/navigation";
 	import { page } from "$app/state";
+	import { cloudApi } from "$lib/api-cloud";
 	import ChartContainer from "$lib/ChartContainer.svelte";
 	import MatchTable from "$lib/tournament/MatchTable.svelte";
 	import {
@@ -28,6 +30,7 @@
 	import { buildSlotMaps } from "$lib/tournament/slot-identity";
 	import { getZoneClock } from "$lib/tournament/zone-context.svelte";
 	import FamilyStatsPanel from "$lib/stats/FamilyStatsPanel.svelte";
+	import RecordsPanel from "$lib/stats/RecordsPanel.svelte";
 	import YieldsStatsPanel from "$lib/stats/YieldsStatsPanel.svelte";
 	import { barChartHeight } from "$lib/stats/charts/helpers";
 	import {
@@ -178,6 +181,7 @@
 		"wonders",
 		"families",
 		"yields",
+		"records",
 		"casters",
 	] as const;
 	type StatsTab = (typeof TABS)[number];
@@ -192,6 +196,19 @@
 		// eslint-disable-next-line svelte/no-navigation-without-resolve -- search-param-only update on the current route; URL objects are SvelteKit's documented dynamic-nav API
 		await goto(next, { replaceState: true, keepFocus: true, noScroll: true });
 	}
+
+	// The Records tab's own fetch, built the way the other two surfaces build
+	// theirs: $derived.by reading the corpus *eagerly*, so the panel is handed a
+	// new closure whenever this page is handed a different tournament. A plain
+	// arrow would be a closure the page never rebuilds, and the panel keeps the
+	// payload its current closure produced — so it would go on showing the
+	// tournament it was mounted on. That also covers an invalidateAll from the
+	// layout's settings popover: a mutation bumps updated_at, which is in the
+	// cache key, so the boards in hand are stale and worth refetching.
+	const loadRecords = $derived.by(() => {
+		const tournamentId = data.tournament.tournament_id;
+		return () => cloudApi.getTournamentRecords(tournamentId);
+	});
 
 	// Chip-style tab triggers, matching the user-stats subtabs.
 	const triggerClass =
@@ -216,6 +233,7 @@
 			<Tabs.Trigger value="families" class={triggerClass}>Families</Tabs.Trigger
 			>
 			<Tabs.Trigger value="yields" class={triggerClass}>Yields</Tabs.Trigger>
+			<Tabs.Trigger value="records" class={triggerClass}>Records</Tabs.Trigger>
 			<Tabs.Trigger value="casters" class={triggerClass}>Casters</Tabs.Trigger>
 		</Tabs.List>
 
@@ -400,6 +418,18 @@
 		     player-game, not one game; the split cohorts are games. -->
 		<Tabs.Content value="yields">
 			<YieldsStatsPanel bundle={data.games} countLabel="Players" />
+		</Tabs.Content>
+
+		<!-- Records — the biggest number on each yield across the tournament's
+		     games, and who posted it (Plane B1). Its own fetch, spent when this
+		     tab opens: the boards are not in the bundle the page loads. No
+		     toolbarFlush, matching how this page renders Yields. -->
+		<Tabs.Content value="records">
+			<RecordsPanel
+				load={loadRecords}
+				active={tab === "records"}
+				countLabel="Players"
+			/>
 		</Tabs.Content>
 
 		<!-- Casters — caster leaderboard (Plane A) -->

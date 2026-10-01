@@ -192,6 +192,43 @@ export interface ChartBundle extends ChartBundleCore {
 	}>;
 }
 
+// The records payload — its own endpoint and its own cached entry beside the
+// bundle, fetched when the Records tab opens rather than shipped with every
+// stats request. Built in the same pass as the yield bands; the rationale for
+// each field is on the canonical type.
+export interface RecordsBundle {
+	// series → board → rows, biggest first. A board is "peak", "final", or a
+	// "t20"…"t100" checkpoint; a cumulative series is keyed "<series>:cum",
+	// and whether that reads as produced or held is the `cumulative` field on
+	// YIELD_SERIES (./charts/yields).
+	records: Record<
+		string,
+		Record<
+			string,
+			Array<{
+				game_id: string;
+				player_index: number;
+				turn: number;
+				value: number;
+			}>
+		>
+	>;
+
+	// The games holding a record, and the record holders' own seats — nobody
+	// else's. `name` is the handle the save records, which the game page
+	// already prints; never online_id.
+	recordGames: Record<
+		string,
+		{
+			turns: number;
+			seats: Record<number, { nation: string | null; name: string | null }>;
+		}
+	>;
+
+	// Seats each board could draw on, so a thin late checkpoint says so.
+	recordCounts: Record<string, number>;
+}
+
 // The single scope selection for the user corpus (mirrors the Worker's
 // UserScope; collection id is a string in the URL/client layer, a number
 // server-side). One mutually-exclusive slice of a user's library.
@@ -217,7 +254,8 @@ export type StatsCategory =
 	| "yields"
 	| "laws"
 	| "cities"
-	| "tech";
+	| "tech"
+	| "records";
 
 // A chart in the catalog. Its predicates take ChartBundleCore, not
 // ChartBundle: none of them reads an Overview field, so one registry serves
