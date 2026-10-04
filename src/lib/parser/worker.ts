@@ -59,7 +59,7 @@ ctx.onmessage = (e: MessageEvent<ParseRequest>) => {
 			phase: "Extracting ZIP",
 			percent: 0,
 		} satisfies ParseProgress);
-		const xml = extractXmlFromZip(e.data.file);
+		const { xml, entryName } = extractXmlFromZip(e.data.file);
 
 		ctx.postMessage({
 			type: "progress",
@@ -74,7 +74,7 @@ ctx.onmessage = (e: MessageEvent<ParseRequest>) => {
 			phase: "Extracting game data",
 			percent: 30,
 		} satisfies ParseProgress);
-		const gameData = extractAllGameData(root, activePlayerIndex);
+		const gameData = extractAllGameData(root, activePlayerIndex, entryName);
 
 		validateCompletedGame(gameData);
 

@@ -34,8 +34,14 @@ import { extractAllGameData } from "../src/lib/parser/parsers/index.js";
 import { validateCompletedGame } from "../src/lib/parser/validation.js";
 
 for (const file of process.argv.slice(2)) {
-	const xml = extractXmlFromZip(readFileSync(file).buffer as ArrayBuffer);
-	const data = extractAllGameData(parseSaveXml(xml), parseActivePlayerIndex(xml));
+	const { xml, entryName } = extractXmlFromZip(
+		readFileSync(file).buffer as ArrayBuffer,
+	);
+	const data = extractAllGameData(
+		parseSaveXml(xml),
+		parseActivePlayerIndex(xml),
+		entryName,
+	);
 	validateCompletedGame(data);
 	// … then count whatever the claim is about.
 }

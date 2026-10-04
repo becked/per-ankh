@@ -22,6 +22,7 @@ import type { Player } from "./players.js";
 export function parseMatchMetadata(
 	root: Record<string, unknown>,
 	players: Player[],
+	entryName: string | null,
 ): MatchMetadata {
 	const xmlGameId = requireStr(root["@_GameId"], "Root.GameId");
 
@@ -40,8 +41,13 @@ export function parseMatchMetadata(
 		: [null, null];
 
 	const enabledDlc = parseGameContent(root);
+	// The attribute first, the file name only when the save has no attribute
+	// to read: the attribute is what the game wrote, where a file name is
+	// whatever it was last renamed to.
 	const saveDateAttr = optAttrStr(root["@_SaveDate"]);
-	const saveDate = saveDateAttr ? parseSaveDate(saveDateAttr) : null;
+	const saveDate =
+		(saveDateAttr ? parseSaveDate(saveDateAttr) : null) ??
+		parseEntryNameDate(entryName);
 
 	const mapWidth = optInt(root["@_MapWidth"]);
 	// MapHeight is not encoded in the XML; the Rust parser assumes a square
@@ -262,6 +268,50 @@ function parseSaveDate(dateStr: string): string | null {
 	const dayPad = day.toString().padStart(2, "0");
 	const monthPad = month.toString().padStart(2, "0");
 	return `${year}-${monthPad}-${dayPad}`;
+}
+
+// The `yyyy-MM-dd-HH-mm-ss` tail of a completed-save file name. The clock is
+// matched but unused: it is what makes the tail specific enough that a game
+// name ending in digits can't be mistaken for it.
+const ENTRY_NAME_DATE_RE = /-(\d{4})-(\d{2})-(\d{2})-\d{2}-\d{2}-\d{2}\.xml$/i;
+
+/**
+ * Parse the save's write date out of the ZIP entry name, as ISO `YYYY-MM-DD`.
+ * Returns null when the name carries no timestamp.
+ *
+ * This is the fallback for a save with no `SaveDate`: the attribute is written
+ * by `Game.writeGameXML` (`Game.cs:1203`), which did not always write it. Of
+ * 332 completed saves spanning 2022-01-02 to 2026-06-17, 4 have no attribute,
+ * and all 4 are builds ≤ 1.0.57329 — the lowest build carrying one is
+ * 1.0.60668.
+ *
+ * The name is the same instant, not a substitute for it.
+ * `Game.getEndAutoSavePath` (`Game.cs:16314`) names a completed save
+ * `OW-{nation}-Year{turn}-{yyyy-MM-dd-HH-mm-ss}.zip`
+ * (`Constants.END_SAVE_FORMAT`) off the same `DateTime.Now` the attribute
+ * formats, and the ZIP carries that name on its XML entry: all 332 entry
+ * names in that corpus end in the tail, and on the 328 saves that have both
+ * the two agree on the date every time. Only the date is kept — the column
+ * holds date-only values and consumers `substr(save_date, 1, 10)` it.
+ *
+ * Anchored on the tail rather than parsed from the prefix because there is no
+ * reliable prefix to skip: 6 of those 332 entry names are whole Windows save
+ * paths with the separators stripped
+ * (`CUsersbeckeDocuments…OW-Assyria-Year136-2023-03-15-22-42-24.xml`).
+ *
+ * Checked against the calendar, which the attribute path has no need to be:
+ * `DateTime.Now` can't produce February 30th and a renamed file can, and
+ * `new Date` rolls an impossible ISO date over ("2022-02-30" → March 2nd)
+ * rather than rejecting it — so the round-trip is the check, not NaN.
+ */
+function parseEntryNameDate(entryName: string | null): string | null {
+	if (entryName === null) return null;
+	const m = ENTRY_NAME_DATE_RE.exec(entryName);
+	if (!m) return null;
+	const iso = `${m[1]}-${m[2]}-${m[3]}`;
+	const asDate = new Date(`${iso}T00:00:00Z`);
+	if (Number.isNaN(asDate.getTime())) return null;
+	return asDate.toISOString().slice(0, 10) === iso ? iso : null;
 }
 
 // ---------- Victory conditions ----------

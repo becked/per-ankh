@@ -117,6 +117,10 @@ import {
 export function extractAllGameData(
 	root: Record<string, unknown>,
 	activePlayerIndex: number | null,
+	// Name of the ZIP entry the XML came from (extract-zip's `entryName`) —
+	// the save-date fallback for saves written before the `SaveDate`
+	// attribute existed. Null when the caller has no archive to name.
+	entryName: string | null,
 ): FullGameData {
 	// 1. Parse all entities.
 	const players = parsePlayers(root, activePlayerIndex);
@@ -153,7 +157,7 @@ export function extractAllGameData(
 	const playerUnitsProduced = parsePlayerUnitsProduced(root);
 
 	// 2. Match metadata (depends on parsed players for winner resolution).
-	const matchMetadata = parseMatchMetadata(root, players);
+	const matchMetadata = parseMatchMetadata(root, players, entryName);
 
 	// 3. Derivations — view-ready aggregates that consumers (game-detail
 	//    tabs) read directly.
