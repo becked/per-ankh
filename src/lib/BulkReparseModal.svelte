@@ -7,8 +7,7 @@
 	// on observer uploads. `user_id` is the owner id, required only in admin
 	// mode for the on-behalf-of upload. The account page's GameListItem and
 	// the admin page's AdminGameListItem both structurally satisfy this; the
-	// game detail page's admin-reparse banner (AdminReimportButton) builds one
-	// directly.
+	// game detail page's reparse banner (ReparseButton) builds one directly.
 	export interface ReparseTarget {
 		game_id: string;
 		game_name: string | null;

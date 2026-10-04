@@ -1,5 +1,6 @@
-// Shared helpers for cloud upload flows (single-file UploadModal and bulk
-// BulkUploadModal). Extracted to avoid divergence between the two modals.
+// Shared helpers for the cloud upload flows (BulkUploadModal for new saves,
+// BulkReparseModal for re-uploading an existing game's save). Extracted to
+// avoid divergence between the two modals.
 
 import type { FullGameData, PlayerRosterEntry } from "./types";
 import type { WorkerMessage } from "./worker";

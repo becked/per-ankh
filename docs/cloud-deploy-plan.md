@@ -511,7 +511,7 @@ Against the live `https://per-ankh.app`. Run in this order:
    browser. Confirms anonymous read path works and PII is stripped.
 5. Download the raw save back via the download endpoint.
 6. Reparse the test game. The Reparse button on `/games/[id]`
-   (`src/lib/ReimportButton.svelte`) only appears when the stored
+   (`src/lib/ReparseButton.svelte`) only appears when the stored
    `parser_version` is older than the frontend's `PARSER_VERSION`; if
    they're equal, bump `PARSER_VERSION` locally to surface the button.
    The bulk equivalent is the dashboard's `BulkReparseModal`.

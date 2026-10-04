@@ -2577,7 +2577,7 @@ export async function handleGameDetail(
 		user_id: row.user_id,
 		user_nation: row.user_nation,
 		// Raw uploader nation (null = observer) so a reparse from the detail
-		// page re-claims the same player/observer — see AdminReimportButton.
+		// page re-claims the same player/observer — see ReparseButton.
 		uploader_nation: row.uploader_nation,
 		user_won: coerceD1Bool(row.user_won),
 		user_display_name: row.user_display_name,
