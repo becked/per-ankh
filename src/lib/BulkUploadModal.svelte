@@ -16,8 +16,9 @@
 	//      and failed uploads can be retried inline.
 	//   6. After all rows reach a terminal state, "Done" navigates to /games.
 	//
-	// The single-file UploadModal.svelte is unchanged — it's used by
-	// ReimportButton's `prefilled` flow which is inherently single-file.
+	// This is the only entry point for uploading new saves: a single file is
+	// just N = 1. Reparsing an existing game re-uploads the save already in
+	// R2, which is BulkReparseModal's pipeline.
 
 	import { goto } from "$app/navigation";
 	import { resolve } from "$app/paths";
