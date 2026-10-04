@@ -2,12 +2,19 @@
 	// Inline action buttons rendered into GameDetailView's headerActions
 	// slot, next to the date in the main heading row.
 	//
-	// All three buttons are icon-only; click opens a small popover with
-	// an explanation + confirm/cancel pair. Click-outside and Escape
-	// dismiss. Only one popover is open at a time — opening a second
-	// closes the first.
+	// Every button is icon-only; click opens a small popover with an
+	// explanation + confirm/cancel pair, or a list whose rows apply on click.
+	// Click-outside and Escape dismiss. Only one popover is open at a time —
+	// opening a second closes the first. Owner-only actions come first, then
+	// the one any signed-in viewer gets, then the destructive one last:
 	//
 	//   - Public/Private lock: owner-only.
+	//   - Rename: owner-only.
+	//   - Move to collection: owner-only.
+	//   - Which nation were you: owner-only. Corrects the pick made in the
+	//     upload picker. The Worker refuses it on a tournament-linked save,
+	//     surfaced inline like the rename popover's errors rather than
+	//     second-guessed here.
 	//   - Download: any signed-in user (owner or not). Hidden for anonymous
 	//     viewers — the API rejects unauthenticated downloads anyway, and
 	//     surfacing a button that immediately bounces to / is noise.
@@ -23,6 +30,7 @@
 		type CollectionInfo,
 	} from "$lib/api-cloud";
 	import { toast } from "$lib/ui/toast";
+	import { nationName } from "$lib/utils/formatting";
 	import { profileHref } from "$lib/utils/profile-href";
 
 	interface Props {
@@ -36,6 +44,18 @@
 		// prefill + Reset affordance; the breadcrumb leaf shows the result.
 		displayName?: string | null;
 		gameName?: string | null;
+		// The save's roster and the owner's current pick, for the "which
+		// nation were you?" correction. The roster rows are a structural
+		// subset of PlayerRosterEntry ($lib/parser/types) so the detail page
+		// can hand over the blob's own array; player_index null means the
+		// upload claimed nobody (observer).
+		players?: ReadonlyArray<{
+			player_index: number;
+			player_name: string;
+			nation: string | null;
+			is_human: boolean;
+		}>;
+		uploaderPlayerIndex?: number | null;
 	}
 
 	let {
@@ -46,9 +66,17 @@
 		currentCollectionId = null,
 		displayName = null,
 		gameName = null,
+		players = [],
+		uploaderPlayerIndex = null,
 	}: Props = $props();
 
-	type Popover = "lock" | "rename" | "collection" | "download" | "delete";
+	type Popover =
+		| "lock"
+		| "rename"
+		| "collection"
+		| "player"
+		| "download"
+		| "delete";
 	let openPopover = $state<Popover | null>(null);
 
 	let toggling = $state(false);
@@ -56,6 +84,7 @@
 	let moving = $state(false);
 	let downloading = $state(false);
 	let deleting = $state(false);
+	let changingPlayer = $state(false);
 
 	let renameValue = $state("");
 	let renameError = $state<string | null>(null);
@@ -64,6 +93,24 @@
 	let newCollectionName = $state("");
 	let createError = $state<string | null>(null);
 
+	let playerError = $state<string | null>(null);
+	// Only humans can be claimed — the upload picker's rule, and what the
+	// Worker validates the index against. An all-AI save (valid for an
+	// archival upload, which is observer by definition) leaves nothing to
+	// pick between, so the control isn't offered at all.
+	const humanPlayers = $derived(players.filter((p) => p.is_human));
+	// The picker's rows: every human seat, then the observer option. One list
+	// so the row markup isn't written twice, labelled the way the upload
+	// picker labels the same seats (name, with the nation beside it).
+	const playerRows = $derived([
+		...humanPlayers.map((p) => ({
+			index: p.player_index as number | null,
+			label: p.player_name || nationName(p.nation),
+			nation: p.player_name ? nationName(p.nation) : null,
+		})),
+		{ index: null, label: "I didn't play in this game", nation: null },
+	]);
+
 	function togglePopover(name: Popover) {
 		openPopover = openPopover === name ? null : name;
 		if (openPopover !== "collection") {
@@ -71,6 +118,7 @@
 			newCollectionName = "";
 			createError = null;
 		}
+		if (openPopover !== "player") playerError = null;
 		if (openPopover === "rename") {
 			// Prefill with the current effective title; empty Save clears the
 			// rename (null → original game_name / nation+turns derivation).
@@ -85,6 +133,7 @@
 		newCollectionName = "";
 		createError = null;
 		renameError = null;
+		playerError = null;
 	}
 
 	async function moveToCollection(collectionId: number) {
@@ -122,6 +171,29 @@
 			createError = "Failed to create collection";
 		} finally {
 			moving = false;
+		}
+	}
+
+	// Apply a new pick. Picking the row that's already current is a no-op —
+	// same as the collection list's current row. A refusal (the Worker locks
+	// the pick on a tournament-linked save) stays in the popover next to the
+	// rows it applies to, rather than a toast that outlives it.
+	async function confirmPlayer(playerIndex: number | null) {
+		if (changingPlayer || playerIndex === uploaderPlayerIndex) {
+			closePopover();
+			return;
+		}
+		changingPlayer = true;
+		playerError = null;
+		try {
+			await cloudApi.setUploaderPlayer(gameId, playerIndex);
+			await invalidateAll();
+			closePopover();
+		} catch (err) {
+			playerError =
+				err instanceof Error ? err.message : "Failed to change your player";
+		} finally {
+			changingPlayer = false;
 		}
 	}
 
@@ -545,6 +617,92 @@
 								+ New collection…
 							</button>
 						{/if}
+					</div>
+				</div>
+			{/if}
+		</div>
+	{/if}
+
+	{#if isOwner && humanPlayers.length > 0}
+		<div class="relative">
+			<button
+				type="button"
+				onclick={() => togglePopover("player")}
+				disabled={changingPlayer}
+				aria-haspopup="dialog"
+				aria-expanded={openPopover === "player"}
+				title="Change your nation"
+				class="action-trigger rounded border border-tan p-1 text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
+			>
+				<!-- Inline SVG person; every icon in this row depicts its action. -->
+				<svg
+					xmlns="http://www.w3.org/2000/svg"
+					class="h-3.5 w-3.5"
+					fill="none"
+					viewBox="0 0 24 24"
+					stroke="currentColor"
+					stroke-width="2"
+					aria-hidden="true"
+				>
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						d="M17.982 18.725A7.488 7.488 0 0012 15.75a7.488 7.488 0 00-5.982 2.975m11.964 0a9 9 0 10-11.964 0m11.964 0A8.966 8.966 0 0112 21a8.966 8.966 0 01-5.982-2.275M15 9.75a3 3 0 11-6 0 3 3 0 016 0z"
+					/>
+				</svg>
+			</button>
+
+			{#if openPopover === "player"}
+				<!-- svelte-ignore a11y_click_events_have_key_events -->
+				<div
+					class="action-popover absolute right-0 top-full z-50 mt-2 w-60 rounded border-2 border-black bg-blue-gray p-2 shadow-lg"
+					role="dialog"
+					tabindex="-1"
+					onclick={(e) => e.stopPropagation()}
+				>
+					<p class="px-1 text-xs font-semibold text-tan">
+						Which nation were you?
+					</p>
+					<p class="mb-2 px-1 text-xs text-gray-400">
+						Sets the nation and win recorded for you on this game.
+					</p>
+					{#if playerError}
+						<p class="mb-2 px-1 text-[10px] text-orange">{playerError}</p>
+					{/if}
+					<div class="max-h-56 overflow-y-auto">
+						{#each playerRows as row (row.index)}
+							{@const isCurrent = row.index === uploaderPlayerIndex}
+							<button
+								type="button"
+								onclick={() => confirmPlayer(row.index)}
+								disabled={changingPlayer}
+								class="flex w-full items-center justify-between gap-2 rounded px-2 py-1 text-left text-xs text-tan transition-colors hover:bg-surface-raised disabled:opacity-50 {isCurrent
+									? 'bg-surface-raised'
+									: ''}"
+							>
+								<span class="truncate">
+									{row.label}
+									{#if row.nation}
+										<span class="text-gray-400">— {row.nation}</span>
+									{/if}
+								</span>
+								{#if isCurrent}
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										class="h-3.5 w-3.5 shrink-0 text-orange"
+										viewBox="0 0 20 20"
+										fill="currentColor"
+										aria-hidden="true"
+									>
+										<path
+											fill-rule="evenodd"
+											d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+											clip-rule="evenodd"
+										/>
+									</svg>
+								{/if}
+							</button>
+						{/each}
 					</div>
 				</div>
 			{/if}

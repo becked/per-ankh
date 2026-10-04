@@ -853,8 +853,12 @@ export const cloudApi = {
 			user_id?: string | null;
 			user_nation?: string | null;
 			// Raw uploader nation choice (null = observer), un-COALESCE'd —
-			// drives the admin reparse from the detail page.
+			// drives the reparse from the detail page.
 			uploader_nation?: string | null;
+			// The claimed seat's player_index (null = observer). What the
+			// owner's player picker checks against — a nation can't tell two
+			// humans playing the same one apart.
+			uploader_player_index?: number | null;
 			user_won?: boolean | null;
 			user_display_name?: string | null;
 			// Uploader's profile slug, null when they have none. Prefixed
@@ -872,6 +876,7 @@ export const cloudApi = {
 				user_id?: string | null;
 				user_nation?: string | null;
 				uploader_nation?: string | null;
+				uploader_player_index?: number | null;
 				user_won?: boolean | null;
 				user_display_name?: string | null;
 				user_slug?: string | null;
@@ -952,6 +957,37 @@ export const cloudApi = {
 		return res.json() as Promise<{
 			game_id: string;
 			display_name: string | null;
+		}>;
+	},
+
+	// Correct which player the owner was on this save — the pick made in the
+	// upload picker, which decides the nation and win recorded for them and
+	// the seat the duel ratings attribute to. Pass a human's player_index, or
+	// null for observer ("I didn't play in this game"). The Worker re-derives
+	// the stored values from the blob it already holds; nothing is reparsed.
+	// Throws ApiError(409, UPLOADER_LOCKED_TOURNAMENT) for a save linked to a
+	// tournament match, where the slot mapping records the pick.
+	setUploaderPlayer: async (
+		id: string,
+		uploaderPlayerIndex: number | null,
+		opts?: CallOpts,
+	): Promise<{
+		game_id: string;
+		uploader_player_index: number | null;
+		user_nation: string | null;
+		user_won: boolean | null;
+	}> => {
+		const res = await request(`/games/${id}`, {
+			...opts,
+			method: "PATCH",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ uploader_player_index: uploaderPlayerIndex }),
+		});
+		return res.json() as Promise<{
+			game_id: string;
+			uploader_player_index: number | null;
+			user_nation: string | null;
+			user_won: boolean | null;
 		}>;
 	},
 

@@ -94,6 +94,11 @@ export const RETENTION_BUCKETS: readonly RetentionBucket[] = [
 			"visibility_change",
 			"collection_change",
 			"name_change",
+			// Owner corrections of which player they were on a save
+			// (handleGamePatch). Carries { uploader_player_index,
+			// user_nation }, which is the only record that the nation and win
+			// now on the games row aren't the ones the upload picked.
+			"uploader_change",
 			// Profile-URL changes (users.ts): slug_claim when a name is taken or
 			// renamed onto, slug_release when it's given up. Not once per account
 			// — users rename, bounded to one change a week by the cooldown — and

@@ -81,6 +81,12 @@ export const ANON_READS_PER_HOUR = 200;
 // minute for an hour straight is well past human use.
 const PER_USER_PATCH_PER_HOUR = 60;
 
+// Per-user PATCH limit on uploader corrections. Tighter than the toggle
+// budget above because this branch reads and decompresses the game's blob
+// from R2 to validate the pick, where the other PATCH fields are D1-only.
+// Still far past human use — a save has one uploader to get right.
+const PER_USER_UPLOADER_CHANGE_PER_HOUR = 20;
+
 // Save-download limits. Per-user is the meaningful signal (auth required);
 // per-IP is a backstop for one user spamming from one IP.
 const PER_USER_DOWNLOADS_PER_HOUR = 50;
@@ -136,6 +142,7 @@ export type RateLimitedEventType =
 	| "upload"
 	| "reimport"
 	| "visibility_change"
+	| "uploader_change"
 	| "download"
 	| "anon_read"
 	| "tournament_admin"
@@ -328,6 +335,27 @@ interface GameRowInputs {
 	displayNameOverride?: string | null;
 }
 
+// The two games-row columns that depend on which player the uploader was.
+// In observer mode (uploaderIndex === null) both are NULL — the uploader has
+// no claim on the game's outcome — and user_won stays NULL on a save that
+// records no winner at all, which is distinct from "played and lost".
+//
+// Shared by the upload path (buildGameRow) and the owner's later correction
+// (handleGamePatch), so a pick means the same thing however it arrives. Both
+// callers live here, so it stays module-private.
+function deriveUploaderColumns(
+	roster: PlayerRosterEntry[],
+	winner: { winner_player_xml_id: number } | null | undefined,
+	uploaderIndex: number | null,
+): { userNation: string | null; userWon: boolean | null } {
+	if (uploaderIndex === null) return { userNation: null, userWon: null };
+	const uploader = roster.find((p) => p.player_index === uploaderIndex);
+	return {
+		userNation: uploader?.nation ?? null,
+		userWon: winner ? winner.winner_player_xml_id === uploaderIndex : null,
+	};
+}
+
 function buildGameRow(inp: GameRowInputs): {
 	sql: string;
 	bindings: unknown[];
@@ -352,16 +380,12 @@ function buildGameRow(inp: GameRowInputs): {
 	const winner = md.winner;
 	const victoryType = winner?.victory_type ?? null;
 
-	// In observer mode (uploaderIndex === null) user_nation and user_won are
-	// both NULL — the uploader has no claim on the game's outcome.
 	const roster = blob.player_roster as PlayerRosterEntry[];
-	let userNation: string | null = null;
-	let userWon: boolean | null = null;
-	if (uploaderIndex !== null) {
-		const uploader = roster.find((p) => p.player_index === uploaderIndex);
-		userNation = uploader?.nation ?? null;
-		userWon = winner ? winner.winner_player_xml_id === uploaderIndex : null;
-	}
+	const { userNation, userWon } = deriveUploaderColumns(
+		roster,
+		winner,
+		uploaderIndex,
+	);
 
 	// isPublicOverride is always supplied by the upload handler now: the
 	// preserved value on re-import, the uploader's default-visibility
@@ -2456,6 +2480,11 @@ export async function handleGameDetail(
 		`SELECT g.user_id, g.is_public, g.display_name, g.user_won,
 		        g.parser_version,
 		        g.user_nation AS uploader_nation,
+		        (
+		            SELECT ps.player_index FROM player_summaries ps
+		            WHERE ps.game_id = g.game_id AND ps.is_uploader = 1
+		            LIMIT 1
+		        ) AS uploader_player_index,
 		        COALESCE(g.user_nation, (
 		            SELECT ps.nation FROM player_summaries ps
 		            WHERE ps.game_id = g.game_id AND ps.is_human = 1
@@ -2479,6 +2508,12 @@ export async function handleGameDetail(
 			// null = observer upload. Distinct from user_nation above, which
 			// falls back to the first human for display.
 			uploader_nation: string | null;
+			// The claimed seat's player_index, from the is_uploader flag the
+			// summaries carry. Null on an observer upload — the nation above
+			// is null for the same reason, but matching a nation back to a
+			// seat can't tell two humans on the same nation apart, so the
+			// index is what a client editing the pick checks against.
+			uploader_player_index: number | null;
 			user_won: number | null;
 			user_display_name: string;
 			// Prefixed: these fields are spread onto the blob, which already
@@ -2577,8 +2612,11 @@ export async function handleGameDetail(
 		user_id: row.user_id,
 		user_nation: row.user_nation,
 		// Raw uploader nation (null = observer) so a reparse from the detail
-		// page re-claims the same player/observer — see ReparseButton.
+		// page re-claims the same player/observer — see ReparseButton. The
+		// index beside it is what the owner's player picker checks (see
+		// GameActions).
 		uploader_nation: row.uploader_nation,
+		uploader_player_index: row.uploader_player_index,
 		user_won: coerceD1Bool(row.user_won),
 		user_display_name: row.user_display_name,
 		user_slug: row.user_slug,
@@ -2617,9 +2655,9 @@ export async function handleGameDetail(
 // CSRF token is needed under that stance — if we ever loosen CORS or accept
 // POST mutations, revisit and add an `X-CSRF-Token` requirement.
 //
-// PATCH /v1/games/:id — owner-only mutation of three optional fields:
+// PATCH /v1/games/:id — owner-only mutation of four optional fields:
 //   { is_public?: boolean, collection_id?: number | null,
-//     display_name?: string | null }
+//     display_name?: string | null, uploader_player_index?: number | null }
 // At least one must be present. is_public toggles share visibility and is
 // rate-limited 60/hr/user via the 'visibility_change' audit event.
 // collection_id moves the game between collections owned by the same user;
@@ -2627,6 +2665,12 @@ export async function handleGameDetail(
 // display_name sets the owner-editable title; null clears it, letting the
 // client fall back to the save's own game_name and then the nation/turns
 // derivation. Not rate-limited, audited as 'name_change'.
+// uploader_player_index corrects which player the owner was — the pick made
+// at upload time, which decides games.user_nation / user_won and the
+// player_summaries.is_uploader flag the duel ratings attribute by. Refused
+// on a tournament-linked save (UPLOADER_LOCKED_TOURNAMENT), rate-limited
+// 20/hr/user, audited as 'uploader_change'. Ratings follow on the next cron
+// rebuild; no reparse is involved, since the roster is already in the blob.
 export async function handleGamePatch(
 	gameId: string,
 	request: Request,
@@ -2663,7 +2707,8 @@ export async function handleGamePatch(
 			"INVALID_BODY",
 		);
 	}
-	const { is_public, collection_id, display_name } = validation.output;
+	const { is_public, collection_id, display_name, uploader_player_index } =
+		validation.output;
 
 	// Rate-limit only when is_public is being changed. A pure collection
 	// move shouldn't burn the user's hourly toggle budget.
@@ -2720,6 +2765,99 @@ export async function handleGamePatch(
 		if (!owns) {
 			return errorResponse("Not found", 404, cors, "NOT_FOUND");
 		}
+	}
+
+	// uploader_player_index: everything that can refuse the correction runs
+	// here, with the handler's other guards, so a rejected pick can't land
+	// after an is_public or display_name change already wrote in the same
+	// request. The pick itself is checked against the stored blob's roster —
+	// the gate handleGameUpload applies to the form field of the same name.
+	let uploaderChange:
+		| {
+				index: number | null;
+				userNation: string | null;
+				userWon: boolean | null;
+				onlineId: string | null;
+		  }
+		| undefined;
+	if (uploader_player_index !== undefined) {
+		if (
+			(await countEventsSince(
+				env.EVENTS_DB,
+				"uploader_change",
+				"user_id",
+				userId,
+			)) >= PER_USER_UPLOADER_CHANGE_PER_HOUR
+		) {
+			return errorResponse(
+				"Per-user player-change limit exceeded",
+				429,
+				cors,
+				"RATE_LIMIT_USER",
+			);
+		}
+
+		// Tournament lock, same as the re-import path: the match's slot
+		// mapping records which player the uploader was, and stays the
+		// historical record once the match is reported — so this is refused
+		// for every linked save, not only one in an active tournament.
+		const linked = await env.SHARE_DB.prepare(
+			"SELECT 1 FROM tournament_matches WHERE game_id = ? LIMIT 1",
+		)
+			.bind(gameId)
+			.first();
+		if (linked) {
+			return errorResponse(
+				"Cannot change your player on a save linked to a tournament match",
+				409,
+				cors,
+				"UPLOADER_LOCKED_TOURNAMENT",
+			);
+		}
+
+		// Uncached read, like the owner branch of the detail endpoint: the
+		// roster this validates against has to be the bytes R2 holds now.
+		const compressed = await readBlob(
+			env.SHARE_BUCKET,
+			`games/${gameId}.json.gz`,
+			"bypass",
+		);
+		if (!compressed) {
+			return errorResponse("Blob missing", 404, cors, "BLOB_MISSING");
+		}
+		const decompressed = await decompressWithLimit(
+			compressed,
+			MAX_BLOB_DECOMPRESSED,
+		);
+		const blob = JSON.parse(
+			new TextDecoder().decode(decompressed),
+		) as FullGameData;
+		const roster = blob.player_roster as PlayerRosterEntry[];
+		const picked =
+			uploader_player_index === null
+				? null
+				: roster.find(
+						(p) => p.is_human && p.player_index === uploader_player_index,
+					);
+		if (uploader_player_index !== null && !picked) {
+			return errorResponse(
+				`Player index ${uploader_player_index} not found among humans`,
+				400,
+				cors,
+				"UNKNOWN_PLAYER_INDEX",
+			);
+		}
+		const { userNation, userWon } = deriveUploaderColumns(
+			roster,
+			blob.match_metadata.winner,
+			uploader_player_index,
+		);
+		uploaderChange = {
+			index: uploader_player_index,
+			userNation,
+			userWon,
+			onlineId: picked?.online_id ?? null,
+		};
 	}
 
 	const ip = request.headers.get("CF-Connecting-IP");
@@ -2787,6 +2925,68 @@ export async function handleGamePatch(
 		}
 	}
 
+	if (uploaderChange) {
+		await env.SHARE_DB.batch([
+			env.SHARE_DB.prepare(
+				`UPDATE games SET user_nation = ?, user_won = ?, updated_at = datetime('now')
+				 WHERE game_id = ?`,
+			).bind(
+				uploaderChange.userNation,
+				uploaderChange.userWon === null ? null : uploaderChange.userWon ? 1 : 0,
+				gameId,
+			),
+			// is_uploader is the only player_summaries column the pick feeds;
+			// every other one is derived from the blob and unchanged, so this
+			// flips the flag instead of rebuilding the table the way
+			// handleAdminReindex does. The index binds twice because an
+			// observer correction passes null and `player_index = NULL` is
+			// never true — the IS NOT NULL arm makes that deliberate rather
+			// than a reliance on SQL's null comparison.
+			env.SHARE_DB.prepare(
+				`UPDATE player_summaries
+				 SET is_uploader = CASE
+				     WHEN ? IS NOT NULL AND player_index = ? THEN 1 ELSE 0 END
+				 WHERE game_id = ?`,
+			).bind(uploaderChange.index, uploaderChange.index, gameId),
+		]);
+
+		// Link the newly claimed seat's OnlineID the way the upload path
+		// does — we just learned the user plays as it. Observer corrections
+		// capture nothing, and ids learned from other games stay put.
+		if (uploaderChange.onlineId !== null) {
+			try {
+				await captureOnlineIds(env, userId, [uploaderChange.onlineId]);
+			} catch (e) {
+				logError("capture_online_ids_failed", e, { game_id: gameId });
+			}
+		}
+
+		try {
+			await env.EVENTS_DB.prepare(
+				`INSERT INTO events (event_type, game_id, user_id, ip_address, metadata)
+				 VALUES ('uploader_change', ?, ?, ?, ?)`,
+			)
+				.bind(
+					gameId,
+					userId,
+					ip,
+					// The nation, never the seat's online_id — PII stays out of
+					// audit metadata (cloud/src/log.ts PII_KEYS is the backstop,
+					// not the first line).
+					JSON.stringify({
+						uploader_player_index: uploaderChange.index,
+						user_nation: uploaderChange.userNation,
+					}),
+				)
+				.run();
+		} catch (e) {
+			logError("audit_event_log_failed", e, {
+				event_type: "uploader_change",
+				game_id: gameId,
+			});
+		}
+	}
+
 	// Stats cache invalidation. is_public is the field that actually
 	// shifts the public-scope bundle, but invalidating unconditionally
 	// keeps the call site simple and the KV churn is negligible
@@ -2799,6 +2999,13 @@ export async function handleGamePatch(
 			...(is_public !== undefined ? { is_public } : {}),
 			...(collection_id !== undefined ? { collection_id } : {}),
 			...(display_name !== undefined ? { display_name } : {}),
+			...(uploaderChange
+				? {
+						uploader_player_index: uploaderChange.index,
+						user_nation: uploaderChange.userNation,
+						user_won: uploaderChange.userWon,
+					}
+				: {}),
 		},
 		200,
 		cors,

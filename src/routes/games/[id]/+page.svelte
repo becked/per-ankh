@@ -184,6 +184,8 @@
 							collections={data.collections ?? []}
 							displayName={game.display_name ?? null}
 							gameName={game.game_details.game_name ?? null}
+							players={game.player_roster}
+							uploaderPlayerIndex={game.uploader_player_index ?? null}
 						/>
 					{/snippet}
 					{#snippet preTabs()}

@@ -417,6 +417,12 @@ export type UploaderPlayerIndex = v.InferOutput<
 //   - display_name is the owner's renamed title for the save. Pass a string
 //     to set, or null to clear and fall back to the save's original
 //     game_name. Empty / whitespace-only strings are rejected (use null).
+//   - uploader_player_index corrects which player the owner was, for a save
+//     uploaded under the wrong pick. Same shape as the upload form field
+//     above (a human's player_index, or null for observer), and the handler
+//     re-derives games.user_nation / user_won and player_summaries.is_uploader
+//     from it. Refused on a tournament-linked save, where the slot mapping
+//     already records the pick.
 
 export const GAME_DISPLAY_NAME_MAX = 120;
 
@@ -436,13 +442,15 @@ export const GamePatchSchema = v.pipe(
 				),
 			),
 		),
+		uploader_player_index: v.optional(UploaderPlayerIndexSchema),
 	}),
 	v.check(
 		(o) =>
 			o.is_public !== undefined ||
 			o.collection_id !== undefined ||
-			o.display_name !== undefined,
-		"At least one of is_public, collection_id, display_name required",
+			o.display_name !== undefined ||
+			o.uploader_player_index !== undefined,
+		"At least one of is_public, collection_id, display_name, uploader_player_index required",
 	),
 );
 

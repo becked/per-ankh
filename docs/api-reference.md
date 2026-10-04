@@ -255,7 +255,7 @@ Fetch the parsed game blob (JSON).
 
 - **Auth:** Public (owner extras). Owner always allowed; non-owner only if `is_public=1`; anonymous on a private game → `401`, signed-in non-owner on a private game → `403`.
 - **Path:** `id` (21-char).
-- **Response 200:** the stored `FullGameData` JSON with injected top-level fields (`user_id`, `user_nation`, `uploader_nation`, `user_won`, `user_display_name`, `user_slug`, `display_name`); owner additionally gets `is_public`.
+- **Response 200:** the stored `FullGameData` JSON with injected top-level fields (`user_id`, `user_nation`, `uploader_nation`, `uploader_player_index`, `user_won`, `user_display_name`, `user_slug`, `display_name`); owner additionally gets `is_public`.
 - **Errors:** `404` (`NOT_FOUND`, `BLOB_MISSING`), `401 UNAUTHORIZED`, `403 FORBIDDEN`, `429 RATE_LIMIT`.
 - **Notes:** Non-owner viewers get `online_id` stripped from the blob. Anonymous reads consume the `anon_read` bucket (200/hr per IP). Owner responses are `private, no-store`; public responses `public, max-age=3600, s-maxage=60` with `Vary: Cookie, Origin`.
 
@@ -269,14 +269,14 @@ Whether a game is linked to a tournament match.
 - **Notes:** `tournament_link_view` bucket (600/hr per IP; scraper UAs exempt) — its own, deliberately not the `tournament_view` one the tournament pages draw on. The budget is charged before the link is looked up, so an unlinked game costs a slot too.
 
 ### `PATCH /v1/games/:id`
-Update a game's visibility, collection, or display name.
+Update a game's visibility, collection, display name, or which player the owner was.
 
 - **Auth:** Session + owner. Non-owner or missing game → `404` (does not distinguish).
 - **Path:** `id` (21-char).
-- **Body:** `GamePatchSchema` (all optional, ≥1 required) — `is_public` (boolean), `collection_id` (`number | null`, ≥1), `display_name` (`string | null`, 1–120 trimmed).
-- **Response 200:** echoes only the supplied fields — `{ game_id, is_public?, collection_id?, display_name? }`.
-- **Errors:** `401 UNAUTHORIZED`, `404 NOT_FOUND` (non-owner / missing / non-owned `collection_id`), `400` (`INVALID_JSON`, `INVALID_BODY`), `409 LINKED_TO_ACTIVE_TOURNAMENT`, `429 RATE_LIMIT_USER`.
-- **Notes:** `is_public` toggle rate-limited (`visibility_change`, 60/hr). Cannot set `is_public=false` while the game is linked to a non-`complete` tournament match.
+- **Body:** `GamePatchSchema` (all optional, ≥1 required) — `is_public` (boolean), `collection_id` (`number | null`, ≥1), `display_name` (`string | null`, 1–120 trimmed), `uploader_player_index` (`number | null`, ≥0; `null` = observer).
+- **Response 200:** echoes only the supplied fields — `{ game_id, is_public?, collection_id?, display_name?, uploader_player_index?, user_nation?, user_won? }` (the last two are the values re-derived from the new pick).
+- **Errors:** `401 UNAUTHORIZED`, `404 NOT_FOUND` (non-owner / missing / non-owned `collection_id`), `404 BLOB_MISSING`, `400` (`INVALID_JSON`, `INVALID_BODY`, `UNKNOWN_PLAYER_INDEX`), `409 LINKED_TO_ACTIVE_TOURNAMENT`, `409 UPLOADER_LOCKED_TOURNAMENT`, `429 RATE_LIMIT_USER`.
+- **Notes:** `is_public` toggle rate-limited (`visibility_change`, 60/hr). Cannot set `is_public=false` while the game is linked to a non-`complete` tournament match. `uploader_player_index` corrects the pick made at upload: the index must name a human in the stored blob's `player_roster`, and the handler re-derives `games.user_nation` / `user_won` and `player_summaries.is_uploader` from it — no reparse. Rate-limited 20/hr/user (`uploader_change`), and refused with `UPLOADER_LOCKED_TOURNAMENT` for a save linked to any tournament match, complete or not, where the slot mapping records the pick. Duel ratings follow on the next cron rebuild.
 
 ### `DELETE /v1/games/:id`
 Delete a game and its blobs.
