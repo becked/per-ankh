@@ -182,6 +182,8 @@
 			{collections}
 			displayName={game.display_name ?? null}
 			gameName={game.game_details.game_name ?? null}
+			players={game.player_roster}
+			uploaderPlayerIndex={game.uploader_player_index ?? null}
 		/>
 		<p class="text-sm text-gray-200">
 			{formatDate(game.game_details.save_date)}
