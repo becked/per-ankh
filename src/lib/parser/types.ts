@@ -81,6 +81,10 @@ export interface MatchMetadata {
 	xml_game_id: string;
 	total_turns: number;
 	game_name: string | null;
+	// Date the save was written, ISO `YYYY-MM-DD`. Read from the `SaveDate`
+	// root attribute, falling back to the timestamp in the save's file name
+	// for builds that predate that attribute (see parseEntryNameDate in
+	// parsers/match-metadata.ts). Null when neither source has one.
 	save_date: string | null;
 	game_version: string | null;
 	map_width: number | null;
@@ -524,4 +528,4 @@ export interface FullGameData {
  * fixes, MINOR for additive fields, MAJOR for breaking schema changes.
  * Initial value `2.0.0` mirrors `FullGameData.version: 2`.
  */
-export const PARSER_VERSION = "2.27.0";
+export const PARSER_VERSION = "2.27.1";

@@ -30,7 +30,19 @@ export class ParseError extends Error {
 	}
 }
 
-export function extractXmlFromZip(buffer: ArrayBuffer): string {
+/**
+ * The save XML plus the name of the ZIP entry it was stored under. The entry
+ * name is returned because it is data, not bookkeeping: Old World writes the
+ * save's timestamp into it, and that is the only date a save predating the
+ * `SaveDate` attribute carries (see parseEntryNameDate in
+ * parsers/match-metadata.ts).
+ */
+export interface ExtractedSave {
+	xml: string;
+	entryName: string;
+}
+
+export function extractXmlFromZip(buffer: ArrayBuffer): ExtractedSave {
 	if (buffer.byteLength === 0) {
 		throw new ParseError("Empty file", "EMPTY_FILE");
 	}
@@ -79,5 +91,5 @@ export function extractXmlFromZip(buffer: ArrayBuffer): string {
 		);
 	}
 
-	return strFromU8(raw);
+	return { xml: strFromU8(raw), entryName: xmlEntries[0] };
 }

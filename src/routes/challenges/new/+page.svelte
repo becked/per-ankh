@@ -97,7 +97,7 @@
 			// The map is a public download, so the creator's identity comes off
 			// before anything else reads it — the stored ZIP and the parsed
 			// blob then agree.
-			const xml = extractXmlFromZip(buffer);
+			const { xml } = extractXmlFromZip(buffer);
 			const scrubbed = scrubIdentity(xml);
 			if (scrubbed !== xml) buffer = rezip(fileName, scrubbed);
 			const { data, rawZip } = await parseSaveFile(
@@ -179,7 +179,7 @@
 		const fileName = map.fileName;
 		map = { kind: "parsing", fileName, phase: "Removing seats", percent: 0 };
 		try {
-			const xml = keepFirstSeat(extractXmlFromZip(extra.rawZip));
+			const xml = keepFirstSeat(extractXmlFromZip(extra.rawZip).xml);
 			await load(rezip(fileName, xml), fileName);
 		} catch (err) {
 			map = {

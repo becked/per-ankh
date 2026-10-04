@@ -22,6 +22,13 @@ export interface CachedSave {
 	// instead of creating a second one.
 	zip: Buffer;
 	xml: string;
+	// The name of the ZIP entry the XML came from. It travels with the XML
+	// because it is data: a save with no `SaveDate` attribute carries its write
+	// timestamp only here (parseEntryNameDate,
+	// src/lib/parser/parsers/match-metadata.ts). A sweep that dropped it would
+	// write `save_date: null` where the browser sweep writes the date, and the
+	// two must agree (recoverUploaderIndex, src/lib/parser/upload-helpers.ts).
+	entryName: string;
 }
 
 // Null means R2 holds no object for this game — a miss, which both sweeps
@@ -36,11 +43,11 @@ export async function readCachedSave(
 	const cached = existsSync(dest) && (await stat(dest)).size > 0;
 	if (!cached && !(await r2Get(`saves/${gameId}.zip`, dest))) return null;
 	const zip = await readFile(dest);
-	const xml = extractXmlFromZip(
+	const { xml, entryName } = extractXmlFromZip(
 		zip.buffer.slice(
 			zip.byteOffset,
 			zip.byteOffset + zip.byteLength,
 		) as ArrayBuffer,
 	);
-	return { zip, xml };
+	return { zip, xml, entryName };
 }
