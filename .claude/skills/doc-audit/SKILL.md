@@ -8,7 +8,9 @@ description: >-
   grounded in the current code — it proposes actions and never deletes, moves,
   or rewrites a doc without an explicit instruction. Not for writing or editing
   a single doc (that's normal work); this is the whole-corpus triage-and-verify
-  pass. The worked example is docs/doc-audit-2026-06-30.md.
+  pass. Also covers sweeping stale or duplicated code comments, which fail the
+  same way prose does — see "Sweeping code comments". The worked example is
+  docs/doc-audit-2026-06-30.md.
 metadata:
   type: project
   worked-example: docs/doc-audit-2026-06-30.md
@@ -68,6 +70,20 @@ These are the facts an agent won't infer from a doc alone, and the most common s
 - **Save-file *format* knowledge is durable** even when its surrounding implementation is dead — the XML format didn't change because the parser was rewritten to TypeScript (`src/lib/parser/`). Lean `caveat`/`keep` on the format catalog, `archive` on the DuckDB/Rust framing around it.
 - **Some `docs/` files are generated build artifacts**, not hand-maintained prose (e.g. `docs/ux-review/{README,index}.html` from `./per-ankh ux-review`, i.e. `scripts/ux-review/`). A regenerable artifact is not "stale" — judge it differently.
 - **The banner convention already works.** Docs that self-banner as historical are the easiest to adjudicate; the cheap win is applying it consistently and pairing it with a move to `docs/archive/`.
+
+## Sweeping code comments
+
+Same failure in a different file extension: a stale comment reads as current and steers the next change. The sweep reuses the protocol above — triage fan-out, then validate every load-bearing claim yourself — with four differences.
+
+**Scope by mass, not by file count.** Comment lines are heavily concentrated: at `f40fe2be`, the top 50 of 600 source files held 44% of all 26,573 comment lines and the top 100 held 59%. Rank files by comment-line count and audit the head. A 600-file sweep is not a better audit, only a longer one.
+
+**The rubric collapses to three verdicts.** There is no `docs/archive/` for a comment, so the five-way rubric doesn't transfer. **keep** — says something the code cannot. **fix** — the claim is stale, unscoped, or restates the line under it. **delete** — the fact has a canonical home elsewhere in the file, or git already records it (a comment narrating its own past edits is always this one).
+
+**Two of the defects need reading, not grepping.** A fact stated twice in one file *in different words* is invisible to any mechanical check — a verbatim-sentence scan found 13 files at `f40fe2be` and missed every reworded pair. So is a measured claim that was true when written and silently isn't now. Both need an agent reading the file end to end asking "has this already been said here, and is it still true?" Mechanical scans are for building the candidate list, never for the verdict.
+
+**Density is not a finding.** The repo's long incident-citing comments (`cloud/src/tournament/limits.ts`, `cloud/src/blob-cache.ts`, `cloud/src/d1.ts`) are the house pattern and the most valuable comments in the tree. Verdict on what a comment *claims*, never on how long it is — an audit that reports high-ratio files as defects produces a sweep that strips exactly the context the next agent needs. The policy these verdicts test against is `CLAUDE.md` § Coding Standards → **Comments**.
+
+Output is the same: a dated report under `docs/`, proposals only, no file mutated without an explicit instruction.
 
 ## Going forward: make the next audit a diff
 
