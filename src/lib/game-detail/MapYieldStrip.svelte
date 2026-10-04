@@ -8,7 +8,10 @@
 	// and a stockpile isn't the running sum of the rate — spending leaves the
 	// rate untouched. So the final turn's stockpile and the lifetime total go
 	// in the tooltip, each labelled, rather than into a slot whose meaning
-	// would change as you scrub. Clicking a slot opens its yield's tab.
+	// would change as you scrub. Clicking a slot opens its yield's tab, at
+	// that yield: the Yields tab stacks a chart per yield, and the five slots
+	// that open it name charts deep in that stack — Food is the eighth of the
+	// fourteen, Wood the thirteenth.
 	import { Tooltip } from "bits-ui";
 	import type { YieldHistory } from "$lib/types/YieldHistory";
 	import type { PlayerResourceInfo, YieldPriceEntry } from "$lib/parser/types";
@@ -43,7 +46,7 @@
 		turn: number;
 		finalTurn: number;
 		// eslint-disable-next-line no-unused-vars -- Callback type signature
-		onOpenTab: (tab: GameTabId) => void;
+		onOpenTab: (tab: GameTabId, atYield?: string) => void;
 	} = $props();
 
 	// Game-wide, so independent of the player and the turn. Only the four
@@ -118,7 +121,7 @@
 						<Tooltip.Trigger
 							class="flex cursor-pointer items-center gap-1.5 px-2 text-left transition-colors hover:bg-tan/15"
 							aria-label={slot.title}
-							onclick={() => onOpenTab(slot.tab)}
+							onclick={() => onOpenTab(slot.tab, slot.yieldType)}
 						>
 							<SpriteIcon category="yields" value={slot.yieldType} size={16} />
 							<!-- Width reserved for the widest rate the corpus holds —

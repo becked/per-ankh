@@ -116,6 +116,10 @@
 	// The lightbox's tab stays set while the lightbox animates closed, and
 	// clears once it has.
 	let lightboxTab = $state<GameTabId | null>(null);
+	// The yield the lightbox opens at, when a yield strip slot opened it: the
+	// Yields tab lands on that yield's chart rather than at the top of its
+	// stack. Null for every other way in — a menu icon, a panel, a hash.
+	let lightboxYield = $state<string | null>(null);
 	let lightboxOpen = $state(false);
 	let lightboxDialog = $state<HTMLDialogElement | null>(null);
 	const lightboxLabel = $derived(
@@ -124,10 +128,11 @@
 
 	// Only a tab this game has: a hash can name one it doesn't (#leaders on a
 	// game with no rulers), or no tab at all.
-	function openLightbox(id: string) {
+	function openLightbox(id: string, atYield: string | null = null) {
 		const tab = tabs.find((t) => t.id === resolveTabId(id));
 		if (!tab) return;
 		lightboxTab = tab.id;
+		lightboxYield = atYield;
 		lightboxOpen = true;
 	}
 
@@ -265,7 +270,7 @@
 					<BitsConfig defaultPortalTo={lightboxDialog}>
 						<!-- The whole game, as the analyst view renders it: never the
 						     chrome's player or turn (#269). -->
-						<GameTab {game} tab={lightboxTab} />
+						<GameTab {game} tab={lightboxTab} openAtYield={lightboxYield} />
 					</BitsConfig>
 				{/if}
 			</div>
