@@ -1,8 +1,8 @@
 // The nightly rebuild: every duel D1 can reconstruct, run through the rating
-// engine, turned into ten suggested opponents per player, written back as two
-// full-replace caches. Called from the scheduled handler (cloud/src/index.ts)
-// and from the admin trigger, which is what an operator uses to seed the
-// tables after a deploy rather than waiting for 03:47.
+// engine, turned into twelve suggested opponents per player, written back as
+// two full-replace caches. Called from the scheduled handler
+// (cloud/src/index.ts) and from the admin trigger, which is what an operator
+// uses to seed the tables after a deploy rather than waiting for 03:47.
 //
 // Both tables are caches — everything in them is re-derivable from games and
 // tournament results — so a rebuild replaces rather than merges. Pure D1: no

@@ -1,5 +1,5 @@
--- Recommended opponents: the ten players each user is shown on the Opponents
--- tab of their own profile.
+-- Recommended opponents: the twelve players each user is shown on the
+-- Suggested tab of their own profile.
 --
 -- Rebuilt nightly, right after user_ratings (0045), by
 -- cloud/src/ratings/recommend.ts. Nightly rather than per request for three

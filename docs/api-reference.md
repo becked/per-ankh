@@ -827,7 +827,7 @@ Tournaments you administer.
 - **Errors:** `401 UNAUTHORIZED`.
 
 ### `GET /v1/users/me/opponents`
-Your ten suggested opponents — players you should get a close game against.
+Your twelve suggested opponents — players you should get a close game against.
 
 - **Auth:** Session.
 - **Response 200:** `{ opponents: [{ user_id, display_name, slug, avatar_url, discord_url, meetings, badges, map }], rated }`. `map` is `{ name, setting, url }` — a map from the community atlas' published pool whose script neither player has played in the last six months, resolved from the stored anchor at read time (`null` when there was no pool to pick from, or the atlas has since dropped that map). `name` and `setting` together identify the map unambiguously, which is what a pasted invitation needs: `name` carries the variant where the pool holds several of one script ("DOTA Jungle"), and `setting` is trimmed to the size and aspect ratio ("Duel · wide"), which is what separates two entries sharing a variant. `url` deep-links the atlas, which answers the rest of the configuration. `discord_url` is their Discord profile, built from the snowflake `avatar_url` already carries — no `discord_*` field is serialized, and the handle never is. `meetings` is how many rated games the pair has already played; `badges` is a subset of `active_this_week` / `new_here`; `rated` is whether the viewer has any rated multiplayer game at all, which is what separates "nothing yet" from "nothing this week".
