@@ -1,5 +1,71 @@
 # Changelog
 
+## [2026-10-05-ddc6c73] - 2026-10-05
+
+### Features
+
+- (stats) a recency window on the global corpus — [a49cc0a](https://github.com/becked/per-ankh/commit/a49cc0a3d9ae178cf5dd460584e9367a29eb78a1)
+- (stats) GDP as a first-class series — [96303b8](https://github.com/becked/per-ankh/commit/96303b82cc8ed9d2db2427144fed01c94717e82c)
+- (parser) 2.20.0 — what a challenge scorer needs from a save — [9688d16](https://github.com/becked/per-ankh/commit/9688d16a157ff118c2d242f3f1c6d08d11ec7583)
+- (bake) dynasty traits, theology tiers, and unit nations for the scorer — [3573639](https://github.com/becked/per-ankh/commit/357363917c57e88b41471d5e66595f5d1e4eb1cb)
+- (challenges) the rules vocabulary, the scorer, and its Worker mirror — [98aeae1](https://github.com/becked/per-ankh/commit/98aeae179cfa72aa4b7f300de286ca99f355ea67)
+- (challenges) Worker endpoints, migration 0049, and the challenge upload lane — [52db021](https://github.com/becked/per-ankh/commit/52db021434ccfbefe97ee0dab4f08215378684bf)
+- (challenges) the challenge pages, run submission, and the profile scope — [546bacf](https://github.com/becked/per-ankh/commit/546bacfb90d85f3bbd44d18e44191a2b4a0c8fae)
+- (video) carry each video's runtime on every video payload — [8574165](https://github.com/becked/per-ankh/commit/8574165da9e1d1fd659593d20b0ba535489f47ba)
+- (tournament) group and attribute a tournament's videos — [27f1ad7](https://github.com/becked/per-ankh/commit/27f1ad7a106388d6c52501c63530a7ef3d567697)
+- (tournament) serve the video archive — [b3fc42f](https://github.com/becked/per-ankh/commit/b3fc42fbbee6fd2ef99d3e36644554dcc0d632f1)
+- (tournament) browse tournament videos by match, part and angle — [4520465](https://github.com/becked/per-ankh/commit/452046522ed7cf045437e253ea8348e2d2424aa5)
+- (tournament) the videos tab names each match's bracket — [41afa7a](https://github.com/becked/per-ankh/commit/41afa7a081a68a24afba239c5690256c150c150c)
+- (opponents) twelve names on every page, and the floor is the count — [6dc7c94](https://github.com/becked/per-ankh/commit/6dc7c9433043e4b87bfbd00e8d3235fd39c5ef29)
+
+### Fixes
+
+- (stats) address the recency-window self-review — [ba4e68b](https://github.com/becked/per-ankh/commit/ba4e68b7eb0b0607e6c539ee4239c87e0ef660aa)
+- (home) the summary reads the window-keyed global entry — [d8ac2eb](https://github.com/becked/per-ankh/commit/d8ac2eb137a4a3975a8c5769af8a7799df7651ee)
+- (stats) the Records tab reads the recency window too — [4693844](https://github.com/becked/per-ankh/commit/4693844b447335edd41c39947f0d925fb60ad639)
+- (stats) address the GDP self-review — [f88394d](https://github.com/becked/per-ankh/commit/f88394d626a978f97a758c68966008fa89c04c1d)
+- (stats) a reindex drops every corpus's cached bundle — [fb9a7a1](https://github.com/becked/per-ankh/commit/fb9a7a1b98ac6b13da7cb6fb380f306052023d6b)
+- (challenges) offer Delete only where the Worker will allow it — [e398eba](https://github.com/becked/per-ankh/commit/e398eba2d994d70c5a66c95cf3b416c8d93a6c70)
+- (challenges) the setup line reads the game's names, not the zTypes — [cc62b10](https://github.com/becked/per-ankh/commit/cc62b104640a970b3e13b8aec41660cb587a4e8b)
+- (upload) name the page by its mode, and give it a trail back — [6c74585](https://github.com/becked/per-ankh/commit/6c745859ffe740631f75e7d20bae0038fd918823)
+- carry the query string through the login bounce — [a29e715](https://github.com/becked/per-ankh/commit/a29e715cd737d92f7ab761d1b6f3f8aa0b15c987)
+- (challenges) tier improvements by the game's upgrade chain, not the zType suffix — [156434d](https://github.com/becked/per-ankh/commit/156434d10174937da4e0ccf52f8e7a72a5a520db)
+- (challenges) the seat strip reads the game's nation names — [c5b17de](https://github.com/becked/per-ankh/commit/c5b17de859906cf6d5e6f1d7cbfe98c1381b84ae)
+- (upload) don't promise a load that already failed — [03bafb1](https://github.com/becked/per-ankh/commit/03bafb1203624236e0c9de28eee0afb140ec126a)
+- (challenges) the published map keeps no seat name — [94f2169](https://github.com/becked/per-ankh/commit/94f2169c9214a71b256718dd4a6f5f62870001ab)
+- (challenges) keep runs out of the home page's feed — [ce02b86](https://github.com/becked/per-ankh/commit/ce02b8603ca5b23dc460fd0f81645411d9f78c90)
+- (challenges) keep runs off the played-games board and the profile header — [7daaaf6](https://github.com/becked/per-ankh/commit/7daaaf6158fd37ab9c6d6c69f13a74e4fb168b4e)
+- (bake) run unit-stats in bake:all — [faa1eed](https://github.com/becked/per-ankh/commit/faa1eed840b52bad3c4111591e2a58696ac24dcf)
+- (tournament) attribute by the versus, not by the first two names — [2509c33](https://github.com/becked/per-ankh/commit/2509c33ef67b0d958e75914610b7d3ae9aee7d1d)
+- (tournament) the archive lists live broadcasts and says where it read from — [5f33f9d](https://github.com/becked/per-ankh/commit/5f33f9d8f8b88f76be66d9bad9a04051f3aad0f1)
+- (tournament) the archive trusts recorded casters, and its keyless test controls the key — [4917828](https://github.com/becked/per-ankh/commit/4917828209765503c2b2fbd120fc9e730c4946d9)
+- (tournament) videos tab follows the archive's source, and its buttons work — [cb34ebf](https://github.com/becked/per-ankh/commit/cb34ebfc9965d20bb6a79be862dc214c7c270d28)
+- (tournament) videos tab reads matches through the accessors — [ead16a9](https://github.com/becked/per-ankh/commit/ead16a91ad785902aab3f02b9e6b5fd28aea9cd6)
+- (tournament) videos tab filters and match rows match the app — [0d09a44](https://github.com/becked/per-ankh/commit/0d09a4444cf3bee84240f9e52adcca672558fd26)
+- (tournament) the videos tab's match row reads like every other match surface — [58521b2](https://github.com/becked/per-ankh/commit/58521b20361100c071242d2896954e7b1778957e)
+- (opponents) the card wraps instead of crushing the name — [107a048](https://github.com/becked/per-ankh/commit/107a048a693ce1b49b1e893041aa59bb368ca014)
+- (opponents) the twelve-name page meets the map suggestion — [70cfa6d](https://github.com/becked/per-ankh/commit/70cfa6db0e168494963d7506553be7b987f4c9f1)
+
+### Other
+
+- (stats) the window is an argument buildGlobalSelection requires — [fd5721f](https://github.com/becked/per-ankh/commit/fd5721fa67b866025f746ed7e0e1e88e83d47e14)
+- (stats) date the window fixtures in days, not months — [fd2cd56](https://github.com/becked/per-ankh/commit/fd2cd564bd04ffbf6f29f2177a29d4bf3551ac1f)
+- (stats) the facet row is three controls, not two — [86b60da](https://github.com/becked/per-ankh/commit/86b60dacb30b967a6d0b44bb496d9c823448373a)
+- (stats) the window reaches both of /stats' payloads — [af3c5dd](https://github.com/becked/per-ankh/commit/af3c5dd6e80c7a0f0fbc6e2d0a1e7ceb0de70e14)
+- (stats) count what the window's string comparison rests on — [f10147c](https://github.com/becked/per-ankh/commit/f10147c882d42e2e8c49fd5d61641a30a7bcaff0)
+- (stats) a cache precondition the case establishes, not inherits — [7fe4b72](https://github.com/becked/per-ankh/commit/7fe4b722b35288415459bd4a8bb36f25d0c4fef8)
+- (stats) the series count the GDP entry moved, and the rule behind the basket — [30c200e](https://github.com/becked/per-ankh/commit/30c200e56376e74ade0d7304a5d6d6fda4f46672)
+- (game-detail) centre the Analysis/Map toggle in the header — [f40fe2b](https://github.com/becked/per-ankh/commit/f40fe2bebbb8af4719759b3685c81784f6cf5c79)
+- one saveBlobAs for every authenticated download — [66d2d39](https://github.com/becked/per-ankh/commit/66d2d39ba35d00685e95132f6c2e35b21dd35738)
+- (challenges) the challenge maps design doc, as built — [f1d17f1](https://github.com/becked/per-ankh/commit/f1d17f1df77424452111d3bc9700c68d38ca739f)
+- (ui) share the destructive button and the rules editor's input class — [482a86b](https://github.com/becked/per-ankh/commit/482a86bc868fe3b667259bc31d72444fd085622b)
+- (cloud) put staleParserResponse's comment back on it — [9b1ad77](https://github.com/becked/per-ankh/commit/9b1ad777063bc88bc8592407704350ec0d9f27a6)
+- (bake) record the three new bakers in the skill — [73a4daf](https://github.com/becked/per-ankh/commit/73a4dafa7756a2c5418936538cedf9e95bceaaa5)
+- (challenges) the design doc matches what shipped — [e63732d](https://github.com/becked/per-ankh/commit/e63732d4d4d6d01206b514e8b6865ecf81a066a7)
+- (challenges) count what the scorer's optional fields rest on — [ecf3d25](https://github.com/becked/per-ankh/commit/ecf3d25c482aa2ee95bb3b7bb2fb626f64bf6bd0)
+- (tournament) cover the archive endpoint; document it — [d8b71df](https://github.com/becked/per-ankh/commit/d8b71df0a13b1efc8b8c3bc7a67cdd8f49b9b9c2)
+- (tournament) record how a video finds its match — [9ca7936](https://github.com/becked/per-ankh/commit/9ca79362f8a41795b05675497b1354e4734309e2)
+
 ## [2026-10-04-21ae85d] - 2026-10-04
 
 ### Features
