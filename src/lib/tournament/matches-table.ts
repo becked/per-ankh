@@ -37,11 +37,13 @@ export function matchStatusGroup(m: TournamentMatch): MatchStatusGroup | null {
 }
 
 // The instant a timed match sorts by: the time of the sitting the match reads by
-// (matchSittingPart) — the next one still ahead for a scheduled match or a split
-// match mid-schedule, falling back to the most recently started one in the
-// true-overdue case, since WHEN it went overdue is exactly what an admin chasing
-// reports needs. Null for unscheduled/completed — and for the table cell, which
-// renders it for overdue rows so "In progress" keeps its timestamp.
+// (matchSittingPart) — the one still ahead or still live for a scheduled match
+// or a split match mid-schedule, falling back to the most recently started one
+// in the true-overdue case, since WHEN it went overdue is exactly what an admin
+// chasing reports needs. A live sitting therefore keeps the match sorted at its
+// own start time instead of jumping it forward to the sitting after it. Null for
+// unscheduled/completed — and for the table cell, which renders it for overdue
+// rows so "In progress" keeps its timestamp.
 export function matchSortInstant(m: TournamentMatch): string | null {
 	const group = matchStatusGroup(m);
 	if (group !== "scheduled" && group !== "in_progress") return null;
@@ -268,9 +270,9 @@ export const MATCH_COLUMN_DEFS: Record<string, MatchColumn> = {
 	},
 	// Casters + streams on one line ("{stream} by {caster}"), plus the "needs a
 	// caster" flag (MatchTable renders the cell; the cast buttons live in the
-	// separate actions column). Sorts by the streamer's name — the most-recent
-	// scheduled sitting's for a match row — with casterless rows pinned last by
-	// the comparator's nulls-last rule.
+	// separate actions column). Sorts by the streamer's name — for a match row
+	// the one on the sitting it reads by (rowPart) — with casterless rows pinned
+	// last by the comparator's nulls-last rule.
 	broadcast: {
 		key: "broadcast",
 		label: "Casters & Streams",

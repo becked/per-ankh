@@ -38,8 +38,10 @@
 	} = $props();
 
 	// The sitting these controls act on: the row's own part, or (for a whole-match
-	// row) its most recent scheduled sitting. Guaranteed non-null by the caller's
-	// rowIsPendingSitting gate, but resolved defensively.
+	// row) the sitting the match reads by — the one still ahead or still live,
+	// else the one last played, the same sitting the row's time cell names.
+	// Guaranteed non-null by the caller's rowIsPendingSitting gate, but resolved
+	// defensively.
 	const part = $derived(rowPart(row));
 	const casters = $derived(part?.casters ?? []);
 	const mine = $derived(
