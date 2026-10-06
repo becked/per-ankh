@@ -846,19 +846,19 @@ function emitSpecialistsTs(sidecar: SpecialistsSidecar): string {
 	lines.push("};");
 	lines.push("");
 	lines.push(
-		"// An improvement whose <AdjacentImprovementSpecialists> staffs the listed",
+		"// An improvement whose <AdjacentImprovementSpecialists> gives a free",
 	);
 	lines.push(
-		"// improvements on its same-team hex neighbours for free, keyed by the",
+		"// specialist to the listed improvements on its same-team hex neighbours,",
 	);
 	lines.push(
-		"// GRANTING improvement. The game keeps this grant in a per-tile dict that",
+		"// keyed by the SOURCE improvement. The game holds this in a per-tile dict",
 	);
 	lines.push(
-		"// never reaches the save (Tile.writeGameXML, Tile.cs:1507, guards",
+		"// that never reaches the save (Tile.writeGameXML, Tile.cs:1507, guards",
 	);
 	lines.push(
-		"// <Specialist> on the stored specialist), so deriveGrantedSpecialists",
+		"// <Specialist> on the stored specialist), so deriveFreeSpecialists",
 	);
 	lines.push("// rebuilds it from adjacency the way the game does on load.");
 	lines.push("export const ADJACENT_IMPROVEMENT_SPECIALISTS: Readonly<");

@@ -63,16 +63,13 @@
 		return imp;
 	});
 
-	const specialistLabel = $derived.by(() => {
-		if (!tile.specialist) return null;
-		const name = specialistName(tile.specialist);
-		// A wonder-granted specialist is marked, because the save holds nothing
-		// for it — it is derived from adjacency. "free" is the game's own word
-		// for it ("Free {0_specialist} in adjacent {1,2_improvement}",
-		// TEXT_HELPTEXT_BONUS_FREE_IMPROVEMENT_SPECIALIST_ADJACENT), and the
-		// parenthetical is the shape improvementLabel above already uses.
-		return tile.specialist_granted ? `${name} (free)` : name;
-	});
+	// A free specialist from a neighbouring improvement reads the same as a
+	// placed one, because in the game it IS the same — `Tile.getSpecialist`
+	// (Tile.cs:6993) returns either without distinction. `specialist_free`
+	// records which one the save wrote, not a difference worth showing.
+	const specialistLabel = $derived(
+		tile.specialist ? specialistName(tile.specialist) : null,
+	);
 
 	// Conservative size estimate for edge-flip clamping. Exact CSS size depends on
 	// content; over-estimating just biases toward flipping at the canvas edges.

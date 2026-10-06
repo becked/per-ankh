@@ -34,26 +34,42 @@ import {
 } from "./types";
 
 /**
- * The oldest parse the Worker accepts for a challenge map or run. The scorer
- * reads fields this version introduced — `build_turns_left` (an improvement
- * still under construction), `original_tribe` (a unit taken from a tribe
- * rather than trained) and the cities' `tile_xml_id` (when a city was
- * captured) — and each is optional on the blob type because older blobs lack
- * it, which on such a blob would score an unfinished improvement as built and
- * a captured unit as trained. The verdict is persisted, so a run parsed by a
- * stale tab is refused rather than scored wrong.
+ * The oldest parse the Worker accepts for a challenge map or run. The floor is
+ * not a release counter: it moves only when a PARSER_VERSION changes what
+ * `ScorableBlob` below means, which most bumps don't. Two kinds have moved it
+ * so far.
  *
- * Measured across the 13 saves in `test-data/saves/` at this version:
+ * 2.20.0 introduced fields the scorer reads — `build_turns_left` (an
+ * improvement still under construction), `original_tribe` (a unit taken from a
+ * tribe rather than trained) and the cities' `tile_xml_id` (when a city was
+ * captured) — each optional on the blob type because older blobs lack it,
+ * which on such a blob would score an unfinished improvement as built and a
+ * captured unit as trained.
+ *
+ * Measured across the 13 saves in `test-data/saves/` at 2.20.0:
  * `tile_xml_id` on 282/282 cities, with the ownership-log join `capturedTurn`
  * makes resolving for 31/31 captured cities — the join that silently falls
  * back to the save's own turn on a miss; `build_turns_left` non-null on
  * 218/5433 improvements and every one of those > 0, the parser nulling it once
  * the improvement stands, which is what `isUnderConstruction`'s `?? 0` rests
- * on; `original_tribe` on 256/1976 units across 11 of the 13. Those are counts
- * over blobs this PARSER_VERSION wrote, not over what D1 holds — stored blobs
- * came from older parsers, which is the floor's whole reason for existing.
+ * on; `original_tribe` on 256/1976 units across 11 of the 13.
+ *
+ * 2.21.0 changed a VALUE the scorer reads: `improvement_data.improvements[]
+ * .specialist` now also carries the free specialist a neighbouring improvement
+ * gives a tile, which the save never wrote (see
+ * src/lib/parser/derive/free-specialists.ts). On a 2.20.0 blob an
+ * aqueduct-adjacent farm reports no specialist at all, so a `city.specialists`
+ * objective over Farmers would be unmet on one parse of a save and met on the
+ * next. Measured across the same 13 saves: 4 have a built Jerwan Aqueduct, and
+ * 14 adjacent farms across 3 of those gain a Farmer at 2.21.0 that 2.20.0 does
+ * not see.
+ *
+ * All of those are counts over blobs the stated PARSER_VERSION wrote, not over
+ * what D1 holds — stored blobs came from older parsers, which is the floor's
+ * whole reason for existing. The verdict is persisted, so a run parsed by a
+ * stale tab is refused rather than scored wrong.
  */
-export const CHALLENGE_MIN_PARSER_VERSION = "2.20.0";
+export const CHALLENGE_MIN_PARSER_VERSION = "2.21.0";
 
 // ---------------------------------------------------------------------------
 // The slice of FullGameData the scorer reads, declared structurally so the

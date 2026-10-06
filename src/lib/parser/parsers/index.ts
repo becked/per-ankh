@@ -78,7 +78,7 @@ import {
 	deriveEventLogs,
 	deriveGameDetails,
 	deriveGameReligions,
-	deriveGrantedSpecialists,
+	deriveFreeSpecialists,
 	deriveImprovementData,
 	deriveLawAdoptionHistory,
 	deriveMapTiles,
@@ -196,7 +196,7 @@ export function extractAllGameData(
 	);
 	// The adjacency walk runs once; both tile projections below read its
 	// result rather than repeating it.
-	const grantedSpecialists = deriveGrantedSpecialists(
+	const freeSpecialists = deriveFreeSpecialists(
 		tiles,
 		parseTeamAssignments(root),
 	);
@@ -204,7 +204,7 @@ export function extractAllGameData(
 		tiles,
 		cities,
 		players,
-		grantedSpecialists,
+		freeSpecialists,
 	);
 	const mapTiles = deriveMapTiles(
 		tiles,
@@ -212,7 +212,7 @@ export function extractAllGameData(
 		cityReligions,
 		religions,
 		players,
-		grantedSpecialists,
+		freeSpecialists,
 	);
 	const gameReligions = deriveGameReligions(religions, players);
 	const playerWonders = derivePlayerWonders(

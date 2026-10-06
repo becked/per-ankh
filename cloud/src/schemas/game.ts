@@ -206,20 +206,20 @@ export const MAX_DISABLED_IMPROVEMENTS = 1_000;
 //         tile_xml_id on city_statistics.cities (dates a capture through
 //         tile_ownership_history). Read by the challenge scorer; purely
 //         additive.
-// 2.21.0 — wonder-granted specialists are derived at parse time and
-//         materialised onto map_tiles[].specialist and
+// 2.21.0 — free specialists are derived at parse time and materialised onto
+//         map_tiles[].specialist and
 //         improvement_data.improvements[].specialist, with a new
-//         specialist_granted flag on both saying which ones they are. The
-//         save records nothing for them: the Jerwan Aqueduct staffs every
-//         adjacent farm, and Tile.writeGameXML guards its <Specialist>
-//         element on the STORED specialist, so a tile holding only the free
-//         one writes no element at all while the game still counts it
-//         (Tile.getSpecialist). Measured across test-data/saves: 4 of 13 have
-//         a built aqueduct, and in 3 of them all 14 adjacent farms carried no
-//         <Specialist>; the fourth already stores a Farmer on all 5 of its
-//         farms, where a stored specialist shadows the grant and the
-//         derivation adds none. VALUE-CHANGING for the affected games'
-//         specialist counts, rural coverage and specialist science — a bump
+//         specialist_free flag on both saying which ones they are. The save
+//         records nothing for them: the Jerwan Aqueduct gives a free
+//         specialist to each adjacent farm, and Tile.writeGameXML guards its
+//         <Specialist> element on the STORED specialist, so a tile holding
+//         only the free one writes no element at all while the game still
+//         counts it (Tile.getSpecialist). Measured across test-data/saves:
+//         4 of 13 have a built aqueduct, and in 3 of them all 14 adjacent
+//         farms carried no <Specialist>; the fourth already stores a Farmer
+//         on all 5 of its farms, where a stored specialist shadows the free
+//         one and the derivation adds none. VALUE-CHANGING for the affected
+//         games' specialist counts, rural coverage and specialist science — a bump
 //         rather than a silent correction, since existing blobs keep the old
 //         shape until reparsed.
 export const KNOWN_PARSER_VERSIONS = new Set([

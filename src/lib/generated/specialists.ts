@@ -533,11 +533,11 @@ export const ELIGIBLE_IMPROVEMENTS: Readonly<
 	IMPROVEMENT_THEATER_3: { specialist: "SPECIALIST_POET_3", urban: true },
 };
 
-// An improvement whose <AdjacentImprovementSpecialists> staffs the listed
-// improvements on its same-team hex neighbours for free, keyed by the
-// GRANTING improvement. The game keeps this grant in a per-tile dict that
-// never reaches the save (Tile.writeGameXML, Tile.cs:1507, guards
-// <Specialist> on the stored specialist), so deriveGrantedSpecialists
+// An improvement whose <AdjacentImprovementSpecialists> gives a free
+// specialist to the listed improvements on its same-team hex neighbours,
+// keyed by the SOURCE improvement. The game holds this in a per-tile dict
+// that never reaches the save (Tile.writeGameXML, Tile.cs:1507, guards
+// <Specialist> on the stored specialist), so deriveFreeSpecialists
 // rebuilds it from adjacency the way the game does on load.
 export const ADJACENT_IMPROVEMENT_SPECIALISTS: Readonly<
 	Record<string, readonly string[]>

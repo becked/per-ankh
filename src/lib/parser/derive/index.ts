@@ -10,7 +10,7 @@ export { deriveTechDiscoveryHistory } from "./tech-discovery-history.js";
 export { deriveCompletedTechs } from "./completed-techs.js";
 export { deriveUnitsProduced } from "./units-produced.js";
 export { deriveCityStatistics } from "./city-statistics.js";
-export { deriveGrantedSpecialists } from "./granted-specialists.js";
+export { deriveFreeSpecialists } from "./free-specialists.js";
 export { deriveImprovementData } from "./improvement-data.js";
 export { deriveMapTiles } from "./map-tiles.js";
 export { deriveGameReligions } from "./game-religions.js";
