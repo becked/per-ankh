@@ -4,6 +4,7 @@
 	import { getCivilizationColor } from "$lib/config";
 	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
 	import { improvementDisplayName } from "$lib/game-detail/helpers";
+	import { specialistName } from "$lib/game-detail/specialists";
 	import { CHROME_PANEL_CLASS } from "$lib/game-detail/map-chrome";
 
 	let {
@@ -64,7 +65,7 @@
 
 	const specialistLabel = $derived.by(() => {
 		if (!tile.specialist) return null;
-		const name = formatEnum(tile.specialist, "SPECIALIST_");
+		const name = specialistName(tile.specialist);
 		// A wonder-granted specialist is marked, because the save holds nothing
 		// for it — it is derived from adjacency. "free" is the game's own word
 		// for it ("Free {0_specialist} in adjacent {1,2_improvement}",
