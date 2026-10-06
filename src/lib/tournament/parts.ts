@@ -70,30 +70,51 @@ export function hasStartedPart(m: TournamentMatch): boolean {
 	});
 }
 
-// The next upcoming part, or null when none qualifies. A match reads by when it
-// will NEXT be played, so parts already behind the cutoff are skipped — a
+// The next upcoming (still-future) part, or null when none is ahead. A match
+// reads by when it will NEXT be played, so parts already started are skipped — a
 // fully-past schedule with no result has no next part (and reads as in_progress
-// via matchDisplayStatus, which checks hasStartedPart first). graceMs keeps a
-// just-started sitting counting as the next one; 0 means strictly future — the
-// same grace parameter upcomingScheduledParts takes for the part-row surfaces.
-// Reactive: reads the shared clock (nowMs), so a part drops out of "next" as it
-// falls behind the cutoff. Ties keep the earlier part in list order.
-function nextScheduledPart(
-	m: TournamentMatch,
-	graceMs = 0,
-): TournamentMatchPart | null {
-	const cutoff = nowMs() - graceMs;
+// via matchDisplayStatus, which checks hasStartedPart first). A sitting under way
+// is livePart's answer, not this one. Reactive: reads the shared clock (nowMs),
+// so a part drops out of "next" as its instant passes. Ties keep the earlier
+// part in list order.
+function nextScheduledPart(m: TournamentMatch): TournamentMatchPart | null {
+	const now = nowMs();
 	let next: TournamentMatchPart | null = null;
 	let nextT = Infinity;
 	for (const p of matchParts(m)) {
 		const t = partInstant(p);
-		if (t == null || t < cutoff) continue; // no usable time, or already passed
+		if (t == null || t < now) continue; // no usable time, or already passed
 		if (t < nextT) {
 			nextT = t;
 			next = p;
 		}
 	}
 	return next;
+}
+
+// The sitting being played right now: the most recently started part that
+// hasn't aged out of its live window, or null when none is under way. Drawn
+// from the same predicate liveAndUpcoming's LIVE list uses — started, and not
+// partPlayed — rather than re-deriving the window, so a whole-match row and the
+// part rows can't disagree about which sitting is live. Most recent rather than
+// earliest because when two sittings sit close enough to both be inside the
+// window, the later one is the one actually being played. Classifies every part
+// against one `now`, as liveAndUpcoming does, so a single pass can't straddle
+// the boundary.
+function livePart(m: TournamentMatch): TournamentMatchPart | null {
+	const now = nowMs();
+	let live: TournamentMatchPart | null = null;
+	let liveT = -Infinity;
+	for (const p of matchParts(m)) {
+		const t = partInstant(p);
+		if (t == null || t > now || partPlayed(p, now)) continue;
+		// >= so equal times keep the later part in list order.
+		if (t >= liveT) {
+			liveT = t;
+			live = p;
+		}
+	}
+	return live;
 }
 
 // The match's most recent part that has a time at all — "who was on last".
@@ -115,10 +136,10 @@ function latestScheduledPart(m: TournamentMatch): TournamentMatchPart | null {
 	return latest;
 }
 
-// The one sitting a whole match reads by: the one still ahead — or still inside
-// its live window, so a sitting that started an hour ago is what the match is
-// about rather than the one after it — else, once nothing is ahead, the one it
-// was last played at. Null when no part has a time yet.
+// The one sitting a whole match reads by: the one being played right now if any
+// is — so a sitting that started an hour ago is what the match is about rather
+// than the one after it — else the one still ahead, else, once nothing is ahead,
+// the one it was last played at. Null when no part has a time yet.
 //
 // The single answer a whole-match row gets when it asks which sitting it is
 // about: the time the row shows (matchSortInstant) and the casters and cast
@@ -129,23 +150,24 @@ function latestScheduledPart(m: TournamentMatch): TournamentMatchPart | null {
 // row lists every sitting's (rowStreams), because a match's extra POVs and VODs
 // are its archive rather than a claim about who is on next.
 //
-// The grace is LIVE_WINDOW_MS rather than a window of its own, because what it
-// closes is a disagreement with the part-row surfaces that draw their LIVE badge
-// from that same constant: rolling at the start instant moved a whole-match row
-// on to tomorrow's casterless sitting the moment tonight's began, while Live &
-// Upcoming went on showing tonight's live and cast. Sharing the constant is what
-// makes the two agree for exactly as long as a sitting reads as live. Reactive
-// via nextScheduledPart, so the answer rolls to the following sitting as that
-// window closes, keeping the pair in step.
+// A live sitting beats the one after it because what that closes is a
+// disagreement with the part-row surfaces: rolling at the start instant moved a
+// whole-match row on to tomorrow's casterless sitting the moment tonight's
+// began, while Live & Upcoming went on showing tonight's live and cast. livePart
+// asks the same question those rows do instead of re-deriving the window from
+// the constant, so the two agree for exactly as long as a sitting reads as live
+// — by construction rather than by two places sharing a number. Reactive
+// throughout, so the answer rolls to the following sitting as the window closes,
+// keeping the pair in step.
 export function matchSittingPart(
 	m: TournamentMatch,
 ): TournamentMatchPart | null {
-	return nextScheduledPart(m, LIVE_WINDOW_MS) ?? latestScheduledPart(m);
+	return livePart(m) ?? nextScheduledPart(m) ?? latestScheduledPart(m);
 }
 
-// A match counts as scheduled once it has an upcoming part still ahead. No
-// grace: a sitting that has started is under way, not scheduled, which is why
-// this reads the strict cutoff where matchSittingPart takes the live window.
+// A match counts as scheduled once it has an upcoming part still ahead. A
+// sitting that has started is under way, not scheduled — which is exactly what
+// nextScheduledPart answers, and why matchSittingPart asks livePart ahead of it.
 export function isMatchScheduled(m: TournamentMatch): boolean {
 	return nextScheduledPart(m) != null;
 }
@@ -215,9 +237,10 @@ export const CAST_GRACE_MS = 2 * 60 * 60 * 1000;
 // until a result is reported, so this is the only thing bounding how long a
 // finished-but-unreported match lingers as "live" — which is why it is set
 // shorter than the longest game rather than longer, and why it coincides with
-// CAST_GRACE_MS above without being the same rule. It is also the grace
-// matchSittingPart holds a started sitting for, so a whole-match row and the
-// part rows name the same sitting for exactly as long as it reads as live.
+// CAST_GRACE_MS above without being the same rule. partPlayed below is the only
+// place it becomes a boundary, so every surface that asks whether a sitting is
+// still live — the part rows, and livePart for a whole-match row — gets one
+// answer, and a whole-match row names the sitting the part rows badge as live.
 export const LIVE_WINDOW_MS = 2 * 60 * 60 * 1000;
 
 // True once a sitting has aged out of LIVE_WINDOW_MS — its broadcast window
