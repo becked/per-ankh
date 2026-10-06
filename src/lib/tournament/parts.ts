@@ -70,30 +70,66 @@ export function hasStartedPart(m: TournamentMatch): boolean {
 	});
 }
 
-// The next upcoming (still-future) part's instant (ISO-8601 UTC), or null when
-// no part is still ahead. A match reads by when it will NEXT be played, so
-// parts already in the past are skipped — a fully-past schedule with no result
-// shows no time (and reads as in_progress via matchDisplayStatus, which checks
-// hasStartedPart first). Reactive: reads the shared clock (nowMs), so a part
-// drops out of "next" as its scheduled instant passes.
-export function nextScheduledAt(m: TournamentMatch): string | null {
+// The next upcoming (still-future) part, or null when no part is still ahead. A
+// match reads by when it will NEXT be played, so parts already in the past are
+// skipped — a fully-past schedule with no result has no next part (and reads as
+// in_progress via matchDisplayStatus, which checks hasStartedPart first).
+// Reactive: reads the shared clock (nowMs), so a part drops out of "next" as its
+// scheduled instant passes. Ties keep the earlier part in list order.
+function nextScheduledPart(m: TournamentMatch): TournamentMatchPart | null {
 	const now = nowMs();
-	let next: string | null = null;
+	let next: TournamentMatchPart | null = null;
 	let nextT = Infinity;
 	for (const p of matchParts(m)) {
 		const t = partInstant(p);
 		if (t == null || t < now) continue; // no usable time, or already passed
 		if (t < nextT) {
 			nextT = t;
-			next = p.scheduled_at;
+			next = p;
 		}
 	}
 	return next;
 }
 
+// The match's most recent part that has a time at all — "who was on last".
+// Not clock-aware: a match whose whole schedule is still ahead resolves to its
+// final sitting, which is why this is the fallback below rather than a rule any
+// surface uses on its own.
+function latestScheduledPart(m: TournamentMatch): TournamentMatchPart | null {
+	let latest: TournamentMatchPart | null = null;
+	let latestT = -Infinity;
+	for (const p of matchParts(m)) {
+		const t = partInstant(p);
+		if (t == null) continue;
+		// >= so equal times keep the later part in list order.
+		if (t >= latestT) {
+			latestT = t;
+			latest = p;
+		}
+	}
+	return latest;
+}
+
+// The one sitting a whole match reads by: the next one still ahead, else — once
+// nothing is ahead — the one it was last played at. Null when no part has a time
+// yet.
+//
+// The single answer for every whole-match question about a sitting: the time the
+// row shows (matchSortInstant) and the casters, streams and cast buttons that
+// sit beside it (rowPart) both resolve through here, because resolving them
+// apart is what let a split match advertise its next sitting's time next to a
+// LATER sitting's empty caster list — a scheduled, casted game reading "needs a
+// caster". Reactive via nextScheduledPart, so the answer rolls to the following
+// sitting as each start passes, keeping the pair in step.
+export function matchSittingPart(
+	m: TournamentMatch,
+): TournamentMatchPart | null {
+	return nextScheduledPart(m) ?? latestScheduledPart(m);
+}
+
 // A match counts as scheduled once it has an upcoming part still ahead.
 export function isMatchScheduled(m: TournamentMatch): boolean {
-	return nextScheduledAt(m) != null;
+	return nextScheduledPart(m) != null;
 }
 
 // A part's display index within its match (1-based) and whether the match is

@@ -16,7 +16,7 @@ import {
 import {
 	matchDisplayStatus,
 	matchParts,
-	nextScheduledAt,
+	matchSittingPart,
 	type MatchDisplayStatus,
 } from "./parts";
 
@@ -36,25 +36,16 @@ export function matchStatusGroup(m: TournamentMatch): MatchStatusGroup | null {
 	return matchDisplayStatus(m);
 }
 
-// The instant a timed match sorts by: any match with an upcoming part sorts by
-// that next sitting (a scheduled match, or a split match mid-schedule whose next
-// part is still ahead). Only when no part is still future — the true-overdue
-// case — does an in-progress match fall back to its most recently started part,
-// since WHEN it went overdue is exactly what an admin chasing reports needs.
-// Null for unscheduled/completed — and for the table cell, which renders it for
-// overdue rows so "In progress" keeps its timestamp.
+// The instant a timed match sorts by: the time of the sitting the match reads by
+// (matchSittingPart) — the next one still ahead for a scheduled match or a split
+// match mid-schedule, falling back to the most recently started one in the
+// true-overdue case, since WHEN it went overdue is exactly what an admin chasing
+// reports needs. Null for unscheduled/completed — and for the table cell, which
+// renders it for overdue rows so "In progress" keeps its timestamp.
 export function matchSortInstant(m: TournamentMatch): string | null {
 	const group = matchStatusGroup(m);
 	if (group !== "scheduled" && group !== "in_progress") return null;
-	const next = nextScheduledAt(m);
-	if (next) return next;
-	let latest: string | null = null;
-	for (const p of matchParts(m)) {
-		if (p.scheduled_at == null) continue;
-		if (Number.isNaN(Date.parse(p.scheduled_at))) continue;
-		if (latest === null || p.scheduled_at > latest) latest = p.scheduled_at;
-	}
-	return latest;
+	return matchSittingPart(m)?.scheduled_at ?? null;
 }
 
 // ─── Tournament context ──────────────────────────────────────────────
@@ -106,31 +97,14 @@ export function toMatchRows(matches: TournamentMatch[]): MatchRow[] {
 		}));
 }
 
-// The sitting a row acts on for casters/streams: for a part row, its own part;
-// for a match row (the All tab's whole-match census), the match's most recent
-// *scheduled* sitting — "who's on now / last" rather than an arbitrary first
-// part. Null when a match row has no scheduled sitting yet.
-function mostRecentScheduledPart(
-	m: TournamentMatch,
-): TournamentMatchPart | null {
-	let best: TournamentMatchPart | null = null;
-	let bestT = -Infinity;
-	for (const p of matchParts(m)) {
-		if (p.scheduled_at == null) continue;
-		const t = Date.parse(p.scheduled_at);
-		if (Number.isNaN(t)) continue;
-		// >= so equal times keep the later part in list order.
-		if (t >= bestT) {
-			bestT = t;
-			best = p;
-		}
-	}
-	return best;
-}
-
-// The sitting whose casters a row shows and whose id the cast controls target.
+// The sitting whose casters a row shows and whose id the cast controls target:
+// for a part row, its own part; for a match row (the All tab's whole-match
+// census), the sitting the match reads by — the same one its time cell names,
+// because a row that advertises one sitting's time beside another's casters is
+// telling a player their casted game needs a caster. Null when a match row has
+// no scheduled sitting yet.
 export function rowPart(row: MatchRow): TournamentMatchPart | null {
-	return row.part ?? mostRecentScheduledPart(row.match);
+	return row.part ?? matchSittingPart(row.match);
 }
 
 // The casters shown for a row (streamer first, then co-casters), from the row's
