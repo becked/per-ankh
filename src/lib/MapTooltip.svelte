@@ -65,8 +65,8 @@
 
 	// A free specialist from a neighbouring improvement reads the same as a
 	// placed one, because in the game it IS the same — `Tile.getSpecialist`
-	// (Tile.cs:6993) returns either without distinction. `specialist_free`
-	// records which one the save wrote, not a difference worth showing.
+	// (Tile.cs:6993) returns either without distinction, and the row doesn't
+	// record which kind it holds.
 	const specialistLabel = $derived(
 		tile.specialist ? specialistName(tile.specialist) : null,
 	);

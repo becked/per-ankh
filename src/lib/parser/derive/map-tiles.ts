@@ -12,8 +12,8 @@
 //
 // religions attach by city territory (the city the tile belongs to).
 //
-// `specialist` / `specialist_free` come from `tileSpecialist`
-// (derive/free-specialists.ts), which is also what improvement_data reads.
+// `specialist` comes from `tileSpecialist` (derive/free-specialists.ts),
+// which is also what improvement_data reads.
 
 import type { City, CityReligion } from "../parsers/cities.js";
 import type { Player } from "../parsers/players.js";
@@ -109,7 +109,7 @@ export function deriveMapTiles(
 			improvement_pillaged: t.improvementPillaged,
 			improvement_turns_left: t.improvementTurnsLeft,
 			has_road: t.hasRoad,
-			...tileSpecialist(t, freeSpecialists),
+			specialist: tileSpecialist(t, freeSpecialists),
 			tribe_site: t.tribeSite,
 			religions: tileReligions,
 			river_w: t.riverW,

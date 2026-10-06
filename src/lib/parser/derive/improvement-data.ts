@@ -3,8 +3,8 @@
 // (the tile's `<CityTerritory>` field) and the player via the owning
 // city's `playerXmlId`. ORDER BY p.nation, c.city_name, t.improvement.
 //
-// `specialist` / `specialist_free` come from `tileSpecialist`
-// (derive/free-specialists.ts), which is also what map_tiles reads.
+// `specialist` comes from `tileSpecialist` (derive/free-specialists.ts),
+// which is also what map_tiles reads.
 
 import type { City } from "../parsers/cities.js";
 import type { Player } from "../parsers/players.js";
@@ -41,7 +41,7 @@ export function deriveImprovementData(
 			city_name: city?.cityName ?? null,
 			city_xml_id: city?.xmlId ?? null,
 			improvement: t.improvement,
-			...tileSpecialist(t, freeSpecialists),
+			specialist: tileSpecialist(t, freeSpecialists),
 			resource: t.resource,
 			build_turns_left: t.improvementTurnsLeft,
 		});

@@ -115,13 +115,12 @@ export function reconstructMapTiles(
 			improvement_pillaged: owned ? t.improvement_pillaged : false,
 			improvement_turns_left: owned ? t.improvement_turns_left : null,
 			has_road: owned ? t.has_road : false,
-			// Both carried through the same ownership gate as `improvement`, so
-			// a free specialist inherits this module's existing final-state
+			// Carried through the same ownership gate as `improvement`, so a free
+			// specialist inherits this module's existing final-state
 			// approximation rather than a new one: the aqueduct and the farm are
 			// shown as of the final turn for any turn the tile was owned,
 			// exactly as the improvement itself is.
 			specialist: owned ? t.specialist : null,
-			specialist_free: owned ? (t.specialist_free ?? false) : false,
 			owner_nation: owned ? (playerNation.get(ownerXmlId) ?? null) : null,
 			owner_player_xml_id: owned ? ownerXmlId : null,
 			// City-chrome gated.

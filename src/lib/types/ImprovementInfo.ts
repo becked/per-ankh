@@ -15,18 +15,16 @@ owner_player_xml_id?: number | null, city_name: string | null,
  * blobs parsed before PARSER_VERSION 2.20.0.
  */
 city_xml_id?: number | null,
-improvement: string, specialist: string | null,
+improvement: string,
 /**
- * True when `specialist` is the free specialist a neighbouring improvement
- * gives this tile rather than one the save recorded. It is an ordinary
- * specialist in the game either way: `Tile.getSpecialist` returns the free one
- * when none is stored, but `Tile.writeGameXML` guards `<Specialist>` on the
- * STORED value, so the save holds nothing for it and the parser derives it
- * from adjacency instead (see derive/free-specialists.ts). Absent on blobs
- * parsed before PARSER_VERSION 2.21.0, which carry only stored specialists —
- * so `?? false` reads correctly on every blob.
+ * The specialist the GAME reads off this tile — `Tile.getSpecialist`: the one
+ * the save recorded, or the free one a neighbouring improvement gives the tile
+ * when none is stored. `Tile.writeGameXML` guards `<Specialist>` on the STORED
+ * value, so the save holds nothing for a free one and the parser derives it
+ * from adjacency (see derive/free-specialists.ts). Blobs parsed before
+ * PARSER_VERSION 2.21.0 carry only the stored kind.
  */
-specialist_free?: boolean, resource: string | null,
+specialist: string | null, resource: string | null,
 /**
  * Turns of construction still to go, or null once the improvement stands
  * (the tile's <ImprovementBuildTurnsLeft>). A tile carries its improvement

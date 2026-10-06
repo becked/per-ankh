@@ -57,7 +57,9 @@
 //
 // `deriveMapTiles` and `deriveImprovementData` both consume the one result
 // through `tileSpecialist` below — neither the walk nor the shadowing rule is
-// written twice.
+// written twice. Neither row records WHICH kind it holds: the game draws no
+// distinction (`Tile.getSpecialist` returns either), so nothing downstream has
+// a reason to ask.
 
 import {
 	ADJACENT_IMPROVEMENT_SPECIALISTS,
@@ -145,19 +147,15 @@ export function deriveFreeSpecialists(
 
 /**
  * The specialist the GAME reads off a tile — `Tile.getSpecialist`
- * (Tile.cs:6993) — plus the flag saying whether it is the free one, for the
- * blob rows that carry both. `deriveMapTiles` and `deriveImprovementData` each
- * spread this so the shadowing rule has one home.
+ * (Tile.cs:6993): the stored one when there is one, the free one otherwise.
+ * `deriveMapTiles` and `deriveImprovementData` both call this, so the
+ * shadowing rule has one home. A stored specialist shadows the free one, so
+ * the walk never records one for a tile that has its own; `??` is ordering,
+ * not a tie-break.
  */
 export function tileSpecialist(
 	t: Tile,
 	freeSpecialists: Map<number, string>,
-): { specialist: string | null; specialist_free: boolean } {
-	// A stored specialist shadows the free one, so the walk never records one
-	// for a tile that has its own; `??` is ordering, not a tie-break.
-	const free = freeSpecialists.get(t.xmlId) ?? null;
-	return {
-		specialist: t.specialist ?? free,
-		specialist_free: t.specialist === null && free !== null,
-	};
+): string | null {
+	return t.specialist ?? freeSpecialists.get(t.xmlId) ?? null;
 }
