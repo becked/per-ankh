@@ -11,6 +11,11 @@
 //     + is_capital flags.
 //
 // religions attach by city territory (the city the tile belongs to).
+//
+// `specialist` is the specialist the GAME reads off the tile —
+// `Tile.getSpecialist` (Tile.cs:6993), the stored one when there is one and a
+// neighbouring wonder's free one otherwise. `specialist_granted` says which,
+// because the save records only the stored kind (see derive/granted-specialists.ts).
 
 import type { City, CityReligion } from "../parsers/cities.js";
 import type { Player } from "../parsers/players.js";
@@ -25,6 +30,7 @@ export function deriveMapTiles(
 	cityReligions: CityReligion[],
 	religions: Religion[],
 	players: Player[],
+	grantedSpecialists: Map<number, string>,
 ): MapTile[] {
 	const playerMap = playerByXmlId(players);
 
@@ -93,6 +99,9 @@ export function deriveMapTiles(
 			territoryCity !== undefined
 				? (religionsByCity.get(territoryCity.xmlId) ?? [])
 				: [];
+		// A stored specialist shadows the grant, so the walk never records one
+		// for a tile that has its own; `??` is ordering, not a tie-break.
+		const grantedSpecialist = grantedSpecialists.get(t.xmlId) ?? null;
 		return {
 			x: t.x,
 			y: t.y,
@@ -104,7 +113,8 @@ export function deriveMapTiles(
 			improvement_pillaged: t.improvementPillaged,
 			improvement_turns_left: t.improvementTurnsLeft,
 			has_road: t.hasRoad,
-			specialist: t.specialist,
+			specialist: t.specialist ?? grantedSpecialist,
+			specialist_granted: t.specialist === null && grantedSpecialist !== null,
 			tribe_site: t.tribeSite,
 			religions: tileReligions,
 			river_w: t.riverW,

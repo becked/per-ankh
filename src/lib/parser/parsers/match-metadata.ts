@@ -289,7 +289,7 @@ function parseVictoryEnabledList(root: Record<string, unknown>): string[] {
  * the index of each `PlayerTeam` corresponds to the player XML id and its
  * text is that player's team id. Returns the array indexed by player XML id.
  */
-function parseTeamAssignments(root: Record<string, unknown>): number[] {
+export function parseTeamAssignments(root: Record<string, unknown>): number[] {
 	const teamElem = root.Team;
 	if (!isElement(teamElem)) return [];
 

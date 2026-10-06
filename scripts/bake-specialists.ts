@@ -26,11 +26,27 @@
 //                                          eligible improvement missing here is
 //                                          missing from both halves of the
 //                                          coverage ratio, not just one.
+//                                          <AdjacentImprovementSpecialists> is
+//                                          the runtime adjacency grant (see
+//                                          below).
 //   Reference/XML/Infos/text-*.xml       — <Entry> with <zType>TEXT_*</> and
 //                                          <en-US>. text-specialistClass.xml has
 //                                          the class line names ("Priest"); the
 //                                          per-tier names ("Elder Priest") live
 //                                          in text-infos.xml. Merge all text-*.xml.
+//
+// Two of the emitted tables exist because the SAVE cannot be read for them.
+// The Jerwan Aqueduct grants a free specialist to each adjacent farm, and the
+// game stores that grant in a per-tile dict keyed by improvement type
+// (`Tile.changeImprovement`, Tile.cs:6626) which `Tile.writeGameXML`
+// (Tile.cs:1507) never writes — its `<Specialist>` element is guarded on the
+// STORED `getCurrentSpecialist()`, so a tile whose only specialist is the free
+// one writes no element at all. `Tile.getSpecialist` (Tile.cs:6993) still
+// returns it, via `improvement().meSpecialist`, so the game counts a specialist
+// Per-Ankh could not see. Reproducing it at parse time needs the rule
+// (`eAdjacentImprovementSpecialists`: granting improvement -> granted-to
+// improvements) and the zType each granted-to improvement would hold, which is
+// the `<Specialist>` this script already reads and used to discard.
 //
 // OUTPUT: .bake/specialists.json (gitignored sidecar). The finalize step
 // (scripts/build-manifests.ts) reads it and emits the runtime module at
@@ -71,6 +87,9 @@ interface ImprovementEntry {
 	zType?: string;
 	Specialist?: string;
 	bUrban?: string;
+	// Absent on almost every improvement; the empty template element
+	// (improvement.xml:125) parses to "" rather than an object, hence the union.
+	AdjacentImprovementSpecialists?: { zValue?: string | string[] } | string;
 }
 interface TextEntry {
 	zType?: string;
@@ -90,7 +109,10 @@ interface SpecialistClassInfo {
 	kind: "urban" | "rural";
 }
 // Emitted per-eligible-improvement shape (mirrored by EligibleImprovement).
+// `specialist` is the zType this improvement holds — the one a wonder's
+// adjacency grant would place on it.
 interface EligibleImprovement {
+	specialist: string;
 	urban: boolean;
 }
 
@@ -185,12 +207,52 @@ async function main(): Promise<void> {
 	}
 
 	// An improvement is specialist-eligible iff it declares a <Specialist>; its
-	// urban/rural side comes from <bUrban>.
+	// urban/rural side comes from <bUrban>. The zType itself is kept because
+	// it is what an adjacency grant places on the tile.
 	const eligibleImprovements: Record<string, EligibleImprovement> = {};
 	for (const imp of improvementEntries) {
 		if (!imp.zType || !imp.zType.startsWith("IMPROVEMENT_")) continue;
 		if (!imp.Specialist || !imp.Specialist.startsWith("SPECIALIST_")) continue;
-		eligibleImprovements[imp.zType] = { urban: imp.bUrban === "1" };
+		eligibleImprovements[imp.zType] = {
+			specialist: imp.Specialist,
+			urban: imp.bUrban === "1",
+		};
+	}
+
+	// The adjacency grant: granting improvement -> the improvements it staffs
+	// on its same-team neighbours. One improvement declares this in the whole
+	// catalogue (the Jerwan Aqueduct, improvement.xml:6446, granting to
+	// IMPROVEMENT_FARM); the only other occurrence is the empty template
+	// element at improvement.xml:125, which carries no zValue.
+	const adjacentImprovementSpecialists: Record<string, string[]> = {};
+	for (const imp of improvementEntries) {
+		if (!imp.zType || !imp.zType.startsWith("IMPROVEMENT_")) continue;
+		const field = imp.AdjacentImprovementSpecialists;
+		const raw = typeof field === "object" ? field?.zValue : undefined;
+		const granted = raw == null ? [] : Array.isArray(raw) ? raw : [raw];
+		// Sorted for deterministic output, like sortRecord below.
+		const valid = granted.filter((z) => z.startsWith("IMPROVEMENT_")).sort();
+		if (valid.length > 0) adjacentImprovementSpecialists[imp.zType] = valid;
+	}
+	// An empty table would silently ship "no wonder grants anything", which
+	// reads exactly like the bug this exists to fix. Fail instead.
+	if (Object.keys(adjacentImprovementSpecialists).length === 0) {
+		throw new Error(
+			"bake-specialists: no improvement declares <AdjacentImprovementSpecialists> — the XML shape changed",
+		);
+	}
+	// Every granted-to improvement must be specialist-eligible, or the grant
+	// names a tile type with no specialist to place.
+	for (const [granter, granted] of Object.entries(
+		adjacentImprovementSpecialists,
+	)) {
+		for (const target of granted) {
+			if (!eligibleImprovements[target]) {
+				throw new Error(
+					`bake-specialists: ${granter} grants a specialist to ${target}, which declares no <Specialist>`,
+				);
+			}
+		}
 	}
 
 	// Sort keys for deterministic output (finalize also sorts on emit).
@@ -208,6 +270,9 @@ async function main(): Promise<void> {
 				specialists: sortRecord(specialists),
 				classes: sortRecord(classes),
 				eligibleImprovements: sortRecord(eligibleImprovements),
+				adjacentImprovementSpecialists: sortRecord(
+					adjacentImprovementSpecialists,
+				),
 			},
 			null,
 			"\t",
@@ -221,7 +286,8 @@ async function main(): Promise<void> {
 	console.log(
 		`bake-specialists: ${Object.keys(specialists).length} specialists, ` +
 			`${Object.keys(classes).length} classes (${urbanClasses} urban), ` +
-			`${Object.keys(eligibleImprovements).length} eligible improvements → ` +
+			`${Object.keys(eligibleImprovements).length} eligible improvements, ` +
+			`${Object.keys(adjacentImprovementSpecialists).length} adjacency grants → ` +
 			`${SIDECAR.replace(REPO_ROOT + "/", "")}`,
 	);
 }

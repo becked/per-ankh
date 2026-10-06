@@ -12,7 +12,17 @@ export type MapTile = { x: number, y: number, terrain: string | null, height: st
  * nor grants adjacency bonuses. Optional: absent on blobs parsed before
  * PARSER_VERSION 2.17.0.
  */
-improvement_turns_left?: number | null, has_road: boolean, specialist: string | null, tribe_site: string | null, 
+improvement_turns_left?: number | null, has_road: boolean, specialist: string | null,
+/**
+ * True when `specialist` is a neighbouring wonder's free specialist rather
+ * than one the save recorded. `Tile.getSpecialist` returns the free one when
+ * no specialist is stored, but `Tile.writeGameXML` guards `<Specialist>` on
+ * the STORED value, so the save holds nothing for it and the parser derives
+ * it from adjacency instead (see derive/granted-specialists.ts). Absent on
+ * blobs parsed before PARSER_VERSION 2.21.0, which carry only stored
+ * specialists — so `?? false` reads correctly on every blob.
+ */
+specialist_granted?: boolean, tribe_site: string | null, 
 /**
  * All religions present in this tile's city (up to 5)
  */

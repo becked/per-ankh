@@ -62,9 +62,16 @@
 		return imp;
 	});
 
-	const specialistLabel = $derived(
-		tile.specialist ? formatEnum(tile.specialist, "SPECIALIST_") : null,
-	);
+	const specialistLabel = $derived.by(() => {
+		if (!tile.specialist) return null;
+		const name = formatEnum(tile.specialist, "SPECIALIST_");
+		// A wonder-granted specialist is marked, because the save holds nothing
+		// for it — it is derived from adjacency. "free" is the game's own word
+		// for it ("Free {0_specialist} in adjacent {1,2_improvement}",
+		// TEXT_HELPTEXT_BONUS_FREE_IMPROVEMENT_SPECIALIST_ADJACENT), and the
+		// parenthetical is the shape improvementLabel above already uses.
+		return tile.specialist_granted ? `${name} (free)` : name;
+	});
 
 	// Conservative size estimate for edge-flip clamping. Exact CSS size depends on
 	// content; over-estimating just biases toward flipping at the canvas edges.

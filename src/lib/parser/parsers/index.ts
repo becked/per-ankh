@@ -29,7 +29,7 @@ import {
 	memoryDataToRow,
 } from "./events.js";
 import { parseFamilies, familyToRow } from "./families.js";
-import { parseMatchMetadata } from "./match-metadata.js";
+import { parseMatchMetadata, parseTeamAssignments } from "./match-metadata.js";
 import {
 	parseLaws,
 	parsePlayerGoals,
@@ -78,6 +78,7 @@ import {
 	deriveEventLogs,
 	deriveGameDetails,
 	deriveGameReligions,
+	deriveGrantedSpecialists,
 	deriveImprovementData,
 	deriveLawAdoptionHistory,
 	deriveMapTiles,
@@ -193,13 +194,25 @@ export function extractAllGameData(
 		characters,
 		players,
 	);
-	const improvementData = deriveImprovementData(tiles, cities, players);
+	// The adjacency walk runs once; both tile projections below read its
+	// result rather than repeating it.
+	const grantedSpecialists = deriveGrantedSpecialists(
+		tiles,
+		parseTeamAssignments(root),
+	);
+	const improvementData = deriveImprovementData(
+		tiles,
+		cities,
+		players,
+		grantedSpecialists,
+	);
 	const mapTiles = deriveMapTiles(
 		tiles,
 		cities,
 		cityReligions,
 		religions,
 		players,
+		grantedSpecialists,
 	);
 	const gameReligions = deriveGameReligions(religions, players);
 	const playerWonders = derivePlayerWonders(

@@ -15,7 +15,17 @@ owner_player_xml_id?: number | null, city_name: string | null,
  * blobs parsed before PARSER_VERSION 2.20.0.
  */
 city_xml_id?: number | null,
-improvement: string, specialist: string | null, resource: string | null,
+improvement: string, specialist: string | null,
+/**
+ * True when `specialist` is a neighbouring wonder's free specialist rather
+ * than one the save recorded. `Tile.getSpecialist` returns the free one when
+ * no specialist is stored, but `Tile.writeGameXML` guards `<Specialist>` on
+ * the STORED value, so the save holds nothing for it and the parser derives
+ * it from adjacency instead (see derive/granted-specialists.ts). Absent on
+ * blobs parsed before PARSER_VERSION 2.21.0, which carry only stored
+ * specialists — so `?? false` reads correctly on every blob.
+ */
+specialist_granted?: boolean, resource: string | null,
 /**
  * Turns of construction still to go, or null once the improvement stands
  * (the tile's <ImprovementBuildTurnsLeft>). A tile carries its improvement

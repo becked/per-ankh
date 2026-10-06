@@ -493,17 +493,24 @@ interface SpecialistClassInfo {
 	kind: "urban" | "rural";
 }
 interface EligibleImprovement {
+	specialist: string;
 	urban: boolean;
 }
 interface SpecialistsSidecar {
 	specialists: Record<string, SpecialistInfo>;
 	classes: Record<string, SpecialistClassInfo>;
 	eligibleImprovements: Record<string, EligibleImprovement>;
+	adjacentImprovementSpecialists: Record<string, string[]>;
 }
 
 async function readSpecialistsSidecar(): Promise<SpecialistsSidecar> {
 	if (!existsSync(SPECIALISTS_SIDECAR)) {
-		return { specialists: {}, classes: {}, eligibleImprovements: {} };
+		return {
+			specialists: {},
+			classes: {},
+			eligibleImprovements: {},
+			adjacentImprovementSpecialists: {},
+		};
 	}
 	const raw = await readFile(SPECIALISTS_SIDECAR, "utf-8");
 	return JSON.parse(raw) as SpecialistsSidecar;
@@ -790,6 +797,7 @@ function emitSpecialistsTs(sidecar: SpecialistsSidecar): string {
 	lines.push("}");
 	lines.push("");
 	lines.push("export interface EligibleImprovement {");
+	lines.push("\treadonly specialist: string;");
 	lines.push("\treadonly urban: boolean;");
 	lines.push("}");
 	lines.push("");
@@ -823,8 +831,9 @@ function emitSpecialistsTs(sidecar: SpecialistsSidecar): string {
 	lines.push("};");
 	lines.push("");
 	lines.push(
-		"// Improvements that can hold a specialist (IMPROVEMENT_* zType) → urban flag.",
+		"// Improvements that can hold a specialist (IMPROVEMENT_* zType) → the",
 	);
+	lines.push("// specialist zType they hold, plus the urban flag.");
 	lines.push("// Presence in this map is the coverage denominator.");
 	lines.push(
 		"export const ELIGIBLE_IMPROVEMENTS: Readonly<Record<string, EligibleImprovement>> = {",
@@ -832,6 +841,32 @@ function emitSpecialistsTs(sidecar: SpecialistsSidecar): string {
 	for (const key of sortedKeys(sidecar.eligibleImprovements)) {
 		lines.push(
 			`\t${JSON.stringify(key)}: ${JSON.stringify(sidecar.eligibleImprovements[key])},`,
+		);
+	}
+	lines.push("};");
+	lines.push("");
+	lines.push(
+		"// An improvement whose <AdjacentImprovementSpecialists> staffs the listed",
+	);
+	lines.push(
+		"// improvements on its same-team hex neighbours for free, keyed by the",
+	);
+	lines.push(
+		"// GRANTING improvement. The game keeps this grant in a per-tile dict that",
+	);
+	lines.push(
+		"// never reaches the save (Tile.writeGameXML, Tile.cs:1507, guards",
+	);
+	lines.push(
+		"// <Specialist> on the stored specialist), so deriveGrantedSpecialists",
+	);
+	lines.push("// rebuilds it from adjacency the way the game does on load.");
+	lines.push("export const ADJACENT_IMPROVEMENT_SPECIALISTS: Readonly<");
+	lines.push("\tRecord<string, readonly string[]>");
+	lines.push("> = {");
+	for (const key of sortedKeys(sidecar.adjacentImprovementSpecialists)) {
+		lines.push(
+			`\t${JSON.stringify(key)}: ${JSON.stringify(sidecar.adjacentImprovementSpecialists[key])},`,
 		);
 	}
 	lines.push("};");

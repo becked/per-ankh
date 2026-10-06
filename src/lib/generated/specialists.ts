@@ -14,6 +14,7 @@ export interface SpecialistClassInfo {
 }
 
 export interface EligibleImprovement {
+	readonly specialist: string;
 	readonly urban: boolean;
 }
 
@@ -273,107 +274,273 @@ export const SPECIALIST_CLASSES: Readonly<Record<string, SpecialistClassInfo>> =
 		SPECIALISTCLASS_WOODCUTTER: { name: "Woodcutter", kind: "rural" },
 	};
 
-// Improvements that can hold a specialist (IMPROVEMENT_* zType) → urban flag.
+// Improvements that can hold a specialist (IMPROVEMENT_* zType) → the
+// specialist zType they hold, plus the urban flag.
 // Presence in this map is the coverage denominator.
 export const ELIGIBLE_IMPROVEMENTS: Readonly<
 	Record<string, EligibleImprovement>
 > = {
-	IMPROVEMENT_ALTAR_ATEN: { urban: true },
-	IMPROVEMENT_BARRACKS: { urban: true },
-	IMPROVEMENT_BATHS_1: { urban: true },
-	IMPROVEMENT_BATHS_2: { urban: true },
-	IMPROVEMENT_BATHS_3: { urban: true },
-	IMPROVEMENT_CAMP: { urban: false },
-	IMPROVEMENT_CATHEDRAL_BUDDHISM: { urban: true },
-	IMPROVEMENT_CATHEDRAL_CHRISTIANITY: { urban: true },
-	IMPROVEMENT_CATHEDRAL_HINDUISM: { urban: true },
-	IMPROVEMENT_CATHEDRAL_JUDAISM: { urban: true },
-	IMPROVEMENT_CATHEDRAL_MANICHAEISM: { urban: true },
-	IMPROVEMENT_CATHEDRAL_ZOROASTRIANISM: { urban: true },
-	IMPROVEMENT_COURTHOUSE_1: { urban: true },
-	IMPROVEMENT_COURTHOUSE_2: { urban: true },
-	IMPROVEMENT_COURTHOUSE_3: { urban: true },
-	IMPROVEMENT_FARM: { urban: false },
-	IMPROVEMENT_GROVE: { urban: false },
-	IMPROVEMENT_LAURION_MINE: { urban: false },
-	IMPROVEMENT_LIBRARY_1: { urban: true },
-	IMPROVEMENT_LIBRARY_2: { urban: true },
-	IMPROVEMENT_LIBRARY_3: { urban: true },
-	IMPROVEMENT_LUMBERMILL: { urban: false },
-	IMPROVEMENT_MARKET_1: { urban: true },
-	IMPROVEMENT_MARKET_2: { urban: true },
-	IMPROVEMENT_MARKET_3: { urban: true },
-	IMPROVEMENT_MINE: { urban: false },
-	IMPROVEMENT_MONASTERY_BUDDHISM: { urban: true },
-	IMPROVEMENT_MONASTERY_CHRISTIANITY: { urban: true },
-	IMPROVEMENT_MONASTERY_HINDUISM: { urban: true },
-	IMPROVEMENT_MONASTERY_JUDAISM: { urban: true },
-	IMPROVEMENT_MONASTERY_MANICHAEISM: { urban: true },
-	IMPROVEMENT_MONASTERY_ZOROASTRIANISM: { urban: true },
-	IMPROVEMENT_NETS: { urban: false },
-	IMPROVEMENT_PASTURE: { urban: false },
-	IMPROVEMENT_QUARRY: { urban: false },
-	IMPROVEMENT_RANGE: { urban: true },
-	IMPROVEMENT_SHRINE_AMUN: { urban: true },
-	IMPROVEMENT_SHRINE_ANAHITA: { urban: true },
-	IMPROVEMENT_SHRINE_APEDEMEK: { urban: true },
-	IMPROVEMENT_SHRINE_ARDAKSHO: { urban: true },
-	IMPROVEMENT_SHRINE_ARINNITTI: { urban: true },
-	IMPROVEMENT_SHRINE_ASHUR: { urban: true },
-	IMPROVEMENT_SHRINE_ASTAR: { urban: true },
-	IMPROVEMENT_SHRINE_ATAR: { urban: true },
-	IMPROVEMENT_SHRINE_ATHENA: { urban: true },
-	IMPROVEMENT_SHRINE_BAAL_HAMMON: { urban: true },
-	IMPROVEMENT_SHRINE_BEHER: { urban: true },
-	IMPROVEMENT_SHRINE_BELLONA: { urban: true },
-	IMPROVEMENT_SHRINE_CERES: { urban: true },
-	IMPROVEMENT_SHRINE_ERESHKIGAL: { urban: true },
-	IMPROVEMENT_SHRINE_ESHMUN: { urban: true },
-	IMPROVEMENT_SHRINE_FERONIA: { urban: true },
-	IMPROVEMENT_SHRINE_HADES: { urban: true },
-	IMPROVEMENT_SHRINE_HALKI: { urban: true },
-	IMPROVEMENT_SHRINE_HVAR_KHSHAITA: { urban: true },
-	IMPROVEMENT_SHRINE_INDRA: { urban: true },
-	IMPROVEMENT_SHRINE_ISHTAR: { urban: true },
-	IMPROVEMENT_SHRINE_ISIS: { urban: true },
-	IMPROVEMENT_SHRINE_KAMRUSEPA: { urban: true },
-	IMPROVEMENT_SHRINE_MAHREM: { urban: true },
-	IMPROVEMENT_SHRINE_MANDULIS: { urban: true },
-	IMPROVEMENT_SHRINE_MARDUK: { urban: true },
-	IMPROVEMENT_SHRINE_MAYON: { urban: true },
-	IMPROVEMENT_SHRINE_MEDR: { urban: true },
-	IMPROVEMENT_SHRINE_MELQART: { urban: true },
-	IMPROVEMENT_SHRINE_MITHRA: { urban: true },
-	IMPROVEMENT_SHRINE_MURUGAN: { urban: true },
-	IMPROVEMENT_SHRINE_NABU: { urban: true },
-	IMPROVEMENT_SHRINE_NANA: { urban: true },
-	IMPROVEMENT_SHRINE_NEITH: { urban: true },
-	IMPROVEMENT_SHRINE_NINURTA: { urban: true },
-	IMPROVEMENT_SHRINE_NUSKA: { urban: true },
-	IMPROVEMENT_SHRINE_OESHO: { urban: true },
-	IMPROVEMENT_SHRINE_ORLAGNO: { urban: true },
-	IMPROVEMENT_SHRINE_OSIRIS: { urban: true },
-	IMPROVEMENT_SHRINE_POSEIDON: { urban: true },
-	IMPROVEMENT_SHRINE_RA: { urban: true },
-	IMPROVEMENT_SHRINE_SEBIUMEKER: { urban: true },
-	IMPROVEMENT_SHRINE_SERAPIS: { urban: true },
-	IMPROVEMENT_SHRINE_SHAMASH: { urban: true },
-	IMPROVEMENT_SHRINE_SOL: { urban: true },
-	IMPROVEMENT_SHRINE_SURYA: { urban: true },
-	IMPROVEMENT_SHRINE_TANIT: { urban: true },
-	IMPROVEMENT_SHRINE_TARHUN: { urban: true },
-	IMPROVEMENT_SHRINE_THE_MARUTS: { urban: true },
-	IMPROVEMENT_SHRINE_TIRUMAL: { urban: true },
-	IMPROVEMENT_SHRINE_VARUNA: { urban: true },
-	IMPROVEMENT_SHRINE_YAMA: { urban: true },
-	IMPROVEMENT_SHRINE_ZEUS: { urban: true },
-	IMPROVEMENT_TEMPLE_BUDDHISM: { urban: true },
-	IMPROVEMENT_TEMPLE_CHRISTIANITY: { urban: true },
-	IMPROVEMENT_TEMPLE_HINDUISM: { urban: true },
-	IMPROVEMENT_TEMPLE_JUDAISM: { urban: true },
-	IMPROVEMENT_TEMPLE_MANICHAEISM: { urban: true },
-	IMPROVEMENT_TEMPLE_ZOROASTRIANISM: { urban: true },
-	IMPROVEMENT_THEATER_1: { urban: true },
-	IMPROVEMENT_THEATER_2: { urban: true },
-	IMPROVEMENT_THEATER_3: { urban: true },
+	IMPROVEMENT_ALTAR_ATEN: { specialist: "SPECIALIST_PRIEST_1", urban: true },
+	IMPROVEMENT_BARRACKS: { specialist: "SPECIALIST_OFFICER_1", urban: true },
+	IMPROVEMENT_BATHS_1: { specialist: "SPECIALIST_DOCTOR_1", urban: true },
+	IMPROVEMENT_BATHS_2: { specialist: "SPECIALIST_DOCTOR_2", urban: true },
+	IMPROVEMENT_BATHS_3: { specialist: "SPECIALIST_DOCTOR_3", urban: true },
+	IMPROVEMENT_CAMP: { specialist: "SPECIALIST_TRAPPER", urban: false },
+	IMPROVEMENT_CATHEDRAL_BUDDHISM: {
+		specialist: "SPECIALIST_BISHOP_1",
+		urban: true,
+	},
+	IMPROVEMENT_CATHEDRAL_CHRISTIANITY: {
+		specialist: "SPECIALIST_BISHOP_1",
+		urban: true,
+	},
+	IMPROVEMENT_CATHEDRAL_HINDUISM: {
+		specialist: "SPECIALIST_BISHOP_1",
+		urban: true,
+	},
+	IMPROVEMENT_CATHEDRAL_JUDAISM: {
+		specialist: "SPECIALIST_BISHOP_1",
+		urban: true,
+	},
+	IMPROVEMENT_CATHEDRAL_MANICHAEISM: {
+		specialist: "SPECIALIST_BISHOP_1",
+		urban: true,
+	},
+	IMPROVEMENT_CATHEDRAL_ZOROASTRIANISM: {
+		specialist: "SPECIALIST_BISHOP_1",
+		urban: true,
+	},
+	IMPROVEMENT_COURTHOUSE_1: { specialist: "SPECIALIST_SCRIBE_1", urban: true },
+	IMPROVEMENT_COURTHOUSE_2: { specialist: "SPECIALIST_SCRIBE_2", urban: true },
+	IMPROVEMENT_COURTHOUSE_3: { specialist: "SPECIALIST_SCRIBE_3", urban: true },
+	IMPROVEMENT_FARM: { specialist: "SPECIALIST_FARMER", urban: false },
+	IMPROVEMENT_GROVE: { specialist: "SPECIALIST_GARDENER", urban: false },
+	IMPROVEMENT_LAURION_MINE: { specialist: "SPECIALIST_MINER", urban: false },
+	IMPROVEMENT_LIBRARY_1: {
+		specialist: "SPECIALIST_PHILOSOPHER_1",
+		urban: true,
+	},
+	IMPROVEMENT_LIBRARY_2: {
+		specialist: "SPECIALIST_PHILOSOPHER_2",
+		urban: true,
+	},
+	IMPROVEMENT_LIBRARY_3: {
+		specialist: "SPECIALIST_PHILOSOPHER_3",
+		urban: true,
+	},
+	IMPROVEMENT_LUMBERMILL: { specialist: "SPECIALIST_WOODCUTTER", urban: false },
+	IMPROVEMENT_MARKET_1: { specialist: "SPECIALIST_SHOPKEEPER_1", urban: true },
+	IMPROVEMENT_MARKET_2: { specialist: "SPECIALIST_SHOPKEEPER_2", urban: true },
+	IMPROVEMENT_MARKET_3: { specialist: "SPECIALIST_SHOPKEEPER_3", urban: true },
+	IMPROVEMENT_MINE: { specialist: "SPECIALIST_MINER", urban: false },
+	IMPROVEMENT_MONASTERY_BUDDHISM: {
+		specialist: "SPECIALIST_MONK_1",
+		urban: true,
+	},
+	IMPROVEMENT_MONASTERY_CHRISTIANITY: {
+		specialist: "SPECIALIST_MONK_1",
+		urban: true,
+	},
+	IMPROVEMENT_MONASTERY_HINDUISM: {
+		specialist: "SPECIALIST_MONK_1",
+		urban: true,
+	},
+	IMPROVEMENT_MONASTERY_JUDAISM: {
+		specialist: "SPECIALIST_MONK_1",
+		urban: true,
+	},
+	IMPROVEMENT_MONASTERY_MANICHAEISM: {
+		specialist: "SPECIALIST_MONK_1",
+		urban: true,
+	},
+	IMPROVEMENT_MONASTERY_ZOROASTRIANISM: {
+		specialist: "SPECIALIST_MONK_1",
+		urban: true,
+	},
+	IMPROVEMENT_NETS: { specialist: "SPECIALIST_FISHER", urban: false },
+	IMPROVEMENT_PASTURE: { specialist: "SPECIALIST_RANCHER", urban: false },
+	IMPROVEMENT_QUARRY: { specialist: "SPECIALIST_STONECUTTER", urban: false },
+	IMPROVEMENT_RANGE: { specialist: "SPECIALIST_OFFICER_1", urban: true },
+	IMPROVEMENT_SHRINE_AMUN: { specialist: "SPECIALIST_ACOLYTE_1", urban: true },
+	IMPROVEMENT_SHRINE_ANAHITA: {
+		specialist: "SPECIALIST_ACOLYTE_1",
+		urban: true,
+	},
+	IMPROVEMENT_SHRINE_APEDEMEK: {
+		specialist: "SPECIALIST_ACOLYTE_1",
+		urban: true,
+	},
+	IMPROVEMENT_SHRINE_ARDAKSHO: {
+		specialist: "SPECIALIST_ACOLYTE_1",
+		urban: true,
+	},
+	IMPROVEMENT_SHRINE_ARINNITTI: {
+		specialist: "SPECIALIST_ACOLYTE_1",
+		urban: true,
+	},
+	IMPROVEMENT_SHRINE_ASHUR: { specialist: "SPECIALIST_ACOLYTE_1", urban: true },
+	IMPROVEMENT_SHRINE_ASTAR: { specialist: "SPECIALIST_ACOLYTE_1", urban: true },
+	IMPROVEMENT_SHRINE_ATAR: { specialist: "SPECIALIST_ACOLYTE_1", urban: true },
+	IMPROVEMENT_SHRINE_ATHENA: {
+		specialist: "SPECIALIST_ACOLYTE_1",
+		urban: true,
+	},
+	IMPROVEMENT_SHRINE_BAAL_HAMMON: {
+		specialist: "SPECIALIST_ACOLYTE_1",
+		urban: true,
+	},
+	IMPROVEMENT_SHRINE_BEHER: { specialist: "SPECIALIST_ACOLYTE_1", urban: true },
+	IMPROVEMENT_SHRINE_BELLONA: {
+		specialist: "SPECIALIST_ACOLYTE_1",
+		urban: true,
+	},
+	IMPROVEMENT_SHRINE_CERES: { specialist: "SPECIALIST_ACOLYTE_1", urban: true },
+	IMPROVEMENT_SHRINE_ERESHKIGAL: {
+		specialist: "SPECIALIST_ACOLYTE_1",
+		urban: true,
+	},
+	IMPROVEMENT_SHRINE_ESHMUN: {
+		specialist: "SPECIALIST_ACOLYTE_1",
+		urban: true,
+	},
+	IMPROVEMENT_SHRINE_FERONIA: {
+		specialist: "SPECIALIST_ACOLYTE_1",
+		urban: true,
+	},
+	IMPROVEMENT_SHRINE_HADES: { specialist: "SPECIALIST_ACOLYTE_1", urban: true },
+	IMPROVEMENT_SHRINE_HALKI: { specialist: "SPECIALIST_ACOLYTE_1", urban: true },
+	IMPROVEMENT_SHRINE_HVAR_KHSHAITA: {
+		specialist: "SPECIALIST_ACOLYTE_1",
+		urban: true,
+	},
+	IMPROVEMENT_SHRINE_INDRA: { specialist: "SPECIALIST_ACOLYTE_1", urban: true },
+	IMPROVEMENT_SHRINE_ISHTAR: {
+		specialist: "SPECIALIST_ACOLYTE_1",
+		urban: true,
+	},
+	IMPROVEMENT_SHRINE_ISIS: { specialist: "SPECIALIST_ACOLYTE_1", urban: true },
+	IMPROVEMENT_SHRINE_KAMRUSEPA: {
+		specialist: "SPECIALIST_ACOLYTE_1",
+		urban: true,
+	},
+	IMPROVEMENT_SHRINE_MAHREM: {
+		specialist: "SPECIALIST_ACOLYTE_1",
+		urban: true,
+	},
+	IMPROVEMENT_SHRINE_MANDULIS: {
+		specialist: "SPECIALIST_ACOLYTE_1",
+		urban: true,
+	},
+	IMPROVEMENT_SHRINE_MARDUK: {
+		specialist: "SPECIALIST_ACOLYTE_1",
+		urban: true,
+	},
+	IMPROVEMENT_SHRINE_MAYON: { specialist: "SPECIALIST_ACOLYTE_1", urban: true },
+	IMPROVEMENT_SHRINE_MEDR: { specialist: "SPECIALIST_ACOLYTE_1", urban: true },
+	IMPROVEMENT_SHRINE_MELQART: {
+		specialist: "SPECIALIST_ACOLYTE_1",
+		urban: true,
+	},
+	IMPROVEMENT_SHRINE_MITHRA: {
+		specialist: "SPECIALIST_ACOLYTE_1",
+		urban: true,
+	},
+	IMPROVEMENT_SHRINE_MURUGAN: {
+		specialist: "SPECIALIST_ACOLYTE_1",
+		urban: true,
+	},
+	IMPROVEMENT_SHRINE_NABU: { specialist: "SPECIALIST_ACOLYTE_1", urban: true },
+	IMPROVEMENT_SHRINE_NANA: { specialist: "SPECIALIST_ACOLYTE_1", urban: true },
+	IMPROVEMENT_SHRINE_NEITH: { specialist: "SPECIALIST_ACOLYTE_1", urban: true },
+	IMPROVEMENT_SHRINE_NINURTA: {
+		specialist: "SPECIALIST_ACOLYTE_1",
+		urban: true,
+	},
+	IMPROVEMENT_SHRINE_NUSKA: { specialist: "SPECIALIST_ACOLYTE_1", urban: true },
+	IMPROVEMENT_SHRINE_OESHO: { specialist: "SPECIALIST_ACOLYTE_1", urban: true },
+	IMPROVEMENT_SHRINE_ORLAGNO: {
+		specialist: "SPECIALIST_ACOLYTE_1",
+		urban: true,
+	},
+	IMPROVEMENT_SHRINE_OSIRIS: {
+		specialist: "SPECIALIST_ACOLYTE_1",
+		urban: true,
+	},
+	IMPROVEMENT_SHRINE_POSEIDON: {
+		specialist: "SPECIALIST_ACOLYTE_1",
+		urban: true,
+	},
+	IMPROVEMENT_SHRINE_RA: { specialist: "SPECIALIST_ACOLYTE_1", urban: true },
+	IMPROVEMENT_SHRINE_SEBIUMEKER: {
+		specialist: "SPECIALIST_ACOLYTE_1",
+		urban: true,
+	},
+	IMPROVEMENT_SHRINE_SERAPIS: {
+		specialist: "SPECIALIST_ACOLYTE_1",
+		urban: true,
+	},
+	IMPROVEMENT_SHRINE_SHAMASH: {
+		specialist: "SPECIALIST_ACOLYTE_1",
+		urban: true,
+	},
+	IMPROVEMENT_SHRINE_SOL: { specialist: "SPECIALIST_ACOLYTE_1", urban: true },
+	IMPROVEMENT_SHRINE_SURYA: { specialist: "SPECIALIST_ACOLYTE_1", urban: true },
+	IMPROVEMENT_SHRINE_TANIT: { specialist: "SPECIALIST_ACOLYTE_1", urban: true },
+	IMPROVEMENT_SHRINE_TARHUN: {
+		specialist: "SPECIALIST_ACOLYTE_1",
+		urban: true,
+	},
+	IMPROVEMENT_SHRINE_THE_MARUTS: {
+		specialist: "SPECIALIST_ACOLYTE_1",
+		urban: true,
+	},
+	IMPROVEMENT_SHRINE_TIRUMAL: {
+		specialist: "SPECIALIST_ACOLYTE_1",
+		urban: true,
+	},
+	IMPROVEMENT_SHRINE_VARUNA: {
+		specialist: "SPECIALIST_ACOLYTE_1",
+		urban: true,
+	},
+	IMPROVEMENT_SHRINE_YAMA: { specialist: "SPECIALIST_ACOLYTE_1", urban: true },
+	IMPROVEMENT_SHRINE_ZEUS: { specialist: "SPECIALIST_ACOLYTE_1", urban: true },
+	IMPROVEMENT_TEMPLE_BUDDHISM: {
+		specialist: "SPECIALIST_PRIEST_1",
+		urban: true,
+	},
+	IMPROVEMENT_TEMPLE_CHRISTIANITY: {
+		specialist: "SPECIALIST_PRIEST_1",
+		urban: true,
+	},
+	IMPROVEMENT_TEMPLE_HINDUISM: {
+		specialist: "SPECIALIST_PRIEST_1",
+		urban: true,
+	},
+	IMPROVEMENT_TEMPLE_JUDAISM: {
+		specialist: "SPECIALIST_PRIEST_1",
+		urban: true,
+	},
+	IMPROVEMENT_TEMPLE_MANICHAEISM: {
+		specialist: "SPECIALIST_PRIEST_1",
+		urban: true,
+	},
+	IMPROVEMENT_TEMPLE_ZOROASTRIANISM: {
+		specialist: "SPECIALIST_PRIEST_1",
+		urban: true,
+	},
+	IMPROVEMENT_THEATER_1: { specialist: "SPECIALIST_POET_1", urban: true },
+	IMPROVEMENT_THEATER_2: { specialist: "SPECIALIST_POET_2", urban: true },
+	IMPROVEMENT_THEATER_3: { specialist: "SPECIALIST_POET_3", urban: true },
+};
+
+// An improvement whose <AdjacentImprovementSpecialists> staffs the listed
+// improvements on its same-team hex neighbours for free, keyed by the
+// GRANTING improvement. The game keeps this grant in a per-tile dict that
+// never reaches the save (Tile.writeGameXML, Tile.cs:1507, guards
+// <Specialist> on the stored specialist), so deriveGrantedSpecialists
+// rebuilds it from adjacency the way the game does on load.
+export const ADJACENT_IMPROVEMENT_SPECIALISTS: Readonly<
+	Record<string, readonly string[]>
+> = {
+	IMPROVEMENT_JERWAN_AQUEDUCT: ["IMPROVEMENT_FARM"],
 };
