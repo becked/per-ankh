@@ -41,7 +41,19 @@
 //     DIFFERENT city of the same player qualifies, so a same-city predicate
 //     would be wrong. In test-data/saves/match_426504745_save the aqueduct
 //     sits in CityTerritory 10 and three of its five adjacent farms lie
-//     outside it, two in territory 5 and one in 8;
+//     outside it, two in territory 5 and one in 8.
+//     The game reads the source side's team off the city TERRITORY; the
+//     walk below reads it off the source TILE's owner. Those are the same
+//     value wherever either is non-NONE, which is why reading the tile is
+//     equivalent here and not merely conservative. Measured across the 13
+//     saves in test-data/saves/: all 14456 owned tiles sit in a territory
+//     whose city owner they match, and no territory is mixed (0 of 282) —
+//     the 317 unowned tiles that still carry a `<CityTerritory>` are the
+//     whole of 5 territories whose city has `City.Player = -1`. For those,
+//     `City.getTeam()` (City.cs:3207) is NONE because `hasPlayer()` is
+//     false, and `changeImprovement` gates the ENTIRE walk on
+//     `pCityTerritory.getTeam() != TeamType.NONE` (Tile.cs:6625) — so the
+//     game skips exactly the territories `teamOf` skips;
 //   - it carries no stored specialist. The dict entry is still recorded on a
 //     farm that already has one, but has no effect — `getSpecialist`
 //     (Tile.cs:6993) returns the stored one and never reaches the free
