@@ -1,5 +1,34 @@
 # Changelog
 
+## [2026-10-07-7529669] - 2026-10-07
+
+### Features
+
+- (parser) derive the Jerwan Aqueduct's wonder-granted specialists — [1fa39ef](https://github.com/becked/per-ankh/commit/1fa39ef86fc9127ea0a93300f81f2800de103705)
+- (stats) a Game length tab on all three stats surfaces — [a6d4ca3](https://github.com/becked/per-ankh/commit/a6d4ca32c9269b1845ef4fae83352602a3c4968e)
+
+### Fixes
+
+- (tournament) a whole-match row reads the sitting its time names — [6b43cd7](https://github.com/becked/per-ankh/commit/6b43cd7236156cd02821c8a5f238744b33199d94)
+- (tournament) a live sitting stays the one its match reads by — [b971b4a](https://github.com/becked/per-ankh/commit/b971b4a500e916d5c29915b6be31dcaff52d8037)
+- (tournament) a live sitting is the latest one under way — [57d30dd](https://github.com/becked/per-ankh/commit/57d30dddc7c084a20ebbf0c15b4b4bb51a48ebf2)
+- (map) show the tier-distinct specialist name in the tile tooltip — [6b3b3b2](https://github.com/becked/per-ankh/commit/6b3b3b2c9b69fa69ee517b82dca7885ac4e11d5a)
+- (game-detail) drop the no-matchup notice from the specialists tab — [3e3e5f7](https://github.com/becked/per-ankh/commit/3e3e5f799aa7e50c9ee8e110b6a88e4582d7f37f)
+- (map) the tile panel drops when the camera moves — [81ae296](https://github.com/becked/per-ankh/commit/81ae2964cc4b19c6b2feb2e1518f3bffb7e3c4ea)
+- (map) resolve the tile panel's tile per turn, and drop it on button zoom — [d5a60db](https://github.com/becked/per-ankh/commit/d5a60db4091bb97a4b9a03a6d78900ee5a0d241f)
+- (stats) fit the Game length tab to the stats surfaces — [3d36392](https://github.com/becked/per-ankh/commit/3d3639243f4316faf069000769d8ed96679821cd)
+
+### Other
+
+- (pr-review) refresh the baked-name example the tooltip fix invalidated — [00f9fc7](https://github.com/becked/per-ankh/commit/00f9fc7e6c1477cdda245879a6cd6faf2e04861c)
+- (specialists) use the game's "free specialist" vocabulary — [8edd9fe](https://github.com/becked/per-ankh/commit/8edd9fe855b34aa91c7bad2c26ca2f39aba4acde)
+- (parser) drop specialist_free — the game has one kind of specialist — [5dcaaf7](https://github.com/becked/per-ankh/commit/5dcaaf7cccbe7cc6ae9d6c98ac3d0632fa4a6395)
+- (test) format free-specialists.test.ts with Prettier — [9fbf6da](https://github.com/becked/per-ankh/commit/9fbf6da0b4ad4a9e193421e691e4e016c5c1b084)
+- (challenges) name the current parser floor, 2.21.0 — [9751170](https://github.com/becked/per-ankh/commit/9751170f763fe6b694cf8332cacddbbac25d811c)
+- (game-detail) label science specialists through specialistName — [5d92077](https://github.com/becked/per-ankh/commit/5d9207774f0eebd6d3c80d7805cd181a13baf44b)
+- (parser) record why the source tile's team stands in for the city's — [1173d8d](https://github.com/becked/per-ankh/commit/1173d8d40cfcf4e39739539707b189873abc3af0)
+- (stats) say what the Game length spec's hasData actually does — [7529669](https://github.com/becked/per-ankh/commit/75296691dfb7a6149e7c5b0476f437eb1312dad3)
+
 ## [2026-10-05-ddc6c73] - 2026-10-05
 
 ### Features
