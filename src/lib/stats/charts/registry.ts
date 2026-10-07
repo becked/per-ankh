@@ -108,8 +108,10 @@ export const CHART_SPECS: ChartSpec[] = [
 		id: "length",
 		category: "length",
 		title: "Game length",
-		// `!= null`, not `!== null`: a bundle cached before the field existed
-		// reads undefined, and the tab must not surface over one.
+		// Required by ChartSpec but never evaluated: StatsView calls hasData only
+		// inside its generic spec loop, which this category — like the other
+		// panel-rendered anchors — never reaches. A bundle cached before the field
+		// existed is caught by GameLengthPanel's own null branch instead.
 		hasData: (b) => b.turnLength != null,
 	},
 	// Laws — category anchor only; rendered by LawsStatsPanel (one nation
