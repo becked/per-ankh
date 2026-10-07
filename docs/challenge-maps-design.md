@@ -102,7 +102,7 @@ The scorer reads the blob, so what the blob does not carry has to be added first
 - `THEOLOGY_TIERS` — `<iTier>` from `theology.xml`, new generated table, for `religion.min_theology_tier`.
 - `player_wonders[].completed_turn` already means completion: `derivePlayerWonders` keeps only the `WONDER_ACTIVITY` entries whose text says "completed" (the log also carries a "has begun construction" entry per wonder, indistinguishable by `Data1–3`). The filter is on English log text, so a non-English save records no wonders and `build … by_turn` on a wonder cannot be met from it — the same limitation the Wonders tab has today. Nothing to add for v1; the language-independent form (completion = latest entry for a wonder that stands finished on the map) is a follow-up.
 
-Because each is optional on the blob type (older blobs lack it) and the scorer would read its absence as "not under construction" / "trained", the Worker refuses a challenge map or run parsed before `CHALLENGE_MIN_PARSER_VERSION` (2.20.0, `400 STALE_PARSER`) rather than persist a verdict scored on missing fields — the case is a tab left open across a deploy.
+Because each is optional on the blob type (older blobs lack it) and the scorer would read its absence as "not under construction" / "trained", the Worker refuses a challenge map or run parsed before `CHALLENGE_MIN_PARSER_VERSION` (2.21.0, `400 STALE_PARSER`) rather than persist a verdict scored on missing fields — the case is a tab left open across a deploy.
 
 ### 3.5 Stress test: the 26 that already ran
 
