@@ -401,12 +401,6 @@
 		</div>
 	{/if}
 
-	{#if !matchup}
-		<p class="mb-6 rounded-lg bg-surface p-4 text-sm italic text-tan">
-			Side-by-side comparison needs exactly two nations. The table below covers
-			every player.
-		</p>
-	{/if}
 	{#if matchup && comparisonPanels.length > 0}
 		<div class="mb-6 rounded-lg bg-surface p-4">
 			<h3 class="mb-3 text-base font-bold text-tan">Side by side</h3>
