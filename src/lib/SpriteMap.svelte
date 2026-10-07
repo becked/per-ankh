@@ -391,6 +391,25 @@
 	}
 	let hoverState = $state<HoverState | null>(null);
 
+	// What the panel renders: the hovered tile re-read from the live `tiles`
+	// array, not the object the hover handed over. A turn change rebuilds every
+	// tile object (`reconstructMapTiles` projects the final-turn snapshot into
+	// a fresh array), and playback steps the turn every 300ms — 150ms on fast
+	// — under a stationary cursor, so a held object would keep naming the turn
+	// it was raised at. The camera can't have moved — that clears `hoverState`
+	// outright — so the hover's screen position still points at this
+	// coordinate. A coordinate the new array has no entry for, which is a
+	// navigation to a game with a different map size, drops the panel, as the
+	// city popover closes at a turn its city has no banner at.
+	const hoverPanel = $derived.by(() => {
+		const hover = hoverState;
+		if (!hover) return null;
+		const tile = tiles.find(
+			(t) => t.x === hover.tile.x && t.y === hover.tile.y,
+		);
+		return tile ? { tile, x: hover.x, y: hover.y } : null;
+	});
+
 	// The box both overlays work in, in canvas-local CSS pixels: the hover
 	// panel clamps to its edges, and the city banners project into it. It is
 	// the CANVAS's size and not the container's — deck.gl pins
@@ -1325,6 +1344,12 @@
 			initialViewState: { ...next, minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM },
 		});
 		currentViewState = next;
+		// Going around the controller goes around `onViewStateChange` too —
+		// `Deck.setProps` assigns `initialViewState` straight to its tracked
+		// view state and raises nothing — so this path drops the tile panel
+		// itself. Reachable with a panel up: a banner raises one on focus, and
+		// shift-tab from it reaches these buttons. See `onViewStateChange`.
+		hoverState = null;
 	}
 
 	function adjustZoom(delta: number) {
@@ -1369,16 +1394,19 @@
 				maxZoom: MAX_ZOOM,
 			},
 			controller: true,
-			// Any camera move drops the tile panel, because nothing re-resolves
-			// it while the map moves: deck.gl re-picks hover only off a pointer
-			// move (`Deck._pickAndCallback` runs the request `_onPointerMove`
-			// leaves behind, and that bails outright while a button is held).
-			// So a pan left the panel frozen at the pixel the drag began from,
-			// naming a tile that had slid out from under it, and a wheel zoom —
-			// the primary way to zoom here — left it sitting over a map
-			// rescaling beneath it. One rule covers every path the camera moves
-			// on: drag-pan, wheel and pinch zoom, double-click zoom, the
-			// keyboard controls. The next hover puts the panel back.
+			// A camera move drops the tile panel, because nothing re-resolves
+			// its screen position while the map moves: deck.gl re-picks hover
+			// only off a pointer move (`Deck._pickAndCallback` runs the request
+			// `_onPointerMove` leaves behind, and that bails outright while a
+			// button is held). So a pan left the panel frozen at the pixel the
+			// drag began from, naming a tile that had slid out from under it,
+			// and a wheel zoom — the primary way to zoom here — left it sitting
+			// over a map rescaling beneath it. deck raises this for every
+			// camera path its controller owns — drag-pan, wheel and pinch zoom,
+			// double-click zoom, the keyboard controls — so one rule covers
+			// them all; the overlay zoom buttons bypass the controller and
+			// clear the panel in `applyViewState` instead. The next hover puts
+			// it back.
 			onViewStateChange: ({ viewState: vs }) => {
 				currentViewState = normalizeViewState(vs);
 				hoverState = null;
@@ -1895,15 +1923,15 @@
 		/>
 	{/if}
 
-	{#if hoverState}
+	{#if hoverPanel}
 		<MapTooltip
-			tile={hoverState.tile}
-			cityFamily={hoverState.tile.owner_city
-				? (cityFamilyCrestByName.get(hoverState.tile.owner_city) ?? null)
+			tile={hoverPanel.tile}
+			cityFamily={hoverPanel.tile.owner_city
+				? (cityFamilyCrestByName.get(hoverPanel.tile.owner_city) ?? null)
 				: null}
-			nationCrestKey={resolveNationCrestKey(hoverState.tile.owner_nation)}
-			screenX={hoverState.x}
-			screenY={hoverState.y}
+			nationCrestKey={resolveNationCrestKey(hoverPanel.tile.owner_nation)}
+			screenX={hoverPanel.x}
+			screenY={hoverPanel.y}
 			canvasWidth={deckWidth}
 			canvasHeight={deckHeight}
 		/>
