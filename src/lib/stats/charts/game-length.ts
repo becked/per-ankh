@@ -40,6 +40,11 @@ export function gameLengthHistogramOption(
 	const share = (count: number) => Math.round((count / games) * 100);
 	return {
 		...CHART_THEME,
+		// Titled in-chart, like every other builder behind a dedicated panel
+		// (laws, tech, families, yields): only the registry-driven charts get
+		// their title injected by StatsView, and this one is not among them.
+		// `top: 64` is the headroom that title needs.
+		title: { ...CHART_THEME.title, text: "Game length" },
 		tooltip: {
 			...CHART_THEME.tooltip,
 			axisPointer: { type: "shadow" },
@@ -50,7 +55,7 @@ export function gameLengthHistogramOption(
 				return `${bucketLabel(bucket.start, bucketTurns)} turns<br/>${bucket.count} of ${games} games<br/>${share(bucket.count)}%`;
 			},
 		},
-		grid: COMMON_GRID,
+		grid: { ...COMMON_GRID, top: 64 },
 		xAxis: {
 			type: "category",
 			data: labels,

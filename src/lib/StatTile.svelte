@@ -10,8 +10,13 @@
 		icon?: Snippet;
 		// The value content (text or inline markup).
 		children: Snippet;
+		// Optional second line below the value, in the label's type — for a
+		// value that carries its own spread (the Game length median's IQR). A
+		// string rather than a snippet, matching `label`: the line is the
+		// value's own annotation, not a slot for arbitrary markup.
+		sub?: string;
 	}
-	let { label, icon, children }: Props = $props();
+	let { label, icon, children, sub }: Props = $props();
 </script>
 
 <div class="rounded p-2" style="background-color: rgb(var(--color-surface));">
@@ -20,4 +25,7 @@
 		{label}
 	</p>
 	<p class="truncate text-sm font-bold text-bright">{@render children()}</p>
+	{#if sub}
+		<p class="mt-0.5 text-[10px] text-gray-400">{sub}</p>
+	{/if}
 </div>

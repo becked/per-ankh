@@ -66,7 +66,7 @@ export interface ChartBundleSummaryCore {
 // 20 turns is read off the corpus: the public duel slice spans 4–180, which is
 // 10 buckets with a clear mode (249 of 762 games at 60–79), and the narrowest
 // corpus a surface renders — one tournament, 102 games over 31–180 — still
-// gets 8. A finer bucket turns that one into noise; a coarser one flattens the
+// gets 9. A finer bucket turns that one into noise; a coarser one flattens the
 // mode out of the wide corpus.
 export const TURN_LENGTH_BUCKET = 20;
 

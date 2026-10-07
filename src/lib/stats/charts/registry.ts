@@ -108,7 +108,9 @@ export const CHART_SPECS: ChartSpec[] = [
 		id: "length",
 		category: "length",
 		title: "Game length",
-		hasData: (b) => b.turnLength !== null,
+		// `!= null`, not `!== null`: a bundle cached before the field existed
+		// reads undefined, and the tab must not surface over one.
+		hasData: (b) => b.turnLength != null,
 	},
 	// Laws — category anchor only; rendered by LawsStatsPanel (one nation
 	// selector driving both the law-adoption and opening-sequence charts).
