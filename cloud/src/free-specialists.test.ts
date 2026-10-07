@@ -89,14 +89,7 @@ describe("deriveFreeSpecialists", () => {
 			farm(4, 3),
 			farm(4, 5),
 		];
-		expect(freeAt(tiles)).toEqual([
-			"4,4",
-			"5,3",
-			"5,5",
-			"6,3",
-			"6,4",
-			"6,5",
-		]);
+		expect(freeAt(tiles)).toEqual(["4,4", "5,3", "5,5", "6,3", "6,4", "6,5"]);
 	});
 
 	// Odd row: NE/SE are (x, y±1). Farms at (6,2) and (6,4) are the neighbours
@@ -113,14 +106,7 @@ describe("deriveFreeSpecialists", () => {
 			farm(6, 2),
 			farm(6, 4),
 		];
-		expect(freeAt(tiles)).toEqual([
-			"4,2",
-			"4,3",
-			"4,4",
-			"5,2",
-			"5,4",
-			"6,3",
-		]);
+		expect(freeAt(tiles)).toEqual(["4,2", "4,3", "4,4", "5,2", "5,4", "6,3"]);
 	});
 
 	it("leaves a farm two tiles away alone", () => {
