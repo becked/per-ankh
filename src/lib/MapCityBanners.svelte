@@ -104,7 +104,14 @@
 		type="button"
 		class="city-banner {full ? CHROME_PANEL_CLASS : 'is-label'}"
 		style="left: {left}px; top: {top}px;"
-		onmouseenter={() => onBannerHover(banner.tile, anchor[0], anchor[1])}
+		onmouseenter={(e) => {
+			// A held button means the map is being dragged under the cursor, so a
+			// banner sliding past it isn't a hover — deck.gl suppresses its own
+			// hover picking on the same test (`Deck._onPointerMove`). Without
+			// this, the panel the pan just dropped comes straight back, pinned to
+			// whichever city the cursor swept over.
+			if (e.buttons === 0) onBannerHover(banner.tile, anchor[0], anchor[1]);
+		}}
 		onfocus={() => onBannerHover(banner.tile, anchor[0], anchor[1])}
 		onclick={(e) => onBannerClick(banner.cityName, e.currentTarget)}
 	>

@@ -1369,8 +1369,19 @@
 				maxZoom: MAX_ZOOM,
 			},
 			controller: true,
+			// Any camera move drops the tile panel, because nothing re-resolves
+			// it while the map moves: deck.gl re-picks hover only off a pointer
+			// move (`Deck._pickAndCallback` runs the request `_onPointerMove`
+			// leaves behind, and that bails outright while a button is held).
+			// So a pan left the panel frozen at the pixel the drag began from,
+			// naming a tile that had slid out from under it, and a wheel zoom —
+			// the primary way to zoom here — left it sitting over a map
+			// rescaling beneath it. One rule covers every path the camera moves
+			// on: drag-pan, wheel and pinch zoom, double-click zoom, the
+			// keyboard controls. The next hover puts the panel back.
 			onViewStateChange: ({ viewState: vs }) => {
 				currentViewState = normalizeViewState(vs);
+				hoverState = null;
 			},
 			// Hover dispatch: deck.gl returns the picked layer's data item.
 			// Our pickable PolygonLayer is fed the MapTile array directly,
