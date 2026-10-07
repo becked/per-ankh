@@ -92,6 +92,7 @@ import {
 	projectDisplayName,
 	type DetailPlayer,
 } from "./helpers";
+import { specialistName } from "./specialists";
 import { standingShiftMarkers, type StandingShift } from "./standings";
 
 // ─── Key-science-tech conditions ─────────────────────────────────────
@@ -419,11 +420,8 @@ export function scienceTechMarkers(
 					),
 					// Level-distinct names ("Apprentice Poet" / "Master Poet" /
 					// "Elder Poet") straight from the baked specialist table.
-					specialists: countByName(
-						staffed,
-						(i) =>
-							SPECIALISTS[i.specialist!]?.name ??
-							formatEnum(i.specialist!, "SPECIALIST_"),
+					specialists: countByName(staffed, (i) =>
+						specialistName(i.specialist!),
 					),
 					// Base science these earn per turn (floor — modifiers stack).
 					flat:
