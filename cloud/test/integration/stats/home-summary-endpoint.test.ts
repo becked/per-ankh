@@ -50,7 +50,29 @@ const duelKey = (parser_version = CURRENT_PARSER_VERSION): string =>
 function seedBundle(over: Record<string, unknown> = {}): string {
 	return JSON.stringify({
 		meta: { game_count: 603, parser_version: CURRENT_PARSER_VERSION },
-		summary: { total_games: 603, avg_total_turns: 118 },
+		summary: { total_games: 603, avg_total_turns: 73.7 },
+		turnLength: {
+			games: 603,
+			min: 4,
+			p25: 56,
+			median: 73,
+			mean: 73.7,
+			p75: 90,
+			max: 180,
+			bucket_turns: 20,
+			histogram: [
+				{ start: 0, count: 7 },
+				{ start: 20, count: 40 },
+				{ start: 40, count: 129 },
+				{ start: 60, count: 197 },
+				{ start: 80, count: 139 },
+				{ start: 100, count: 62 },
+				{ start: 120, count: 23 },
+				{ start: 140, count: 5 },
+				{ start: 160, count: 0 },
+				{ start: 180, count: 1 },
+			],
+		},
 		nationWinRate: [
 			{ nation: "NATION_ROME", games: 200, wins: 110, rate: 0.55 },
 		],

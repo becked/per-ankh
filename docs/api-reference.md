@@ -366,7 +366,7 @@ User-corpus aggregate stats bundle.
 - **Auth:** Public (owner extras) — owner (`self`) corpus includes private games; visitor/anon forced to public.
 - **Path:** `user_id` (21-char).
 - **Query:** `scope` (default `all`; `public`|`vs_ai`|`mp`|`tournament`|`<collection_id>`; collection and `public` narrowing are owner-only).
-- **Response 200:** `ChartBundle` — `ChartBundleCore` (meta, summary, nations, win rates, starting-leader archetype/trait win rates, wonder build/timing stats, yield curves, law/tech timing…) plus the user-only extension: `win_rate`, `games_with_outcome`, `summary.top_nation`/`top_archetype`, and `save_dates` (the Overview calendar; user-only since bundle schema 9, along with the removal of `favorite_day_of_week` — the profile card's copy of that comes from `GET /v1/users/:user_id`, not here).
+- **Response 200:** `ChartBundle` — `ChartBundleCore` (meta, summary, `turnLength`, nations, win rates, starting-leader archetype/trait win rates, wonder build/timing stats, yield curves, law/tech timing…) plus the user-only extension: `win_rate`, `games_with_outcome`, `summary.top_nation`/`top_archetype`, and `save_dates` (the Overview calendar; user-only since bundle schema 9, along with the removal of `favorite_day_of_week` — the profile card's copy of that comes from `GET /v1/users/:user_id`, not here).
 - **Errors:** `400 INVALID_USER_ID`, `404 NOT_FOUND`.
 - **Notes:** KV-cached, keyed on `{ user_id, viewerScope, scope, parser_version }`.
 

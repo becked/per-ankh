@@ -15,6 +15,7 @@ import { WONDER_EMPTY_MESSAGE } from "./wonders";
 
 export const CATEGORIES: Array<{ id: StatsCategory; label: string }> = [
 	{ id: "yields", label: "Yields" },
+	{ id: "length", label: "Game length" },
 	{ id: "nations", label: "Nations" },
 	{ id: "leaders", label: "Leaders" },
 	{ id: "wonders", label: "Wonders" },
@@ -98,6 +99,16 @@ export const CHART_SPECS: ChartSpec[] = [
 		category: "yields",
 		title: "Yields",
 		hasData: (b) => b.yieldCurves.turns.length > 0,
+	},
+	// Game length — category anchor only; rendered by GameLengthPanel (the four
+	// order statistics plus the turn-count histogram). The first category keyed
+	// to a per-game fact rather than to a game entity: a second one (victory
+	// type, map size) belongs beside it here rather than in a tab of its own.
+	{
+		id: "length",
+		category: "length",
+		title: "Game length",
+		hasData: (b) => b.turnLength !== null,
 	},
 	// Laws — category anchor only; rendered by LawsStatsPanel (one nation
 	// selector driving both the law-adoption and opening-sequence charts).

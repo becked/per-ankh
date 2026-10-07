@@ -1,11 +1,12 @@
 <script lang="ts">
-	// Tournament stats page. Nine tabs — Matches (the sortable match list,
+	// Tournament stats page. Eleven tabs — Matches (the sortable match list,
 	// each row linking to its uploaded game), Players (standings + nation
 	// picks), Nations (nation win rate), Leaders (starting archetype and
 	// traits), Wonders (build timing and builder win rate), Families (capital
-	// family + per-nation picks), Yields (per-turn curves), Records (the
-	// biggest numbers on each yield) and Casters (caster
-	// leaderboard) — spanning both stats
+	// family + per-nation picks), Families fielded (keep rate against the
+	// pool's chance level), Yields (per-turn curves), Game length (turn-count
+	// distribution), Records (the biggest numbers on each yield) and Casters
+	// (caster leaderboard) — spanning both stats
 	// subsystems: Plane A tournament-native (standings + casters) and Plane B1
 	// (the ChartBundle pointed at the tournament's games). Renders the charts
 	// directly (no chart registry) through the shared ChartContainer, reusing the
@@ -31,6 +32,7 @@
 	import { getZoneClock } from "$lib/tournament/zone-context.svelte";
 	import FamilyKeepsPanel from "$lib/stats/FamilyKeepsPanel.svelte";
 	import FamilyStatsPanel from "$lib/stats/FamilyStatsPanel.svelte";
+	import GameLengthPanel from "$lib/stats/GameLengthPanel.svelte";
 	import RecordsPanel from "$lib/stats/RecordsPanel.svelte";
 	import YieldsStatsPanel from "$lib/stats/YieldsStatsPanel.svelte";
 	import { barChartHeight } from "$lib/stats/charts/helpers";
@@ -183,6 +185,7 @@
 		"families",
 		"family-fielded",
 		"yields",
+		"length",
 		"records",
 		"casters",
 	] as const;
@@ -238,6 +241,9 @@
 				>Families fielded</Tabs.Trigger
 			>
 			<Tabs.Trigger value="yields" class={triggerClass}>Yields</Tabs.Trigger>
+			<Tabs.Trigger value="length" class={triggerClass}
+				>Game length</Tabs.Trigger
+			>
 			<Tabs.Trigger value="records" class={triggerClass}>Records</Tabs.Trigger>
 			<Tabs.Trigger value="casters" class={triggerClass}>Casters</Tabs.Trigger>
 		</Tabs.List>
@@ -430,6 +436,14 @@
 		     player-game, not one game; the split cohorts are games. -->
 		<Tabs.Content value="yields">
 			<YieldsStatsPanel bundle={data.games} countLabel="Players" />
+		</Tabs.Content>
+
+		<!-- Game length — how long this event's matches ran (Plane B1). The one
+		     panel here with no countLabel: turn count belongs to the game, so its
+		     denominator is games on every surface, where Yields and Records count
+		     the seats this corpus's all-humans focal set admits. -->
+		<Tabs.Content value="length">
+			<GameLengthPanel bundle={data.games} />
 		</Tabs.Content>
 
 		<!-- Records — the biggest number on each yield across the tournament's

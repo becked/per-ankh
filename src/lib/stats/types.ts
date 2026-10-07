@@ -26,9 +26,33 @@ export interface ChartBundleMeta {
 }
 
 // Summary tiles common to both corpora (per-game facts).
+//
+// avg_total_turns is `turnLength.mean` under its original name — the Worker
+// computes it once and serves both. Read it from turnLength: that one is
+// non-nullable whenever the distribution exists, so the Game length panel needs
+// no branch for an average it always has.
 export interface ChartBundleSummaryCore {
 	total_games: number;
 	avg_total_turns: Nullable<number>;
+}
+
+// The corpus's game-length distribution, over its distinct games. Order
+// statistics and histogram both: min/max are single games (the public corpus's
+// shortest duel is a real 4-turn rush), p25/median/p75 are where the mass is,
+// and the histogram is the shape behind both.
+export interface TurnLengthStats {
+	// Distinct games behind every number here, and the histogram's denominator.
+	games: number;
+	min: number;
+	p25: number;
+	median: number;
+	mean: number;
+	p75: number;
+	max: number;
+	bucket_turns: number;
+	// Contiguous from the bucket holding `min` to the one holding `max`; an
+	// interior bucket with no game keeps its zero.
+	histogram: Array<{ start: number; count: number }>;
 }
 
 // User-corpus summary adds the "most X" tiles (one-focal-per-game); the
@@ -82,6 +106,10 @@ export interface ChartBundleCore {
 	familyKeeps: FamilyKeeps;
 
 	summary: ChartBundleSummaryCore;
+
+	// How long this corpus's games ran. Null when no in-scope game produced a
+	// seat row — no distribution rather than an empty one.
+	turnLength: Nullable<TurnLengthStats>;
 
 	nations: Array<{ nation: string; games_played: number }>;
 
@@ -290,6 +318,7 @@ export type StatsCategory =
 	| "families"
 	| "family-fielded"
 	| "yields"
+	| "length"
 	| "laws"
 	| "cities"
 	| "tech"

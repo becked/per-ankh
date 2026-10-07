@@ -59,6 +59,7 @@ const BUNDLE_SCHEMA_CHANGELOG: Record<number, string> = {
 	10: "familyKeeps — per-family-class keep rate against the pool's chance baseline, overall and per nation",
 	11: "records moved to their own entry — per yield series, the top seats on each of seven boards (peak, end-of-game, and the T20/T40/T60/T80/T100 checkpoints), for both the rate and the cumulative column. Folded into the pass that already builds the bands, so no new query, but stored and served separately (the ':records' payload segment above) because only the Records tab reads them",
 	12: "gdp — a per-turn GDP series on yieldCurves and a GDP record board, from the game_player_turn columns migration 0048 adds. A new key inside an existing Record rather than a new declared field, so nothing dereferences it blind, but a bundle cached before the deploy would draw an empty GDP chart on the Yields tab for up to a TTL. A flush is cheaper than that",
+	13: "turnLength — the corpus's game-length distribution (min/p25/median/mean/p75/max plus a 20-turn histogram) over its distinct games, for the Game length tab. No new query: the turn count already rides the base join, and summary.avg_total_turns is now turnLength.mean rather than a second sum over the same rows. A declared field the panel dereferences, so a pre-field bundle would read undefined",
 };
 
 export const BUNDLE_SCHEMA_VERSION = Math.max(

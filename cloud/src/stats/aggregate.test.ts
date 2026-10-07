@@ -5,11 +5,13 @@ import {
 	RECORD_KEYS,
 	type SeatRecord,
 	boundOpeningLaws,
+	buildTurnLength,
 	dedupeSeatRecords,
 	emptySeatRecord,
 	foldRecordRow,
 	rankRecords,
 } from "./aggregate";
+import { TURN_LENGTH_BUCKET } from "./types";
 
 // Openings drawn from the real civic laws — succession laws never reach this
 // field — as sorted windows over the sorted law list, so each set has the shape
@@ -296,5 +298,86 @@ describe("records", () => {
 			);
 			expect(recordGames.b).toBeUndefined();
 		});
+	});
+});
+
+describe("buildTurnLength", () => {
+	it("has no distribution for an empty corpus", () => {
+		expect(buildTurnLength([])).toBeNull();
+	});
+
+	it("reports one game as its own every statistic", () => {
+		const only = buildTurnLength([73]);
+		expect(only).toMatchObject({
+			games: 1,
+			min: 73,
+			p25: 73,
+			median: 73,
+			mean: 73,
+			p75: 73,
+			max: 73,
+		});
+	});
+
+	it("takes the turn counts in any order", () => {
+		const ascending = [4, 40, 60, 73, 90, 180];
+		const shuffled = [90, 4, 180, 60, 73, 40];
+		expect(buildTurnLength(shuffled)).toEqual(buildTurnLength(ascending));
+	});
+
+	it("separates the mean from the median on a right-skewed corpus", () => {
+		// The shape the real corpus has: a mound with a long thin right tail,
+		// which is the whole reason both numbers are served.
+		const turns = [50, 50, 50, 50, 50, 50, 50, 50, 50, 500];
+		const stats = buildTurnLength(turns);
+		expect(stats?.median).toBe(50);
+		expect(stats?.mean).toBe(95);
+	});
+
+	it("brackets the median with the middle half", () => {
+		const stats = buildTurnLength([10, 20, 30, 40, 50, 60, 70, 80]);
+		expect(stats).not.toBeNull();
+		expect(stats!.p25).toBeLessThan(stats!.median);
+		expect(stats!.median).toBeLessThan(stats!.p75);
+		expect(stats!.min).toBeLessThanOrEqual(stats!.p25);
+		expect(stats!.p75).toBeLessThanOrEqual(stats!.max);
+	});
+
+	it("buckets every game exactly once", () => {
+		const turns = [4, 19, 20, 39, 40, 73, 90, 119, 180];
+		const stats = buildTurnLength(turns);
+		expect(stats!.histogram.reduce((a, b) => a + b.count, 0)).toBe(
+			turns.length,
+		);
+		expect(stats!.games).toBe(turns.length);
+	});
+
+	it("spans from the bucket holding min to the one holding max", () => {
+		// 180 is a bucket boundary, so the last bucket is 180's own and not the
+		// 160 one it would fall in if the range were treated as exclusive.
+		const stats = buildTurnLength([4, 180]);
+		expect(stats!.bucket_turns).toBe(TURN_LENGTH_BUCKET);
+		expect(stats!.histogram[0].start).toBe(0);
+		expect(stats!.histogram.at(-1)).toEqual({ start: 180, count: 1 });
+	});
+
+	it("keeps an interior bucket with no game, and leaves no empty end", () => {
+		// 0–19 and 100–119 are occupied; everything between is a real gap in
+		// the distribution, and dropping it would draw the two as neighbours.
+		const stats = buildTurnLength([4, 110]);
+		expect(stats!.histogram).toEqual([
+			{ start: 0, count: 1 },
+			{ start: 20, count: 0 },
+			{ start: 40, count: 0 },
+			{ start: 60, count: 0 },
+			{ start: 80, count: 0 },
+			{ start: 100, count: 1 },
+		]);
+	});
+
+	it("gives a corpus inside one bucket a single bucket", () => {
+		expect(buildTurnLength([61, 73, 79])!.histogram).toEqual([
+			{ start: 60, count: 3 },
+		]);
 	});
 });

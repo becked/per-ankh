@@ -570,6 +570,22 @@ exports[`chart bundle round-trip > builds the all-humans bundle from the same co
       "tech": "TECH_STONECUTTING",
     },
   ],
+  "turnLength": {
+    "bucket_turns": 20,
+    "games": 3,
+    "histogram": [
+      {
+        "count": 3,
+        "start": 100,
+      },
+    ],
+    "max": 100,
+    "mean": 100,
+    "median": 100,
+    "min": 100,
+    "p25": 100,
+    "p75": 100,
+  },
   "wonderStats": [
     {
       "built": 1,
@@ -4779,6 +4795,22 @@ exports[`chart bundle round-trip > builds the user bundle from the fixture corpu
       "tech": "TECH_STONECUTTING",
     },
   ],
+  "turnLength": {
+    "bucket_turns": 20,
+    "games": 3,
+    "histogram": [
+      {
+        "count": 3,
+        "start": 100,
+      },
+    ],
+    "max": 100,
+    "mean": 100,
+    "median": 100,
+    "min": 100,
+    "p25": 100,
+    "p75": 100,
+  },
   "win_rate": 0.3333333333333333,
   "wonderStats": [
     {

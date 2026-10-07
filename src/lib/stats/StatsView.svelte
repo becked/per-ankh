@@ -11,6 +11,7 @@
 	import { page } from "$app/state";
 	import ChartContainer from "$lib/ChartContainer.svelte";
 	import YieldsStatsPanel from "./YieldsStatsPanel.svelte";
+	import GameLengthPanel from "./GameLengthPanel.svelte";
 	import FamilyKeepsPanel from "./FamilyKeepsPanel.svelte";
 	import RecordsPanel from "./RecordsPanel.svelte";
 	import FamilyStatsPanel from "./FamilyStatsPanel.svelte";
@@ -172,6 +173,8 @@
 		<Tabs.Content value={section.id} class="px-4 pb-4">
 			{#if section.id === "yields"}
 				<YieldsStatsPanel {bundle} {countLabel} toolbarFlush />
+			{:else if section.id === "length"}
+				<GameLengthPanel {bundle} />
 			{:else if section.id === "records"}
 				<RecordsPanel
 					load={loadRecords}

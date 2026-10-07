@@ -18,11 +18,13 @@ import { LAW_CLASSES } from "../generated/law-classes";
 import { WONDER_CULTURE_PREREQ, cultureRank } from "../generated/wonders";
 import { buildFamilyKeeps } from "./family-keeps";
 import type { StatsCorpus } from "./resolve";
+import { TURN_LENGTH_BUCKET } from "./types";
 import type {
 	ChartBundle,
 	ChartBundleCore,
 	Nullable,
 	RecordsBundle,
+	TurnLengthStats,
 	YieldCohort,
 } from "./types";
 import type { QueryableD1 } from "../d1";
@@ -139,6 +141,53 @@ function percentile(sortedAsc: number[], p: number): Nullable<number> {
 	const hi = Math.ceil(idx);
 	if (lo === hi) return sortedAsc[lo];
 	return sortedAsc[lo] * (hi - idx) + sortedAsc[hi] * (idx - lo);
+}
+
+// The corpus's game-length distribution. Takes one turn count per *distinct*
+// game — the caller dedupes, because the rows this module aggregates are per
+// seat — and returns null for an empty corpus, which is what makes every field
+// on TurnLengthStats a plain number.
+//
+// `mean` is also served as summary.avg_total_turns, which is why the average
+// is computed here and not a second time beside it.
+export function buildTurnLength(
+	gameTurns: Iterable<number>,
+): Nullable<TurnLengthStats> {
+	const sorted = [...gameTurns].sort((a, b) => a - b);
+	if (sorted.length === 0) return null;
+
+	const min = sorted[0];
+	const max = sorted[sorted.length - 1];
+	// percentile() is null only for an empty sample, which the guard above has
+	// already returned for — so the three reads below are numbers, and the
+	// return type says so rather than threading a null no caller can see.
+	const pct = (p: number): number => percentile(sorted, p) as number;
+
+	// Every bucket from the one holding `min` to the one holding `max`, so an
+	// interior gap keeps its zero. Both ends are inclusive: a corpus whose
+	// longest game is exactly 180 with a 20-turn bucket needs the 180 bucket,
+	// which is the one `max` itself falls in.
+	const firstBucket = Math.floor(min / TURN_LENGTH_BUCKET);
+	const lastBucket = Math.floor(max / TURN_LENGTH_BUCKET);
+	const counts = new Array<number>(lastBucket - firstBucket + 1).fill(0);
+	for (const t of sorted) {
+		counts[Math.floor(t / TURN_LENGTH_BUCKET) - firstBucket] += 1;
+	}
+
+	return {
+		games: sorted.length,
+		min,
+		p25: pct(25),
+		median: pct(50),
+		mean: sorted.reduce((a, b) => a + b, 0) / sorted.length,
+		p75: pct(75),
+		max,
+		bucket_turns: TURN_LENGTH_BUCKET,
+		histogram: counts.map((count, i) => ({
+			start: (firstBucket + i) * TURN_LENGTH_BUCKET,
+			count,
+		})),
+	};
 }
 
 interface TechEventRow {
@@ -1155,26 +1204,17 @@ export async function buildChartBundle(
 	// --- Summary tiles + map-size win rate ----------------------------
 	const totalGames = corpus.gameIds.length;
 
-	const avgTurnsSum = baseRows.reduce(
-		(acc, r) => acc + (r.total_turns ?? 0),
-		0,
-	);
+	// Game length. Turn count is a per-game fact and baseRows is per seat, so a
+	// duel's 72 turns arrive once per player — deduped here, which is also the
+	// denominator avg_total_turns has always divided by (the games that produced
+	// a seat row, not every id in the resolved corpus).
 	const distinctGameTurnLookup = new Map<string, number>();
 	for (const r of baseRows) {
 		if (!distinctGameTurnLookup.has(r.game_id)) {
 			distinctGameTurnLookup.set(r.game_id, r.total_turns);
 		}
 	}
-	const distinctGameTurnSum = [...distinctGameTurnLookup.values()].reduce(
-		(a, b) => a + b,
-		0,
-	);
-	const avgTotalTurns =
-		distinctGameTurnLookup.size > 0
-			? distinctGameTurnSum / distinctGameTurnLookup.size
-			: null;
-	// Silence unused-var lint; avgTurnsSum was computed for debug context.
-	void avgTurnsSum;
+	const turnLength = buildTurnLength(distinctGameTurnLookup.values());
 
 	const nationCount = new Map<string, number>();
 	const archetypeCount = new Map<string, number>();
@@ -1743,8 +1783,9 @@ export async function buildChartBundle(
 		},
 		summary: {
 			total_games: totalGames,
-			avg_total_turns: avgTotalTurns,
+			avg_total_turns: turnLength?.mean ?? null,
 		},
+		turnLength,
 		familyKeeps,
 		nations,
 		nationWinRate,
@@ -1834,6 +1875,7 @@ function emptyCore(parserVersion: string): ChartBundleCore {
 			total_games: 0,
 			avg_total_turns: null,
 		},
+		turnLength: null,
 		// Built from the empty corpus rather than hand-written, so the shape can
 		// only be the one the real path produces.
 		familyKeeps: buildFamilyKeeps([]),

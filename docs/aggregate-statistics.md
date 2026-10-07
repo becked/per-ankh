@@ -155,23 +155,16 @@ when the bundle shape changes in the Worker, mirror it on the frontend.
 
 What lives in the extension: `win_rate`, `games_with_outcome`, `summary.top_nation`, `summary.top_archetype` — and, since schema 9, `save_dates`. That last one is *not* there because the all-humans reading would be wrong (it is per-game, so it would be fine); it is there because only the profile Overview calendar renders it, and it was the one bundle field whose size grew with the corpus instead of with the turn axis — which a whole-site corpus is what makes matter. Its loader moved with it, so a core bundle costs nine chunked query loops where the user bundle costs ten — ten queries per chunk and eleven, since `loadRecordIdentity` carries two in its one loop (see below). `favorite_day_of_week` was deleted outright at the same version: the profile card reads its own copy from `GET /v1/users/:user_id`, and the bundle's copy had no consumer anywhere.
 
-The frontend treats each named bundle field as an opaque slice for one chart's
-ECharts option builder. The catalog is declarative:
+The frontend treats each named bundle field as an opaque slice for one chart's ECharts option builder. The catalog is declarative:
 
-- `src/lib/stats/charts/registry.ts` — `CATEGORIES` (nav order) and
-  `CHART_SPECS` (one entry per chart: `hasData`, height, empty message).
+- `src/lib/stats/charts/registry.ts` — `CATEGORIES` (nav order) and `CHART_SPECS` (one entry per chart: `hasData`, height, empty message).
 - `src/lib/stats/charts/*.ts` — the option builders.
-- `src/lib/stats/StatsView.svelte` — renders categories as subtabs. Nations and
-  Cities go through the generic spec loop; **Yields, Families, Laws, Tech** are
-  dedicated panels (per-nation selectors, multi-chart layouts), with a
-  category-anchor `CHART_SPECS` entry that exists only to surface the subtab.
-- Per-nation panels share `NationSelect` with an `ALL_NATIONS` sentinel; the
-  bundle carries an `__all__` aggregate row per law/tech so "all nations" needs
-  no client-side median recombining.
+- `src/lib/stats/StatsView.svelte` — renders categories as subtabs. Four categories go through the generic spec loop (**Nations, Leaders, Wonders, Cities**); the other six are dedicated panels with a category-anchor `CHART_SPECS` entry that exists only to surface the subtab — **Families, Families fielded, Laws, Tech** for their per-nation selectors, **Yields** for its per-series chart stack, and **Game length** because `turnLength` is one object rather than a row per nation, so the panel is four stat cells over a turn-count histogram. **Records** is the seventh panel and the exception to the pattern: it has no spec at all, because its payload is not in the bundle and asking the Worker up front just to decide whether to draw the tab would spend the read the split exists to save — so `StatsView` lists it unconditionally.
+- Per-nation panels share `NationSelect` with an `ALL_NATIONS` sentinel; the bundle carries an `__all__` aggregate row per law/tech so "all nations" needs no client-side median recombining.
 
-**Adding a chart over existing data:** add a field to `ChartBundle` (both type
-files), populate it in `aggregate.ts`, add a `CHART_SPECS` entry + an option
-builder. No Worker schema bump unless the change is backwards-incompatible.
+Game length is also the first category keyed to a **per-game** fact rather than to a game entity — every other tab is keyed to nations, leaders, wonders, families, laws, cities or techs. A second per-game stat (victory type, map size) belongs beside it in that tab rather than in one of its own.
+
+**Adding a chart over existing data:** add a field to `ChartBundle` (both type files), populate it in `aggregate.ts`, add a `CHART_SPECS` entry + an option builder. Adding the field is a `BUNDLE_SCHEMA_VERSION` bump — see § Caching for the rule and how to bump it; only a chart drawn from fields the bundle already carries escapes one.
 
 Law→class reference (used by the Laws/Families panels) is baked from
 `Reference/XML` by `scripts/bake-law-classes.ts` and emitted byte-identically to
@@ -214,6 +207,7 @@ The leaderboard behind the yield bands: per yield series, the biggest numbers po
   sits above the scope selector and shouldn't move with it) but means two SQL
   implementations of "win rate" and "modal weekday" must stay aligned.
 - ~~**No aggregator tests.**~~ **Closed 2026-08-29.** `cloud/test/integration/stats/round-trip.test.ts` drives a seeded corpus through the real upload path, calls `buildChartBundle` directly in **both** focal modes (no user endpoint produces `focal: "humans"`), and pins the whole bundle as a snapshot. A snapshot rather than a digest because the test has two jobs: some changes must be provably byte-identical (the disjoint-cohort rework) and others deliberately change chart output and need the diff readable (bounding `openingLaws`). The bundle is canonicalized first — `test/helpers/chart-bundle.ts` deep-sorts arrays **of objects** only, since arrays of primitives are index-aligned against `yieldCurves.turns` and reordering one would hide a defect rather than normalize it. Structural invariants that canonicalization flattens are asserted beside the snapshot instead.
+- **`turnLength.games` is not `summary.total_games`.** The distribution is built from the games that produced a seat row, where `total_games` counts every id the corpus resolved to — the same denominator `summary.avg_total_turns` has always divided by, now carried on the object so a reader doesn't have to assume the two agree. It also means the Game length panel's sample line can read below the corpus size the sibling tabs report.
 - **Calendar heatmap remounts on scope change** (`OverviewTab.svelte`, keyed on
   `save_dates`) — ECharts' calendar + custom-series doesn't re-render correctly
   through an in-place `setOption`.

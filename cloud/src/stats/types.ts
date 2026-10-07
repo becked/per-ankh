@@ -48,9 +48,58 @@ export interface ChartBundleMeta {
 
 // Summary tiles common to both corpora — pure per-game facts that survive the
 // focal widening unchanged.
+//
+// avg_total_turns is `turnLength.mean` under its original name. Both are
+// served, and buildTurnLength computes it once — the field predates the Game
+// length tab and the design docs that inventory the bundle still call it by
+// this name (global-stats-design §8, tournament-stats-design §6), so it keeps
+// it rather than moving and breaking a reader we can't see.
 export interface ChartBundleSummaryCore {
 	total_games: number;
 	avg_total_turns: Nullable<number>;
+}
+
+// Width of one game-length histogram bucket, in turns. Server-side because the
+// bucketing and the frontend's bucket labels are the same fact: a panel that
+// spelled the width itself could disagree with the buckets it is labelling.
+//
+// 20 turns is read off the corpus: the public duel slice spans 4–180, which is
+// 10 buckets with a clear mode (249 of 762 games at 60–79), and the narrowest
+// corpus a surface renders — one tournament, 102 games over 31–180 — still
+// gets 8. A finer bucket turns that one into noise; a coarser one flattens the
+// mode out of the wide corpus.
+export const TURN_LENGTH_BUCKET = 20;
+
+// The corpus's game-length distribution, over its *distinct* games — turn
+// count is a per-game fact and the aggregator's rows are per seat, so a duel's
+// 72 turns arrive twice and are deduped before any of this is computed.
+//
+// Order statistics and the histogram both, because they answer different
+// halves of one question and neither derives from the other. `min`/`max` are
+// single games — the public corpus's shortest duel is a real 4-turn NETWORK
+// rush, not a bad row — where `p25`/`median`/`p75` are where the mass sits
+// (56/73/90 for that same corpus). The histogram is the shape behind both.
+export interface TurnLengthStats {
+	// Distinct games behind every number here, and the histogram's denominator.
+	// Not always summary.total_games: that counts the resolved corpus, where
+	// this counts the games that produced a seat row — the same denominator
+	// avg_total_turns has always divided by.
+	games: number;
+	min: number;
+	p25: number;
+	median: number;
+	mean: number;
+	p75: number;
+	max: number;
+	// Echoed from TURN_LENGTH_BUCKET so a cached bundle carries the width its
+	// own buckets were cut at, rather than the width the reader was deployed
+	// with — the two come apart for a TTL every time that constant changes.
+	bucket_turns: number;
+	// Contiguous buckets from the one holding `min` to the one holding `max`.
+	// An interior bucket with no game keeps its zero: the gap is part of the
+	// distribution's shape, and dropping it would draw a thin corpus as a
+	// continuous run of adjacent bars it isn't.
+	histogram: Array<{ start: number; count: number }>;
 }
 
 // User-corpus summary. Adds the "most X" tiles, which assume one focal player
@@ -76,6 +125,12 @@ export interface ChartBundleCore {
 
 	// --- Summary -----------------------------------------------------
 	summary: ChartBundleSummaryCore;
+
+	// --- Game length -------------------------------------------------
+	// How long this corpus's games ran. Null when no in-scope game produced a
+	// seat row — no distribution rather than an empty one, which is also what
+	// makes every number inside it non-nullable.
+	turnLength: Nullable<TurnLengthStats>;
 
 	// Games played per nation (the focal players' picks), for the
 	// games-by-nation bar. Same buckets as nationWinRate.
