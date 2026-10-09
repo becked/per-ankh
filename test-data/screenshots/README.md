@@ -36,3 +36,15 @@ Classify the bytes the upload path would **store**, not the file you dropped in:
 Clef's limit is 8 MiB *decoded* across the request, and this corpus blows through it: a Retina `@2x` capture at 2870×1806 decodes to 19.8 MiB and a 1868×1720 one to 12.3 MiB. 4 of the 12 `oldworld-` images here exceed that budget on their own and cannot be sent raw — so this is a hard failure, not a fidelity preference. The production cap is a pixel count rather than a long edge for the same reason one step down: 1920×1080 decodes to 7.91 MiB and squeaks under, but 1920×1200 on a 16:10 display is 8.79 MiB and over.
 
 The second reason is that bands fitted on originals do not transfer. In production the verdict binds the stored object (issue #289, upload path item 4), so a probability measured on bytes that are never stored is a probability about a different image.
+
+## Running it
+
+```bash
+npm run eval:screenshots -- --dry-run          # build the stored variants, print the corpus table, call nothing
+npm run eval:screenshots -- --limit 2          # the first two images by filename, to check the call shape before spending on the full run
+npm run eval:screenshots                       # both variants over the whole corpus
+```
+
+`scripts/eval-screenshot-classifier.ts` derives the class from the filename prefix, downscales to the stored variant, sends one image per request, and prints the per-image probabilities, the band each question's probabilities support, and what the run cost. It needs `CLOUDFLARE_ACCOUNT_ID` and a `CLOUDFLARE_AI_TOKEN` with Workers AI Read and Edit in `.env` (see `.env.example`); `--dry-run` needs neither.
+
+The script carries the `state` and the five questions it sends. Those are as much the output of this eval as the numbers are — a band only transfers to the upload endpoint if the endpoint sends the same request — so step 3 reuses them verbatim or re-runs the eval.
