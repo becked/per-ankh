@@ -2,29 +2,32 @@
 
 A local corpus of images used to pick the Clef variant and set the three threshold bands that gate screenshot uploads (issue #289, build order step 2). Like `test-data/saves/`, it is not a fixture set: nothing in the test suites reads this directory, and a fresh clone starts empty. Populate it yourself. The integration tests for the upload endpoint stub the Clef call, so they need no images either.
 
-Git ignores everything here except this README (`.gitignore:81-82`). That is deliberate and not a convenience: the corpus is mostly **other people's content** — other 4X titles' screenshots, photographs, memes — which is nobody's here to redistribute, in a public repo. The repo already declines to track even Mohawk's own assets that it legitimately bundles — `static/atlases/`, `static/sprites/` and `assets/atlas-sources/` are all gitignored, and `LICENSE` carves the first two out of the MIT grant under "Third-Party Content". Old World screenshots have a second reason: a multiplayer shot shows the other players' names on screen, the same PII that keeps the saves corpus out of git.
+Git ignores everything here except this README (`.gitignore:81-82`). That is deliberate and not a convenience: the corpus is largely **other people's content** — Old World screenshots saved from Discord, and ordinary photographs — which is nobody's here to redistribute, in a public repo. The repo already declines to track even Mohawk's own assets that it legitimately bundles — `static/atlases/`, `static/sprites/` and `assets/atlas-sources/` are all gitignored, and `LICENSE` carves the first two out of the MIT grant under "Third-Party Content". Old World screenshots have a second reason: a multiplayer shot shows the other players' names on screen, the same PII that keeps the saves corpus out of git.
 
 Nothing downstream needs the images. The eval's output is a table of per-image probabilities, and the bands derived from it are the artifact that survives — `docs/momentum-model.md` is the shape to follow, a model fitted on a local corpus nobody else has, with the numbers and the fit's provenance recorded in `docs/` rather than the corpus vendored.
 
 ## Naming
 
-Flat directory, one prefix per expected class, zero-padded: `oldworld-01.png`, `composite-01.png`, `other4x-01.png`, `photo-01.jpg`, `meme-01.jpg`. The eval derives the expected class from the prefix, so the label travels with the file and needs no manifest referencing images nobody else has. Keep the extension the file arrived with — nothing reads it but the decoder.
+Flat directory, one prefix per class, zero-padded: `oldworld-01.png`, `photo-01.jpg`. The eval derives the expected class from the prefix, so the label travels with the file and needs no manifest referencing images nobody else has. Keep the extension the file arrived with — nothing reads it but the decoder.
 
-| prefix | what it is | why the class exists |
+| prefix | what it is | count |
 | --- | --- | --- |
-| `oldworld-` | Old World, any view, crops included | the true positives the gate must pass |
-| `composite-` | Old World UI with something pasted into a corner | the case the allowlist cannot cover |
-| `other4x-` | Civ, Humankind, Stellaris | the narrowness check on `is_old_world` |
-| `photo-` | camera photographs | the only images that exercise `is_a_photograph` |
-| `meme-` | image macros, reaction images, anything not a game | the easy negatives |
+| `oldworld-` | Old World, any view, crops included | 15–18 |
+| `photo-` | ordinary camera photographs | 8–10 |
 
-`composite-` is the class the eval exists for, and it is the reason two labels would not do. A composite genuinely contains the game, so it scores high on `is_old_world` — an allowlist cannot reject it — and Clef runs one pass over the whole image without localizing. Under a plain Old World / not-Old-World split its rows are indistinguishable from the true positives you want to auto-accept, which is the one confusion the eval exists to resolve. That is also why the bands are conjunctive and never compensatory.
+Two classes, because of which direction each of Clef's questions runs.
 
-`other4x-` is the nearest miss available: another isometric 4X with a hex map and a yield bar. A band that admits Civ admits most things.
+**The safety questions need only legitimate images.** `contains_nsfw` and `contains_gore` set a line that legitimate content must stay *under*, so the band comes from the `oldworld-` images alone: take the highest probability any of them scores, and put the reject threshold just above it. That is an aggressive band by construction — a map screenshot should score near zero — and it is derived entirely from images that are legal to hold. The corpus never contains illicit material, which for CSAM is categorical and not a matter of convenience.
 
-Aim for the ~50 images the issue calls for, weighted toward `composite-` and `other4x-` rather than spread evenly — `oldworld-` and `meme-` are the easy ends of the range and settle quickly. Note that nothing here exercises `contains_gore` or `contains_nsfw`, so the eval cannot calibrate those two bands; they ship at a conservative default until something does.
+**`photo-` is the measurable proxy for the class that cannot be assembled.** `contains_nsfw` cannot be calibrated directly against the thing it screens for. But porn and CSAM are photographs, so `is_a_photograph` carries that weight using entirely ordinary content — a street, a dog, dinner, people at a table. Two are worth getting deliberately: a photo *of a screen* showing the game, which is the adversarial edge between this question and `is_old_world`, and a few with people in frame, the nearest legal analogue to what is being screened.
 
-**A crop is not an outlier.** Highlighting one city's layout or a leader's stats is why someone saves a screenshot at all, so `oldworld-` is expected to hold arbitrary shapes — portrait and near-square included. Measured over the 12 `oldworld-` images here, 5 fall outside a 1.2–2.5 aspect band, which is what removed that band from the spec's pre-filter. The surviving floor is a long edge of ~640 px, which only `oldworld-06` (502×462) fails.
+**`is_old_world` gets a loose band, which is why there are no other-4X images here.** It runs in the accept direction, and a threshold in that direction is not decidable from positives alone — if every legitimate image scores ≥0.92, then 0.9, 0.5 and 0.01 all fit the corpus equally. Measuring where a near-miss lands is the only thing that would separate them, and keeping Civ out of the gallery is not what this gate is for. So set it low, accept that a non-Old-World 4X screenshot may pass, and take the benefit: a loose band is what stops odd crops being refused.
+
+Include **a combat or battle screenshot** among the `oldworld-` images. It is the one legitimate case that might score non-trivially on `contains_gore`, and the gore band has to clear whatever it scores. If nothing legitimate trips it, that band can be set very tight — but only measurement says whether that is available.
+
+Beyond that, more map screenshots add nothing. The counts above are what they are because a band set from a *maximum* is sensitive to sample size: each new image can only push the max up, so what matters is covering content that differs — combat, an event popup, character art, an unusual palette — rather than adding more of what is already represented.
+
+**A crop is not an outlier.** Highlighting one city's layout or a leader's stats is why someone saves a screenshot at all, so `oldworld-` is expected to hold arbitrary shapes — portrait and near-square included. Measured over the first 12 `oldworld-` images here, 5 fall outside a 1.2–2.5 aspect band, which is what removed that band from the spec's pre-filter. The surviving floor is a long edge of ~640 px, which only `oldworld-06` (502×462) fails.
 
 ## Feed Clef the variant, not the original
 
