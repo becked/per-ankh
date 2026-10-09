@@ -73,6 +73,14 @@ test-data/saves/*
 !test-data/saves/sample.xml
 !test-data/saves/README.md
 
+# Screenshot classifier eval corpus (issue #289 step 2). Other titles'
+# screenshots, photographs and memes — none of it ours to redistribute — plus
+# Old World shots that show other players' names, the same PII the saves above
+# carry. Local-only: the eval's output is the probabilities table, not the
+# images.
+test-data/screenshots/*
+!test-data/screenshots/README.md
+
 # Game asset reference checkout (XML, source, graphics) — read by
 # scripts/bake-improvements.ts at bake time. Local-only; not committed.
 # No trailing slash, so it still matches when Reference is a symlink into
