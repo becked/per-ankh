@@ -55,6 +55,10 @@ import { captureOnlineIds } from "./online-ids";
 import { momentumCurve } from "./momentum";
 import { MOMENTUM_MODEL_VERSION } from "./generated/momentum";
 import { beginR2Op, logError, logWarn, setLogField } from "./log";
+import {
+	deleteGameScreenshots,
+	type ScreenshotStorageEnv,
+} from "./screenshots/storage";
 import { isTournamentAdmin } from "./tournament/authz";
 import { maybeAdvanceAfterMatchReport } from "./tournament/admin";
 import {
@@ -81,7 +85,7 @@ import {
 import type { Verdict } from "./challenges/types";
 import type { QueryableD1, EventsEnv } from "./d1";
 
-export interface GamesEnv extends SessionEnv, EventsEnv {
+export interface GamesEnv extends SessionEnv, EventsEnv, ScreenshotStorageEnv {
 	SHARE_BUCKET: R2Bucket;
 	SHARE_DB: QueryableD1;
 	ALLOWED_ORIGINS: string;
@@ -190,7 +194,8 @@ export type RateLimitedEventType =
 	| "slug_claim_attempt"
 	| "challenge_view"
 	| "challenge_link_view"
-	| "challenge_create";
+	| "challenge_create"
+	| "screenshot_upload_attempt";
 
 // Upload rate limits cover both first-time uploads and re-imports — both
 // hit the same R2 puts + D1 batch, so they cost the same.
@@ -3026,6 +3031,25 @@ export async function handleGamePatch(
 		if (await isRunOnOpenChallenge(env.SHARE_DB, gameId)) {
 			return openChallengeRunResponse(cors);
 		}
+		// And a game with screenshots stays public. Every screenshot object is
+		// served from a public, edge-cached host with no per-request gate
+		// (cloud/src/screenshots/), so a private game with screenshots would
+		// be a game whose images carry on being public anyway — the invariant
+		// has to hold here or it holds nowhere. Removing the screenshots is
+		// the way to make such a game private.
+		const screenshots = await env.SHARE_DB.prepare(
+			"SELECT COUNT(*) AS count FROM game_screenshots WHERE game_id = ?",
+		)
+			.bind(gameId)
+			.first<{ count: number }>();
+		if ((screenshots?.count ?? 0) > 0) {
+			return errorResponse(
+				"Remove this game's screenshots before making it private",
+				409,
+				cors,
+				"HAS_SCREENSHOTS",
+			);
+		}
 	}
 
 	// Ownership check on collection_id: prevent moving a game into another
@@ -3188,6 +3212,10 @@ export async function handleGameDelete(
 	} finally {
 		endDeletes();
 	}
+	// The screenshots live in their own bucket under one prefix per game, so
+	// they are a list-and-delete rather than two more fixed keys. Their D1
+	// rows cascade with the game; the objects don't.
+	await deleteGameScreenshots(env, gameId);
 
 	await env.SHARE_DB.prepare("DELETE FROM games WHERE game_id = ?")
 		.bind(gameId)

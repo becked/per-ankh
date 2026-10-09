@@ -55,9 +55,12 @@
 // the margin is then the movement actually observed rather than a guessed
 // cushion. One pass falls back to MIN_MARGIN and says so.
 //
-// The bands only transfer to production if production sends the same request:
-// STATE and QUESTIONS below are as much the output of this eval as the numbers
-// are. Step 3 reuses them verbatim or re-runs this.
+// The bands only transfer to production if production sends the same request,
+// so the request is not written here: the state string, the five questions and
+// the conjunctive gate are imported from cloud/src/screenshots/clef.ts, the
+// module the upload endpoint calls Clef through. They are as much the output of
+// this eval as the numbers are — editing a question there invalidates every
+// band in it, and re-running this is how the new ones are found.
 //
 // AUTH: hits the Workers AI REST API with CLOUDFLARE_ACCOUNT_ID and
 // CLOUDFLARE_AI_TOKEN (a token with Workers AI Read AND Edit — inference is
@@ -73,6 +76,22 @@ import { fileURLToPath } from "node:url";
 
 import sharp from "sharp";
 
+import {
+	BAND_KIND,
+	buildClefRequest,
+	CLEF_MAX_DECODED_BYTES,
+	CLEF_MAX_IMAGE_BYTES,
+	gateVerdict,
+	NOUL_IDS,
+	QUESTIONS,
+	readClefAnswers,
+	SCORE_ID,
+	STATE,
+	type BandKind,
+	type ClefAnswers,
+	type ClefResult,
+	type GateVerdict,
+} from "../cloud/src/screenshots/clef";
 import { flagInt, flagString, parseFlags, printJson } from "./lib/cli";
 import {
 	bold,
@@ -100,10 +119,6 @@ const STORED_MAX_PIXELS = 1_800_000;
 // sees these bytes.
 const STORED_WEBP_QUALITY = 80;
 
-// ─── Clef limits ────────────────────────────────────────────────────────────
-const CLEF_MAX_DECODED_BYTES = 8 * 1024 * 1024;
-const CLEF_MAX_IMAGE_BYTES = 4 * 1024 * 1024;
-
 // ─── The free pre-filter (upload-path step 3) ───────────────────────────────
 // A quality floor for the strip tile and the thumbnail, not a guess at what
 // the image is. Applied to the stored variant, which is what the Worker
@@ -126,151 +141,12 @@ const PRICE_PER_M_INPUT: Record<Variant, number> = {
 	clef: 0.24,
 };
 
-// ─── The request ────────────────────────────────────────────────────────────
-// Images are placed before the state, so the questions can refer to "the
-// attached image". The last sentence of the state is load-bearing: without it
-// the context ("a gallery of game screenshots") primes a yes on the one
-// question that is the gate's allowlist.
-const STATE =
-	"The attached image was submitted by a user to a public Old World fan site, " +
-	"to be published in a gallery of game screenshots. Answer each question " +
-	"about the attached image. Nothing about the submission says what the image " +
-	"actually contains.";
-
-interface NoulQuestion {
-	type: "noul";
-	instructions: string;
-	criteria: { true: string; false: string };
-}
-interface ScoreQuestion {
-	type: "score";
-	instructions: string;
-	criteria: string[];
-}
-
-// Four nouls and one score, one forward pass. The bands are conjunctive: a
-// high is_old_world must never relax the safety questions, because the gate
-// screens for inappropriate content rather than identifying the game, and
-// Clef runs one pass over the whole image without localizing — so confidence
-// that the game is present says nothing about what else is in frame.
-const NOUL_QUESTIONS: Record<string, NoulQuestion> = {
-	// The load-bearing gate. A positive requirement is an allowlist: anything
-	// that isn't the game fails it regardless of what it is. Narrow on purpose
-	// — the other 4X titles named below should fail.
-	is_old_world: {
-		type: "noul",
-		instructions:
-			"Is the attached image a screenshot of the turn-based strategy game Old World by Mohawk Games?",
-		criteria: {
-			true:
-				"The image shows Old World itself — its hex-tile map, its city, unit or " +
-				"character art, its yield and resource icons, its tech tree, a council or " +
-				"event popup, or any other part of its interface — including a crop or a " +
-				"zoomed-in detail of any of those.",
-			false:
-				"Anything else. A screenshot of a different strategy game — Civilization, " +
-				"Humankind, Total War, Stellaris, Age of Wonders — is a no, as is any image " +
-				"that is not a screenshot of Old World at all.",
-		},
-	},
-	// Reject direction. The carve-out is what keeps the band tight: Old World's
-	// own portrait and event art is painted classical imagery, and without the
-	// false criterion the legitimate maximum — which IS the band — drifts up.
-	contains_nsfw: {
-		type: "noul",
-		instructions:
-			"Does the attached image contain sexual or pornographic content?",
-		criteria: {
-			true:
-				"Sexual activity, pornography, exposed genitals or breasts, or imagery " +
-				"whose purpose is sexual arousal.",
-			false:
-				"No such content. A historical strategy game's own painted portrait or " +
-				"event illustration — classical statuary, a draped or partially draped " +
-				"figure — is not sexual content.",
-		},
-	},
-	// Reject direction, and nothing had to be collected for it: Old World is
-	// map-based with no battle screen, so warfare is units resolving on the hex
-	// map and is already in the corpus. The band is the maximum the oldworld-
-	// images reach.
-	contains_gore: {
-		type: "noul",
-		instructions: "Does the attached image contain gore?",
-		criteria: {
-			true:
-				"Graphic injury or death shown realistically: open wounds, mutilation, " +
-				"dismemberment, blood, or a corpse.",
-			false:
-				"No such content. A strategy game's own stylised depiction of warfare — " +
-				"armies or units facing each other on a map, a weapon or a siege engine, a " +
-				"battle result in a text popup, a death reported in words — is not gore.",
-		},
-	},
-	// The measurable proxy for the class that cannot be assembled. The photo-of
-	// -a-screen case is deliberately a yes: it is the adversarial edge between
-	// this question and is_old_world, and the gate wants it caught here.
-	is_a_photograph: {
-		type: "noul",
-		instructions: "Is the attached image a photograph taken with a camera?",
-		criteria: {
-			true:
-				"A camera photograph of the physical world — people, places, animals, " +
-				"objects, food — including a photograph taken of a screen, monitor or " +
-				"television that is displaying something else.",
-			false:
-				"A screen capture, a rendered image, a digital illustration, a drawing, a " +
-				"diagram or a document.",
-		},
-	},
-};
-
-const SCORE_ID = "game_screenshot_confidence";
-
-// Ordered lowest-first; levels are indexed from 0. Not a gate — the score and
-// its per-level probabilities are stored on the row so the admin queue can be
-// sorted by how plausible a screenshot is.
-const SCORE_QUESTION: ScoreQuestion = {
-	type: "score",
-	instructions:
-		"How confidently is the attached image a screenshot of Old World?",
-	criteria: [
-		"Not a screen capture at all — a photograph, a drawing, or a document.",
-		"A screen capture, but of something other than Old World — a different game, a web page, or an application.",
-		"Possibly Old World, but too small, too blurry or too tightly cropped to tell.",
-		"Recognisably Old World — a crop or a detail of its map, interface or art.",
-		"Unmistakably Old World — its hex map or main interface, clearly legible.",
-	],
-};
-
-const QUESTIONS: Record<string, NoulQuestion | ScoreQuestion> = {
-	...NOUL_QUESTIONS,
-	[SCORE_ID]: SCORE_QUESTION,
-};
-
-const NOUL_IDS = Object.keys(NOUL_QUESTIONS);
-
 // ─── Response shapes ────────────────────────────────────────────────────────
 
-interface NoulAnswer {
-	type: "noul";
-	noul: number;
-}
-interface ScoreAnswer {
-	type: "score";
-	score: number;
-	legend: Record<string, unknown>;
-	probabilities: Record<string, number>;
-	confidence: number;
-}
-type ClefAnswer = NoulAnswer | ScoreAnswer;
-
-interface ClefResult {
-	model: string;
-	answers: Record<string, ClefAnswer>;
-	usage: { input_tokens: number; output_tokens: number };
-}
-
+// The REST envelope around the ClefResult the Workers AI binding returns
+// directly. The result itself, and the narrowing of its answers, are shared
+// with the Worker (readClefAnswers) so the two cannot disagree about what a
+// malformed answer means.
 interface ApiEnvelope {
 	success: boolean;
 	errors?: { code?: number; message?: string }[];
@@ -382,14 +258,7 @@ async function classify(
 	accountId: string,
 	token: string,
 ): Promise<ClefResult> {
-	const body = {
-		model: variant,
-		state: STATE,
-		questions: QUESTIONS,
-		images: [
-			{ content_type: "image/webp", base64: image.webp.toString("base64") },
-		],
-	};
+	const body = buildClefRequest(image.webp.toString("base64"), variant);
 	const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/@cf/cloudflare/${variant}`;
 	let lastError = "";
 	for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
@@ -441,49 +310,11 @@ async function classify(
 	);
 }
 
-// Pull the typed answers out of a response, failing loudly rather than
-// coercing. A missing or wrongly-typed answer means the request and the bands
-// have drifted apart, which is exactly the thing that must not pass silently.
-function readAnswers(
-	variant: Variant,
-	name: string,
-	result: ClefResult,
-): Observation {
-	const nouls: Record<string, number> = {};
-	for (const id of NOUL_IDS) {
-		const answer = result.answers[id];
-		if (answer == null || answer.type !== "noul") {
-			throw new Error(
-				`${variant} ${name}: expected a noul answer for ${id}, got ${JSON.stringify(answer)}`,
-			);
-		}
-		nouls[id] = answer.noul;
-	}
-	const score = result.answers[SCORE_ID];
-	if (score == null || score.type !== "score") {
-		throw new Error(
-			`${variant} ${name}: expected a score answer for ${SCORE_ID}, got ${JSON.stringify(score)}`,
-		);
-	}
-	return {
-		nouls,
-		score: score.score,
-		confidence: score.confidence,
-		probabilities: score.probabilities,
-		inputTokens: result.usage.input_tokens,
-	};
-}
-
 // ─── Statistics ─────────────────────────────────────────────────────────────
 
-// One Clef call's worth of answers for one image.
-interface Observation {
-	nouls: Record<string, number>;
-	score: number;
-	confidence: number;
-	probabilities: Record<string, number>;
-	inputTokens: number;
-}
+// One Clef call's worth of answers for one image — the shape the Worker reads
+// too, so a question added here is a question both sides must handle.
+type Observation = ClefAnswers;
 
 interface Row {
 	name: string;
@@ -505,18 +336,6 @@ interface Row {
 	inputTokens: number;
 	repeats: number;
 }
-
-// Which band each question feeds, which is also which direction it runs.
-// deriveBand and the per-repeat aggregation both read this, so the two cannot
-// disagree about which end of a distribution is the dangerous one.
-type BandKind = "reject-legit-only" | "reject-separated" | "accept-loose";
-
-const BAND_KIND: Record<string, BandKind> = {
-	is_old_world: "accept-loose",
-	contains_nsfw: "reject-legit-only",
-	contains_gore: "reject-legit-only",
-	is_a_photograph: "reject-separated",
-};
 
 // The draw that would widen the band or close the gap. A reject-direction
 // question is endangered by the HIGHEST probability a legitimate image reaches
@@ -746,26 +565,11 @@ function deriveBand(question: string, rows: Row[]): Band {
 	};
 }
 
-type Verdict = "accept" | "review" | "reject";
-
-// What the conjunctive gate would do to an image at the derived bounds. Bands
-// never compensate: a high is_old_world must not relax the safety questions,
-// so any one question rejecting ends it and any one flagging downgrades to the
-// queue.
-function gateVerdict(row: Row, bands: Band[]): Verdict {
-	let verdict: Verdict = "accept";
-	for (const band of bands) {
-		const p = row.nouls[band.question];
-		if (band.kind === "accept-loose") {
-			if (band.rejectAt != null && p <= band.rejectAt) return "reject";
-			if (band.reviewAt != null && p < band.reviewAt) verdict = "review";
-		} else {
-			if (band.rejectAt != null && p >= band.rejectAt) return "reject";
-			if (band.reviewAt != null && p >= band.reviewAt) verdict = "review";
-		}
-	}
-	return verdict;
-}
+// The gate itself is the production one (cloud/src/screenshots/clef.ts), fed
+// the bands derived above instead of the shipped ones — which is what makes
+// the corpus outcome below a statement about the endpoint rather than about a
+// second implementation of it.
+type Verdict = GateVerdict;
 
 // ─── Output ─────────────────────────────────────────────────────────────────
 
@@ -906,7 +710,7 @@ function printBands(
 		const of = scored.filter((r) => r.imageClass === cls);
 		if (of.length === 0) continue;
 		const byVerdict = (v: Verdict): Row[] =>
-			of.filter((r) => gateVerdict(r, bands) === v);
+			of.filter((r) => gateVerdict(r.nouls, bands) === v);
 		const parts = (["accept", "review", "reject"] as Verdict[]).map((v) => {
 			const hit = byVerdict(v);
 			return `${hit.length} ${v}${hit.length > 0 && v !== "accept" ? ` (${hit.map((r) => r.name).join(", ")})` : ""}`;
@@ -1102,7 +906,7 @@ async function main(): Promise<void> {
 				info(`${variant}${of} ${idx + 1}/${images.length} ${image.name}`);
 				const result = await classify(variant, image, accountId, token);
 				const list = observations.get(image.name) ?? [];
-				list.push(readAnswers(variant, image.name, result));
+				list.push(readClefAnswers(result, `${variant} ${image.name}`));
 				observations.set(image.name, list);
 			}
 		}

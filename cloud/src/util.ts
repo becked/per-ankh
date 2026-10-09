@@ -376,12 +376,19 @@ export function isTrustedFrontend(request: Request): boolean {
 	return request.headers.get(SSR_TRUSTED_HEADER) === "1";
 }
 
-// base64url encoding of an ArrayBuffer or Uint8Array, no padding.
-export function base64UrlEncode(buffer: ArrayBuffer | Uint8Array): string {
+// Standard base64 of an ArrayBuffer or Uint8Array, padded — what a JSON API
+// that takes bytes expects (the Clef call in screenshots/clef.ts embeds the
+// image this way, since remote URLs aren't accepted).
+export function base64Encode(buffer: ArrayBuffer | Uint8Array): string {
 	const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
 	let binary = "";
 	for (const b of bytes) binary += String.fromCharCode(b);
-	return btoa(binary)
+	return btoa(binary);
+}
+
+// base64url encoding of an ArrayBuffer or Uint8Array, no padding.
+export function base64UrlEncode(buffer: ArrayBuffer | Uint8Array): string {
+	return base64Encode(buffer)
 		.replace(/\+/g, "-")
 		.replace(/\//g, "_")
 		.replace(/=+$/, "");

@@ -79,6 +79,13 @@ export const RETENTION_BUCKETS: readonly RetentionBucket[] = [
 			// render calls it, so on the page budget a game crawl would take
 			// /challenges down with it. Same 1h counter role, metadata-free.
 			"challenge_link_view",
+			// Screenshot upload attempts (screenshots/handlers.ts): inserted per
+			// request that reaches the classifier, not per stored screenshot,
+			// for the slug_claim_attempt reason — it's the refused uploads that
+			// need bounding, since a refusal spends a Clef call and no quota.
+			// The screenshots that landed are recorded by screenshot_upload in
+			// the bucket below. Metadata-free.
+			"screenshot_upload_attempt",
 		],
 	},
 	{
@@ -121,6 +128,11 @@ export const RETENTION_BUCKETS: readonly RetentionBucket[] = [
 			"login_denied",
 			"online_id_remove",
 			"purge_games",
+			// A stored screenshot (screenshots/handlers.ts), carrying the
+			// classifier's verdict as it stood. 90 days is the same window the
+			// other content writes get: the row in game_screenshots is the
+			// durable record, and this is the upload's audit trail beside it.
+			"screenshot_upload",
 		],
 	},
 ];

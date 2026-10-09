@@ -79,6 +79,25 @@ destinations = ["per-ankh-traces"]
 binding = "SHARE_BUCKET"
 bucket_name = "per-ankh-shares"
 
+# R2 storage for user-uploaded game screenshots (issue #289). A SECOND bucket
+# rather than a prefix in per-ankh-shares, because this one sits behind a
+# public R2 custom domain (img.per-ankh.app): the same domain over the shares
+# bucket would expose every save blob and ZIP by key. No Worker is in the image
+# read path — every object is public, so there is nothing to gate, and reads
+# cost no invocations.
+[[r2_buckets]]
+binding = "SCREENSHOT_BUCKET"
+bucket_name = "per-ankh-screenshots"
+
+# Workers AI, for the Clef call that screens a screenshot before it is stored
+# (cloud/src/screenshots/clef.ts). Account-level, so prod and staging bind the
+# same service; the model variant is pinned in code because the thresholds were
+# fitted to it. NOT covered by the `secrets.parity` preflight's binding check,
+# which reads the three [[table]] binding kinds — this one is a [section], so
+# it is listed there explicitly.
+[ai]
+binding = "AI"
+
 # D1 database for share index, cloud users/games, and event logging.
 #
 # Read replication is ENABLED on this database (`read_replication.mode =
@@ -256,6 +275,26 @@ HOME_SUMMARY_VIEW_PER_HOUR = "600"
 CHALLENGE_VIEW_PER_HOUR = "600"
 CHALLENGE_LINK_VIEW_PER_HOUR = "600"
 
+# === Screenshot upload limits ===
+# Hourly ceiling on screenshot upload ATTEMPTS per user, on the same lever and
+# with the same override caveat as the ceilings above. A different job from the
+# 5-per-game / 100-per-account caps in cloud/src/screenshots/handlers.ts: the
+# caps bound what is STORED, this bounds what is CLASSIFIED. A refused upload
+# spends a Clef call and no quota, so the caps bound an attacker's storage and
+# only this bounds their inference spend.
+#
+# Deliberately tighter than PER_USER_UPLOADS_PER_HOUR (100), because the two
+# have opposite shapes: saves get bulk-reuploaded whenever PARSER_VERSION
+# moves, screenshots never do. Twenty is four games' worth of strip in an hour
+# — well past human use — and bounds one account at ~$0.008 of classification
+# an hour.
+PER_USER_SCREENSHOTS_PER_HOUR = "20"
+# Public base of the R2 custom domain in front of SCREENSHOT_BUCKET. The Worker
+# builds screenshot URLs from this plus the object key, so the host is config
+# and the key layout is code. Must stay in step with the hostnames in the
+# zone's Cache Rule and with `img-src` in svelte.config.js.
+SCREENSHOT_BASE_URL = "https://img.per-ankh.app"
+
 # === Cloud rewrite (/v1/auth/*, /v1/games/*) ===
 # CORS allowlist for new routes — comma-separated origins. Cookie-based
 # auth requires Access-Control-Allow-Credentials: true, which forbids the
@@ -326,6 +365,16 @@ crons = ["17 4 * * *", "17 5 * * *", "17 6 * * *", "17 7 * * *", "37 * * * *"]
 binding = "SHARE_BUCKET"
 bucket_name = "per-ankh-shares-staging"
 
+# Behind img.staging.per-ankh.app — a second-level subdomain, which Universal
+# SSL does not cover on a full-setup zone; R2's own custom-hostname
+# certificate does.
+[[env.staging.r2_buckets]]
+binding = "SCREENSHOT_BUCKET"
+bucket_name = "per-ankh-screenshots-staging"
+
+[env.staging.ai]
+binding = "AI"
+
 # Read replication is enabled here too — same out-of-band step as the prod
 # database (see the top-level SHARE_DB comment). Staging carries it so a
 # replica-served route is exercised before prod, not first discovered there.
@@ -367,6 +416,8 @@ SEASON_VIEW_PER_HOUR = "600"
 HOME_SUMMARY_VIEW_PER_HOUR = "600"
 CHALLENGE_VIEW_PER_HOUR = "600"
 CHALLENGE_LINK_VIEW_PER_HOUR = "600"
+PER_USER_SCREENSHOTS_PER_HOUR = "20"
+SCREENSHOT_BASE_URL = "https://img.staging.per-ankh.app"
 ALLOWED_ORIGINS = "https://staging.per-ankh.app"
 # Separate staging Discord OAuth app — paste its client ID:
 DISCORD_CLIENT_ID = "1512545079493922927"

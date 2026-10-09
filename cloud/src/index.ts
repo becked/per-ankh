@@ -68,6 +68,11 @@ import {
 	handleGameChallengeLink,
 	handlePatchChallenge,
 } from "./challenges/handlers";
+import {
+	handleAcceptScreenshotTerms,
+	handleScreenshotUpload,
+} from "./screenshots/handlers";
+import type { ScreenshotsEnv } from "./screenshots/handlers";
 import { handleCollectionCreate, handleCollectionsList } from "./collections";
 import type { CollectionsEnv } from "./collections";
 import { handleListOnlineIds, handleRemoveOnlineId } from "./online-ids";
@@ -184,6 +189,7 @@ interface Env
 		TournamentAdminEnv,
 		ChannelsEnv,
 		FeaturedVideosEnv,
+		ScreenshotsEnv,
 		GlobalStatsEnv,
 		HomeSummaryEnv,
 		OpponentsEnv,
@@ -401,6 +407,21 @@ const ROUTES: RouteSpec[] = [
 		handler: (r, e, m) => handleGameDelete(m![1], r, e),
 	},
 
+	// A screenshot of a public game, screened by Clef before anything is
+	// stored (cloud/src/screenshots/). Nested under the game because the
+	// game is what a screenshot belongs to and what its R2 prefix is keyed
+	// by; the acceptance of the upload terms it requires is an account write,
+	// over with the other /v1/users/me/* routes.
+	{
+		method: "POST",
+		match: {
+			kind: "regex",
+			regex: /^\/v1\/games\/([A-Za-z0-9_-]{21})\/screenshots$/,
+		},
+		route: "POST /v1/games/:id/screenshots",
+		handler: (r, e, m) => handleScreenshotUpload(m![1], r, e),
+	},
+
 	// Site-admin: bulk reparse across all users. Gated by ADMIN_DISCORD_ID
 	// secret inside each handler; failures return 404 to avoid leaking the
 	// endpoints' existence.
@@ -524,6 +545,16 @@ const ROUTES: RouteSpec[] = [
 		match: { kind: "path", path: "/v1/users/me/slug" },
 		route: "DELETE /v1/users/me/slug",
 		handler: (r, e) => handleReleaseSlug(r, e),
+	},
+
+	// The one-time screenshot upload terms. Set-once rather than a
+	// preference, so it is its own route and not a field on
+	// POST /v1/auth/settings.
+	{
+		method: "POST",
+		match: { kind: "path", path: "/v1/users/me/screenshot-terms" },
+		route: "POST /v1/users/me/screenshot-terms",
+		handler: (r, e) => handleAcceptScreenshotTerms(r, e),
 	},
 
 	// CSP violation reports — unauthenticated; the browser POSTs here

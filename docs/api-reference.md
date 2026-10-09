@@ -14,7 +14,7 @@ This reference is drift-guarded: `cloud/src/routes-doc.test.ts` asserts it docum
 - [Collections](#collections----v1collections) — `/v1/collections`
 - [Users & profiles](#users--profiles) — `/v1/users/*` (public)
 - [Global stats](#global-stats----v1stats) — `/v1/stats`
-- [Account](#account) — `/v1/users/me/online-ids`, profile URL, settings
+- [Account](#account) — `/v1/users/me/online-ids`, profile URL, screenshot terms, settings
 - [Tournaments — reads](#tournaments--reads)
 - [Tournaments — lifecycle & configuration](#tournaments--lifecycle--configuration)
 - [Tournaments — slots](#tournaments--slots)
@@ -111,6 +111,7 @@ The three tournament read buckets are split by the *surface that spends them*, n
 | user search | 60 / hr per user | `GET /v1/users/search` |
 | `user_search_public` | 300 / hr per user | `GET /v1/users/public-search` |
 | `slug_claim_attempt` | 15 / hr per user | `POST` + `DELETE /v1/users/me/slug` (counts attempts, not successes) |
+| `screenshot_upload_attempt` | 20 / hr per user | `POST /v1/games/:id/screenshots` (counts attempts, not successes — a refused upload spends a classifier call and no quota, so the 5-per-game / 100-per-account caps bound storage and only this bounds inference spend). Tighter than the save-upload ceiling on purpose: saves get bulk-reuploaded whenever `PARSER_VERSION` moves, screenshots never do. Own ceiling var (`PER_USER_SCREENSHOTS_PER_HOUR`) |
 | upload / download | per-user + per-IP + global | game upload / download |
 
 Over-limit → `429` with an endpoint-specific `code`. Known scraper User-Agents are exempt from the anonymous read/view limits, and from their audit rows too — so an exempt read leaves no trace in `events`. The exemption is keyed on a self-declared header, which is why the visitor's UA isn't forwarded across the SSR hop: it applies to a caller hitting the API directly and not to page traffic through `per-ankh.app`.
@@ -288,8 +289,8 @@ Update a game's visibility, collection, or display name.
 - **Path:** `id` (21-char).
 - **Body:** `GamePatchSchema` (all optional, ≥1 required) — `is_public` (boolean), `collection_id` (`number | null`, ≥1), `display_name` (`string | null`, 1–120 trimmed).
 - **Response 200:** echoes only the supplied fields — `{ game_id, is_public?, collection_id?, display_name? }`.
-- **Errors:** `401 UNAUTHORIZED`, `404 NOT_FOUND` (non-owner / missing / non-owned `collection_id`), `400` (`INVALID_JSON`, `INVALID_BODY`), `409` (`LINKED_TO_ACTIVE_TOURNAMENT`, `LINKED_TO_OPEN_CHALLENGE`), `429 RATE_LIMIT_USER`.
-- **Notes:** `is_public` toggle rate-limited (`visibility_change`, 60/hr). Cannot set `is_public=false` while the game is linked to a non-`complete` tournament match, or is a submitted run of a challenge that hasn't closed (the leaderboard links to it).
+- **Errors:** `401 UNAUTHORIZED`, `404 NOT_FOUND` (non-owner / missing / non-owned `collection_id`), `400` (`INVALID_JSON`, `INVALID_BODY`), `409` (`LINKED_TO_ACTIVE_TOURNAMENT`, `LINKED_TO_OPEN_CHALLENGE`, `HAS_SCREENSHOTS`), `429 RATE_LIMIT_USER`.
+- **Notes:** `is_public` toggle rate-limited (`visibility_change`, 60/hr). Cannot set `is_public=false` while the game is linked to a non-`complete` tournament match, is a submitted run of a challenge that hasn't closed (the leaderboard links to it), or still has screenshots — those are served from a public, edge-cached host with no per-request gate, so a private game with screenshots would be one whose images stayed public anyway.
 
 ### `DELETE /v1/games/:id`
 Delete a game and its blobs.
@@ -298,7 +299,17 @@ Delete a game and its blobs.
 - **Path:** `id` (21-char).
 - **Response:** `204 No Content`.
 - **Errors:** `401 UNAUTHORIZED`, `404 NOT_FOUND`, `403 FORBIDDEN`, `409` (`LINKED_TO_ACTIVE_TOURNAMENT`, `LINKED_TO_OPEN_CHALLENGE`).
-- **Notes:** Blocked while linked to any tournament whose status ≠ `complete`, and while the game is a run on a challenge that has not closed (the submission row would cascade away with it). Deletes R2 objects then the D1 row (child tables cascade).
+- **Notes:** Blocked while linked to any tournament whose status ≠ `complete`, and while the game is a run on a challenge that has not closed (the submission row would cascade away with it). Deletes R2 objects then the D1 row (child tables cascade) — including every `screenshots/{game_id}/…` object, listed by prefix from the screenshots bucket.
+
+### `POST /v1/games/:id/screenshots`
+Attach a screenshot to a public game, screened by a classifier before anything is stored.
+
+- **Auth:** Session + owner. Non-owner or missing game → `404` (does not distinguish).
+- **Path:** `id` (21-char).
+- **Body:** `multipart/form-data` — `image` (the WebP the browser re-encoded: ≤ 4 MiB, ≤ 2,097,152 px, ≥ 640 px on the long edge), optional `caption` (trimmed, ≤ 200 chars; empty is stored as null).
+- **Response 201:** `{ screenshot: { screenshot_id, game_id, url, width, height, size_bytes, caption, status, created_at } }` — `url` is the public `img.per-ankh.app` URL built from the object key; `status` is `published`, or `in_review` when the classifier put it in the admin queue.
+- **Errors:** `401 UNAUTHORIZED`, `403 TERMS_NOT_ACCEPTED` (the code the UI turns into the terms prompt — see [`POST /v1/users/me/screenshot-terms`](#post-v1usersmescreenshot-terms)), `404 NOT_FOUND`, `409` (`GAME_NOT_PUBLIC`, `GAME_SCREENSHOT_LIMIT` 5 per game, `ACCOUNT_SCREENSHOT_LIMIT` 100 per account), `429 RATE_LIMIT_SCREENSHOT_UPLOAD` (`PER_USER_SCREENSHOTS_PER_HOUR`, 20), `400` (`INVALID_FORM`, `MISSING_IMAGE`, `EMPTY_IMAGE`, `INVALID_IMAGE`, `IMAGE_TOO_SMALL`, `INVALID_CAPTION`), `413 IMAGE_TOO_LARGE`, `422 SCREENSHOT_REJECTED` — carries `{ questions: string[] }`, the classifier questions that refused it, `503 CLASSIFIER_UNAVAILABLE`, `500` (`R2_FAILED`, `D1_FAILED`).
+- **Notes:** Order is load-bearing — terms, ownership and visibility, the two caps, then the hourly budget, all before the free 640 px pre-filter and the paid classifier, so nothing certain to be refused costs an inference call. The dimensions are read from the WebP container itself, not from what the client claims. Clef is asked five questions in one forward pass (`cloud/src/screenshots/clef.ts`) against bands fitted by `npm run eval:screenshots`; they are conjunctive, so any one question rejecting refuses the upload and any one flagging stores the row with `hidden_at` set for the admin queue. The gate **fails closed**: a classifier error or an unreadable answer is a `503` and nothing is stored. The object goes to R2 at `screenshots/{game_id}/{screenshot_id}.webp` before the D1 insert, which carries both caps as a `WHERE` so two concurrent uploads can't race past one (the loser's object is deleted again). The hourly budget counts `screenshot_upload_attempt` rows — one per request that reaches the classifier, refused or not, since the caps bound storage and only this bounds inference spend — and a stored screenshot additionally writes a `screenshot_upload` audit event (90-day retention).
 
 ---
 
@@ -499,6 +510,15 @@ Release the caller's profile URL, leaving them on the `/users/<user_id>` permali
 - **Response:** `204 No Content` (idempotent).
 - **Errors:** `401 UNAUTHORIZED`, `429 RATE_LIMIT_SLUG_CLAIM` (the same 15/hr attempts bucket as the POST).
 - **Notes:** Deliberately **not** gated by the rename cooldown — taking your name back out of a public URL always works — but it does *stamp* it, so release-then-claim isn't a way around the gate. The released name returns to the pool immediately and anyone may claim it, so an old `/u/<name>` link can end up resolving to a different person; `/users/<user_id>` is the permalink that doesn't move. Writes a `slug_release` audit event with `{ previous_slug }` (awaited; 90-day retention) only when a slug was actually held.
+
+### `POST /v1/users/me/screenshot-terms`
+Accept the screenshot upload terms. One-time; `POST /v1/games/:id/screenshots` refuses until it is done.
+
+- **Auth:** Session.
+- **Body:** JSON `{ accepted: true }` — the affirmative is in the body rather than implied by the route, because what this records is that a person agreed to something.
+- **Response 200:** `{ screenshot_terms_accepted_at }` (SQLite `datetime('now')` text).
+- **Errors:** `401 UNAUTHORIZED`, `415 UNSUPPORTED_MEDIA_TYPE`, `400 INVALID_BODY` (including `accepted: false`), `404 NOT_FOUND` (no `users` row behind a live session).
+- **Notes:** Set-once in the statement — `COALESCE(screenshot_terms_accepted_at, datetime('now'))` — so a second POST is idempotent and returns the original timestamp: a re-POST is not a second agreement. Not a field on `POST /v1/auth/settings`, which is for reversible preferences. There is no endpoint to revoke it; removing the screenshots is the reversible act.
 
 _(Account settings live at [`POST /v1/auth/settings`](#post-v1authsettings).)_
 

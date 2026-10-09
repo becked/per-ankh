@@ -1,3 +1,4 @@
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import {
 	cloudflareTest,
@@ -12,6 +13,49 @@ const SECURITY_MIGRATIONS_PATH = path.resolve(
 	import.meta.dirname,
 	"./migrations-security",
 );
+const WRANGLER_PATH = path.resolve(import.meta.dirname, "./wrangler.toml");
+
+// The config the isolate is built from is wrangler.toml with the `[ai]`
+// bindings removed.
+//
+// Workers AI has no local simulator — the pool classifies an `ai` binding as
+// never-local and opens a REMOTE proxy session against the Cloudflare account
+// before a single test runs. That is fatal on a checkout that has never run
+// `wrangler login` ("remote dev authentication error", whole suite, not just
+// the screenshot tests), and on one that has, it makes `npm test` reach the
+// user's account. Neither is acceptable for a suite that has to pass on a
+// fresh clone.
+//
+// Nothing is lost: the Clef call is the one thing the screenshot tests must
+// NOT make for real — it costs money per run and its answers are
+// non-deterministic — so they replace env.AI with a stub (the request shape
+// they assert against is imported from the same module the handler builds it
+// with). Without the binding, `env.AI` is simply absent, which means a test
+// that forgot to stub gets a TypeError and the handler's fail-closed path,
+// never live inference.
+//
+// Stripped into a copy under .wrangler/ rather than removed from
+// wrangler.toml, which is the deploy config and must keep the binding. Same
+// line-oriented assumption the deploy preflight's toml scanners make
+// (scripts/prod/checks/secrets.ts): flat sections, no inline tables.
+function wranglerConfigWithoutAi(): string {
+	const lines = readFileSync(WRANGLER_PATH, "utf8").split("\n");
+	const kept: string[] = [];
+	let inAi = false;
+	for (const line of lines) {
+		const trimmed = line.trim();
+		if (trimmed.startsWith("[")) {
+			inAi = trimmed === "[ai]" || /^\[env\.[^.\]]+\.ai\]$/.test(trimmed);
+		}
+		if (!inAi) kept.push(line);
+	}
+	const out = path.resolve(import.meta.dirname, ".wrangler/tmp/wrangler.toml");
+	mkdirSync(path.dirname(out), { recursive: true });
+	writeFileSync(out, kept.join("\n"));
+	return out;
+}
+
+const TEST_WRANGLER_PATH = wranglerConfigWithoutAi();
 
 // Two projects:
 //   - "unit" runs the existing pure-function tests on the default Node pool.
@@ -37,7 +81,7 @@ export default defineConfig({
 				plugins: [
 					cloudflareTest(async () => ({
 						main: "./src/index.ts",
-						wrangler: { configPath: "./wrangler.toml" },
+						wrangler: { configPath: TEST_WRANGLER_PATH },
 						miniflare: {
 							bindings: {
 								TEST_MIGRATIONS: await readD1Migrations(MIGRATIONS_PATH),
