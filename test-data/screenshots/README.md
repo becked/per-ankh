@@ -4,7 +4,7 @@ A local corpus of images used to pick the Clef variant and set the three thresho
 
 Git ignores everything here except this README (`.gitignore:81-82`). That is deliberate and not a convenience: the corpus is largely **other people's content** — Old World screenshots saved from Discord, and ordinary photographs — which is nobody's here to redistribute, in a public repo. The repo already declines to track even Mohawk's own assets that it legitimately bundles — `static/atlases/`, `static/sprites/` and `assets/atlas-sources/` are all gitignored, and `LICENSE` carves the first two out of the MIT grant under "Third-Party Content". Old World screenshots have a second reason: a multiplayer shot shows the other players' names on screen, the same PII that keeps the saves corpus out of git.
 
-Nothing downstream needs the images. The eval's output is a table of per-image probabilities, and the bands derived from it are the artifact that survives — `docs/momentum-model.md` is the shape to follow, a model fitted on a local corpus nobody else has, with the numbers and the fit's provenance recorded in `docs/` rather than the corpus vendored.
+Nothing downstream needs the images. The eval's output is a table of per-image probabilities, and the bands derived from it are the artifact that survives; the corpus itself is never vendored. Where those two land is still open — the bands fit the wrangler-var pattern the spec already uses for its rate and read budgets, while the table and the reasoning behind the band want a doc, for which `docs/momentum-model.md` (a model fitted on a local corpus nobody else has, its numbers and provenance recorded in `docs/`) is one precedent.
 
 ## Naming
 
