@@ -107,11 +107,19 @@ export async function buildProfilePage(args: {
 		resultRaw === "win" || resultRaw === "loss" ? resultRaw : null;
 	const sort = url.searchParams.get("sort") ?? "date_desc";
 
-	// Fetch recent videos only when the Videos tab is active.
-	const videos =
+	// Fetch recent videos only when the Videos tab is active. The owner's own
+	// featured set rides along on that tab: the videos read already leads with
+	// those videos — the Worker's order, so every visitor gets it — but it
+	// doesn't say which ones they are, and the pin on each card needs to know.
+	// Owner-only, so nobody pays a round-trip for a control they can't see.
+	const [videos, myFeaturedVideos] = await Promise.all([
 		tab === "videos"
-			? await cloudApi.getUserVideos(targetUserId, { fetch })
-			: [];
+			? cloudApi.getUserVideos(targetUserId, { fetch })
+			: Promise.resolve([]),
+		tab === "videos" && isOwner
+			? cloudApi.listMyFeaturedVideos({ fetch })
+			: Promise.resolve([]),
+	]);
 
 	// Same lazy load for the tournament record — one request covering
 	// matches and casts, only when that tab is open.
@@ -158,6 +166,7 @@ export async function buildProfilePage(args: {
 		scope,
 		hasChannels,
 		videos,
+		myFeaturedVideos,
 		isTournamentParticipant,
 		tournamentRecord,
 		suggestions,
