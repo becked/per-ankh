@@ -4,8 +4,9 @@
 // and the one Cloudflare Images transformation the grids render as a tile.
 // Nothing stores a second derivative — one object per screenshot is what keeps
 // the delete and purge paths single-valued, and that matters more than usual
-// here because purge IS the hide mechanism, so a second stored variant would
-// mean two deletes and two purges per hide with two ways to half-fail.
+// here because purge IS the removal mechanism, so a second stored variant
+// would mean two deletes and two purges per takedown with two ways to
+// half-fail.
 //
 // Here rather than in the Worker because two things outside it have to name
 // the same URLs. The Worker builds them for the readers and purges them when a

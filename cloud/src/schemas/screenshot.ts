@@ -40,21 +40,26 @@ export const ReportScreenshotSchema = v.object({
 });
 
 // The admin actions on one screenshot. The whole moderation vocabulary, which
-// is what makes a closed picklist right rather than five routes: `hide` and
-// `unhide` are not symmetric (a hide deletes the object, so only a
-// classifier-queued row can be put back), and the handler has to say so in
+// is what makes a closed picklist right rather than five routes: `takedown`
+// and `approve` are not symmetric (a takedown deletes the object, so only a
+// classifier-queued row can be approved), and the handler has to say so in
 // one place.
 //
-//   hide             the terminal decision: hidden_at + hidden_by, the object
+// Named for the decision, not for the column it writes: a takedown removes
+// the image from the site for good, where `hide`/`unhide` named a reversal
+// that does not exist. The columns keep their names — `hidden_at` and
+// `hidden_by` describe the state, and "hidden" is what the state is.
+//
+//   takedown         the terminal decision: hidden_at + hidden_by, the object
 //                    deleted, both URLs purged, open reports resolved, and
 //                    the home-strip star cleared.
-//   unhide           approve what the classifier queued. Refused once an
-//                    admin has hidden the row, because the bytes are gone.
+//   approve          publish what the classifier queued. Refused once a
+//                    takedown has run, because the bytes are gone.
 //   star / unstar    the home strip's curation (step 7 renders it).
 //   resolve_reports   the reports were looked at and the image stays up.
 export const SCREENSHOT_MODERATION_ACTIONS = [
-	"hide",
-	"unhide",
+	"takedown",
+	"approve",
 	"star",
 	"unstar",
 	"resolve_reports",

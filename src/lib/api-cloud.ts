@@ -548,12 +548,12 @@ export interface ModerationScreenshot {
 	caption: string | null;
 	created_at: string;
 	// `in_review` is the classifier's uncertain band: hidden, but its object
-	// is still in R2, so it is the one state `unhide` can act on. `hidden`
-	// means an admin hid it, which deleted the object — a closed decision,
-	// and one neither list below actually carries: a hide resolves the
-	// reports that prompted it and clears the star, so the row drops out of
-	// both legs. It is in the union because `status` describes a row rather
-	// than a list, not because a surface should branch on it.
+	// is still in R2, so it is the one state `approve` can act on. `hidden`
+	// means an admin took it down, which deleted the object — a closed
+	// decision, and one neither list below actually carries: a takedown
+	// resolves the reports that prompted it and clears the star, so the row
+	// drops out of both legs. It is in the union because `status` describes a
+	// row rather than a list, not because a surface should branch on it.
 	status: "published" | "in_review" | "hidden";
 	// The home strip's star (step 7 renders it). Null when unstarred.
 	featured_at: string | null;
@@ -586,12 +586,12 @@ export interface ScreenshotModerationLists {
 	featured: ModerationScreenshot[];
 }
 
-// The decisions POST /v1/admin/screenshots/:id/moderate takes. `hide` and
-// `unhide` are not symmetric: a hide deletes the stored object, so only a
-// classifier-queued row can be put back, and unhiding an admin-hidden one is
+// The decisions POST /v1/admin/screenshots/:id/moderate takes. `takedown` and
+// `approve` are not symmetric: a takedown deletes the stored object, so only a
+// classifier-queued row can be approved, and approving a taken-down one is
 // refused with 409 OBJECT_REMOVED.
 export type ScreenshotModerationAction =
-	"hide" | "unhide" | "star" | "unstar" | "resolve_reports";
+	"takedown" | "approve" | "star" | "unstar" | "resolve_reports";
 
 export class ApiError extends Error {
 	constructor(
@@ -1402,10 +1402,10 @@ export const cloudApi = {
 		return res.json() as Promise<ScreenshotModerationLists>;
 	},
 
-	// One decision on one screenshot. `hide` is terminal — it deletes the
+	// One decision on one screenshot. `takedown` is terminal — it deletes the
 	// stored object and purges both its URLs — so the caller confirms first;
-	// `unhide` answers 409 OBJECT_REMOVED on a row that has already been
-	// hidden, because there are no bytes left to publish.
+	// `approve` answers 409 OBJECT_REMOVED on a row that has already been
+	// taken down, because there are no bytes left to publish.
 	adminModerateScreenshot: async (
 		screenshotId: string,
 		action: ScreenshotModerationAction,

@@ -676,14 +676,14 @@ interface OwnedScreenshotRow {
 
 // DELETE /v1/games/:id/screenshots/:screenshot_id — the uploader removes their
 // own screenshot. Permanent: there is no hidden-but-kept state for an owner,
-// only for the classifier's uncertain band and step 6's admin hide.
+// only for the classifier's uncertain band and the admin takedown.
 //
 // This endpoint is what makes the HAS_SCREENSHOTS refusal honest. Without it a
 // game with a screenshot could not be made private by any route its owner has
 // — the lock would offer "Make private", flip optimistically, and revert on a
 // 409 naming a remedy nobody could carry out.
 //
-// Three steps, the same three the admin hide will take: the D1 row, the R2
+// Three steps, the same three the admin takedown takes: the D1 row, the R2
 // object, then both URLs out of the edge cache. D1 first, because that is the
 // one a reader consults — an object that outlived its row renders nowhere,
 // while a row that outlived its object renders a broken tile.

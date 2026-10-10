@@ -443,7 +443,8 @@ const ROUTES: RouteSpec[] = [
 	},
 	// The uploader's own removal. Permanent, and the remedy the
 	// HAS_SCREENSHOTS refusal on PATCH /v1/games/:id names — so it is the
-	// owner's route, not an admin one (step 6 adds hide / unhide / star).
+	// owner's route, not an admin one (the admin decisions are takedown /
+	// approve / star).
 	{
 		method: "DELETE",
 		match: {

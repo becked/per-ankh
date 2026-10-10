@@ -68,7 +68,7 @@ export function screenshotThumbUrl(
 // Every cached address of one screenshot. The readers serve both and the purge
 // clears both, from one list, so neither can be forgotten at one of the three
 // call sites that remove a screenshot (the owner's delete, the game delete,
-// and step 6's admin hide).
+// and the admin takedown).
 export function screenshotPublicUrls(
 	env: ScreenshotStorageEnv,
 	r2Key: string,

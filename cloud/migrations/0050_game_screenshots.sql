@@ -23,7 +23,7 @@
 --
 -- hidden_at covers two states that look the same to every reader and differ
 -- in whether the object still exists: a review-band upload is stored hidden
--- with its object in R2, awaiting an admin decision, while an admin hide
+-- with its object in R2, awaiting an admin decision, while an admin takedown
 -- deletes the object and purges it from the edge (a public cached URL has no
 -- per-request gate to re-evaluate, so clearing the column alone would not
 -- stop the edge serving it).

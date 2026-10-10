@@ -14,7 +14,7 @@
 // Deliberately not a module that knows what a screenshot is: it takes URLs.
 // Which URLs one screenshot has is storage.ts's answer (the object plus its
 // one thumbnail transformation), and keeping that out of here is what lets the
-// owner's delete, the game delete and the admin hide share one list.
+// owner's delete, the game delete and the admin takedown share one list.
 
 import { logError } from "../log";
 

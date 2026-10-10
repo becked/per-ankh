@@ -12,9 +12,9 @@
 	// Both lists come from the page load, in the order the Worker put them —
 	// the queue oldest first, because a queue is served in the order it
 	// arrived, and the starred set newest first. An action re-runs the load
-	// rather than patching a row: a hide resolves reports and clears a star
-	// too, so the row that comes back is a different row and the server is
-	// where that is decided.
+	// rather than patching a row: a takedown resolves reports and clears a
+	// star too, so the row that comes back is a different row and the server
+	// is where that is decided.
 	import { invalidateAll } from "$app/navigation";
 	import {
 		cloudApi,
@@ -79,20 +79,31 @@
 			.join(" · ");
 	}
 
-	// What each action says before it runs. Only `hide` confirms: it deletes
-	// the stored object and purges both its URLs, so it is the one decision
-	// here that cannot be taken back — the others move a column.
+	// What the failure toast calls each action. The wire vocabulary is not
+	// English — "Couldn't takedown that screenshot" is not a sentence — and
+	// `resolve_reports` is a phrase rather than a verb.
+	const ACTION_VERB: Record<ScreenshotModerationAction, string> = {
+		takedown: "take down",
+		approve: "approve",
+		star: "star",
+		unstar: "unstar",
+		resolve_reports: "dismiss the reports on",
+	};
+
+	// What each action says before it runs. Only `takedown` confirms: it
+	// deletes the stored object and purges both its URLs, so it is the one
+	// decision here that cannot be taken back — the others move a column.
 	async function act(
 		shot: ModerationScreenshot,
 		action: ScreenshotModerationAction,
 	): Promise<void> {
 		if (busy !== null) return;
-		if (action === "hide") {
+		if (action === "takedown") {
 			const ok = await confirmDialog({
-				title: "Hide this screenshot?",
+				title: "Take this screenshot down?",
 				message:
 					"This deletes the image and clears it from the cache. It can't be undone — the screenshot can't be put back, only re-uploaded by its owner.",
-				confirmLabel: "Hide",
+				confirmLabel: "Take down",
 				destructive: true,
 			});
 			if (!ok) return;
@@ -103,7 +114,7 @@
 			await invalidateAll();
 		} catch (err) {
 			toast.error(
-				`Couldn't ${action.replace("_", " ")} that screenshot: ${
+				`Couldn't ${ACTION_VERB[action]} that screenshot: ${
 					err instanceof Error ? err.message : err
 				}`,
 			);
@@ -195,28 +206,28 @@
 
 			<div class="mt-2 flex flex-wrap items-center gap-2">
 				{#if shot.status === "in_review"}
-					<!-- The only state `unhide` can act on: the object is still in
-					     R2. An admin hide deletes it, which is why a hidden row
+					<!-- The only state `approve` can act on: the object is still in
+					     R2. A takedown deletes it, which is why a taken-down row
 					     offers nothing. -->
 					<button
 						type="button"
-						onclick={() => act(shot, "unhide")}
+						onclick={() => act(shot, "approve")}
 						disabled={busy !== null}
 						class={actionClass}
 					>
-						Publish
+						Approve
 					</button>
 				{/if}
 				<!-- On a queued row this is the reject half of the decision; on a
-				     published one it is the takedown. Either way it is the same
-				     endpoint and the same three steps. -->
+				     published one it takes down something already visible. Either
+				     way it is the same endpoint and the same three steps. -->
 				<button
 					type="button"
-					onclick={() => act(shot, "hide")}
+					onclick={() => act(shot, "takedown")}
 					disabled={busy !== null}
 					class={actionClass}
 				>
-					Hide
+					Take down
 				</button>
 				{#if shot.reports.length > 0}
 					<button
@@ -257,8 +268,8 @@
 		>
 			<p class="mb-3 text-xs text-tan">
 				Screenshots the classifier wasn't sure about, which no surface renders
-				until they're published here, and screenshots a viewer has reported.
-				Hiding deletes the image and purges it from the edge — it can't be
+				until they're approved here, and screenshots a viewer has reported. A
+				takedown deletes the image and purges it from the edge — it can't be
 				undone, and it resolves the reports that prompted it.
 			</p>
 			{#if screenshots.queue.length === 0}

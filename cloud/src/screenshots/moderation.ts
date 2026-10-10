@@ -16,15 +16,16 @@
 // migration 0051 is where they are written down:
 //
 //   hidden_at set, hidden_by null   the classifier queued it. The object is
-//                                   still in R2, so `unhide` can publish it.
-//   hidden_by set                   an admin hid it. The object is deleted and
-//                                   both its URLs are purged, so there is
-//                                   nothing to put back and `unhide` refuses.
+//                                   still in R2, so `approve` can publish it.
+//   hidden_by set                   an admin took it down. The object is
+//                                   deleted and both its URLs are purged, so
+//                                   there is nothing to put back and
+//                                   `approve` refuses.
 //
-// A hide is therefore not reversible, which is not an oversight: these objects
-// are public and edge-cached with no Worker in the image path, so clearing a
-// column cannot stop the edge serving bytes it already has. Deleting the
-// object is the only thing that does.
+// A takedown is therefore not reversible, which is not an oversight: these
+// objects are public and edge-cached with no Worker in the image path, so
+// clearing a column cannot stop the edge serving bytes it already has.
+// Deleting the object is the only thing that does.
 
 import { BANDS, gateVerdict, trippedQuestions } from "./clef";
 import { recordScreenshotEvent } from "./handlers";
@@ -346,7 +347,7 @@ export async function handleAdminListScreenshots(
 	}
 
 	// The queue's two legs: what the classifier could not decide, and what a
-	// viewer has objected to. An admin-hidden row is in neither — a hide
+	// viewer has objected to. A taken-down row is in neither — a takedown
 	// resolves the reports that prompted it, so a closed decision does not
 	// come back asking to be made again.
 	const queued = await env.SHARE_DB.prepare(
@@ -405,10 +406,10 @@ interface ModerationTargetRow {
 	hidden_by: string | null;
 }
 
-// Mark every open report on one screenshot as looked at. Shared by `hide` and
-// `resolve_reports` because they are the same bookkeeping under two decisions:
-// either way a human has read the report and acted on it, and either way the
-// row must stop appearing in the queue.
+// Mark every open report on one screenshot as looked at. Shared by `takedown`
+// and `resolve_reports` because they are the same bookkeeping under two
+// decisions: either way a human has read the report and acted on it, and
+// either way the row must stop appearing in the queue.
 async function resolveOpenReports(
 	env: ScreenshotModerationEnv,
 	screenshotId: string,
@@ -427,10 +428,10 @@ async function resolveOpenReports(
 // the body (ModerateScreenshotSchema lists them).
 //
 // One route for the five rather than five routes, because they are one
-// decision about one row and two of them are not independent: a hide clears
-// the star and resolves the reports, so the combinations that would need
-// refusing on separate endpoints don't exist here. The audit row carries which
-// action it was.
+// decision about one row and two of them are not independent: a takedown
+// clears the star and resolves the reports, so the combinations that would
+// need refusing on separate endpoints don't exist here. The audit row carries
+// which action it was.
 //
 // Not nested under the game, unlike the owner's delete: an admin reaches a
 // screenshot from the queue, which spans every game, and `screenshot_id` is a
@@ -466,18 +467,18 @@ export async function handleScreenshotModerate(
 	}
 
 	switch (action) {
-		case "hide": {
+		case "takedown": {
 			// COALESCE on both, the acceptance timestamp's shape, and it does
 			// two jobs. `hidden_at` means "invisible since", so a row the
 			// classifier already queued keeps the moment it stopped being
 			// visible rather than being moved to the moment someone confirmed
 			// it — the decision's own time is on the audit event. And neither
-			// column is rewritten by a repeated hide, so the first admin to
-			// act stays the one recorded.
+			// column is rewritten by a repeated takedown, so the first admin
+			// to act stays the one recorded.
 			//
 			// The star goes with it. A hidden row has no object, so a starred
 			// one would be a home-strip entry that can only render broken, and
-			// the hide is the decision that reverses the curation.
+			// the takedown is the decision that reverses the curation.
 			await env.SHARE_DB.prepare(
 				`UPDATE game_screenshots
 				    SET hidden_at = COALESCE(hidden_at, datetime('now')),
@@ -492,21 +493,21 @@ export async function handleScreenshotModerate(
 			// owner's delete takes, and for the same reason: the row is what a
 			// reader consults, so an object that outlived its row renders
 			// nowhere while a row that outlived its object renders a broken
-			// tile. Re-run on a repeated hide rather than short-circuited: the
-			// purge logs its failures instead of throwing, so pressing hide
-			// again is the only recovery path a half-failed purge has.
+			// tile. Re-run on a repeated takedown rather than short-circuited:
+			// the purge logs its failures instead of throwing, so taking the row
+			// down again is the only recovery path a half-failed purge has.
 			await removeScreenshot(env, row.r2_key, screenshotId);
 			await resolveOpenReports(env, screenshotId, adminUserId);
 			break;
 		}
-		case "unhide": {
+		case "approve": {
 			if (row.hidden_by != null) {
 				// The bytes are gone. Clearing the column would publish a row
 				// whose tile and lightbox both 404, which is worse than the
 				// refusal — and there is nothing to re-upload from, since the
 				// object was deleted and purged.
 				return errorResponse(
-					"That screenshot was hidden by an admin, which deleted the image — it can't be restored",
+					"That screenshot was taken down, which deleted the image — it can't be restored",
 					409,
 					cors,
 					"OBJECT_REMOVED",

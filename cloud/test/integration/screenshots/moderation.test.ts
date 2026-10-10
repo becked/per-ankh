@@ -5,9 +5,10 @@
 // is what migration 0051's `hidden_by` exists to tell apart: a classifier-
 // queued row still has its object and can be published, while an admin-hidden
 // one does not and cannot. Everything else — who may report, what the queue
-// selects, what a hide takes with it — follows from that distinction, and
-// every one of those is invisible to a reader, because both states filter out
-// of the galleries identically.
+// selects, what a takedown takes with it — follows from that distinction,
+// and
+// every one of those is invisible to a reader, because both states filter
+// out of the galleries identically.
 //
 // The Clef call is stubbed as in gallery.test.ts: these tests need stored
 // rows in known states, not a classifier verdict.
@@ -224,7 +225,7 @@ describe("POST /v1/games/:id/screenshots/:screenshot_id/report", () => {
 		expect(body.queue).toHaveLength(1);
 		const row = body.queue[0];
 		expect(row.screenshot_id).toBe(id);
-		// Still published — a report is not a hide. The galleries keep
+		// Still published — a report is not a takedown. The galleries keep
 		// rendering it until an admin decides.
 		expect(row.status).toBe("published");
 		expect(row.reports).toHaveLength(1);
@@ -464,16 +465,16 @@ describe("POST /v1/admin/screenshots/:screenshot_id/moderate", () => {
 		const id = await upload(user, gameId);
 		const stranger = await makeUser();
 
-		await expectErrorCode(await moderate(id, "hide"), {
+		await expectErrorCode(await moderate(id, "takedown"), {
 			status: 404,
 			code: "NOT_FOUND",
 		});
-		await expectErrorCode(await moderate(id, "hide", stranger), {
+		await expectErrorCode(await moderate(id, "takedown", stranger), {
 			status: 404,
 			code: "NOT_FOUND",
 		});
 		// The owner is not an admin here either — their route is the delete.
-		await expectErrorCode(await moderate(id, "hide", user), {
+		await expectErrorCode(await moderate(id, "takedown", user), {
 			status: 404,
 			code: "NOT_FOUND",
 		});
@@ -489,14 +490,14 @@ describe("POST /v1/admin/screenshots/:screenshot_id/moderate", () => {
 		});
 	});
 
-	it("hides: row, object, reports and star all in one decision", async () => {
+	it("takes down: row, object, reports and star all in one decision", async () => {
 		const { user, gameId } = await readyUser();
 		const id = await upload(user, gameId);
 		const reporter = await makeUser();
 		await expectOk(await moderate(id, "star", admin));
 		await expectOk(await report(gameId, id, "sexual_content", reporter));
 
-		await expectOk(await moderate(id, "hide", admin));
+		await expectOk(await moderate(id, "takedown", admin));
 
 		// hidden_by is what distinguishes this from a classifier queue, and
 		// the object is gone — which is why the distinction has to exist.
@@ -520,38 +521,38 @@ describe("POST /v1/admin/screenshots/:screenshot_id/moderate", () => {
 		expect(strip.screenshots).toEqual([]);
 	});
 
-	it("hides a queued screenshot too — that is the reject half of the queue", async () => {
+	it("takes down a queued screenshot too — the reject half of the queue", async () => {
 		const { user, gameId } = await readyUser();
 		const id = await uploadQueued(user, gameId);
 
-		await expectOk(await moderate(id, "hide", admin));
+		await expectOk(await moderate(id, "takedown", admin));
 
 		const row = await hiddenColumns(id);
 		expect(row?.hidden_by).toBe(admin.userId);
 		expect(await objectKeys(gameId)).toHaveLength(0);
 	});
 
-	it("keeps the first hide's decision on a repeat", async () => {
+	it("keeps the first takedown's decision on a repeat", async () => {
 		const { user, gameId } = await readyUser();
 		const id = await upload(user, gameId);
-		await expectOk(await moderate(id, "hide", admin));
+		await expectOk(await moderate(id, "takedown", admin));
 		const first = await hiddenColumns(id);
 
 		// Repeatable rather than a 409: re-running is the only recovery a
 		// half-failed purge has, since the purge logs instead of throwing.
-		await expectOk(await moderate(id, "hide", admin));
+		await expectOk(await moderate(id, "takedown", admin));
 		const second = await hiddenColumns(id);
 		expect(second?.hidden_at).toBe(first?.hidden_at);
 		expect(second?.hidden_by).toBe(first?.hidden_by);
 	});
 
-	it("unhides a queued screenshot, which publishes it", async () => {
+	it("approves a queued screenshot, which publishes it", async () => {
 		const { user, gameId } = await readyUser();
 		const id = await uploadQueued(user, gameId);
 		// The object was kept, which is what makes this possible at all.
 		expect(await objectKeys(gameId)).toHaveLength(1);
 
-		await expectOk(await moderate(id, "unhide", admin));
+		await expectOk(await moderate(id, "approve", admin));
 
 		const row = await hiddenColumns(id);
 		expect(row?.hidden_at).toBeNull();
@@ -564,14 +565,14 @@ describe("POST /v1/admin/screenshots/:screenshot_id/moderate", () => {
 		expect(body.queue).toEqual([]);
 	});
 
-	it("refuses to unhide what an admin hid, because the image is gone", async () => {
+	it("refuses to approve what an admin took down, because the image is gone", async () => {
 		const { user, gameId } = await readyUser();
 		const id = await upload(user, gameId);
-		await expectOk(await moderate(id, "hide", admin));
+		await expectOk(await moderate(id, "takedown", admin));
 
 		// The whole reason `hidden_by` exists: clearing the column here would
 		// publish a row whose tile and lightbox both 404.
-		await expectErrorCode(await moderate(id, "unhide", admin), {
+		await expectErrorCode(await moderate(id, "approve", admin), {
 			status: 409,
 			code: "OBJECT_REMOVED",
 		});
@@ -609,7 +610,7 @@ describe("POST /v1/admin/screenshots/:screenshot_id/moderate", () => {
 		});
 
 		const hidden = await upload(user, gameId);
-		await expectOk(await moderate(hidden, "hide", admin));
+		await expectOk(await moderate(hidden, "takedown", admin));
 		await expectErrorCode(await moderate(hidden, "star", admin), {
 			status: 409,
 			code: "SCREENSHOT_HIDDEN",
@@ -638,7 +639,7 @@ describe("POST /v1/admin/screenshots/:screenshot_id/moderate", () => {
 
 	it("404s an unknown screenshot", async () => {
 		await expectErrorCode(
-			await moderate("0123456789abcdefghijk", "hide", admin),
+			await moderate("0123456789abcdefghijk", "takedown", admin),
 			{ status: 404, code: "NOT_FOUND" },
 		);
 	});
