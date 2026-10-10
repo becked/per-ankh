@@ -1228,8 +1228,9 @@ export const cloudApi = {
 	},
 
 	// One game's screenshots, newest first — the game-detail strip. Public
-	// read on its own per-IP budget; `hidden_at` is the only filter, so a
-	// review-band upload is absent until an admin acts.
+	// read on its own per-IP budget, with one viewer-dependent leg: a
+	// review-band upload is sent to its own uploader, marked `in_review`, and
+	// to nobody else until an admin publishes it.
 	getGameScreenshots: async (
 		gameId: string,
 		opts?: CallOpts,

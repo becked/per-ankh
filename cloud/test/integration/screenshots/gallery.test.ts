@@ -1,9 +1,11 @@
 // The two gallery reads and the owner's delete (issue #289, step 5).
 //
 // These are the first readers of game_screenshots, so what they pin is mostly
-// about visibility: `hidden_at` is the only filter either read applies, and
-// the invariant that makes that safe (a screenshot requires a public game) is
-// enforced by the upload gate and by handleGamePatch, not here.
+// about visibility, and both reads apply one rule: a published row to
+// everyone, a classifier-queued row to its uploader alone, a taken-down one to
+// nobody. The invariant that makes a public host safe (a screenshot requires a
+// public game) is enforced by the upload gate and by handleGamePatch, not
+// here.
 //
 // The Clef call is stubbed, as in upload.test.ts — these tests need stored
 // rows, not a classifier verdict, so the stub is the clean-accept one and only

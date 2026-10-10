@@ -73,9 +73,10 @@ export async function buildProfilePage(args: {
 	// decide where a visitor lands, not just what renders — hence read before
 	// the tab.
 	const hasChannels = profile.channels.length > 0;
-	// The flag counts only visible screenshots — the same `hidden_at IS NULL`
-	// the payload read applies — so an account whose only upload is in the
-	// review band gets no tab rather than an empty one.
+	// The flag counts the screenshots this viewer can see — the same rule the
+	// payload read applies — so an account whose only upload is in the review
+	// band gets the tab on its own profile, where it can delete the row, and
+	// nobody else gets an empty one.
 	const hasScreenshots = profile.has_screenshots;
 	// The flag is "holds a match OR has cast", so a dedicated caster who never
 	// plays still gets the tab.

@@ -4,10 +4,11 @@
 -- Migration 0050 gave game_screenshots a single `hidden_at`, and its header
 -- already names the pair that column covers: a review-band upload is stored
 -- hidden with its object still in R2, awaiting a decision, while an admin
--- takedown deletes the object and purges it from the edge. Every READER is
--- indifferent to that difference — `hidden_at IS NULL` is the only filter
--- either gallery applies — but the admin queue is not, because the two differ
--- in whether there are still bytes to put back:
+-- takedown deletes the object and purges it from the edge. The difference is
+-- whether there are still bytes, which is what every reader of this table
+-- turns out to need: a queued row goes to its own uploader, a taken-down one
+-- goes to nobody, and only a queued one holds a quota slot or pins its game
+-- public.
 --
 --   hidden_at IS NOT NULL AND hidden_by IS NULL  the classifier queued it.
 --                                                The object is in R2, so the

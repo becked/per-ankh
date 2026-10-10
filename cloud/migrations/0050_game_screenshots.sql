@@ -6,8 +6,9 @@
 -- It is enforced on both sides: the upload endpoint refuses on a private game,
 -- and PATCH /v1/games/:id refuses to unpublish a game that still has
 -- screenshots (cloud/src/games.ts, alongside LINKED_TO_ACTIVE_TOURNAMENT and
--- the open-challenge run). So readers filter on `hidden_at` ONLY — there is no
--- is_public join on either table here, and nothing downstream should add one.
+-- the open-challenge run). So nothing here needs an is_public join — the
+-- readers filter on the hidden columns alone, and nothing downstream should
+-- add one.
 
 -- ============================================================
 -- GAME_SCREENSHOTS
