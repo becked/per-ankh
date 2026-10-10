@@ -101,9 +101,7 @@ async function downscale(file: Blob): Promise<DownscaleResultMsg> {
 	// The resize. `resizeQuality: "high"` is the browser's own downsampler;
 	// drawImage's is bilinear and aliases visibly at the 2-3x factors a Retina
 	// capture needs. Re-wrapping the decoded bitmap rather than re-reading the
-	// blob means one decode. Where the options aren't honoured this hands back
-	// a full-size bitmap and the blit below still scales it to the canvas, so
-	// the output dimensions are the same either way.
+	// blob means one decode.
 	let bitmap = source;
 	if (width !== sourceWidth || height !== sourceHeight) {
 		bitmap = await createImageBitmap(source, {
@@ -113,6 +111,18 @@ async function downscale(file: Blob): Promise<DownscaleResultMsg> {
 		});
 	}
 
+	// Did the browser honour the resize? Not every one does — Firefox only
+	// learned `resizeQuality` in 149 and ignores the dictionary before that,
+	// and Safari's support is listed as partial below 16.6 — in which case
+	// the call above hands back a full-size copy instead. The output
+	// dimensions come out the same either way, because the blit below scales
+	// whatever it is given to the canvas, so nothing downstream can tell the
+	// difference: the only symptom is the aliasing `resizeQuality` was asked
+	// for to avoid. Halving down to within 2x of the target first is where
+	// drawImage's filter is clean, so the fallback costs picture quality
+	// rather than producing it.
+	const resampled = bitmap.width === width && bitmap.height === height;
+
 	const canvas = new OffscreenCanvas(width, height);
 	const context = canvas.getContext("2d");
 	if (!context) {
@@ -121,7 +131,14 @@ async function downscale(file: Blob): Promise<DownscaleResultMsg> {
 			"NO_CANVAS",
 		);
 	}
-	context.drawImage(bitmap, 0, 0, width, height);
+	context.imageSmoothingQuality = "high";
+	context.drawImage(
+		resampled ? bitmap : halveToward(bitmap, width, height),
+		0,
+		0,
+		width,
+		height,
+	);
 	if (bitmap !== source) bitmap.close();
 	source.close();
 
@@ -148,4 +165,39 @@ async function downscale(file: Blob): Promise<DownscaleResultMsg> {
 		sourceWidth,
 		sourceHeight,
 	};
+}
+
+// Repeated halvings until one more would undershoot the target, so whatever
+// comes back is within 2x of it and the caller's single blit is a factor
+// drawImage's bilinear filter handles without aliasing. Only reached when the
+// browser ignored the resize options above.
+//
+// Each step draws into its own OffscreenCanvas, which is itself a drawImage
+// source, so the chain needs no ImageBitmap round trip. The aspect ratio is
+// uniform, so both dimensions cross the 2x line together; requiring both
+// keeps a degenerate 1 px target terminating.
+function halveToward(
+	source: ImageBitmap,
+	targetWidth: number,
+	targetHeight: number,
+): ImageBitmap | OffscreenCanvas {
+	let current: ImageBitmap | OffscreenCanvas = source;
+	let width = source.width;
+	let height = source.height;
+	while (width >= targetWidth * 2 && height >= targetHeight * 2) {
+		width = Math.max(targetWidth, Math.round(width / 2));
+		height = Math.max(targetHeight, Math.round(height / 2));
+		const step = new OffscreenCanvas(width, height);
+		const context = step.getContext("2d");
+		if (!context) {
+			throw new DownscaleError(
+				"This browser can't prepare images for upload",
+				"NO_CANVAS",
+			);
+		}
+		context.imageSmoothingQuality = "high";
+		context.drawImage(current, 0, 0, width, height);
+		current = step;
+	}
+	return current;
 }

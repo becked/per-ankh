@@ -184,9 +184,21 @@ export async function handleScreenshotUpload(
 		.bind(gameId)
 		.first<GameOwnerRow>();
 	// Don't leak existence: 404 covers both "no game" and "not yours", the
-	// shape handleGamePatch uses.
+	// shape handleGamePatch uses — so the message has to be true of either.
+	//
+	// Written for the uploader, like every message below it: the picker shows
+	// `error` verbatim rather than restating the rule in a second place, so
+	// each of these is the copy a person reads. The remaining ones in this
+	// handler (INVALID_FORM, MISSING_IMAGE, EMPTY_IMAGE, INVALID_IMAGE) stay
+	// API-shaped on purpose — a client that re-encodes before posting cannot
+	// reach them, so they are for whoever is holding the endpoint wrong.
 	if (!game || game.user_id !== userId) {
-		return errorResponse("Not found", 404, cors, "NOT_FOUND");
+		return errorResponse(
+			"That game is gone, or it isn't yours",
+			404,
+			cors,
+			"NOT_FOUND",
+		);
 	}
 	if (game.is_public !== 1) {
 		return errorResponse(
@@ -238,7 +250,7 @@ export async function handleScreenshotUpload(
 	);
 	if (attempts >= screenshotsPerHour(env)) {
 		return errorResponse(
-			"Screenshot upload rate limit exceeded",
+			"You've uploaded a lot of screenshots this hour — try again later",
 			429,
 			cors,
 			"RATE_LIMIT_SCREENSHOT_UPLOAD",
@@ -349,7 +361,12 @@ export async function handleScreenshotUpload(
 		});
 	} catch (e) {
 		logError("r2_put_failed", e, { screenshot_id: screenshotId });
-		return errorResponse("Storage write failed", 500, cors, "R2_FAILED");
+		return errorResponse(
+			"Couldn't store that screenshot — try again",
+			500,
+			cors,
+			"R2_FAILED",
+		);
 	} finally {
 		endPut();
 	}
@@ -397,7 +414,12 @@ export async function handleScreenshotUpload(
 	} catch (e) {
 		logError("d1_insert_failed", e, { screenshot_id: screenshotId });
 		await deleteScreenshotObject(env, r2Key, screenshotId);
-		return errorResponse("Database write failed", 500, cors, "D1_FAILED");
+		return errorResponse(
+			"Couldn't save that screenshot — try again",
+			500,
+			cors,
+			"D1_FAILED",
+		);
 	}
 	if (!inserted) {
 		// The statement's own cap guard refused it — a concurrent upload took

@@ -18,7 +18,6 @@
 	import {
 		ApiError,
 		cloudApi,
-		SCREENSHOT_CAPTION_MAX,
 		UnauthorizedError,
 		type UploadedScreenshot,
 	} from "$lib/api-cloud";
@@ -30,6 +29,7 @@
 		downscaleToStoredVariant,
 		type StoredVariant,
 	} from "./downscale";
+	import { SCREENSHOT_CAPTION_MAX } from "./limits";
 	import { MIN_LONG_EDGE } from "./stored-variant";
 
 	let {

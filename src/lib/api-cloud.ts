@@ -475,11 +475,6 @@ export interface UploadedScreenshot {
 	created_at: string;
 }
 
-// Mirrors SCREENSHOT_CAPTION_MAX in cloud/src/schemas/screenshot.ts. The
-// Worker is the validator; this is the input's own maxlength, so the limit is
-// met by the field refusing a 201st character rather than by a 400.
-export const SCREENSHOT_CAPTION_MAX = 200;
-
 export class ApiError extends Error {
 	constructor(
 		public status: number,

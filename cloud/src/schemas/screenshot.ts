@@ -6,11 +6,11 @@
 
 import * as v from "valibot";
 
-// A caption is one line under a tile, not a description: long enough for
-// "Turn 140, three cities on the Nile", short enough that the strip stays a
-// row of images. Trimmed to empty counts as no caption, so the UI can send
-// the field unconditionally.
-export const SCREENSHOT_CAPTION_MAX = 200;
+// The ceiling is shared with the caption input's own maxlength, so it lives
+// in one module both sides read (src/lib/screenshots/limits.ts) — the shape
+// cloud/src/games.ts and screenshots/handlers.ts already use for code the
+// browser and the Worker both need.
+import { SCREENSHOT_CAPTION_MAX } from "../../../src/lib/screenshots/limits";
 
 export const ScreenshotCaptionSchema = v.pipe(
 	v.string(),
