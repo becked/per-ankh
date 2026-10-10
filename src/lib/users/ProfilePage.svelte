@@ -16,6 +16,7 @@
 	import { autohideScroll } from "$lib/actions/autohideScroll";
 	import { cloudApi } from "$lib/api-cloud";
 	import Breadcrumb, { type Crumb } from "$lib/Breadcrumb.svelte";
+	import { syncMyFeatured } from "$lib/featured-videos.svelte";
 	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
 	import UserTournamentsTab from "$lib/tournament/UserTournamentsTab.svelte";
 	import GamesTable from "$lib/users/GamesTable.svelte";
@@ -31,6 +32,14 @@
 
 	const bundle = $derived(data.bundle);
 	const profile = $derived(data.profile);
+
+	// Seed the shared set the pin on each card reads with the viewer's own
+	// featured videos. Only the owner's Videos tab fetches them (see
+	// profile-load), so on anyone else's profile — or on another tab — this
+	// clears a set nothing renders, and opening that tab seeds it again.
+	$effect(() => {
+		syncMyFeatured(data.myFeaturedVideos);
+	});
 
 	// The Records tab's own fetch — its payload is not in the bundle, so the
 	// profile only pays for it when that tab opens. The scope row drives it like
@@ -283,7 +292,7 @@
 
 						{#if data.hasChannels}
 							<Tabs.Content value="videos">
-								<VideosTab videos={data.videos} />
+								<VideosTab videos={data.videos} isOwner={data.isOwner} />
 							</Tabs.Content>
 						{/if}
 

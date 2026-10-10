@@ -746,6 +746,48 @@ export const cloudApi = {
 		});
 	},
 
+	// --- Featured videos (the user's own) ---
+	// The signed-in user's featured videos, newest first — their pick of their
+	// own uploads, which GET /v1/users/:id/videos leads with for every visitor.
+	// Read for the pin's state on each card and for the account page's Featured
+	// tab; the public copy needs no request of its own, since it arrives at the
+	// front of that read.
+	listMyFeaturedVideos: async (opts?: CallOpts): Promise<CreatorVideo[]> => {
+		const res = await request("/auth/featured-videos", opts);
+		return (await (res.json() as Promise<{ videos: CreatorVideo[] }>)).videos;
+	},
+
+	// Feature one of the user's own videos. Named by platform + id, not sent as
+	// a snapshot like featureVideo above: the Worker takes the snapshot from the
+	// user's own channel feeds, so nothing a caller types reaches a row that
+	// renders on their public profile. A video that isn't in one of their linked
+	// channels is refused with a user-safe ApiError message. Upserts, so
+	// featuring one already in the set is a no-op refresh rather than an error.
+	featureMyVideo: async (
+		platform: string,
+		videoId: string,
+		opts?: CallOpts,
+	): Promise<void> => {
+		await postJson<{ ok: true }>(
+			"/auth/featured-videos",
+			{ platform, video_id: videoId },
+			opts,
+		);
+	},
+
+	// Unfeature one of the user's own. Idempotent on the server, so callers
+	// don't need to handle 404.
+	unfeatureMyVideo: async (
+		platform: string,
+		videoId: string,
+		opts?: CallOpts,
+	): Promise<void> => {
+		await request(
+			`/auth/featured-videos/${encodeURIComponent(platform)}/${encodeURIComponent(videoId)}`,
+			{ ...opts, method: "DELETE" },
+		);
+	},
+
 	// --- Games ---
 	listGames: async (opts?: ListGamesOpts): Promise<GameListResponse> => {
 		const params = new URLSearchParams();

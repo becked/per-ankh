@@ -192,6 +192,33 @@ Remove the user's channel for a platform. Idempotent.
 - **Response 200:** `{ ok: true }`.
 - **Errors:** `401 UNAUTHORIZED`.
 
+### `GET /v1/auth/featured-videos`
+The signed-in user's own featured videos, newest video first (`published_at DESC`) — their pick of their uploads, which [`GET /v1/users/:user_id/videos`](#get-v1usersuser_idvideos) leads with for every visitor. Uncapped: how many of their own videos a creator promotes is their call.
+
+The user-scoped twin of the site-admin set ([Site admin: featured videos](#site-admin-featured-videos)), and stored the same way — a **snapshot** of the fields the platform owns (`user_featured_videos`), because the video a creator wants at the top of their tab is the first one to age out of their channel's ~15-entry feed. Identity is not snapshotted: `user_id` is both curator and uploader here, and the read joins `users` for the name and avatar, so a rename follows.
+
+- **Auth:** Session.
+- **Response 200:** `{ videos: { id, title, url, thumbnail_url: string|null, published_at, platform, duration_seconds: null, user_id, display_name, slug: string|null, avatar_url }[] }`. `duration_seconds` is null for every row — the table has no such column; see [Video runtimes](#video-runtimes).
+- **Errors:** `401 UNAUTHORIZED`.
+
+### `POST /v1/auth/featured-videos`
+Feature one of the signed-in user's own videos, named by platform + id.
+
+- **Auth:** Session.
+- **Body:** `FeatureMyVideoSchema` — `{ platform, video_id }`. `platform` must have a registered provider (`youtube`); `video_id` is ≤64 chars.
+- **Response 200:** `{ ok: true }`.
+- **Errors:** `401 UNAUTHORIZED`, `400 VIDEO_NOT_IN_CHANNELS`, `400 INVALID_BODY` / `INVALID_JSON`, `415 UNSUPPORTED_MEDIA_TYPE`.
+- **Notes:** Deliberately **not** a snapshot body, unlike the admin write: the stored row renders on a public profile under the owner's name, so the Worker takes the snapshot from the user's own channel feeds (the same SWR-cached read the Videos tab is built from) rather than from anything the caller sends. A video that is in none of their linked channels — including one that is in somebody else's — is refused with `VIDEO_NOT_IN_CHANNELS`, which is what makes "their own upload" true of every row in the table. Upserts on `(user_id, platform, video_id)`: re-featuring a video already in the set refreshes its snapshot (a re-titled video, a rotated thumbnail) rather than failing, so the pin is safe to press twice.
+
+### `DELETE /v1/auth/featured-videos/:platform/:video_id`
+Unfeature one of the user's own.
+
+- **Auth:** Session.
+- **Path:** `platform` (lowercase), `video_id` (≤64 chars of `[A-Za-z0-9_-]`).
+- **Response 200:** `{ ok: true }`.
+- **Errors:** `401 UNAUTHORIZED`.
+- **Notes:** Idempotent, and scoped to the caller's own rows — deleting a video that isn't featured still succeeds (so the pin on a card and the Featured tab's Remove don't have to agree on which got there first), and deleting one that is somebody else's featured video succeeds without touching it.
+
 ### `POST /v1/auth/logout`
 End the current session.
 
@@ -379,12 +406,12 @@ The record boards over the same corpus — feeds the profile Stats view's "Recor
 - **Notes:** Its own KV entry under the bundle's key plus a `:records` segment, so both expire together and one prefix walk invalidates both. Off the bundle because the rows are ~60-70 KB gzipped on top of a 154 KB payload that every stats request pays for, and only this tab reads them. A miss on either key builds both — the records are folded out of the same pass over `game_player_turn` that builds the yield bands — so the second fetch is a KV read, not a second aggregation.
 
 ### `GET /v1/users/:user_id/videos`
-Recent videos merged across the user's linked channels (newest first) — feeds the profile "Videos" tab.
+The profile "Videos" tab: the user's own featured videos first, then recent uploads merged across their linked channels — newest first within each half.
 
-- **Auth:** Public — channels and their videos are user-published; no PII, same for every viewer.
+- **Auth:** Public — channels, their videos and the owner's featured set are all user-published; no PII, same for every viewer. The promotion is part of what this read answers rather than something the page computes, so a signed-out visitor gets the owner's picks at the front too.
 - **Path:** `user_id` (21-char).
 - **Response 200:** `{ videos: { id, title, url, thumbnail_url: string|null, published_at, platform, duration_seconds: number|null }[] }` (empty when the user has no linked channels). For live content `published_at` is when the broadcast aired, not when its VOD was later published — see the note below. `duration_seconds` is the runtime; see [Video runtimes](#video-runtimes) for when it is null.
-- **Notes:** Per-channel KV cache, stale-while-revalidate (serves cached instantly, refreshes in the background past a 1h soft TTL). YouTube videos come from the unauthenticated channel RSS feed. That feed dates live content by its VOD publish instant, which runs hours (routinely a calendar day) after the broadcast, so when `YOUTUBE_API_KEY` is configured each refresh spends one further quota unit on `videos.list` (`part=liveStreamingDetails,contentDetails`) to re-date broadcasts to `liveStreamingDetails.actualStartTime` and re-sorts. The same call returns each video's runtime, so `duration_seconds` costs no extra quota. Without the key the feed's own dates stand. A refresh whose `videos.list` call fails is served but not cached, so the feed dates never persist past that one response.
+- **Notes:** The featured half is D1 rows written by [`POST /v1/auth/featured-videos`](#post-v1authfeatured-videos) — snapshots, so a featured video stays on the tab after it drops out of its channel's feed, and `duration_seconds` is null on those entries. Where a featured video is still in the feed, the snapshot is what renders and the feed's copy is dropped, so it appears once. The 24-video cap applies after the promotion. Per-channel KV cache, stale-while-revalidate (serves cached instantly, refreshes in the background past a 1h soft TTL). YouTube videos come from the unauthenticated channel RSS feed. That feed dates live content by its VOD publish instant, which runs hours (routinely a calendar day) after the broadcast, so when `YOUTUBE_API_KEY` is configured each refresh spends one further quota unit on `videos.list` (`part=liveStreamingDetails,contentDetails`) to re-date broadcasts to `liveStreamingDetails.actualStartTime` and re-sorts. The same call returns each video's runtime, so `duration_seconds` costs no extra quota. Without the key the feed's own dates stand. A refresh whose `videos.list` call fails is served but not cached, so the feed dates never persist past that one response.
 
 ### `GET /v1/users/:user_id/tournaments`
 One player's whole tournament record — played + upcoming matches, and cast appearances — for the profile "Tournaments" tab.
@@ -419,7 +446,7 @@ It is null in four cases, and they are worth telling apart:
 - **No `YOUTUBE_API_KEY`.** The free RSS feeds state no length, so every keyless path returns null for every video.
 - **A broadcast still running.** `videos.list` reports `P0D` for these; that is parsed as null rather than 0, so "not over yet" never reads as "zero length".
 - **A degraded enrichment.** A `videos.list` batch that fails leaves its videos with feed dates and null runtimes. Such a response is served but never cached (`UncacheableVideos`), so the null does not persist past that one request.
-- **Featured videos.** `GET /v1/featured-videos` and `GET /v1/admin/featured-videos` serve D1 snapshots taken when a video was starred, and that table has no duration column — so these are null for every featured video, not merely unknown for some.
+- **Featured videos.** `GET /v1/featured-videos` and `GET /v1/admin/featured-videos` serve D1 snapshots taken when a video was starred, and that table has no duration column — so these are null for every featured video, not merely unknown for some. The same holds for the owner-featured rows on `GET /v1/auth/featured-videos` and at the front of `GET /v1/users/:user_id/videos`.
 
 The value costs no extra quota: it rides on the `videos.list` call that already runs to re-date live broadcasts to their air time.
 
@@ -975,7 +1002,7 @@ Re-import a save into a target user's library (admin).
 
 All **Site admin** (`ADMIN_DISCORD_ID`). Non-admins receive `404 NOT_FOUND` (existence hidden).
 
-The curated set of videos an admin has starred from any video card. These are the only videos stored in D1 — every other video surface (the home creator strip, a profile's Videos tab, a tournament's playlist) reads live from the platform and caches in KV. A featured video ages out of the feed it came from (a channel's RSS returns ~15 entries), so each row is a **snapshot** of the fields the platform owns. The uploader's name and avatar are deliberately not snapshotted: a stored `user_id` is joined against `users` at read time (so a rename follows), and `uploader_name`/`uploader_url` carry an unlinked YouTube channel.
+The curated set of videos an admin has starred from any video card. Featuring is the only reason a video is stored in D1 at all — every video surface (the home creator strip, a profile's Videos tab, a tournament's playlist) otherwise reads live from the platform and caches in KV. A featured video ages out of the feed it came from (a channel's RSS returns ~15 entries), so each row is a **snapshot** of the fields the platform owns. The user-scoped twin of this set, which a creator curates for their own profile, is [`GET /v1/auth/featured-videos`](#get-v1authfeatured-videos). The uploader's name and avatar are deliberately not snapshotted: a stored `user_id` is joined against `users` at read time (so a rename follows), and `uploader_name`/`uploader_url` carry an unlinked YouTube channel.
 
 Writes are admin-only; the set itself is public — see [`GET /v1/featured-videos`](#get-v1featured-videos).
 

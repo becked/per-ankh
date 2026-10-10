@@ -132,7 +132,10 @@ import {
 	handleAddChannel,
 	handleCreatorVideos,
 	handleDeleteChannel,
+	handleFeatureMyVideo,
 	handleListMyChannels,
+	handleListMyFeaturedVideos,
+	handleUnfeatureMyVideo,
 	handleUserVideos,
 } from "./channels";
 import type { ChannelsEnv } from "./channels";
@@ -310,6 +313,37 @@ const ROUTES: RouteSpec[] = [
 		match: { kind: "regex", regex: /^\/v1\/auth\/channels\/([a-z]+)$/ },
 		route: "DELETE /v1/auth/channels/:platform",
 		handler: (r, e, m) => handleDeleteChannel(m![1], r, e),
+	},
+	// The signed-in user's own featured videos — their pick of their uploads,
+	// pinned to the front of their profile's Videos tab (see
+	// cloud/src/channels.ts). Session-scoped like the channels above, and the
+	// user-scoped twin of /v1/admin/featured-videos; the public copy of the set
+	// is served by GET /v1/users/:user_id/videos, which leads with it.
+	{
+		method: "GET",
+		match: { kind: "path", path: "/v1/auth/featured-videos" },
+		route: "GET /v1/auth/featured-videos",
+		handler: (r, e) => handleListMyFeaturedVideos(r, e),
+	},
+	{
+		// Passes ctx: the write validates the video against the user's own
+		// channel feeds, so it reads through the same SWR cache the profile
+		// read does and can refresh a stale entry in the background.
+		method: "POST",
+		match: { kind: "path", path: "/v1/auth/featured-videos" },
+		route: "POST /v1/auth/featured-videos",
+		handler: (r, e, _m, c) => handleFeatureMyVideo(r, e, c),
+	},
+	{
+		// Platform + provider-native video id, bounded here so the id never
+		// reaches the query as arbitrary path text (mirroring the admin form).
+		method: "DELETE",
+		match: {
+			kind: "regex",
+			regex: /^\/v1\/auth\/featured-videos\/([a-z]+)\/([A-Za-z0-9_-]{1,64})$/,
+		},
+		route: "DELETE /v1/auth/featured-videos/:platform/:video_id",
+		handler: (r, e, m) => handleUnfeatureMyVideo(m![1], m![2], r, e),
 	},
 	{
 		method: "POST",

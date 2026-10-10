@@ -7,6 +7,13 @@
 // linked channel's recent uploads (KV-cached, stale-while-revalidate) for the
 // profile "Videos" tab.
 //
+// The owner-featured set (/v1/auth/featured-videos, user_featured_videos) is
+// also here: a user's own pick of their uploads, pinned to the front of that
+// same read. It lives in this module rather than beside the site-admin set
+// (cloud/src/featured.ts) because both ends of the write are here — it is
+// validated against this module's channel feeds, and the only read that
+// renders it is this module's public profile read.
+//
 // Multi-platform by construction — every platform-specific concern is behind
 // the provider registry; YouTube ships first, Twitch et al. register a
 // provider with no change here.
@@ -16,8 +23,14 @@ import { buildAvatarUrl } from "./auth";
 import { displayNameSql } from "./identity";
 import { logError } from "./log";
 import { AddChannelSchema } from "./schemas/channel";
+import { FeatureMyVideoSchema } from "./schemas/featured";
 import { sessionFromRequest, type SessionEnv } from "./session";
-import { cloudCorsHeaders, errorResponse, jsonResponse } from "./util";
+import {
+	cloudCorsHeaders,
+	errorResponse,
+	jsonResponse,
+	parseJsonBody,
+} from "./util";
 import { getRecentVideosCached } from "./video/cache";
 import {
 	providerForPlatform,
@@ -29,6 +42,7 @@ import {
 	ChannelResolutionError,
 	type Video,
 	type VideoEnv,
+	type VideoPlatform,
 } from "./video/types";
 import type { QueryableD1 } from "./d1";
 
@@ -246,20 +260,16 @@ function attributedChannelVideos(
 	);
 }
 
-// GET /v1/users/:user_id/videos — public. Merges recent uploads across the
-// user's linked channels (each KV-cached, SWR). No auth: channels are
-// user-published and videos are the same for every viewer. The uploader on
-// each video is the profile's own owner — the display name and avatar this
-// page's header already serves publicly — so the tab renders the cards with
-// the credit suppressed rather than repeating it once per card.
-export async function handleUserVideos(
-	userId: string,
-	request: Request,
+// One profile's uploads across every channel its owner has linked, each tagged
+// with that owner. Two callers: the public read below, and the feature write
+// further down — which validates against exactly the feed the tab renders, so
+// any video a user can see a pin on is one they can pin. Unsorted and uncapped;
+// both callers impose their own.
+async function userChannelVideos(
 	env: ChannelsEnv,
 	ctx: ExecutionContext,
-): Promise<Response> {
-	const cors = cloudCorsHeaders(env, request);
-
+	userId: string,
+): Promise<CreatorVideo[]> {
 	const rows = await env.SHARE_DB.prepare(
 		`${CHANNELS_WITH_OWNER_SQL} WHERE c.user_id = ?`,
 	)
@@ -269,14 +279,262 @@ export async function handleUserVideos(
 	const perChannel = await Promise.all(
 		(rows.results ?? []).map((c) => attributedChannelVideos(env, ctx, c)),
 	);
+	return perChannel.flat();
+}
 
-	const videos = perChannel
-		.flat()
+// One row of the owner-featured read: the stored snapshot (migration 0050),
+// plus the owner's live identity from the join. The same split the admin set
+// makes — the platform's fields are frozen, identity is not — with no
+// attribution to discriminate, because here the owner IS the uploader.
+interface UserFeaturedVideoRow {
+	platform: VideoPlatform;
+	video_id: string;
+	url: string;
+	title: string;
+	thumbnail_url: string | null;
+	published_at: string;
+	user_id: string;
+	display_name: string;
+	slug: string | null;
+	discord_id: string;
+	avatar_hash: string | null;
+}
+
+// One user's featured videos, newest first — the read behind both the public
+// profile read and the owner's own list, so the snapshot columns and the
+// identity join can't drift apart between them.
+//
+// The join is inner for the same reason CHANNELS_WITH_OWNER_SQL's is:
+// user_featured_videos.user_id is an ON DELETE CASCADE foreign key, so a row
+// without its user is not a state that exists.
+async function selectUserFeaturedVideos(
+	db: QueryableD1,
+	userId: string,
+): Promise<CreatorVideo[]> {
+	const rows = await db
+		.prepare(
+			`SELECT f.platform, f.video_id, f.url, f.title, f.thumbnail_url,
+			        f.published_at, f.user_id,
+			        ${displayNameSql("u")} AS display_name,
+			        u.slug, u.discord_id, u.avatar_hash
+			 FROM user_featured_videos f
+			 JOIN users u ON u.user_id = f.user_id
+			 WHERE f.user_id = ?
+			 ORDER BY f.published_at DESC`,
+		)
+		.bind(userId)
+		.all<UserFeaturedVideoRow>();
+
+	return (rows.results ?? []).map((row): CreatorVideo => ({
+		id: row.video_id,
+		title: row.title,
+		url: row.url,
+		thumbnail_url: row.thumbnail_url,
+		published_at: row.published_at,
+		platform: row.platform,
+		// The table has no duration column, so this is null for every
+		// featured video rather than merely unknown for some — the same gap
+		// the admin snapshots carry (attributeFeaturedVideo in
+		// cloud/src/featured.ts). Typed as CreatorVideo rather than left
+		// inferred so the next field added to Video fails here instead of
+		// silently shipping a featured card that is missing it.
+		duration_seconds: null,
+		user_id: row.user_id,
+		display_name: row.display_name,
+		slug: row.slug,
+		avatar_url: buildAvatarUrl(row.discord_id, row.avatar_hash),
+	}));
+}
+
+// The identity of a video wherever it is keyed — the (platform, video_id) pair
+// the caches, the stored rows' primary keys and the frontend's list keys all
+// use.
+function videoKey(video: Video): string {
+	return `${video.platform}:${video.id}`;
+}
+
+// The Videos tab's order: the owner's featured videos first, then the rest of
+// the live feed, each half newest-first. Pure, so the ordering has a unit test
+// rather than only an integration one.
+//
+// Server-side, unlike the home strip's own featuredFirst (src/routes/+page.ts),
+// which runs in the page load against a set the layout fetches for admins
+// only. This order is part of what the public read answers, so an anonymous
+// visitor sees the owner's picks at the top of the tab.
+//
+// The snapshots are what render, not the feed's own copies of them: a featured
+// video outlives the ~15-entry feed it came from, so the snapshot is the entry
+// that is always there — and dropping the feed copy is also what keeps one
+// video from rendering twice and crashing the tab's keyed {#each} with
+// each_key_duplicate.
+export function featuredFirst(
+	featured: CreatorVideo[],
+	feed: CreatorVideo[],
+): CreatorVideo[] {
+	const keys = new Set(featured.map(videoKey));
+	return [
+		...[...featured].sort(byPublishedDesc),
+		...feed.filter((v) => !keys.has(videoKey(v))),
+	];
+}
+
+// GET /v1/users/:user_id/videos — public. The user's featured videos first
+// (see featuredFirst), then recent uploads across their linked channels (each
+// KV-cached, SWR). No auth: channels are user-published, the featured set is
+// the owner's own curation, and both are the same for every viewer. The
+// uploader on each video is the profile's own owner — the display name and
+// avatar this page's header already serves publicly — so the tab renders the
+// cards with the credit suppressed rather than repeating it once per card.
+export async function handleUserVideos(
+	userId: string,
+	request: Request,
+	env: ChannelsEnv,
+	ctx: ExecutionContext,
+): Promise<Response> {
+	const cors = cloudCorsHeaders(env, request);
+
+	const [featured, feed] = await Promise.all([
+		selectUserFeaturedVideos(env.SHARE_DB, userId),
+		userChannelVideos(env, ctx, userId),
+	]);
+
+	// The cap applies after the promotion, so featuring costs the tab nothing
+	// but reorders it. The featured set is uncapped by design (migration 0050),
+	// which means a user who features more than this fills the tab with their
+	// own picks — their call, and the same trade the home strip makes.
+	const videos = featuredFirst(
+		featured,
 		// Newest first across all platforms.
-		.sort(byPublishedDesc)
-		.slice(0, MAX_MERGED_VIDEOS);
+		feed.sort(byPublishedDesc),
+	).slice(0, MAX_MERGED_VIDEOS);
 
 	return jsonResponse({ videos }, 200, cors);
+}
+
+// --- Owner-featured writes -------------------------------------------------
+//
+// A user's own pick of their uploads, pinned to the front of the read above.
+// The user-scoped twin of the site-admin featured set (cloud/src/featured.ts),
+// session-scoped like /v1/auth/channels, and stored as a snapshot for the same
+// reason that set is: the video a creator wants at the top of their tab is the
+// one that ages out of the ~15-entry feed first (migration 0050).
+
+// GET /v1/auth/featured-videos — the signed-in user's own featured set, newest
+// first. What the pin on a card reads its state from, and what the account
+// page's Featured tab manages; the public copy of the same rows is already at
+// the front of their profile's Videos tab.
+export async function handleListMyFeaturedVideos(
+	request: Request,
+	env: ChannelsEnv,
+): Promise<Response> {
+	const cors = cloudCorsHeaders(env, request);
+	const session = await sessionFromRequest(env, request);
+	if (!session) {
+		return errorResponse("Unauthorized", 401, cors, "UNAUTHORIZED");
+	}
+
+	return jsonResponse(
+		{
+			videos: await selectUserFeaturedVideos(
+				env.SHARE_DB,
+				session.data.user_id,
+			),
+		},
+		200,
+		cors,
+	);
+}
+
+// POST /v1/auth/featured-videos — feature one of the signed-in user's own
+// videos, named by platform + id.
+//
+// The snapshot is taken from the user's own channel feeds, never from the
+// body: the row renders on a public profile under the owner's name, so the
+// title, URL and thumbnail have to come from the platform rather than from
+// whoever is holding the session. That is also what makes "their own upload"
+// true of every row in the table — a video in nobody's linked channel but
+// theirs can't be featured, so the identity the read joins is the uploader's.
+// The admin write can accept a snapshot body (cloud/src/featured.ts) because
+// its caller is trusted; this one can't.
+//
+// Upserts on (user_id, platform, video_id), like that write: re-featuring a
+// video already in the set refreshes its snapshot (a re-titled video, a rotated
+// thumbnail) rather than failing, which also makes the pin safe to press twice.
+export async function handleFeatureMyVideo(
+	request: Request,
+	env: ChannelsEnv,
+	ctx: ExecutionContext,
+): Promise<Response> {
+	const cors = cloudCorsHeaders(env, request);
+	const session = await sessionFromRequest(env, request);
+	if (!session) {
+		return errorResponse("Unauthorized", 401, cors, "UNAUTHORIZED");
+	}
+
+	const parsed = await parseJsonBody(request, FeatureMyVideoSchema, cors);
+	if (!parsed.ok) return parsed.response;
+	const { platform, video_id } = parsed.body;
+
+	const feed = await userChannelVideos(env, ctx, session.data.user_id);
+	const video = feed.find((v) => v.platform === platform && v.id === video_id);
+	if (!video) {
+		return errorResponse(
+			"That video isn't one of your channels' uploads.",
+			400,
+			cors,
+			"VIDEO_NOT_IN_CHANNELS",
+		);
+	}
+
+	await env.SHARE_DB.prepare(
+		`INSERT INTO user_featured_videos (
+		   user_id, platform, video_id, url, title, thumbnail_url, published_at
+		 ) VALUES (?, ?, ?, ?, ?, ?, ?)
+		 ON CONFLICT(user_id, platform, video_id) DO UPDATE SET
+		   url           = excluded.url,
+		   title         = excluded.title,
+		   thumbnail_url = excluded.thumbnail_url,
+		   published_at  = excluded.published_at,
+		   featured_at   = datetime('now')`,
+	)
+		.bind(
+			session.data.user_id,
+			video.platform,
+			video.id,
+			video.url,
+			video.title,
+			video.thumbnail_url,
+			video.published_at,
+		)
+		.run();
+
+	return jsonResponse({ ok: true }, 200, cors);
+}
+
+// DELETE /v1/auth/featured-videos/:platform/:video_id — unfeature. Idempotent,
+// mirroring handleDeleteChannel and the admin unfeature: the pin on a card and
+// the Featured tab's Remove can both reach a row, and neither should have to
+// know which got there first.
+export async function handleUnfeatureMyVideo(
+	platform: string,
+	videoId: string,
+	request: Request,
+	env: ChannelsEnv,
+): Promise<Response> {
+	const cors = cloudCorsHeaders(env, request);
+	const session = await sessionFromRequest(env, request);
+	if (!session) {
+		return errorResponse("Unauthorized", 401, cors, "UNAUTHORIZED");
+	}
+
+	await env.SHARE_DB.prepare(
+		`DELETE FROM user_featured_videos
+		 WHERE user_id = ? AND platform = ? AND video_id = ?`,
+	)
+		.bind(session.data.user_id, platform, videoId)
+		.run();
+
+	return jsonResponse({ ok: true }, 200, cors);
 }
 
 // --- Cross-creator home feed ---------------------------------------------

@@ -5,6 +5,12 @@
 	import { ApiError, cloudApi, type GameListItem } from "$lib/api-cloud";
 	import { autohideScroll } from "$lib/actions/autohideScroll";
 	import BulkReparseModal from "$lib/BulkReparseModal.svelte";
+	import FeaturedVideosTable from "$lib/FeaturedVideosTable.svelte";
+	import {
+		isMyFeatured,
+		setMyFeatured,
+		syncMyFeatured,
+	} from "$lib/featured-videos.svelte";
 	import ChannelSettings from "$lib/settings/ChannelSettings.svelte";
 	import CopyButton from "$lib/tournament/CopyButton.svelte";
 	import CopyMark from "$lib/ui/CopyMark.svelte";
@@ -101,6 +107,17 @@
 	// detail-page reparse banner.
 	const isOutdated = (g: GameListItem): boolean =>
 		isNewer(PARSER_VERSION, g.parser_version);
+
+	// The shared set the pin on each video card reads, seeded from this page's
+	// load — so featuring from a card and removing from the table below are the
+	// same fact, whichever surface the user came from.
+	$effect(() => {
+		syncMyFeatured(data.myFeaturedVideos);
+	});
+
+	// The load's rows narrowed to what is still featured, so a removal drops the
+	// row without a re-fetch — and restores it if the write fails.
+	const myFeaturedRows = $derived(data.myFeaturedVideos.filter(isMyFeatured));
 
 	// Subtab triggers styled as chip-bar pills, matching the game-detail and
 	// aggregate-stats tab bars.
@@ -311,6 +328,9 @@
 					Preferences
 				</Tabs.Trigger>
 				<Tabs.Trigger value="video" class={triggerClass}>Video</Tabs.Trigger>
+				<Tabs.Trigger value="featured" class={triggerClass}>
+					Featured
+				</Tabs.Trigger>
 				<Tabs.Trigger value="maintenance" class={triggerClass}>
 					Maintenance
 				</Tabs.Trigger>
@@ -506,6 +526,16 @@
 					</div>
 					<ChannelSettings initialChannels={data.channels} />
 				</div>
+			</Tabs.Content>
+
+			<Tabs.Content value="featured">
+				<FeaturedVideosTable
+					rows={myFeaturedRows}
+					title="Featured videos"
+					description="Your own uploads, pinned to the top of the Videos tab on your profile — everyone who visits sees them first, signed in or not. Feature one from the pin on any of your video cards there. Each row is a snapshot taken when you featured it, so it stays on the tab after it drops out of your channel's feed."
+					onRemove={(video) => setMyFeatured(video, false)}
+					showUploader={false}
+				/>
 			</Tabs.Content>
 
 			<Tabs.Content value="maintenance">
