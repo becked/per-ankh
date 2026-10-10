@@ -26,6 +26,12 @@ const REVIEWED: Record<string, string> = {
 	// both payloads, and a miss on either runs the one SELECT-only build that
 	// writes both KV keys.
 	"GET /v1/users/:user_id/stats/records": "SELECT-only call graph",
+	// Three SELECTs on SHARE_DB (the public game list, then the player and
+	// series fan-outs). The anon_read count and its audit insert are the only
+	// writes anywhere in the call graph and both run on EVENTS_DB. Nothing
+	// persists what this route read — unlike the two above, it has no KV
+	// entry — so the answer lives only as long as the response.
+	"GET /v1/games/public-recent": "SELECT-only call graph",
 };
 
 // `events` is both audit log and rate-limit counter, so it always runs on the

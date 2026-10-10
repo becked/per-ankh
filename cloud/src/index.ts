@@ -354,6 +354,18 @@ const ROUTES: RouteSpec[] = [
 		match: { kind: "path", path: "/v1/games/public-recent" },
 		route: "GET /v1/games/public-recent",
 		handler: (r, e) => handlePublicRecentGames(r, e),
+		// Three SHARE_DB queries, all SELECT: the game list, then the player
+		// and series fan-outs it feeds. Both `events` touches — the anon_read
+		// count and its audit insert — go through EVENTS_DB, so neither
+		// anchors the session's bookmark.
+		//
+		// Unlike the two profile-stats routes further down it persists its
+		// answer nowhere, so the 24h-KV-entry care that makes first-primary
+		// load-bearing there does not arise here: the response is the only
+		// thing a replica read reaches, and it already tells browsers
+		// `max-age=300`. Replica lag is orders of magnitude inside what the
+		// route itself accepts.
+		staleTolerant: true,
 	},
 	// The played-games leaderboard — what /players reads, all-time and per-season
 	// windows alike. Anonymous, and on its own per-IP budget
