@@ -8,7 +8,7 @@ This reference is drift-guarded: `cloud/src/routes-doc.test.ts` asserts it docum
 
 ## Contents
 
-- [Conventions](#conventions) — base URL, auth tiers, error envelope, identifiers, rate limits, CORS, PII
+- [Conventions](#conventions) — base URL, auth tiers, error envelope, identifiers, rate limits, CORS, caching, PII
 - [Authentication](#authentication----v1auth) — `/v1/auth/*`
 - [Games](#games----v1games) — `/v1/games/*`
 - [Collections](#collections----v1collections) — `/v1/collections`
@@ -121,6 +121,28 @@ Over-limit → `429` with an endpoint-specific `code`. Known scraper User-Agents
 ### CORS
 
 All paths use **credentialed, echo-Origin** CORS (the request `Origin` is reflected when in `ALLOWED_ORIGINS = https://per-ankh.app, http://localhost:1420`) so cookies traverse `per-ankh.app ↔ api.per-ankh.app`. CORS is browser-enforced only; a non-browser client is unaffected.
+
+### Caching
+
+A **shared cache runs in front of the Worker** (`[cache]` in `cloud/wrangler.toml`). On a hit the Worker does not run at all: nothing authorizes, nothing spends a rate-limit budget, nothing writes an audit row, and no access-log line is emitted. Two properties of that cache decide what every endpoint below may say:
+
+- A `200` with **no** `Cache-Control` is not opted out — it gets RFC 9111 heuristic freshness, 7200 seconds.
+- `Cookie` is **not** in the cache key. The key is the path and query string (plus the Worker version); the session cookie this API authenticates with is invisible to it, as is `Authorization`. `Vary` *is* honored, so `Vary: Cookie` is the one way to put the viewer into the key.
+
+So the default is closed: every JSON response carries **`Cache-Control: private, no-store`** unless its endpoint says otherwise below. Endpoints that may be stored in a shared cache declare it in the route table (`sharedCache`, `cloud/src/index.ts`) and are audited by `cloud/src/shared-cache-routes.test.ts`; they are exactly these:
+
+| Endpoint | Directive | Why it is shareable |
+| --- | --- | --- |
+| `GET /v1/games/public-recent` | `public, max-age=300, s-maxage=60` | reads no session |
+| `GET /v1/games/:id` | `public, max-age=3600, s-maxage=60` (non-owner) | two bodies on one URL, separated by `Vary: Cookie, Origin`; the owner's is `private, no-store` |
+| `GET /v1/stats`, `GET /v1/stats/records` | `public, max-age=0, s-maxage=60` | session-gated but viewer-independent — `is_public = 1` is the whole visibility rule |
+| `GET /v1/stats/players` | `public, max-age=300, s-maxage=60` | anonymous; board and window are query parameters |
+| `GET /v1/home-summary` | `public, max-age=0, s-maxage=60` | anonymous, no parameters |
+| `GET /v1/creator-videos`, `GET /v1/tournament-videos`, `GET /v1/featured-videos` | `public, max-age=0, s-maxage=60` | pre-assembled feeds, identical for every caller |
+
+The `s-maxage` values on those were inert before this cache existed — they constrained browsers and intermediaries only, since a Worker-generated response never reached Cloudflare's cache. They are live now, which is what makes the "edge-cached 60s" notes on the video and stats endpoints below descriptions rather than intentions.
+
+Downloads and exports are streams rather than JSON and carry their own directive: `private, max-age=300` for the save and challenge-map ZIPs, `private, max-age=0` for the admin download, `private, no-store` for the tournament CSV export.
 
 ### PII
 
@@ -926,7 +948,7 @@ Download standings + matches as CSVs.
 
 - **Auth:** Session + **Tournament admin** (unlike the other reads — anonymous → `401`, not a setup-gated `404`).
 - **Path:** `id` (21-char).
-- **Response 200:** `application/zip` (`standings.csv` + `matches.csv`), `Content-Disposition: attachment; filename="<slug>-export.zip"`.
+- **Response 200:** `application/zip` (`standings.csv` + `matches.csv`), `Content-Disposition: attachment; filename="<slug>-export.zip"`; `Cache-Control: private, no-store`.
 - **Errors:** `401 UNAUTHORIZED`, `403 NOT_TOURNAMENT_ADMIN`, `404 TOURNAMENT_NOT_FOUND`, `429 RATE_LIMIT_TOURNAMENT_EXPORT` (30/hr per user).
 - **Notes:** Standings CSV uses the full admin shape. Not behind the per-IP view limit.
 

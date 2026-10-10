@@ -274,6 +274,35 @@ interface RouteSpec {
 	//
 	// Adding one here also needs an entry in stale-tolerant-routes.test.ts.
 	staleTolerant?: true;
+	// This route's response may be stored in a cache **shared between
+	// viewers**, and its handler builds its own `Cache-Control` saying so.
+	// Omitted — the default — means the response is for its caller only, which
+	// is what `jsonResponse` emits (`private, no-store`, util.ts).
+	//
+	// The declaration matters because Workers Cache runs in front of the
+	// Worker (`[cache]`, cloud/wrangler.toml): on a hit the handler does not
+	// run, so nothing authorizes, rate-limits or audits, and the key holds the
+	// path and query string but *not* the `Cookie` header our session rides
+	// in. Flagging a route is therefore a claim that its body does not depend
+	// on who asked — or that a `Vary` makes the dependence part of the key.
+	//
+	// Two things disqualify a route:
+	//
+	//   - The body differs by session. `GET /v1/users/:user_id/stats` picks
+	//     `viewerScope` off the session and includes the owner's *private*
+	//     games; the KV layer already keys on that scope for the same reason
+	//     (stats/cache.ts), and a shared HTTP entry would reopen what it
+	//     closes. `Vary: Cookie` is the exception that makes one safe —
+	//     `GET /v1/games/:id` serves two bodies on one URL and names Cookie in
+	//     its `Vary`, so the cookie-less (PII-stripped) variant is the only
+	//     one a shared key can hold.
+	//   - Its gate is on *what* the caller may see rather than on what they
+	//     may spend. A hit answers an anonymous request from a signed-in
+	//     visitor's response, so a 401 the handler would have returned never
+	//     happens.
+	//
+	// Adding one here also needs an entry in shared-cache-routes.test.ts.
+	sharedCache?: true;
 }
 
 const ROUTES: RouteSpec[] = [
@@ -367,6 +396,10 @@ const ROUTES: RouteSpec[] = [
 		// `max-age=300`. Replica lag is orders of magnitude inside what the
 		// route itself accepts.
 		staleTolerant: true,
+		// Nothing here reads the session, so there is no viewer-dependent body
+		// to leak — the PII stance is the same for every caller (display_name
+		// and the in-game player_name, no online_ids). The clean case.
+		sharedCache: true,
 	},
 	// The played-games leaderboard — what /players reads, all-time and per-season
 	// windows alike. Anonymous, and on its own per-IP budget
@@ -378,6 +411,9 @@ const ROUTES: RouteSpec[] = [
 		match: { kind: "path", path: "/v1/stats/players" },
 		route: "GET /v1/stats/players",
 		handler: (r, e) => handlePlayerLeaderboard(r, e),
+		// Anonymous and sessionless — the board named in the URL is the whole
+		// input, and the window is a query parameter, so it is in the key.
+		sharedCache: true,
 	},
 	{
 		method: "GET",
@@ -400,6 +436,12 @@ const ROUTES: RouteSpec[] = [
 		route: "GET /v1/games/:id",
 		// Passes ctx so the per-POP blob cache can fill in the background.
 		handler: (r, e, m, c) => handleGameDetail(m![1], r, e, c),
+		// The one route that serves two bodies on one URL — the owner's, and
+		// the `stripOnlineIds` variant everyone else gets. Safe to share only
+		// because it names Cookie in its `Vary` (games.ts), which puts the
+		// distinction into the cache key, and answers the owner `private,
+		// no-store` so that body is never stored at all.
+		sharedCache: true,
 	},
 	{
 		method: "GET",
@@ -1180,6 +1222,14 @@ const ROUTES: RouteSpec[] = [
 		match: { kind: "path", path: "/v1/stats" },
 		route: "GET /v1/stats",
 		handler: (r, e, _m, c) => handleGlobalStats(r, e, c),
+		// Byte-identical for every viewer, per the gate's own reasoning above:
+		// the session is on who may spend an aggregation, not on what they get
+		// to see. Note what sharing therefore means — a hit does not run the
+		// handler, so an anonymous caller can be answered from a signed-in
+		// one's response. That is the gate's purpose satisfied rather than
+		// bypassed (a hit spends nothing), but it is the consequence to
+		// re-read if the payload ever starts depending on the viewer.
+		sharedCache: true,
 	},
 	// The record boards over the same selection. Everything above applies —
 	// same gate, same `global_stats_view` budget, same ?slice= / ?nation=, same
@@ -1191,6 +1241,8 @@ const ROUTES: RouteSpec[] = [
 		match: { kind: "path", path: "/v1/stats/records" },
 		route: "GET /v1/stats/records",
 		handler: (r, e, _m, c) => handleGlobalRecords(r, e, c),
+		// Same corpus, same gate, same consequence.
+		sharedCache: true,
 	},
 	// The home page's stats panels — the three bundle fields they draw, over the
 	// unfaceted `duel` slice. Public where /v1/stats is session-gated, because
@@ -1204,6 +1256,9 @@ const ROUTES: RouteSpec[] = [
 		match: { kind: "path", path: "/v1/home-summary" },
 		route: "GET /v1/home-summary",
 		handler: (r, e) => handleHomeSummary(r, e),
+		// Public and sessionless, and it reads one precomputed KV entry over a
+		// fixed slice — no parameters at all, so one body for everyone.
+		sharedCache: true,
 	},
 	// Cross-creator home feed — newest uploads across all users' linked
 	// channels, merged newest-first for the home page's "Latest from creators"
@@ -1213,6 +1268,8 @@ const ROUTES: RouteSpec[] = [
 		match: { kind: "path", path: "/v1/creator-videos" },
 		route: "GET /v1/creator-videos",
 		handler: (r, e, _m, c) => handleCreatorVideos(r, e, c),
+		// One pre-assembled feed, identical for every caller.
+		sharedCache: true,
 	},
 	// The other half of that strip — newest uploads across every visible
 	// tournament's admin-set playlist, merged newest-first. Per-playlist KV
@@ -1223,6 +1280,11 @@ const ROUTES: RouteSpec[] = [
 		match: { kind: "path", path: "/v1/tournament-videos" },
 		route: "GET /v1/tournament-videos",
 		handler: (r, e, _m, c) => handleTournamentVideosFeed(r, e, c),
+		// Which tournaments contribute is viewer-independent *by construction*
+		// — anything past `setup`, plus `setup` with signups open — a choice
+		// docs/api-reference.md already records as made because this response
+		// is shared-cacheable.
+		sharedCache: true,
 	},
 	// The third home video feed — the site-admin featured set (see
 	// cloud/src/featured.ts), newest first. Read straight from D1 rather than
@@ -1233,6 +1295,10 @@ const ROUTES: RouteSpec[] = [
 		match: { kind: "path", path: "/v1/featured-videos" },
 		route: "GET /v1/featured-videos",
 		handler: (r, e) => handlePublicFeaturedVideos(r, e),
+		// A small curated table read straight from D1 — public, sessionless
+		// and outside every rate-limit budget, which is most of why it is also
+		// the synthetic-check probe (docs/cloud-deploy-plan.md §6).
+		sharedCache: true,
 	},
 	// The home page's curated screenshot strip — the admin-starred set, newest
 	// star first (cloud/src/screenshots/handlers.ts). Public, and the one
@@ -1292,6 +1358,16 @@ export const ROUTE_KEYS: readonly string[] = ROUTES.map((r) => r.route);
 // and the reviewed list there.
 export const STALE_TOLERANT_ROUTE_KEYS: readonly string[] = ROUTES.filter(
 	(r) => r.staleTolerant,
+).map((r) => r.route);
+
+// The routes whose responses may be stored in a cache shared between viewers,
+// exported for the drift guard in cloud/src/shared-cache-routes.test.ts. Same
+// two-edit shape as the flag above, and for the same reason: with Workers
+// Cache in front of the Worker a shared entry is served without the handler
+// running, so what a reviewer has to establish is that the body does not
+// depend on who asked.
+export const SHARED_CACHE_ROUTE_KEYS: readonly string[] = ROUTES.filter(
+	(r) => r.sharedCache,
 ).map((r) => r.route);
 
 // Derive the per-request env from the raw bindings: split the events handle

@@ -291,6 +291,14 @@ export async function handleTournamentExport(
 			...cors,
 			"Content-Type": "application/zip",
 			"Content-Disposition": `attachment; filename="${tournament.slug}-export.zip"`,
+			// Explicit because this response is built by hand and so inherits
+			// nothing from jsonResponse (util.ts) — and it was the one GET on
+			// the API building its own Response with no `Cache-Control` at all.
+			// It needs one: the standings CSV here is the full admin shape, and
+			// an unheadered `200` is cacheable in front of the Worker for 7200s
+			// under a key that holds no cookie — i.e. served to the callers this
+			// route 403s.
+			"Cache-Control": "private, no-store",
 		},
 	});
 }

@@ -48,6 +48,16 @@ A nightly cron (03:47 UTC, `[triggers]` in `cloud/wrangler.toml`) prunes the `ev
 - **Adding a reader of `events`:** its query window must fit inside the type's retention bucket — the floors are pinned in `cloud/src/retention.test.ts` (rate-limit reads 1h, admin stats 30d); raise them there if a longer window is needed.
 - **Query `events` through `env.EVENTS_DB`, never `env.SHARE_DB`.** `EVENTS_DB` is always the primary binding; `SHARE_DB` may be a D1 read-replication session on routes flagged `staleTolerant`. A replica read only sees what the session's bookmark covers, so a rate-limit `COUNT(*)` misses whatever a concurrent request just committed — an under-count, so limits fail **open** — and an audit INSERT on the session would anchor its bookmark forward and drag the rest of the handler's reads back to the primary. Helpers that count events take a real `D1Database` so a session handle won't compile; keep it that way. The rationale is in `cloud/src/d1.ts`, and the one documented exception is pinned by the guard, `cloud/src/stale-tolerant-routes.test.ts`.
 
+## Cache posture on a new route
+
+A shared cache sits **in front of** this Worker (`[cache]` in `cloud/wrangler.toml`), so on a hit the handler does not run — no auth check, no rate-limit spend, no audit row, no access-log line. Two platform facts make that a correctness concern and not a tuning one: an unheadered `200` gets 7200s of heuristic freshness, and `Cookie` is not in the cache key.
+
+- `jsonResponse` already emits `private, no-store`, so a route that reaches for it inherits the safe posture and needs no thought.
+- A handler that builds its own `Response` — a stream, or anything with a hand-written header block — bypasses that and must set a directive itself.
+- A route whose body may be stored for *other viewers* declares `sharedCache` in the ROUTES table (`index.ts`) and takes an entry in `shared-cache-routes.test.ts`, which also pins the count of `public, max-age=…` sites per file. The bar is that the body does not depend on who asked, or that a `Vary` puts the dependence into the key (`GET /v1/games/:id` is the only one that needs the second form).
+
+Reads do **not** get a free pass for being read-only: `GET /v1/users/:user_id/stats` picks its scope off the session and includes the owner's private games, which is why it is `private` despite being the most cacheable-looking route on the API.
+
 ## Game / user identity & PII
 
 - Each game records the uploader's nation (`user_nation`) and win flag (`user_won`) at upload time. Re-uploads from a different perspective produce a new game record.
