@@ -12,7 +12,7 @@
 	import { PUBLIC_ORIGIN } from "$lib/page-meta";
 	import { PARSER_VERSION } from "$lib/parser/types";
 	import ScreenshotTerms from "$lib/screenshots/ScreenshotTerms.svelte";
-	import { formatDate, formatGameTitle } from "$lib/utils/formatting";
+	import { formatGameTitle, formatLongDate } from "$lib/utils/formatting";
 	import { isNewer } from "$lib/utils/semver";
 	import { ensureUrlScheme } from "$lib/utils/url";
 	import { toast } from "$lib/ui/toast";
@@ -35,6 +35,14 @@
 	// search param on whichever it picks.
 	const suggestedHref = $derived(
 		`${profileHref({ user_id: data.user.user_id, slug: data.user.slug })}?tab=suggested`,
+	);
+
+	// The day the screenshot terms were accepted, or null if they never were.
+	// UTC rather than the viewer's clock, because that is the day this line
+	// already showed — formatDate, which it replaces, renders an instant's UTC
+	// date — so the long form changes the spelling and not the day.
+	const screenshotTermsAccepted = $derived(
+		formatLongDate(data.user.screenshot_terms_accepted_at, "UTC"),
 	);
 
 	// The boolean preferences — optimistic toggles backed by the worker,
@@ -446,14 +454,17 @@
 						style="background-color: rgb(var(--color-surface-raised));"
 					>
 						<div class="text-sm font-bold text-tan">Screenshot terms</div>
-						<p class="mt-2 text-sm text-gray-400">
-							{data.user.screenshot_terms_accepted_at
-								? `Accepted on ${formatDate(data.user.screenshot_terms_accepted_at)}.`
-								: "Not yet accepted. The first screenshot upload will ask for agreement."}
-						</p>
 						<div class="mt-2">
 							<ScreenshotTerms />
 						</div>
+						<!-- The acceptance state reads as the panel's signature rather than
+						     its lead: the rules are what the section is for, and this is
+						     the one line about this account's relationship to them. -->
+						<p class="mt-3 text-right text-sm text-gray-400">
+							{screenshotTermsAccepted
+								? `Accepted on ${screenshotTermsAccepted}`
+								: "Not yet accepted. The first screenshot upload will ask for agreement."}
+						</p>
 					</div>
 
 					<div class="mt-3">

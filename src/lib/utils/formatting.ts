@@ -643,6 +643,55 @@ export function formatShortDate(
 	});
 }
 
+// The English ordinal for a day of the month. Days run 1-31, so 11-13 is the
+// only band where the tens digit overrides the ones ("11th", not "11st").
+function dayOrdinal(day: number): string {
+	if (day >= 11 && day <= 13) return "th";
+	switch (day % 10) {
+		case 1:
+			return "st";
+		case 2:
+			return "nd";
+		case 3:
+			return "rd";
+		default:
+			return "th";
+	}
+}
+
+/**
+ * A day in the long "October 10th, 2026" form, on the pinned locale for the
+ * reason formatShortDate pins it.
+ *
+ * Intl has no ordinal day, so the day is read back out of formatToParts and
+ * given its suffix here. Out of the PARTS rather than off the Date, because
+ * `getDate()` answers in the viewer's zone whatever `timeZone` asked for — so
+ * taking the number from anywhere else is how the suffix ends up on a
+ * different day than the month and year beside it.
+ *
+ * `timeZone` names the clock the day is read on, as in formatShortDate.
+ *
+ * Returns null for a missing or unparseable instant rather than "Invalid Date".
+ */
+export function formatLongDate(
+	iso: string | null | undefined,
+	timeZone?: string,
+): string | null {
+	if (!iso) return null;
+	const d = new Date(iso);
+	if (Number.isNaN(d.getTime())) return null;
+	const parts = new Intl.DateTimeFormat(TIME_LOCALE, {
+		timeZone,
+		month: "long",
+		day: "numeric",
+		year: "numeric",
+	}).formatToParts(d);
+	const value = (type: Intl.DateTimeFormatPartTypes): string =>
+		parts.find((part) => part.type === type)?.value ?? "";
+	const day = Number(value("day"));
+	return `${value("month")} ${day}${dayOrdinal(day)}, ${value("year")}`;
+}
+
 /**
  * Relative "in X" / "X ago" string for a scheduled instant, matching Discord's
  * `<t:…:R>` style: "in 2 days", "in 5 hours", "in 30 minutes", "3 days ago".
