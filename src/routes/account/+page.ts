@@ -18,14 +18,21 @@ export const load: PageLoad = async ({ fetch, url }) => {
 	//   - allGames: the library list (capped at the Worker's 500 max),
 	//     powering the per-save "reparse this one" rows — these let the user
 	//     force a reparse of a save that's already on the current version.
+	//
+	// The Featured tab manages the user's own featured videos — the set their
+	// profile's Videos tab leads with. Fetched here rather than on that tab,
+	// which is the other surface that reaches the set (through the pin on a
+	// card) and has its own load.
 	const [
 		{ games: outOfDateGames },
 		{ games: allGames, total: totalGames },
 		channels,
+		myFeaturedVideos,
 	] = await Promise.all([
 		cloudApi.listOutOfDate(PARSER_VERSION, { fetch }),
 		cloudApi.listGames({ limit: 500, fetch }),
 		cloudApi.listMyChannels({ fetch }),
+		cloudApi.listMyFeaturedVideos({ fetch }),
 	]);
 	return {
 		user,
@@ -33,6 +40,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
 		allGames,
 		totalGames,
 		channels,
+		myFeaturedVideos,
 		meta: {
 			title: "Settings - Per-Ankh",
 			description: "Manage your Per-Ankh account settings.",
