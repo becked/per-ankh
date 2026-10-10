@@ -90,10 +90,11 @@ deleted or hidden screenshot from the edge: those objects are public, served
 from an R2 custom domain with a 30-day Edge TTL, and no Worker sits in the image
 path, so there is no per-request gate to re-evaluate and purge-by-URL is the
 only invalidation there is (issue #289). It pairs with the `CLOUDFLARE_ZONE_ID`
-var in both `wrangler.toml` blocks — paste the zone id from the dashboard
-(per-ankh.app → Overview → Zone ID). With either missing, a delete still removes
-the row and the object and logs `screenshot_purge_unconfigured`, and the image
-keeps being served until the Edge TTL expires.
+var, which is already committed in both `wrangler.toml` blocks — one zone covers
+both image hostnames, so there is nothing to paste and nothing that differs per
+environment. With the token missing, a delete still removes the row and the
+object and logs `screenshot_purge_unconfigured`, and the image keeps being
+served until the Edge TTL expires.
 
 **`SSR_TRUSTED_KEY` goes on both Workers, with the same value.** It's what lets
 the API believe the visitor address the frontend forwards on

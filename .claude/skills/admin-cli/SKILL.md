@@ -29,7 +29,7 @@ metadata:
 ./per-ankh admin nuke-user <user_id>         # Delete cloud user + games + R2 blobs (type "nuke")
 ```
 
-**The delete paths need two environment variables.** `delete-game`, `purge-games` and `nuke-user` also remove the games' screenshots — a second bucket, and public — so they purge the image URLs from the edge, which needs `CLOUDFLARE_ZONE_ID` and `CLOUDFLARE_PURGE_TOKEN` exported in the shell (the Worker holds the same pair as a var and a secret; `wrangler` has no purge command). Without them the objects are still deleted and the command warns: the edge keeps serving them for up to the 30-day Edge TTL, which has no other symptom than the picture still being there.
+**The delete paths need `CLOUDFLARE_PURGE_TOKEN` exported.** `delete-game`, `purge-games` and `nuke-user` also remove the games' screenshots — a second bucket, and public — so they purge the image URLs from the edge, and `wrangler` has no purge command to do it with. The token is the only thing to provide: the zone id is read out of `cloud/wrangler.toml` per target, the same file the Worker gets it from, so there is no committed value to retype. Without the token the objects are still deleted and the command warns, naming what is missing: the edge keeps serving them for up to the 30-day Edge TTL, which has no other symptom than the picture still being there.
 
 ## Corpus sweeps
 
