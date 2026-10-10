@@ -10,9 +10,19 @@
 		here only to support the player community. Per Ankh is free and
 		noncommercial.
 	</p>
+	<!-- Players upload screenshots too (issue #289), and the paragraph above
+	     covers only Mohawk's content. No ownership claim here, deliberately:
+	     the line above says in-game screenshots are Mohawk's, so this says who
+	     posted one and what happens to it, not whose it is. -->
 	<p>
-		Any content will be promptly removed at the request of a rights holder.
-		Contact becked on the &ldquo;Old World&rdquo; Discord server, or by email at
+		Players can post screenshots from their own games. Each one is credited to
+		the player who posted it, screened automatically before it is stored, and
+		can be taken down at any time.
+	</p>
+	<p>
+		Any content will be promptly removed at the request of a rights holder, and
+		anything here that shouldn't be can be reported to the same address. Contact
+		becked on the &ldquo;Old World&rdquo; Discord server, or by email at
 		<a
 			href="mailto:perankh.x7k2@fastmail.com"
 			class="underline hover:text-orange"

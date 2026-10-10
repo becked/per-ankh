@@ -30,6 +30,7 @@
 		type StoredVariant,
 	} from "./downscale";
 	import { SCREENSHOT_CAPTION_MAX } from "./limits";
+	import ScreenshotTerms from "./ScreenshotTerms.svelte";
 	import { MIN_LONG_EDGE } from "./stored-variant";
 
 	let {
@@ -263,23 +264,13 @@
 					<h3 class="mb-2 text-sm font-bold text-tan">
 						Before your first screenshot
 					</h3>
-					<div class="mb-3 space-y-2 text-sm leading-relaxed text-gray-300">
-						<p>
-							Screenshots appear on this game's page and on your profile, where
-							anyone can see them.
-						</p>
-						<p>
-							Every upload is screened automatically before it is stored. One
-							the screening isn't sure about waits for a site admin to look at
-							it.
-						</p>
-						<p>
-							By uploading you confirm the image is a screenshot of your own
-							&ldquo;Old World&rdquo; game, and that it contains nothing
-							illegal, sexual or graphic. A screenshot can be taken down at any
-							time.
-						</p>
-					</div>
+					<ScreenshotTerms />
+					<!-- The line that makes the rules above an agreement, and the
+					     reason they are shared as rules: the account page renders
+					     the same text under a date instead. -->
+					<p class="mb-3 mt-2 text-sm leading-relaxed text-gray-300">
+						By uploading you agree to these terms.
+					</p>
 					<div class="flex flex-wrap items-center gap-2">
 						<button
 							type="button"

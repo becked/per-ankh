@@ -11,7 +11,8 @@
 	import CheckMark from "$lib/ui/CheckMark.svelte";
 	import { PUBLIC_ORIGIN } from "$lib/page-meta";
 	import { PARSER_VERSION } from "$lib/parser/types";
-	import { formatGameTitle } from "$lib/utils/formatting";
+	import ScreenshotTerms from "$lib/screenshots/ScreenshotTerms.svelte";
+	import { formatDate, formatGameTitle } from "$lib/utils/formatting";
 	import { isNewer } from "$lib/utils/semver";
 	import { ensureUrlScheme } from "$lib/utils/url";
 	import { toast } from "$lib/ui/toast";
@@ -428,6 +429,31 @@
 								</button>
 							</form>
 						{/if}
+					</div>
+
+					<!-- Screenshot terms: the one-time agreement the upload endpoint
+					     gates on. Here because an account otherwise has no way to
+					     re-read it, or to see whether it has agreed at all — the
+					     agreement is collected by the picker off a 403, which is a
+					     moment rather than a surface. Display only: no Agree button,
+					     because accepting early changes nothing about a later upload
+					     (the endpoint's write is set-once and the prompt costs a
+					     round trip, not a classifier attempt), and no withdrawal,
+					     because this is not a toggle — which is also why it isn't one
+					     of the Preferences tab's switch rows. -->
+					<div
+						class="mt-3 rounded-lg p-3"
+						style="background-color: rgb(var(--color-surface-raised));"
+					>
+						<div class="text-sm font-bold text-tan">Screenshot terms</div>
+						<p class="mt-2 text-sm text-gray-400">
+							{data.user.screenshot_terms_accepted_at
+								? `You agreed on ${formatDate(data.user.screenshot_terms_accepted_at)}.`
+								: "You haven't agreed to these yet. The first screenshot you upload will ask."}
+						</p>
+						<div class="mt-2">
+							<ScreenshotTerms />
+						</div>
 					</div>
 
 					<div class="mt-3">

@@ -212,6 +212,12 @@ export interface UserMe {
 	// toggle and by the Suggested tab, which tells an opted-out viewer that
 	// the suggesting runs both ways.
 	open_to_matches: boolean;
+	// ISO instant the account agreed to the screenshot terms, null if it never
+	// has. Read by the account page's terms section to say which it is. Not a
+	// gate anywhere on the client: the uploader prompts off the endpoint's
+	// 403 TERMS_NOT_ACCEPTED rather than off this value, so the agreement is
+	// still collected by the one surface that can act on it.
+	screenshot_terms_accepted_at: string | null;
 }
 
 export interface GameListItem {

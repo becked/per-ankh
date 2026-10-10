@@ -220,6 +220,37 @@ describe("POST /v1/users/me/screenshot-terms", () => {
 		);
 	});
 
+	it("carries the acceptance on /v1/auth/me as an ISO instant", async () => {
+		// The account page's terms section reads it from there, and reads it
+		// as an instant: the column holds D1's datetime('now') text, which the
+		// Date parser would take for local time. Null before, normalised
+		// after — both legs, because a section that cannot tell them apart is
+		// the one thing this field exists to do.
+		const user = await makeUser();
+		const before = await expectOk<{
+			screenshot_terms_accepted_at: string | null;
+		}>(await request.get({ path: "/v1/auth/me", as: user }));
+		expect(before.screenshot_terms_accepted_at).toBeNull();
+
+		await expectOk(
+			await request.post({
+				path: "/v1/users/me/screenshot-terms",
+				as: user,
+				body: { accepted: true },
+			}),
+		);
+
+		const after = await expectOk<{
+			screenshot_terms_accepted_at: string | null;
+		}>(await request.get({ path: "/v1/auth/me", as: user }));
+		expect(after.screenshot_terms_accepted_at).toMatch(
+			/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/,
+		);
+		expect(Number.isNaN(Date.parse(after.screenshot_terms_accepted_at!))).toBe(
+			false,
+		);
+	});
+
 	it("requires the affirmative and a session", async () => {
 		const user = await makeUser();
 		await expectErrorCode(

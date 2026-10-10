@@ -152,9 +152,9 @@ Exchange the OAuth code for a session.
 Current session's user profile.
 
 - **Auth:** Session.
-- **Response 200:** `{ user_id, discord_id, display_name, discord_username, avatar_url, slug: string|null, is_beta: boolean, is_admin: boolean, default_game_public: boolean, stream_url: string|null, open_to_matches: boolean }`.
+- **Response 200:** `{ user_id, discord_id, display_name, discord_username, avatar_url, slug: string|null, is_beta: boolean, is_admin: boolean, default_game_public: boolean, stream_url: string|null, open_to_matches: boolean, screenshot_terms_accepted_at: string|null }`.
 - **Errors:** `401 UNAUTHORIZED` (also if the session points at a deleted user, which clears the cookie).
-- **Notes:** Re-claims pre-linked tournament slots on every call. `slug` is the caller's profile URL, null when they have none — carried here so the account page has it without a second fetch. `is_beta`/`is_admin` are advisory (frontend gating); the server re-checks per endpoint.
+- **Notes:** Re-claims pre-linked tournament slots on every call. `slug` is the caller's profile URL, null when they have none — carried here so the account page has it without a second fetch. `is_beta`/`is_admin` are advisory (frontend gating); the server re-checks per endpoint. `screenshot_terms_accepted_at` is an ISO instant (normalised from the column's `datetime('now')` text) or null, read by the account page's terms section; the upload endpoint gates on the column itself, so it is advisory here too.
 
 ### `GET /v1/auth/dev/login`
 Local-only login bypass (no Discord).
