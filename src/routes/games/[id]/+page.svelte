@@ -90,10 +90,18 @@
 								<!-- The picker is the strip's own control rather than a
 								     panel of its own: one "Screenshots" section, with the
 								     owner's way of adding to what it shows underneath it. -->
+								<!-- `featured: false` is the one field the 201 doesn't
+								     carry: a screenshot a moment old has never been
+								     starred, and the admin star the strip renders reads
+								     it. -->
 								<ScreenshotUploader
 									{gameId}
 									isPublic={visibility.isPublic}
-									onUploaded={(shot) => (screenshots = [shot, ...screenshots])}
+									onUploaded={(shot) =>
+										(screenshots = [
+											{ ...shot, featured: false },
+											...screenshots,
+										])}
 								/>
 							{/if}
 						</Panel>

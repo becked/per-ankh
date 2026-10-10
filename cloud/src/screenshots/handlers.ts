@@ -581,6 +581,7 @@ interface ScreenshotRow {
 	height: number;
 	caption: string | null;
 	hidden_at: string | null;
+	featured_at: string | null;
 }
 
 // The game columns the profile tab needs to name and link the game a shot
@@ -620,6 +621,22 @@ function serializeScreenshot(env: ScreenshotUrlEnv, row: ScreenshotRow) {
 		// `in_review` means "waiting on an admin, and you are the only viewer
 		// who is sent it".
 		status: row.hidden_at == null ? "published" : "in_review",
+		// Whether this screenshot is on the home strip, for the admin star the
+		// gallery tile carries (ScreenshotGallery.svelte). Derived from
+		// `featured_at` the way `status` is derived from `hidden_at`, and a
+		// boolean rather than the timestamp because the control reads
+		// starred-or-not and nothing here orders by it — the timestamp is the
+		// strip's ordering key, which is the strip's own payload. It also means
+		// an optimistic flip writes the field's whole truth rather than a client
+		// clock standing in for a column the server owns.
+		//
+		// Sent to every viewer rather than to an admin alone: the value is a
+		// fact about the row, not about who asked, and gating it would put an
+		// isSiteAdmin read (a `users` lookup) on both gallery paths for every
+		// signed-in viewer to withhold what the home page already shows for the
+		// six tiles it has room for. What the client decides from `is_admin` is
+		// whether to render a control, not what is true.
+		featured: row.featured_at != null,
 	};
 }
 
@@ -656,7 +673,8 @@ export async function handleGameScreenshots(
 	// would be stable but random. rowid is insertion order, which is what
 	// "newest first" means. The sort is over at most five rows.
 	const rows = await env.SHARE_DB.prepare(
-		`SELECT screenshot_id, game_id, r2_key, width, height, caption, hidden_at
+		`SELECT screenshot_id, game_id, r2_key, width, height, caption, hidden_at,
+		        featured_at
 		 FROM game_screenshots
 		 WHERE game_id = ?
 		   AND (hidden_at IS NULL OR (hidden_by IS NULL AND user_id = ?))
@@ -703,7 +721,7 @@ export async function handleUserScreenshots(
 
 	const rows = await env.SHARE_DB.prepare(
 		`SELECT s.screenshot_id, s.game_id, s.r2_key, s.width, s.height, s.caption,
-		        s.hidden_at,
+		        s.hidden_at, s.featured_at,
 		        g.game_name, g.display_name, g.user_nation, g.total_turns
 		 FROM game_screenshots s
 		 JOIN games g ON g.game_id = s.game_id
@@ -823,7 +841,7 @@ export async function handleFeaturedScreenshots(
 		// different orders.
 		const rows = await env.SHARE_DB.prepare(
 			`SELECT s.screenshot_id, s.game_id, s.r2_key, s.width, s.height,
-			        s.caption, s.hidden_at,
+			        s.caption, s.hidden_at, s.featured_at,
 			        g.game_name, g.display_name, g.user_nation, g.total_turns,
 			        s.user_id, ${displayNameSql("u")} AS uploader_name,
 			        u.slug AS uploader_slug, u.discord_id, u.avatar_hash

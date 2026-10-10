@@ -19,6 +19,9 @@
 	// five screenshots, which is what lets its strip read as a row, and the
 	// profile's set is bounded at a hundred; a single column ramp serves both
 	// and is one thing to keep in step with the thumbnail's 8:5 shape.
+	//
+	// Three controls, one per viewer: the owner's delete, everyone else's
+	// report, and a site admin's star for the home strip.
 	import { goto } from "$app/navigation";
 	import { resolve } from "$app/paths";
 	import { page } from "$app/state";
@@ -37,6 +40,7 @@
 	import FullscreenDialog from "$lib/ui/FullscreenDialog.svelte";
 	import RadioGroup from "$lib/ui/RadioGroup.svelte";
 	import RadioItem from "$lib/ui/RadioItem.svelte";
+	import StarMark from "$lib/ui/StarMark.svelte";
 	import { confirmDialog } from "$lib/ui/confirm";
 	import { loginBounce } from "$lib/utils/safe-next";
 	import { formatGameTitle } from "$lib/utils/formatting";
@@ -57,7 +61,8 @@
 		// deletes, everyone else reports, and nobody is offered both — a
 		// report on your own screenshot is refused by the endpoint anyway
 		// (409 OWN_SCREENSHOT), since the delete is faster and permanent.
-		// Admin actions are not here; they live on /admin, where the queue is.
+		// The admin star is independent of it — it comes from `page.data` and
+		// not from a prop, so an admin looking at their own gallery gets both.
 		canDelete?: boolean;
 		// Name and link each tile's game. True on the profile tab, where a tile
 		// is the only thing that says which game it came from.
@@ -137,6 +142,68 @@
 				err instanceof ApiError
 					? err.message
 					: "Couldn't delete that screenshot";
+		}
+	}
+
+	// --- Admin star --------------------------------------------------
+	//
+	// Puts a screenshot on the home strip, or takes it off: the `star` /
+	// `unstar` decision the moderation queue on /admin also makes, offered
+	// where an admin actually comes across a screenshot. The queue lists only
+	// what needs a decision and what is already starred, so a published,
+	// unreported shot — most of what is worth featuring — could not be reached
+	// from it at all.
+	//
+	// Read off `page` rather than threaded down as a prop: both surfaces render
+	// this grid from a list and neither has another reason to know who is
+	// looking, which is why FeaturedStar (the same control for videos) reads it
+	// directly too.
+	const canStar = $derived(page.data.user?.is_admin === true);
+
+	// Which tiles are mid-write: a set rather than one flag, because this grid
+	// is many tiles where FeaturedStar is one card, and two stars are two rows
+	// — curating a strip means pressing several in a row, so a press on one
+	// tile must not block the next. Only the pressed star disables, which is
+	// also what keeps it from being pressed twice. (The delete needs no slot
+	// at all: its tile is gone before the request goes out.)
+	const starring = new SvelteSet<string>();
+
+	function setFeatured(screenshotId: string, featured: boolean): void {
+		screenshots = screenshots.map((s) =>
+			s.screenshot_id === screenshotId ? { ...s, featured } : s,
+		);
+	}
+
+	async function toggleStar(shot: GameScreenshot): Promise<void> {
+		if (starring.has(shot.screenshot_id)) return;
+		const next = !shot.featured;
+		error = null;
+		// Optimistic, like the delete above and like the video star this
+		// mirrors: the star fills on the press and goes back on failure.
+		// `featured` is a boolean, so the flip writes the whole truth of the
+		// field — the timestamp the home strip orders by stays the server's.
+		setFeatured(shot.screenshot_id, next);
+		starring.add(shot.screenshot_id);
+		try {
+			await cloudApi.adminModerateScreenshot(
+				shot.screenshot_id,
+				next ? "star" : "unstar",
+			);
+		} catch (err) {
+			setFeatured(shot.screenshot_id, !next);
+			// Prefixed with what failed, the way the moderation table reports the
+			// same endpoint's refusals — not bare like the delete's, because the
+			// one refusal this control can meet without a concurrent change is
+			// the admin gate's `404 Not found`, which says nothing on its own.
+			// No login bounce for that lapse either: the endpoint answers 404
+			// rather than 401 to keep its existence unadvertised, so it arrives
+			// as an ApiError and the UnauthorizedError branch the delete and the
+			// report take would be dead code here.
+			error = `Couldn't ${next ? "star" : "unstar"} that screenshot: ${
+				err instanceof Error ? err.message : err
+			}`;
+		} finally {
+			starring.delete(shot.screenshot_id);
 		}
 	}
 
@@ -265,6 +332,33 @@
 								d="M6 18L18 6M6 6l12 12"
 							/>
 						</svg>
+					</button>
+				{/if}
+				{#if canStar && shot.status === "published"}
+					<!-- Top-left, the corner opposite the owner's delete, so an admin
+					     looking at their own gallery has both. Always visible rather
+					     than revealed on hover — the delete's reasoning, which applies
+					     harder here: a control whose point is to be where a screenshot
+					     is come across cannot be one that touch never offers.
+					     Published rows only: `star` answers 409 on a hidden one, and
+					     the only in_review tiles an admin is ever sent are their own.
+					     Filled = on the home strip. -->
+					<button
+						type="button"
+						onclick={() => toggleStar(shot)}
+						disabled={starring.has(shot.screenshot_id)}
+						aria-pressed={shot.featured}
+						aria-label={shot.featured
+							? "Remove from the home strip"
+							: "Star for the home strip"}
+						title={shot.featured
+							? "Remove from the home strip"
+							: "Star for the home strip"}
+						class="absolute left-1 top-1 cursor-pointer rounded bg-black/60 p-1 transition-colors hover:bg-black/80 disabled:cursor-not-allowed disabled:opacity-50 {shot.featured
+							? 'text-orange'
+							: 'text-tan'}"
+					>
+						<StarMark class="block h-3.5 w-3.5" filled={shot.featured} />
 					</button>
 				{/if}
 			</div>

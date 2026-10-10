@@ -79,6 +79,7 @@ interface StripRow {
 	height: number;
 	caption: string | null;
 	status: "published" | "in_review";
+	featured: boolean;
 	game: {
 		game_name: string | null;
 		display_name: string | null;
@@ -172,6 +173,9 @@ describe("GET /v1/featured-screenshots", () => {
 		const shot = body.screenshots[0];
 		expect(shot.caption).toBe("Late empire");
 		expect(shot.status).toBe("published");
+		// Both ride along from the shared serializer, and both are fixed here:
+		// the star is what selects these rows, and a hidden one can't hold one.
+		expect(shot.featured).toBe(true);
 		// The stored object and the one transformation of it, built from
 		// SCREENSHOT_BASE_URL and the key — never assembled by the client.
 		expect(shot.url).toBe(

@@ -487,6 +487,16 @@ export interface GameScreenshot {
 	// against the caps and pins its game public. A taken-down row reaches no
 	// payload at all, which is why `hidden` is not in this union.
 	status: "published" | "in_review";
+	// On the home strip, which is a site admin's decision — the `star` action
+	// on POST /v1/admin/screenshots/:id/moderate. Sent to every viewer, because
+	// it is a fact about the row rather than about who asked; what `is_admin`
+	// decides is whether a tile renders the star that toggles it.
+	//
+	// A boolean rather than the `featured_at` column behind it: the control
+	// reads starred-or-not, and the timestamp the strip orders by is the
+	// server's to write — so an optimistic flip sets this field's whole truth
+	// instead of standing a client clock in for a value it doesn't have.
+	featured: boolean;
 	// Present only on GET /v1/users/:id/screenshots: the profile tab shows
 	// shots from across all of a user's games, so each tile names and links
 	// the game it belongs to. Raw fields, formatted by formatGameTitle the way
@@ -517,7 +527,8 @@ export interface ScreenshotGameFields {
 // joined live rather than snapshotted, so a rename follows.
 //
 // `status` rides along from the shared serializer and is always "published":
-// a hidden screenshot can't be starred, and a takedown clears the star.
+// a hidden screenshot can't be starred, and a takedown clears the star. So is
+// `featured`, which is always true here — the star is what selects these rows.
 export interface FeaturedScreenshot extends GameScreenshot {
 	game: ScreenshotGameFields;
 	uploader: {

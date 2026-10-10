@@ -80,6 +80,7 @@ interface ReadScreenshot {
 	height: number;
 	caption: string | null;
 	status: "published" | "in_review";
+	featured: boolean;
 	game?: {
 		game_name: string | null;
 		display_name: string | null;
@@ -314,6 +315,54 @@ describe("GET /v1/users/:user_id/screenshots", () => {
 
 		await upload(user, gameId);
 		expect(await flag()).toBe(true);
+	});
+});
+
+// ---------- The home-strip star ----------
+
+// `featured` is the one field these reads carry for a viewer who can't act on
+// it: the gallery tile's admin star renders from it. What it pins is that the
+// star is NOT one of the things these reads vary by viewer — whether a
+// screenshot is on the home strip is a fact about the row, so gating it would
+// have cost an isSiteAdmin read on both paths to withhold what the home page
+// already shows.
+describe("the star both gallery reads carry", () => {
+	it("answers every viewer the same, on both reads", async () => {
+		const { user, gameId } = await readyUser();
+		const plain = await upload(user, gameId);
+		const starred = await upload(user, gameId);
+		// The column a star writes, set here rather than through the admin
+		// endpoint this file has no admin for — moderation.test.ts drives the
+		// decision, and what these two reads carry is the column.
+		await env.SHARE_DB.prepare(
+			`UPDATE game_screenshots
+			    SET featured_at = datetime('now'), featured_by = ?
+			  WHERE screenshot_id = ?`,
+		)
+			.bind(user.userId, starred)
+			.run();
+
+		const stranger = await makeUser();
+		for (const as of [undefined, stranger, user]) {
+			const strip = await expectOk<{ screenshots: ReadScreenshot[] }>(
+				await gameShots(gameId, as),
+			);
+			expect(
+				strip.screenshots.map((s) => [s.screenshot_id, s.featured]),
+			).toEqual([
+				[starred, true],
+				[plain, false],
+			]);
+			const profile = await expectOk<{ screenshots: ReadScreenshot[] }>(
+				await userShots(user.userId, as),
+			);
+			expect(
+				profile.screenshots.map((s) => [s.screenshot_id, s.featured]),
+			).toEqual([
+				[starred, true],
+				[plain, false],
+			]);
+		}
 	});
 });
 
