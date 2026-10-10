@@ -23,6 +23,30 @@
 
 import { STORED_WEBP_QUALITY, storedDimensions } from "./stored-variant";
 
+// What this will attempt to decode. `accept="image/*"` bounds nothing, and the
+// cost of a picked image is its PIXEL count rather than its file size — a
+// flat-UI PNG at 8000x8000 compresses to a few MB and decodes to 256 MiB of
+// RGBA — so the ceiling that matters is on pixels, measured after the first
+// decode and before the resize allocates a second bitmap.
+//
+// 40 MP leaves every screenshot workflow alone: an 8K grab is 33 MP and a
+// 5K iMac @2x full screen is 14.7 MP, while a 6K XDR @2x capture is 81 MP and
+// gets a crop-it-or-save-it-smaller sentence instead of a worker that dies
+// with the generic message.
+const MAX_SOURCE_PIXELS = 40_000_000;
+
+// The nearly-free companion, read before the decode is spent: it catches a
+// mis-picked RAW or TIFF, which `image/*` admits and the decoder then either
+// refuses or spends real memory on. Decimal MB rather than the repo's usual
+// MiB idiom because this number reaches the uploader as copy, and the file
+// size they can see in Finder or Explorer is decimal too.
+const MAX_SOURCE_BYTES = 40_000_000;
+
+// Neither ceiling catches a decoder that dies inside `createImageBitmap`
+// itself — that arrives as the wrapper's `WORKER_FAILED`, which is the right
+// shape of answer with the wrong sentence in it. These two are what keep the
+// cases a picker can reach out of that path.
+
 export type DownscaleRequest = {
 	type: "downscale";
 	file: Blob;
@@ -79,6 +103,13 @@ ctx.onmessage = async (e: MessageEvent<DownscaleRequest>) => {
 };
 
 async function downscale(file: Blob): Promise<DownscaleResultMsg> {
+	if (file.size > MAX_SOURCE_BYTES) {
+		throw new DownscaleError(
+			`That file is ${Math.round(file.size / 1_000_000)} MB, too big to prepare for upload. Save it at a smaller size or crop it first.`,
+			"FILE_TOO_LARGE",
+		);
+	}
+
 	// Decoded once, unresized, to learn the dimensions the target is computed
 	// from: EXIF rotation can swap them, so the picked file's own header is
 	// the wrong source for them. `imageOrientation` is named rather than left
@@ -96,6 +127,18 @@ async function downscale(file: Blob): Promise<DownscaleResultMsg> {
 
 	const sourceWidth = source.width;
 	const sourceHeight = source.height;
+
+	// Before the resize, which is where a second bitmap of this size gets
+	// allocated. Closed on the way out rather than left to the collector,
+	// since the whole point of refusing is that these bytes are the problem.
+	if (sourceWidth * sourceHeight > MAX_SOURCE_PIXELS) {
+		source.close();
+		throw new DownscaleError(
+			`That image is ${Math.round((sourceWidth * sourceHeight) / 1_000_000)} megapixels, too big to prepare for upload. Crop it or save it at a smaller size.`,
+			"SOURCE_TOO_LARGE",
+		);
+	}
+
 	const { width, height } = storedDimensions(sourceWidth, sourceHeight);
 
 	// The resize. `resizeQuality: "high"` is the browser's own downsampler;
@@ -123,6 +166,13 @@ async function downscale(file: Blob): Promise<DownscaleResultMsg> {
 	// rather than producing it.
 	const resampled = bitmap.width === width && bitmap.height === height;
 
+	// The source is read for the last time by the test above: both branches
+	// below draw from `bitmap`. Closing it here rather than after the blit is
+	// what keeps peak memory at one full-size bitmap on the ignored-dictionary
+	// path, where the copy that came back is full size too. When no resize was
+	// needed `bitmap` IS `source`, so there it has to survive the blit.
+	if (bitmap !== source) source.close();
+
 	const canvas = new OffscreenCanvas(width, height);
 	const context = canvas.getContext("2d");
 	if (!context) {
@@ -139,8 +189,7 @@ async function downscale(file: Blob): Promise<DownscaleResultMsg> {
 		width,
 		height,
 	);
-	if (bitmap !== source) bitmap.close();
-	source.close();
+	bitmap.close();
 
 	const webp = await canvas.convertToBlob({
 		type: "image/webp",
