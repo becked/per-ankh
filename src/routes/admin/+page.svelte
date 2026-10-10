@@ -11,7 +11,11 @@
 	import BulkReparseModal from "$lib/BulkReparseModal.svelte";
 	import BulkReindexModal from "$lib/BulkReindexModal.svelte";
 	import FeaturedVideosTable from "$lib/FeaturedVideosTable.svelte";
-	import { syncFeatured } from "$lib/featured-videos.svelte";
+	import {
+		isFeatured,
+		setFeatured,
+		syncFeatured,
+	} from "$lib/featured-videos.svelte";
 	import Select from "$lib/ui/Select.svelte";
 	import { toast } from "$lib/ui/toast";
 	import UserAutocomplete from "$lib/ui/UserAutocomplete.svelte";
@@ -40,6 +44,11 @@
 	$effect(() => {
 		syncFeatured(data.featuredVideos);
 	});
+
+	// The load's rows narrowed to what is still featured, so an unfeature from
+	// the table (or a star elsewhere) drops the row without a re-fetch — and
+	// restores it if the write fails.
+	const featuredRows = $derived(data.featuredVideos.filter(isFeatured));
 
 	const ownerCount = $derived(
 		new Set(data.outOfDateGames.map((g) => g.user_id)).size,
@@ -327,7 +336,12 @@
 			</Tabs.Content>
 
 			<Tabs.Content value="featured">
-				<FeaturedVideosTable videos={data.featuredVideos} />
+				<FeaturedVideosTable
+					rows={featuredRows}
+					title="Admin — Featured videos"
+					description="Videos featured from the star on any video card. Each row is a snapshot taken when it was featured, so it stays here after it drops out of its channel's feed — the uploader's name is joined live, and follows a rename."
+					onRemove={(video) => setFeatured(video, false)}
+				/>
 			</Tabs.Content>
 
 			<Tabs.Content value="ratings">
