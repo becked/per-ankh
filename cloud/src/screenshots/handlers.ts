@@ -1,5 +1,11 @@
-// User-uploaded game screenshots: the upload gate and the terms acceptance
-// it refuses without (issue #289, build-order step 3).
+// User-uploaded game screenshots: the upload gate and the terms acceptance it
+// refuses without (issue #289, step 3), the two public reads the galleries
+// render from, and the owner's delete (step 5).
+//
+// One module because they are one resource: the gates below decide what a row
+// may be, the reads decide which rows a viewer sees, and all three build their
+// URLs from the same place. Splitting them would mean two environments and two
+// serializers over one table.
 //
 // Nothing is stored until it has been screened, so the order here is
 // load-bearing. Cheapest certain reject first — terms, then ownership and
@@ -28,14 +34,20 @@ import {
 } from "./clef";
 import {
 	deleteScreenshotObject,
+	removeScreenshot,
 	screenshotKey,
+	screenshotThumbUrl,
 	screenshotUrl,
 	type ScreenshotStorageEnv,
 } from "./storage";
 import { readWebpSize } from "./webp";
 import { countEventsSince, isBlobLike } from "../games";
-import { beginR2Op, logError, setLogField } from "../log";
-import { ceilingFrom } from "../read-budget";
+import { beginR2Op, logError, setLogField, setSecurityReason } from "../log";
+import {
+	ceilingFrom,
+	enforceReadRateLimit,
+	type ReadBudget,
+} from "../read-budget";
 import {
 	AcceptScreenshotTermsSchema,
 	ScreenshotCaptionSchema,
@@ -60,6 +72,7 @@ export interface ScreenshotsEnv
 	AI: Ai;
 	ALLOWED_ORIGINS: string;
 	PER_USER_SCREENSHOTS_PER_HOUR?: string;
+	SCREENSHOT_VIEW_PER_HOUR?: string;
 }
 
 // ---------- Caps ----------
@@ -97,6 +110,43 @@ export function screenshotsPerHour(env: ScreenshotsEnv): number {
 		"PER_USER_SCREENSHOTS_PER_HOUR",
 	);
 }
+
+// ---------- The read budget ----------
+
+// Per-IP hourly ceiling on the two gallery reads, and its own budget rather
+// than a share of anon_read: the game strip is one read per /games/[id]
+// render, so on the shared budget a crawl of game pages would decide when the
+// profile tab starts refusing — and anon_read is already the tightest ceiling
+// the pages that spend it meet (the tournament_link_view argument, for the
+// same incident).
+//
+// ONE budget for both reads, where the challenge and tournament link reads
+// each took their own. The split there was between surfaces with different
+// fan-out — a link read on every game render against the pages it would have
+// drained. These two have the same shape as each other: one read per view of
+// one gallery, by the same visitor, so a crawl of either spends at the same
+// rate and there is nothing for the second budget to protect.
+//
+// Above ANON_READS_PER_HOUR, so it is never the limit a real visitor meets
+// first; when it does fire, the gallery renders empty rather than failing the
+// page it is on.
+//
+// The default only — read the effective ceiling with screenshotViewPerHour().
+export const SCREENSHOT_VIEW_PER_HOUR = 600;
+
+export function screenshotViewPerHour(env: ScreenshotsEnv): number {
+	return ceilingFrom(
+		env.SCREENSHOT_VIEW_PER_HOUR,
+		SCREENSHOT_VIEW_PER_HOUR,
+		"SCREENSHOT_VIEW_PER_HOUR",
+	);
+}
+
+const VIEW_BUDGET: ReadBudget = {
+	eventType: "screenshot_view",
+	message: "Screenshot view rate limit exceeded",
+	code: "RATE_LIMIT_SCREENSHOT_VIEW",
+};
 
 // ---------- The free pre-filter ----------
 
@@ -166,6 +216,14 @@ export async function handleScreenshotUpload(
 		.bind(userId)
 		.first<TermsRow>();
 	if (!terms || terms.screenshot_terms_accepted_at == null) {
+		// The security tee classifies by status, so this 403 would otherwise
+		// be teed to Skiff as `auth_fail` — a false positive by construction,
+		// since it is the designed first step of the upload flow rather than
+		// anything going wrong, and one that fires on every account's first
+		// screenshot. resolveSecurityEvent honours a handler-set reason ahead
+		// of status (which is why `signup` is in the vocabulary), so the row
+		// is still emitted and is simply labelled truthfully.
+		setSecurityReason("terms_gate");
 		return errorResponse(
 			"Accept the screenshot terms before uploading",
 			403,
@@ -447,6 +505,11 @@ export async function handleScreenshotUpload(
 				screenshot_id: screenshotId,
 				game_id: gameId,
 				url: screenshotUrl(env, r2Key),
+				// Both URLs, so an accepted upload can become a strip tile
+				// without a round trip — and so the client never derives an
+				// image URL of its own (the thumbnail's options are what the
+				// purge has to match).
+				thumb_url: screenshotThumbUrl(env, r2Key),
 				width: size.width,
 				height: size.height,
 				size_bytes: bytes.byteLength,
@@ -461,6 +524,216 @@ export async function handleScreenshotUpload(
 		201,
 		cors,
 	);
+}
+
+// ---------- Reads ----------
+
+// One stored screenshot, as both galleries render it. `hidden_at` is the only
+// filter either read applies — a screenshot requires a public game, enforced
+// at the upload endpoint and again by handleGamePatch's HAS_SCREENSHOTS
+// refusal, so there is no is_public join on this table and nothing downstream
+// should add one (migration 0050 says so at the top).
+//
+// Both URLs are built here rather than derived by the client, because the
+// thumbnail's transformation options are also what the purge has to name: a
+// client that assembled its own tile URL would be a second copy of them, and
+// the symptom of a disagreement would be a deleted image that keeps serving.
+interface ScreenshotRow {
+	screenshot_id: string;
+	game_id: string;
+	r2_key: string;
+	width: number;
+	height: number;
+	caption: string | null;
+}
+
+// The game columns the profile tab needs to name and link the game a shot
+// belongs to. The title itself is derived client-side by formatGameTitle,
+// which is where every other surface derives it — so the raw fields travel,
+// the way GET /v1/games does for the list.
+interface ScreenshotGameRow extends ScreenshotRow {
+	game_name: string | null;
+	display_name: string | null;
+	user_nation: string | null;
+	total_turns: number | null;
+}
+
+function serializeScreenshot(env: ScreenshotsEnv, row: ScreenshotRow) {
+	return {
+		screenshot_id: row.screenshot_id,
+		game_id: row.game_id,
+		url: screenshotUrl(env, row.r2_key),
+		thumb_url: screenshotThumbUrl(env, row.r2_key),
+		width: row.width,
+		height: row.height,
+		caption: row.caption,
+	};
+}
+
+// GET /v1/games/:id/screenshots — one game's strip, newest first. Public.
+//
+// No LIMIT: the 5-per-game cap bounds this to five rows, and a second number
+// here would be a display cap that could disagree with the storage one.
+export async function handleGameScreenshots(
+	gameId: string,
+	request: Request,
+	env: ScreenshotsEnv,
+): Promise<Response> {
+	const cors = cloudCorsHeaders(env, request);
+	const rl = await enforceReadRateLimit(
+		env,
+		request,
+		cors,
+		VIEW_BUDGET,
+		screenshotViewPerHour(env),
+	);
+	if (rl) return rl;
+
+	// rowid breaks the tie, not screenshot_id: created_at is
+	// datetime('now') at one-second resolution, so two uploads in the same
+	// second order arbitrarily on created_at alone, and a nanoid tiebreak
+	// would be stable but random. rowid is insertion order, which is what
+	// "newest first" means. The sort is over at most five rows.
+	const rows = await env.SHARE_DB.prepare(
+		`SELECT screenshot_id, game_id, r2_key, width, height, caption
+		 FROM game_screenshots
+		 WHERE game_id = ? AND hidden_at IS NULL
+		 ORDER BY created_at DESC, rowid DESC`,
+	)
+		.bind(gameId)
+		.all<ScreenshotRow>();
+
+	return jsonResponse(
+		{
+			screenshots: (rows.results ?? []).map((r) => serializeScreenshot(env, r)),
+		},
+		200,
+		cors,
+	);
+}
+
+// GET /v1/users/:user_id/screenshots — one uploader's shots across all their
+// games, newest first. Public, and the profile Screenshots tab's lazy payload.
+//
+// No LIMIT here either, for the same reason: the 100-per-account cap bounds
+// it. `user_id` is carried on the row rather than joined from the game (the
+// uploader is always the game's owner — the upload gate requires it), so this
+// is one index-backed read on idx_game_screenshots_user plus the title join.
+export async function handleUserScreenshots(
+	userId: string,
+	request: Request,
+	env: ScreenshotsEnv,
+): Promise<Response> {
+	const cors = cloudCorsHeaders(env, request);
+	const rl = await enforceReadRateLimit(
+		env,
+		request,
+		cors,
+		VIEW_BUDGET,
+		screenshotViewPerHour(env),
+	);
+	if (rl) return rl;
+
+	const rows = await env.SHARE_DB.prepare(
+		`SELECT s.screenshot_id, s.game_id, s.r2_key, s.width, s.height, s.caption,
+		        g.game_name, g.display_name, g.user_nation, g.total_turns
+		 FROM game_screenshots s
+		 JOIN games g ON g.game_id = s.game_id
+		 WHERE s.user_id = ? AND s.hidden_at IS NULL
+		 ORDER BY s.created_at DESC, s.rowid DESC`,
+	)
+		.bind(userId)
+		.all<ScreenshotGameRow>();
+
+	return jsonResponse(
+		{
+			screenshots: (rows.results ?? []).map((r) => ({
+				...serializeScreenshot(env, r),
+				game: {
+					game_name: r.game_name,
+					display_name: r.display_name,
+					user_nation: r.user_nation,
+					total_turns: r.total_turns,
+				},
+			})),
+		},
+		200,
+		cors,
+	);
+}
+
+// ---------- Delete ----------
+
+interface OwnedScreenshotRow {
+	r2_key: string;
+}
+
+// DELETE /v1/games/:id/screenshots/:screenshot_id — the uploader removes their
+// own screenshot. Permanent: there is no hidden-but-kept state for an owner,
+// only for the classifier's uncertain band and step 6's admin hide.
+//
+// This endpoint is what makes the HAS_SCREENSHOTS refusal honest. Without it a
+// game with a screenshot could not be made private by any route its owner has
+// — the lock would offer "Make private", flip optimistically, and revert on a
+// 409 naming a remedy nobody could carry out.
+//
+// Three steps, the same three the admin hide will take: the D1 row, the R2
+// object, then both URLs out of the edge cache. D1 first, because that is the
+// one a reader consults — an object that outlived its row renders nowhere,
+// while a row that outlived its object renders a broken tile.
+//
+// Deliberately NOT rate-limited. A delete is bounded by what the account
+// uploaded: the 100-per-account cap bounds the total, and replacing a deleted
+// screenshot costs a classifier attempt out of the hourly upload budget. So
+// the upload ceiling already bounds how fast this can be driven, and a second
+// counter would bound nothing new.
+export async function handleScreenshotDelete(
+	gameId: string,
+	screenshotId: string,
+	request: Request,
+	env: ScreenshotsEnv,
+): Promise<Response> {
+	const cors = cloudCorsHeaders(env, request);
+
+	const session = await sessionFromRequest(env, request);
+	if (!session) return errorResponse("Unauthorized", 401, cors, "UNAUTHORIZED");
+	const userId = session.data.user_id;
+
+	// The DELETE carries the same three predicates, so ownership is enforced
+	// by the statement and not by the read above it — the read is here for the
+	// r2_key, which is what the object and both URLs are built from. 404 for
+	// "no such screenshot", "not on that game" and "not yours" alike: the
+	// shape the upload's own 404 uses, so the message has to be true of each.
+	const row = await env.SHARE_DB.prepare(
+		`SELECT r2_key FROM game_screenshots
+		 WHERE screenshot_id = ? AND game_id = ? AND user_id = ?`,
+	)
+		.bind(screenshotId, gameId, userId)
+		.first<OwnedScreenshotRow>();
+	if (!row) {
+		return errorResponse(
+			"That screenshot is gone, or it isn't yours",
+			404,
+			cors,
+			"NOT_FOUND",
+		);
+	}
+
+	await env.SHARE_DB.prepare(
+		`DELETE FROM game_screenshots
+		 WHERE screenshot_id = ? AND game_id = ? AND user_id = ?`,
+	)
+		.bind(screenshotId, gameId, userId)
+		.run();
+
+	await removeScreenshot(env, row.r2_key, screenshotId);
+
+	await recordEvent(env, "screenshot_delete", userId, request, {
+		screenshot_id: screenshotId,
+		game_id: gameId,
+	});
+
+	return jsonResponse({ ok: true }, 200, cors);
 }
 
 // ---------- Terms ----------
@@ -512,7 +785,8 @@ export async function handleAcceptScreenshotTerms(
 // than thrown — an audit row is not worth losing a stored screenshot for.
 async function recordEvent(
 	env: ScreenshotsEnv,
-	eventType: "screenshot_upload_attempt" | "screenshot_upload",
+	eventType:
+		"screenshot_upload_attempt" | "screenshot_upload" | "screenshot_delete",
 	userId: string,
 	request: Request,
 	metadata: Record<string, unknown> | null,

@@ -167,6 +167,10 @@ export interface UserProfile {
 	// `channels` plays for Videos). A dedicated caster who never plays still
 	// gets the tab.
 	tournament_participant: boolean;
+	// Whether this user has any visible screenshot — the Screenshots tab's
+	// trigger, the role `channels` plays for Videos. The shots themselves load
+	// lazily via GET /v1/users/:id/screenshots when the tab opens.
+	has_screenshots: boolean;
 }
 
 export interface UserMe {
@@ -457,12 +461,43 @@ export interface UploadGameResponse {
 	challenge_submitted?: boolean;
 }
 
+// One stored screenshot as either gallery reads it: the game-detail strip and
+// the profile Screenshots tab render the same tile from this.
+//
+// Both URLs come from the Worker rather than being assembled here. `url` is
+// the stored WebP on the public image host; `thumb_url` is the one Cloudflare
+// Images transformation of it the tile uses, and its options are also what a
+// delete has to purge — so a client that built its own would be a second copy
+// of them, and a disagreement would show as a deleted image that keeps
+// rendering.
+export interface GameScreenshot {
+	screenshot_id: string;
+	game_id: string;
+	url: string;
+	thumb_url: string;
+	// Of the stored variant. The lightbox reserves the image's box from them.
+	width: number;
+	height: number;
+	caption: string | null;
+	// Present only on GET /v1/users/:id/screenshots: the profile tab shows
+	// shots from across all of a user's games, so each tile names and links
+	// the game it belongs to. Raw fields, formatted by formatGameTitle the way
+	// every other surface formats a game's title.
+	game?: {
+		game_name: string | null;
+		display_name: string | null;
+		user_nation: string | null;
+		total_turns: number | null;
+	};
+}
+
 // The 201 from POST /v1/games/:id/screenshots: the row the Worker stored,
-// plus the public img.per-ankh.app URL it built from the object key.
+// plus the public img.per-ankh.app URLs it built from the object key.
 export interface UploadedScreenshot {
 	screenshot_id: string;
 	game_id: string;
 	url: string;
+	thumb_url: string;
 	width: number;
 	height: number;
 	size_bytes: number;
@@ -1099,6 +1134,46 @@ export const cloudApi = {
 			body: formData,
 		});
 		return res.json() as Promise<{ screenshot: UploadedScreenshot }>;
+	},
+
+	// One game's screenshots, newest first — the game-detail strip. Public
+	// read on its own per-IP budget; `hidden_at` is the only filter, so a
+	// review-band upload is absent until an admin acts.
+	getGameScreenshots: async (
+		gameId: string,
+		opts?: CallOpts,
+	): Promise<GameScreenshot[]> => {
+		const res = await request(`/games/${gameId}/screenshots`, opts);
+		return (await (res.json() as Promise<{ screenshots: GameScreenshot[] }>))
+			.screenshots;
+	},
+
+	// One uploader's screenshots across all their games, newest first — the
+	// profile Screenshots tab's lazy payload, on the same budget. Each row
+	// carries its `game`, which the game read above leaves out.
+	getUserScreenshots: async (
+		userId: string,
+		opts?: CallOpts,
+	): Promise<GameScreenshot[]> => {
+		const res = await request(`/users/${userId}/screenshots`, opts);
+		return (await (res.json() as Promise<{ screenshots: GameScreenshot[] }>))
+			.screenshots;
+	},
+
+	// Remove one of the caller's own screenshots. Permanent — the row, the
+	// object, and the edge cache — and the remedy the HAS_SCREENSHOTS refusal
+	// on a visibility change names, so a game with screenshots can be made
+	// private again. A viewer who already loaded the image can keep seeing it
+	// until the 2h Browser TTL expires, which no purge reaches.
+	deleteScreenshot: async (
+		gameId: string,
+		screenshotId: string,
+		opts?: CallOpts,
+	): Promise<void> => {
+		await request(`/games/${gameId}/screenshots/${screenshotId}`, {
+			...opts,
+			method: "DELETE",
+		});
 	},
 
 	// Accept the one-time screenshot terms that uploadScreenshot refuses

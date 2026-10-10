@@ -31,7 +31,13 @@ const CLOUD_DIR = resolve(REPO_ROOT, "cloud");
 // shared between the top level and named envs). If any are missing, OAuth
 // breaks and every login 500s. Keep this list in sync with the actual
 // wrangler.toml comments naming required secrets.
-const REQUIRED_SECRETS = ["DISCORD_CLIENT_SECRET"];
+// CLOUDFLARE_PURGE_TOKEN joins it with issue #289's readers: screenshot
+// objects are public and edge-cached with no Worker in the image path, so
+// purge-by-URL is the only invalidation there is. Missing, a deleted or hidden
+// screenshot keeps being served for up to the 30-day Edge TTL — which has no
+// other symptom, so a missing staging secret is worth catching here rather
+// than in a log line nobody is reading.
+const REQUIRED_SECRETS = ["DISCORD_CLIENT_SECRET", "CLOUDFLARE_PURGE_TOKEN"];
 
 interface SecretEntry {
 	name: string;

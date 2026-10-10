@@ -70,8 +70,12 @@ import {
 } from "./challenges/handlers";
 import {
 	handleAcceptScreenshotTerms,
+	handleGameScreenshots,
+	handleScreenshotDelete,
 	handleScreenshotUpload,
+	handleUserScreenshots,
 } from "./screenshots/handlers";
+import { handleDevScreenshotImage } from "./screenshots/dev-images";
 import type { ScreenshotsEnv } from "./screenshots/handlers";
 import { handleCollectionCreate, handleCollectionsList } from "./collections";
 import type { CollectionsEnv } from "./collections";
@@ -413,6 +417,15 @@ const ROUTES: RouteSpec[] = [
 	// by; the acceptance of the upload terms it requires is an account write,
 	// over with the other /v1/users/me/* routes.
 	{
+		method: "GET",
+		match: {
+			kind: "regex",
+			regex: /^\/v1\/games\/([A-Za-z0-9_-]{21})\/screenshots$/,
+		},
+		route: "GET /v1/games/:id/screenshots",
+		handler: (r, e, m) => handleGameScreenshots(m![1], r, e),
+	},
+	{
 		method: "POST",
 		match: {
 			kind: "regex",
@@ -420,6 +433,34 @@ const ROUTES: RouteSpec[] = [
 		},
 		route: "POST /v1/games/:id/screenshots",
 		handler: (r, e, m) => handleScreenshotUpload(m![1], r, e),
+	},
+	// The uploader's own removal. Permanent, and the remedy the
+	// HAS_SCREENSHOTS refusal on PATCH /v1/games/:id names — so it is the
+	// owner's route, not an admin one (step 6 adds hide / unhide / star).
+	{
+		method: "DELETE",
+		match: {
+			kind: "regex",
+			regex:
+				/^\/v1\/games\/([A-Za-z0-9_-]{21})\/screenshots\/([A-Za-z0-9_-]{21})$/,
+		},
+		route: "DELETE /v1/games/:id/screenshots/:screenshot_id",
+		handler: (r, e, m) => handleScreenshotDelete(m![1], m![2], r, e),
+	},
+
+	// Local-only image server. In production no Worker is in the image path at
+	// all — the R2 custom domain and the zone's transformation layer serve the
+	// objects — which means that path has no local implementation, because it
+	// has no code. This route is what `SCREENSHOT_BASE_URL` points at under
+	// `./per-ankh dev` so the galleries render from the dev bucket. Dark in
+	// prod behind DEV_LOGIN + non-HTTPS, the handleDevLogin gate. Registered
+	// beside the screenshot routes rather than with /v1/auth/dev/login because
+	// it is screenshot machinery; see screenshots/dev-images.ts.
+	{
+		method: "GET",
+		match: { kind: "regex", regex: /^\/v1\/dev\/images\/(.+)$/ },
+		route: "GET /v1/dev/images/:key",
+		handler: (r, e, m) => handleDevScreenshotImage(m![1], r, e),
 	},
 
 	// Site-admin: bulk reparse across all users. Gated by ADMIN_DISCORD_ID
@@ -1040,6 +1081,19 @@ const ROUTES: RouteSpec[] = [
 		},
 		route: "GET /v1/users/:user_id/videos",
 		handler: (r, e, m, c) => handleUserVideos(m![1], r, e, c),
+	},
+	// Public screenshots across all of one user's games — the profile
+	// "Screenshots" tab's lazy payload, the same role the videos read above
+	// plays for its tab. The 21-char user_id can't collide with the
+	// /v1/users/me/* path routes registered further down.
+	{
+		method: "GET",
+		match: {
+			kind: "regex",
+			regex: /^\/v1\/users\/([A-Za-z0-9_-]{21})\/screenshots$/,
+		},
+		route: "GET /v1/users/:user_id/screenshots",
+		handler: (r, e, m) => handleUserScreenshots(m![1], r, e),
 	},
 	// Public tournament record for one player — enrollment + played/upcoming
 	// matches + cast appearances, in one lazy fetch for the profile's

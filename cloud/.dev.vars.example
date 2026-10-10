@@ -9,6 +9,11 @@
 # recommended way to get a local session. Local-only: the handler 404s unless
 # this is set AND the request is non-HTTPS, so it stays dark in prod. Full usage
 # in docs/dev-login.md.
+#
+# It also gates GET /v1/dev/images/*, which serves uploaded screenshots out of
+# the local R2 bucket — production serves those from an R2 custom domain with no
+# Worker in the path, so without this route the galleries render 404s locally.
+# `./per-ankh dev` points SCREENSHOT_BASE_URL at it; nothing else to set.
 DEV_LOGIN=1
 
 # Shared key that lets this Worker believe the visitor IP the frontend Worker

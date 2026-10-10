@@ -90,7 +90,26 @@ function cmdDev(): never {
 			color: "cyan",
 			cwd: resolve(REPO_ROOT, "cloud"),
 			command: resolve(REPO_ROOT, "cloud/node_modules/.bin/wrangler"),
-			args: ["dev"],
+			// SCREENSHOT_BASE_URL is overridden to the Worker's own dev image
+			// route. In production nothing in this repo serves a screenshot —
+			// the R2 custom domain and the zone's transformation layer do — so
+			// the committed [vars] value is img.per-ankh.app, and a local upload
+			// would otherwise produce a correct production URL for an object
+			// only this machine has (404 placeholders in both galleries). See
+			// cloud/src/screenshots/dev-images.ts.
+			//
+			// Passed here rather than added to .dev.vars.example because that
+			// file is a template for a gitignored copy: a developer who had
+			// already made their copy would never get the new line, and the
+			// symptom of missing it is the confusing 404 rather than an error.
+			// `./per-ankh dev` is the documented way to run the app, so the
+			// value travels with it. A bare `wrangler dev` keeps the production
+			// host, which is the raw tool behaving as configured.
+			args: [
+				"dev",
+				"--var",
+				"SCREENSHOT_BASE_URL:http://localhost:8787/v1/dev/images",
+			],
 		},
 		{
 			label: "web",

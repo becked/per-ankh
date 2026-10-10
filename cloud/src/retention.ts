@@ -86,6 +86,13 @@ export const RETENTION_BUCKETS: readonly RetentionBucket[] = [
 			// The screenshots that landed are recorded by screenshot_upload in
 			// the bucket below. Metadata-free.
 			"screenshot_upload_attempt",
+			// Screenshot gallery reads (screenshots/handlers.ts): the game
+			// strip and the profile tab, on one budget rather than two — they
+			// have the same one-read-per-gallery-view shape, so there is
+			// nothing a second budget would protect. Its own budget rather
+			// than anon_read's for the challenge_link_view reason: the strip
+			// read runs on every /games/[id] render. Metadata-free.
+			"screenshot_view",
 		],
 	},
 	{
@@ -133,6 +140,12 @@ export const RETENTION_BUCKETS: readonly RetentionBucket[] = [
 			// other content writes get: the row in game_screenshots is the
 			// durable record, and this is the upload's audit trail beside it.
 			"screenshot_upload",
+			// An owner removing their own screenshot
+			// (screenshots/handlers.ts). The same window and the same role as
+			// `delete` for a game: the row is gone, so this is the only record
+			// that it existed. A report's resolution is a different weight and
+			// gets KEEP_FOREVER when screenshot_report arrives.
+			"screenshot_delete",
 		],
 	},
 ];

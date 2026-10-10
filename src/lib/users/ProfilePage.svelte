@@ -21,6 +21,7 @@
 	import GamesTable from "$lib/users/GamesTable.svelte";
 	import OverviewTab from "$lib/users/OverviewTab.svelte";
 	import ScopeRow from "$lib/users/ScopeRow.svelte";
+	import ScreenshotsTab from "$lib/users/ScreenshotsTab.svelte";
 	import SuggestedOpponentsTab from "$lib/users/SuggestedOpponentsTab.svelte";
 	import VideosTab from "$lib/users/VideosTab.svelte";
 	import StatsView from "$lib/stats/StatsView.svelte";
@@ -31,6 +32,13 @@
 
 	const bundle = $derived(data.bundle);
 	const profile = $derived(data.profile);
+
+	// Writable derived, because the owner's delete removes a tile optimistically
+	// — Browser TTL is 7200, so waiting for the round trip would let them keep
+	// seeing their own deleted image for up to two hours — while a new load
+	// still replaces the list. Which is also what fills it when the tab is
+	// first opened: it arrives empty on every other tab.
+	let screenshots = $derived(data.screenshots);
 
 	// The Records tab's own fetch — its payload is not in the bundle, so the
 	// profile only pays for it when that tab opens. The scope row drives it like
@@ -229,6 +237,11 @@
 									>Videos</Tabs.Trigger
 								>
 							{/if}
+							{#if data.hasScreenshots}
+								<Tabs.Trigger value="screenshots" class={triggerClass}
+									>Screenshots</Tabs.Trigger
+								>
+							{/if}
 							<Tabs.Trigger value="stats" class={triggerClass}
 								>Stats</Tabs.Trigger
 							>
@@ -284,6 +297,14 @@
 						{#if data.hasChannels}
 							<Tabs.Content value="videos">
 								<VideosTab videos={data.videos} />
+							</Tabs.Content>
+						{/if}
+
+						{#if data.hasScreenshots}
+							<Tabs.Content value="screenshots">
+								<!-- Payload loads lazily with the tab (mirrors Videos), so
+								     it's empty until then. -->
+								<ScreenshotsTab bind:screenshots isOwner={data.isOwner} />
 							</Tabs.Content>
 						{/if}
 

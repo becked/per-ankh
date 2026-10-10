@@ -46,7 +46,9 @@ export interface AuthEnv extends SessionEnv, EventsEnv {
 	DISCORD_CLIENT_ID: string;
 	DISCORD_CLIENT_SECRET: string;
 	// Dev-only login bypass. Truthy ONLY in cloud/.dev.vars (gitignored,
-	// local-only); prod never sets it. Gates handleDevLogin — see there.
+	// local-only); prod never sets it. Gates handleDevLogin — see there — and
+	// the dev screenshot image route (screenshots/dev-images.ts), which needs
+	// the same "this is a developer's machine" signal.
 	DEV_LOGIN?: string;
 }
 

@@ -1,7 +1,15 @@
 // `./per-ankh admin games [--limit] [--user <id>]` — list recent cloud games.
 // `./per-ankh admin game <id>` — full detail for one game.
 
-import { d1Batch, d1Exec, d1Query, r2DeleteMany, sqlStr } from "../wrangler";
+import { purgeUrls, screenshotUrlsFor } from "../purge";
+import {
+	d1Batch,
+	d1Exec,
+	d1Query,
+	r2DeleteMany,
+	screenshotBucketName,
+	sqlStr,
+} from "../wrangler";
 import {
 	type Column,
 	emdash,
@@ -145,18 +153,23 @@ export async function runDetail(
 		 JOIN games g ON g.user_id = u.user_id WHERE g.game_id = ${idStr}`,
 		`SELECT COUNT(*) AS cnt FROM player_summaries WHERE game_id = ${idStr}`,
 		`SELECT COUNT(*) AS cnt FROM game_player_turn WHERE game_id = ${idStr}`,
+		`SELECT COUNT(*) AS cnt FROM game_screenshots WHERE game_id = ${idStr}`,
 	]);
-	const [gameRows, ownerRows, summaryCountRows, turnCountRows] = [
-		batch[0] as GameRow[],
-		batch[1] as OwnerRow[],
-		batch[2] as CountRow[],
-		batch[3] as CountRow[],
-	];
+	const [gameRows, ownerRows, summaryCountRows, turnCountRows, shotCountRows] =
+		[
+			batch[0] as GameRow[],
+			batch[1] as OwnerRow[],
+			batch[2] as CountRow[],
+			batch[3] as CountRow[],
+			batch[4] as CountRow[],
+		];
 	const game = gameRows[0];
 	if (!game) {
 		throw new Error(`Game not found: ${gameId}`);
 	}
 	const owner = ownerRows[0];
+
+	const screenshotCount = shotCountRows[0]?.cnt ?? 0;
 
 	if (opts.json) {
 		printJson({
@@ -164,6 +177,7 @@ export async function runDetail(
 			owner,
 			player_summary_count: summaryCountRows[0]?.cnt ?? 0,
 			turn_row_count: turnCountRows[0]?.cnt ?? 0,
+			screenshot_count: screenshotCount,
 		});
 		return;
 	}
@@ -193,16 +207,28 @@ export async function runDetail(
 		["Created", formatDate(game.created_at)],
 		["Updated", formatDate(game.updated_at)],
 		["R2 keys", `games/${game.game_id}.json.gz, saves/${game.game_id}.zip`],
+		// A game's screenshots live in their own bucket under one prefix, and
+		// each one has two cached URLs. Named here because `delete-game` has
+		// to clear all of it and this is the page an operator reads first.
+		["Screenshots", `${screenshotCount} under screenshots/${game.game_id}/`],
 	]);
 }
 
 // ─── shared delete helper ──────────────────────────────────────────────────
 //
-// Deletes the given games and their R2 blobs (parsed blob + raw save ZIP).
-// The D1 cascade handles player_summaries, game_player_turn, tech_events, and
-// law_events. Callers own the confirmation prompt, the audit-event row, and
-// the final summary line. Shared by `delete-game`, `purge-games`, and
-// `nuke-user`.
+// Deletes the given games and their R2 blobs (parsed blob + raw save ZIP),
+// plus any screenshots they have — a second bucket, and public, so those also
+// need purging from the edge. The D1 cascade handles player_summaries,
+// game_player_turn, tech_events, law_events, and game_screenshots. Callers own
+// the confirmation prompt, the audit-event row, and the final summary line.
+// Shared by `delete-game`, `purge-games`, and `nuke-user`.
+//
+// The screenshot keys are read from D1 rather than listed from the bucket —
+// the Worker's own path lists by prefix, which also catches an object whose
+// insert failed, but wrangler has no object-list command for the CLI to use.
+// Every screenshot a reader could ever have reached has a row, so the gap is
+// an object no URL was ever built for. Read BEFORE the DELETE below, which
+// cascades those rows away.
 export async function deleteGames(gameIds: string[]): Promise<void> {
 	if (gameIds.length === 0) return;
 
@@ -218,8 +244,28 @@ export async function deleteGames(gameIds: string[]): Promise<void> {
 	);
 	for (const err of r2Summary.errors.slice(0, 5)) warn(err);
 
-	info(`Deleting ${gameIds.length} game(s) from D1...`);
 	const idList = gameIds.map(sqlStr).join(", ");
+	const shotRows = await d1Query<{ r2_key: string }>(
+		`SELECT r2_key FROM game_screenshots WHERE game_id IN (${idList})`,
+	);
+	if (shotRows.length > 0) {
+		const shotKeys = shotRows.map((r) => r.r2_key);
+		info(`Deleting ${shotKeys.length} screenshot object(s)...`);
+		const shotSummary = await r2DeleteMany(
+			shotKeys,
+			10,
+			screenshotBucketName(),
+		);
+		info(
+			`Screenshots: ok=${shotSummary.ok} missing=${shotSummary.missing} failed=${shotSummary.failed}`,
+		);
+		for (const err of shotSummary.errors.slice(0, 5)) warn(err);
+		// Deleting the object is not enough: it is public, edge-cached, and has
+		// no Worker in its read path to re-evaluate anything.
+		await purgeUrls(screenshotUrlsFor(shotKeys));
+	}
+
+	info(`Deleting ${gameIds.length} game(s) from D1...`);
 	await d1Exec(`DELETE FROM games WHERE game_id IN (${idList})`);
 }
 
@@ -241,8 +287,11 @@ export async function runDelete(
 		game_name: string | null;
 		total_turns: number;
 		display_name: string | null;
+		screenshots: number;
 	}>(`
-		SELECT g.game_id, g.user_id, g.game_name, g.total_turns, u.display_name
+		SELECT g.game_id, g.user_id, g.game_name, g.total_turns, u.display_name,
+		       (SELECT COUNT(*) FROM game_screenshots s
+		         WHERE s.game_id = g.game_id) AS screenshots
 		FROM games g LEFT JOIN users u ON u.user_id = g.user_id
 		WHERE g.game_id = ${sqlStr(gameId)}
 	`);
@@ -250,13 +299,16 @@ export async function runDelete(
 	if (!game) {
 		throw new Error(`Game not found: ${gameId}`);
 	}
+	const screenshotCount = game.screenshots;
 
 	if (!opts.yes) {
 		const yes = await confirmTyping(
 			`DELETE GAME: ${emdash(game.game_name)} (${game.game_id})\n` +
 				`  Owner: ${emdash(game.display_name)} (${game.user_id})\n` +
 				`  Turns: ${game.total_turns}\n` +
-				`  Deletes the game row (+ cascades) and R2 blobs. The account stays.`,
+				`  Screenshots: ${screenshotCount}\n` +
+				`  Deletes the game row (+ cascades), R2 blobs, and any screenshots\n` +
+				`  (objects + edge cache). The account stays.`,
 			"delete",
 		);
 		if (!yes) {
@@ -311,7 +363,8 @@ export async function runPurge(
 	if (!opts.yes) {
 		const yes = await confirmTyping(
 			`PURGE GAMES: ${emdash(user.display_name)} (${userId})\n` +
-				`  Delete ${gameIds.length} game(s) + their R2 blobs (json.gz + zip).\n` +
+				`  Delete ${gameIds.length} game(s) + their R2 blobs (json.gz + zip)\n` +
+				`  + any screenshots (objects + edge cache).\n` +
 				`  The account, collections, and online_ids stay.`,
 			"purge",
 		);

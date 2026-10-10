@@ -35,6 +35,7 @@
 	let {
 		gameId,
 		isPublic,
+		onUploaded,
 	}: {
 		gameId: string;
 		// A screenshot requires a public game — that is what lets every stored
@@ -43,6 +44,12 @@
 		// display rule. Read from the shared visibility state, so flipping the
 		// header's lock changes this without a reload.
 		isPublic: boolean;
+		// Called only for a screenshot that is actually visible, so the strip
+		// above can show it without a reload. A review-band upload is stored
+		// hidden and no reader renders it, so it reports nothing — the done
+		// state below is what tells the uploader it is queued.
+		// eslint-disable-next-line no-unused-vars -- parameter in callback signature
+		onUploaded?: (screenshot: UploadedScreenshot) => void;
 	} = $props();
 
 	type Phase = "idle" | "preparing" | "ready" | "terms" | "uploading" | "done";
@@ -64,6 +71,13 @@
 	// terms problem — prompting again would send the user round the same loop
 	// with the same result, so it falls through to the error line instead.
 	let termsPrompted = $state(false);
+
+	// The preview is for bytes nothing else is showing. An accepted upload is
+	// on the strip the moment onUploaded fires, so holding the preview up after
+	// that would put the same image on screen twice.
+	const showPreview = $derived(
+		!(phase === "done" && uploaded?.status === "published"),
+	);
 
 	const resized = $derived.by(() => {
 		const p = prepared;
@@ -144,6 +158,7 @@
 			const res = await cloudApi.uploadScreenshot(gameId, form);
 			uploaded = res.screenshot;
 			phase = "done";
+			if (res.screenshot.status === "published") onUploaded?.(res.screenshot);
 		} catch (err) {
 			if (err instanceof UnauthorizedError) {
 				await bounceToLogin();
@@ -216,26 +231,31 @@
 		<p class="text-sm text-tan">Preparing…</p>
 	{:else if prepared}
 		<div class="flex flex-col gap-3 sm:flex-row sm:items-start">
-			<PanelInset class="sm:w-80 sm:flex-none">
-				<!-- The local preview stays up through the done state rather than
-				     swapping to the stored object's URL: they are the same bytes,
-				     and fetching the public URL here would both need img-src to
-				     name the image host (a CSP the readers in step 5 will widen
-				     anyway) and warm the edge cache for an object a review-band
-				     upload is holding hidden. -->
-				<img
-					src={prepared.preview}
-					alt="Screenshot preview"
-					class="w-full rounded"
-				/>
-				<p class="mt-1 text-xs text-gray-400">
-					{prepared.variant.width}×{prepared.variant.height}
-					{#if resized}
-						· resized from {prepared.variant.sourceWidth}×{prepared.variant
-							.sourceHeight}
-					{/if}
-				</p>
-			</PanelInset>
+			{#if showPreview}
+				<PanelInset class="sm:w-80 sm:flex-none">
+					<!-- The local preview, not the stored object's URL: they are the
+				     same bytes, and fetching the public URL here would warm the
+				     edge cache for an object a review-band upload is holding
+				     hidden.
+				     It is dropped once an ACCEPTED upload is done, because the
+				     strip above is now showing that screenshot and two copies of
+				     one image is one too many. A queued upload keeps it: nothing
+				     else renders a hidden row, so this is the only place its
+				     uploader can see what they sent. -->
+					<img
+						src={prepared.preview}
+						alt="Screenshot preview"
+						class="w-full rounded"
+					/>
+					<p class="mt-1 text-xs text-gray-400">
+						{prepared.variant.width}×{prepared.variant.height}
+						{#if resized}
+							· resized from {prepared.variant.sourceWidth}×{prepared.variant
+								.sourceHeight}
+						{/if}
+					</p>
+				</PanelInset>
+			{/if}
 
 			<div class="min-w-0 flex-1">
 				{#if phase === "terms"}

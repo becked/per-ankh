@@ -17,6 +17,15 @@ export interface CloudEnv {
 	// wrangler.toml blocks (top-level for prod, [env.staging] for staging).
 	dbName: string;
 	r2Bucket: string;
+	// The screenshots bucket (issue #289) and the public R2 custom domain in
+	// front of it. A second bucket rather than a prefix in r2Bucket, because
+	// this one is public: the same domain over the shares bucket would expose
+	// every save blob and ZIP by key. The host is here as well as in the
+	// Worker's SCREENSHOT_BASE_URL because deleting a game's screenshots from
+	// the CLI has to purge their URLs, and the objects are edge-cached with no
+	// Worker in the image path to re-evaluate anything.
+	screenshotBucket: string;
+	imageHost: string;
 	frontendOrigin: string;
 	apiOrigin: string;
 	apiBase: string;
@@ -41,6 +50,8 @@ export const ENVIRONMENTS: Record<CloudEnvName, CloudEnv> = {
 		wranglerEnvFlag: [],
 		dbName: "per-ankh-share-index",
 		r2Bucket: "per-ankh-shares",
+		screenshotBucket: "per-ankh-screenshots",
+		imageHost: "https://img.per-ankh.app",
 		frontendOrigin: "https://per-ankh.app",
 		apiOrigin: "https://api.per-ankh.app",
 		apiBase: "https://api.per-ankh.app/v1",
@@ -53,6 +64,8 @@ export const ENVIRONMENTS: Record<CloudEnvName, CloudEnv> = {
 		wranglerEnvFlag: ["--env", "staging"],
 		dbName: "per-ankh-share-index-staging",
 		r2Bucket: "per-ankh-shares-staging",
+		screenshotBucket: "per-ankh-screenshots-staging",
+		imageHost: "https://img.staging.per-ankh.app",
 		frontendOrigin: "https://staging.per-ankh.app",
 		apiOrigin: "https://api-staging.per-ankh.app",
 		apiBase: "https://api-staging.per-ankh.app/v1",

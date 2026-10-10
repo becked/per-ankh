@@ -195,7 +195,8 @@ export type RateLimitedEventType =
 	| "challenge_view"
 	| "challenge_link_view"
 	| "challenge_create"
-	| "screenshot_upload_attempt";
+	| "screenshot_upload_attempt"
+	| "screenshot_view";
 
 // Upload rate limits cover both first-time uploads and re-imports — both
 // hit the same R2 puts + D1 batch, so they cost the same.
@@ -3214,7 +3215,11 @@ export async function handleGameDelete(
 	}
 	// The screenshots live in their own bucket under one prefix per game, so
 	// they are a list-and-delete rather than two more fixed keys. Their D1
-	// rows cascade with the game; the objects don't.
+	// rows cascade with the game; the objects don't — and unlike the two blobs
+	// above, the objects are public and edge-cached, so deleting them is not
+	// enough on its own. deleteGameScreenshots purges both URLs of everything
+	// it lists; without that the images of a deleted game keep being served
+	// for up to the 30-day Edge TTL.
 	await deleteGameScreenshots(env, gameId);
 
 	await env.SHARE_DB.prepare("DELETE FROM games WHERE game_id = ?")

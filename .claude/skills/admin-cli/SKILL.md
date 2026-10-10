@@ -29,6 +29,8 @@ metadata:
 ./per-ankh admin nuke-user <user_id>         # Delete cloud user + games + R2 blobs (type "nuke")
 ```
 
+**The delete paths need two environment variables.** `delete-game`, `purge-games` and `nuke-user` also remove the games' screenshots — a second bucket, and public — so they purge the image URLs from the edge, which needs `CLOUDFLARE_ZONE_ID` and `CLOUDFLARE_PURGE_TOKEN` exported in the shell (the Worker holds the same pair as a var and a secret; `wrangler` has no purge command). Without them the objects are still deleted and the command warns: the edge keeps serving them for up to the 30-day Edge TTL, which has no other symptom than the picture still being there.
+
 ## Corpus sweeps
 
 `./per-ankh admin duel-event-titles [--csv] [--out FILE] [--concurrency N] [--cache-dir DIR]` lists the event stories that have fired in a two-player multiplayer duel, one row per event type with the counts an event balance pass needs: `games` (duel games it fired in), `player_games` (player slots that fired it, at most two per game), and `character_city_records` (characters and cities holding their own record of it). `--csv` writes a spreadsheet instead of the markdown table. Unlike every other read command it is a **sweep**: one `wrangler` spawn per matching save (hundreds), so budget minutes, not seconds. Saves land in `--cache-dir` and are reused, so a second run to reshape the output reads nothing remote.
