@@ -196,7 +196,8 @@ export type RateLimitedEventType =
 	| "challenge_link_view"
 	| "challenge_create"
 	| "screenshot_upload_attempt"
-	| "screenshot_view";
+	| "screenshot_view"
+	| "screenshot_report";
 
 // Upload rate limits cover both first-time uploads and re-imports — both
 // hit the same R2 puts + D1 batch, so they cost the same.

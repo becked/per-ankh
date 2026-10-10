@@ -314,7 +314,13 @@ export async function handleScreenshotUpload(
 			"RATE_LIMIT_SCREENSHOT_UPLOAD",
 		);
 	}
-	await recordEvent(env, "screenshot_upload_attempt", userId, request, null);
+	await recordScreenshotEvent(
+		env,
+		"screenshot_upload_attempt",
+		userId,
+		request,
+		null,
+	);
 
 	let form: FormData;
 	try {
@@ -492,7 +498,7 @@ export async function handleScreenshotUpload(
 		);
 	}
 
-	await recordEvent(env, "screenshot_upload", userId, request, {
+	await recordScreenshotEvent(env, "screenshot_upload", userId, request, {
 		screenshot_id: screenshotId,
 		game_id: gameId,
 		verdict,
@@ -728,7 +734,7 @@ export async function handleScreenshotDelete(
 
 	await removeScreenshot(env, row.r2_key, screenshotId);
 
-	await recordEvent(env, "screenshot_delete", userId, request, {
+	await recordScreenshotEvent(env, "screenshot_delete", userId, request, {
 		screenshot_id: screenshotId,
 		game_id: gameId,
 	});
@@ -780,13 +786,23 @@ export async function handleAcceptScreenshotTerms(
 
 // ---------- Audit ----------
 
-// The module's own insert, the shape challenges/handlers.ts uses: a closed
+// The feature's own insert, the shape challenges/handlers.ts uses: a closed
 // event-type union so a typo is a compile error, and a failure logged rather
 // than thrown — an audit row is not worth losing a stored screenshot for.
-async function recordEvent(
-	env: ScreenshotsEnv,
+//
+// Exported because moderation.ts is the second writer (one feature, two
+// audiences) and a second copy of this would be two places to get the
+// swallowed-failure stance wrong. It takes EventsEnv rather than
+// ScreenshotsEnv because EVENTS_DB is all it touches, so the moderation
+// handlers don't have to carry an AI binding to write an audit row.
+export async function recordScreenshotEvent(
+	env: EventsEnv,
 	eventType:
-		"screenshot_upload_attempt" | "screenshot_upload" | "screenshot_delete",
+		| "screenshot_upload_attempt"
+		| "screenshot_upload"
+		| "screenshot_delete"
+		| "screenshot_report"
+		| "screenshot_moderate",
 	userId: string,
 	request: Request,
 	metadata: Record<string, unknown> | null,

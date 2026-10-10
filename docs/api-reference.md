@@ -113,6 +113,7 @@ The three tournament read buckets are split by the *surface that spends them*, n
 | `slug_claim_attempt` | 15 / hr per user | `POST` + `DELETE /v1/users/me/slug` (counts attempts, not successes) |
 | `screenshot_view` | 600 / hr per IP | `GET /v1/games/:id/screenshots` + `GET /v1/users/:user_id/screenshots` — ONE budget for both, because each is one read per gallery viewed; its own rather than a share of `anon_read` because the strip read runs on every `/games/[id]` render. Own ceiling var (`SCREENSHOT_VIEW_PER_HOUR`) |
 | `screenshot_upload_attempt` | 20 / hr per user | `POST /v1/games/:id/screenshots` (counts attempts, not successes — a refused upload spends a classifier call and no quota, so the 5-per-game / 100-per-account caps bound storage and only this bounds inference spend). Tighter than the save-upload ceiling on purpose: saves get bulk-reuploaded whenever `PARSER_VERSION` moves, screenshots never do. Own ceiling var (`PER_USER_SCREENSHOTS_PER_HOUR`) |
+| `screenshot_report` | 20 / hr per user | `POST /v1/games/:id/screenshots/:screenshot_id/report` (counts successes, **not** attempts — unlike `screenshot_upload_attempt` above, these rows are the reports' own accountability record and are `KEEP_FOREVER`, so a row per refused attempt would accumulate in a list nothing prunes. The composite PK already holds a reporter to one report per screenshot, so what this bounds is the queue). Own ceiling var (`PER_USER_SCREENSHOT_REPORTS_PER_HOUR`) |
 | upload / download | per-user + per-IP + global | game upload / download |
 
 Over-limit → `429` with an endpoint-specific `code`. Known scraper User-Agents are exempt from the anonymous read/view limits, and from their audit rows too — so an exempt read leaves no trace in `events`. The exemption is keyed on a self-declared header, which is why the visitor's UA isn't forwarded across the SSR hop: it applies to a caller hitting the API directly and not to page traffic through `per-ankh.app`.
@@ -347,6 +348,16 @@ Remove one of the caller's own screenshots. Permanent.
 - **Response 200:** `{ ok: true }`.
 - **Errors:** `401 UNAUTHORIZED`, `404 NOT_FOUND`.
 - **Notes:** This is the remedy `PATCH /v1/games/:id`'s `HAS_SCREENSHOTS` names — without it a game with a screenshot could not be made private by any route its owner has. Three steps, D1 row first (it is what a reader consults), then the R2 object, then **purge-by-URL** of both public URLs. The purge is not bookkeeping: the objects are public, edge-cached with a 30-day Edge TTL, and no Worker sits in the image path, so deleting the object alone leaves the edge serving it. It needs `CLOUDFLARE_ZONE_ID` and the `CLOUDFLARE_PURGE_TOKEN` secret; a failed or unconfigured purge is logged (`screenshot_purge_failed` / `screenshot_purge_unconfigured`) and does not fail the request, because the removal has already happened. The 2-hour Browser TTL is beyond any purge's reach, which is why clients remove the tile optimistically. A queued (`in_review`) screenshot is deletable too. Not rate-limited: the 100-per-account cap bounds the total and re-uploading spends the hourly classifier budget, so nothing new is left to bound. Writes a `screenshot_delete` audit event (90-day retention).
+
+### `POST /v1/games/:id/screenshots/:screenshot_id/report`
+Report a screenshot — moderation layer 2's entry point, feeding the same admin queue the classifier's uncertain band routes to.
+
+- **Auth:** Session. `screenshot_reports.reporter_user_id` is `NOT NULL`, so a report names who filed it — which is what lets one reporter hold one report per screenshot, and what makes a pattern of reports legible.
+- **Path:** `id` (21-char game), `screenshot_id` (21-char).
+- **Body:** JSON `{ reason }`, one of `not_old_world`, `sexual_content`, `graphic_violence`, `real_person`, `personal_information`, `other` (`src/lib/screenshots/report-reasons.ts` — one list the schema, the reporter's radio group and the admin queue's labels all read). A closed list rather than free text: the ids mirror the classifier's own questions, so a report is directly comparable to the probabilities stored on the row, and the admin judges the image rather than a reporter's prose.
+- **Response 200:** `{ ok: true }`.
+- **Errors:** `401 UNAUTHORIZED`, `404 NOT_FOUND` (no such screenshot, not on that game, or already hidden — does not distinguish), `409 OWN_SCREENSHOT`, `429 RATE_LIMIT_SCREENSHOT_REPORT` (`PER_USER_SCREENSHOT_REPORTS_PER_HOUR`, 20), `400 INVALID_BODY` / `INVALID_JSON`, `415 UNSUPPORTED_MEDIA_TYPE`.
+- **Notes:** `hidden_at IS NULL` is part of the target: a hidden screenshot is one no reader can see, so a report on one is a stale client. The uploader is refused (`OWN_SCREENSHOT`) because they have a delete instead, which is faster and permanent. Upserts on `(screenshot_id, reporter_user_id)`: a repeat **while the report is open** corrects the reason, and a repeat **after an admin resolved it** does nothing — the image has not changed, so re-reporting is re-litigating a closed decision, which is the reporter-side half of "no appeal path". The response is identical in all three cases, deliberately: a caller who could tell them apart could read a moderation decision off it. The hourly ceiling is charged **on success only**, unlike the upload attempt counter — these rows *are* the reports' accountability record and are `KEEP_FOREVER`, so a row per refused attempt would accumulate in a list nothing prunes. Writes a `screenshot_report` audit event (`KEEP_FOREVER`).
 
 ---
 
@@ -1057,6 +1068,45 @@ Unfeature.
 - **Response 200:** `{ ok: true }`.
 - **Errors:** `404 NOT_FOUND` (non-admin only).
 - **Notes:** Idempotent — deleting a video that isn't featured still succeeds, so the card star and the Featured tab's Remove don't have to agree on which got there first.
+
+## Site admin: screenshot moderation — `/v1/admin/screenshots*`
+
+All **Site admin** (`ADMIN_DISCORD_ID`). Non-admins receive `404 NOT_FOUND` (existence hidden).
+
+Moderation layer 2's human end: the classifier gates uploads (layer 1) and Cloudflare's CSAM scanning runs on the zone (layer 3); this is what sits between them. A row waiting in this queue was never published — the classifier's uncertain band is stored with `hidden_at` set and no reader renders it — so the queue carries the same weight as the classifier rather than less.
+
+**The two hidden states** are what these endpoints are shaped by (migration `0051`):
+
+| state | columns | meaning |
+| --- | --- | --- |
+| `in_review` | `hidden_at` set, `hidden_by` null | the classifier queued it. The object is still in R2, so it can be published. |
+| `hidden` | `hidden_by` set | an admin hid it. The object is deleted and both URLs purged, so there is nothing to put back. |
+
+A hide is therefore **not reversible**, and that is not an oversight: the objects are public and edge-cached with no Worker in the image path, so clearing a column cannot stop the edge serving bytes it already has — deleting the object is the only thing that does.
+
+### `GET /v1/admin/screenshots`
+The moderation tab's whole payload: the queue that needs a decision, and the starred set that reaches the home page.
+
+- **Auth:** Session + **site admin**.
+- **Response 200:** `{ queue: ModerationScreenshot[], featured: ModerationScreenshot[] }`, each row `{ screenshot_id, game_id, url, thumb_url, width, height, caption, created_at, status: "published"|"in_review"|"hidden", featured_at, uploader: { user_id, display_name, slug }, game: { game_name, display_name, user_nation, total_turns }, clef: { is_old_world, contains_nsfw, contains_gore, is_a_photograph, game_screenshot_confidence, tripped: string[] }, reports: [{ reason, created_at, reporter: { user_id, display_name, slug } }] }`.
+- **Errors:** `404 NOT_FOUND`.
+- **Notes:** Two lists because they are two jobs in two orders — the queue oldest first (a queue is served in the order it arrived, which is what `idx_screenshot_reports_open` is sorted for), the featured set newest first. The queue's legs are the classifier's `in_review` rows and anything with an **open** report; an admin-hidden row is in neither, because a hide resolves the reports that prompted it, so a closed decision never comes back asking to be made again. A published screenshot with an open report appears in **both** lists, which is accurate — it needs a decision and it is on the home page; nothing else overlaps, since a hidden row cannot be starred. `clef` is the probabilities stored at upload, never recomputed, plus `tripped` re-derived against the bands **as they stand now** — which is why the row stores numbers rather than a verdict, and an empty `tripped` on an `in_review` row means the band that queued it has since moved. Identity is joined live, not snapshotted, so a rename follows (the featured-videos stance). Uncapped and outside every read budget: the gate is `isSiteAdmin`, and the 5-per-game cap bounds the table at ~5k rows.
+
+### `POST /v1/admin/screenshots/:screenshot_id/moderate`
+One decision on one screenshot.
+
+- **Auth:** Session + **site admin**.
+- **Path:** `screenshot_id` (21-char). Deliberately not nested under the game: an admin reaches a screenshot from the queue, which spans every game, and `screenshot_id` is a primary key — a game id would be a second value to carry for no authorization it could add.
+- **Body:** JSON `{ action }`, one of `hide`, `unhide`, `star`, `unstar`, `resolve_reports`.
+- **Response 200:** `{ ok: true }`.
+- **Errors:** `404 NOT_FOUND` (non-admin, or no such screenshot), `409 OBJECT_REMOVED` (`unhide` on an admin-hidden row — the image was deleted, so there is nothing to publish), `409 SCREENSHOT_HIDDEN` (`star` on a hidden row), `400 INVALID_BODY` / `INVALID_JSON`, `415 UNSUPPORTED_MEDIA_TYPE`.
+- **Notes:** One endpoint for the five rather than five endpoints, because they are one decision about one row and two of them are not independent — a `hide` clears the star and resolves the open reports, so the combinations that would need refusing across separate routes don't exist here.
+  - **`hide`** is the terminal decision and takes the same three steps as the owner's delete: `hidden_at` + `hidden_by` in D1 (`COALESCE`, so a repeat doesn't rewrite who decided), then the R2 object, then purge-by-URL of **both** public URLs. It also clears `featured_at`/`featured_by` — a hidden row has no object, so a starred one could only render broken — and resolves every open report. Re-running it is the only recovery path a half-failed purge has (the purge logs rather than throws), so a repeated `hide` re-deletes and re-purges rather than short-circuiting.
+  - **`unhide`** publishes what the classifier queued, and is refused on an admin-hidden row.
+  - **`star`/`unstar`** are the home strip's curation. `star` uses `COALESCE` so re-starring keeps the timestamp the strip orders by.
+  - **`resolve_reports`** means the reports were read and the image stays up.
+
+  Writes a `screenshot_moderate` audit event carrying the action (`KEEP_FOREVER` — a moderation decision is an accountability record).
 
 ### `POST /v1/admin/ratings/rebuild`
 Rebuild the rating cache and every player's suggested-opponent list now, instead of waiting for the nightly cron.

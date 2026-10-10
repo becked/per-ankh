@@ -23,7 +23,15 @@
 		UnauthorizedError,
 		type GameScreenshot,
 	} from "$lib/api-cloud";
+	import {
+		SCREENSHOT_REPORT_REASONS,
+		SCREENSHOT_REPORT_REASON_LABELS,
+		type ScreenshotReportReason,
+	} from "$lib/screenshots/report-reasons";
+	import { SvelteSet } from "svelte/reactivity";
 	import FullscreenDialog from "$lib/ui/FullscreenDialog.svelte";
+	import RadioGroup from "$lib/ui/RadioGroup.svelte";
+	import RadioItem from "$lib/ui/RadioItem.svelte";
 	import { confirmDialog } from "$lib/ui/confirm";
 	import { loginBounce } from "$lib/utils/safe-next";
 	import { formatGameTitle } from "$lib/utils/formatting";
@@ -40,7 +48,11 @@
 		// after an upload, so the list has to live there either way.
 		screenshots: GameScreenshot[];
 		// The viewer owns these shots. Only ever true on a surface the owner is
-		// looking at — there is no admin action here (that is step 6).
+		// looking at. It also decides which control a tile offers: an owner
+		// deletes, everyone else reports, and nobody is offered both — a
+		// report on your own screenshot is refused by the endpoint anyway
+		// (409 OWN_SCREENSHOT), since the delete is faster and permanent.
+		// Admin actions are not here; they live on /admin, where the queue is.
 		canDelete?: boolean;
 		// Name and link each tile's game. True on the profile tab, where a tile
 		// is the only thing that says which game it came from.
@@ -56,6 +68,9 @@
 	function open(shot: GameScreenshot): void {
 		lightbox = shot;
 		lightboxOpen = true;
+		// A form left open on the previous image must not greet the next one.
+		reportingId = null;
+		reportError = null;
 	}
 
 	function gameTitle(shot: GameScreenshot): string {
@@ -117,6 +132,63 @@
 				err instanceof ApiError
 					? err.message
 					: "Couldn't delete that screenshot";
+		}
+	}
+
+	// --- Report ------------------------------------------------------
+	//
+	// Inside the lightbox and nowhere else: you report an image after looking
+	// at it, the tile's own corner is the owner's delete, and a reason picker
+	// on every tile in a five-across grid would be a form per thumbnail.
+	//
+	// Reported ids rather than a boolean, because the lightbox moves between
+	// screenshots without unmounting — a single flag would mark the next
+	// image as reported too. Not persisted: a reload shows the control again,
+	// which the endpoint handles (one report per reporter per screenshot, and
+	// a repeat while it is open just corrects the reason).
+	let reportingId = $state<string | null>(null);
+	let reportReason = $state<ScreenshotReportReason>("not_old_world");
+	let reportSending = $state(false);
+	const reported = new SvelteSet<string>();
+	// Its own error slot rather than `error` above: that one renders over the
+	// grid, and a modal dialog makes everything outside it inert — so a
+	// failure raised inside the lightbox has to render inside the lightbox.
+	let reportError = $state<string | null>(null);
+
+	function openReport(shot: GameScreenshot): void {
+		reportingId = shot.screenshot_id;
+		reportReason = "not_old_world";
+		reportError = null;
+	}
+
+	async function sendReport(shot: GameScreenshot): Promise<void> {
+		if (reportSending) return;
+		reportSending = true;
+		reportError = null;
+		try {
+			await cloudApi.reportScreenshot(
+				shot.game_id,
+				shot.screenshot_id,
+				reportReason,
+			);
+			// Not optimistic, unlike the delete: nothing on screen changes
+			// until the server has the report, and there is no tile to put
+			// back if it fails.
+			reported.add(shot.screenshot_id);
+			reportingId = null;
+		} catch (err) {
+			if (err instanceof UnauthorizedError) {
+				// Signed out, or the session expired under the control. The
+				// same bounce the delete and the uploader take, so one panel
+				// does not answer the same lapse three ways.
+				// eslint-disable-next-line svelte/no-navigation-without-resolve -- dynamic next-query construction; resolve()'s branded types don't admit dynamic search strings
+				await goto(loginBounce(page.url));
+				return;
+			}
+			reportError =
+				err instanceof ApiError ? err.message : "Couldn't send that report";
+		} finally {
+			reportSending = false;
 		}
 	}
 </script>
@@ -214,6 +286,73 @@
 			/>
 			{#if lightbox.caption}
 				<p class="flex-none text-center text-sm text-tan">{lightbox.caption}</p>
+			{/if}
+			{#if !canDelete}
+				<!-- The report path. Here rather than on the tile: a reason is a
+				     claim about the image, so it is asked for where the image is
+				     actually being looked at, and the grid stays a grid. -->
+				<div class="flex-none text-center text-xs">
+					{#if reported.has(lightbox.screenshot_id)}
+						<p class="text-tan">Reported. An admin will review it.</p>
+					{:else if reportingId === lightbox.screenshot_id}
+						{@const shot = lightbox}
+						<div
+							class="mx-auto max-w-xs rounded-lg bg-surface p-3 text-left shadow-lg"
+						>
+							<p class="mb-2 font-bold text-tan">
+								What's wrong with this screenshot?
+							</p>
+							<!-- value + onChange with a cast at the boundary, not
+							     bind: — bits-ui RadioGroup is string-only, the shape
+							     SignupPopover already maps at. -->
+							<RadioGroup
+								value={reportReason}
+								onChange={(v) => (reportReason = v as ScreenshotReportReason)}
+								disabled={reportSending}
+								ariaLabel="Reason"
+								class="space-y-1.5"
+							>
+								{#each SCREENSHOT_REPORT_REASONS as reason (reason)}
+									<label
+										class="flex cursor-pointer items-center gap-2 text-tan"
+									>
+										<RadioItem value={reason} />
+										<span>{SCREENSHOT_REPORT_REASON_LABELS[reason]}</span>
+									</label>
+								{/each}
+							</RadioGroup>
+							{#if reportError}
+								<p class="mt-2 font-bold text-danger">{reportError}</p>
+							{/if}
+							<div class="mt-3 flex items-center gap-2">
+								<button
+									type="button"
+									onclick={() => sendReport(shot)}
+									disabled={reportSending}
+									class="cursor-pointer rounded bg-orange px-3 py-1 font-bold text-white hover:bg-orange/80 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-orange"
+								>
+									{reportSending ? "Sending…" : "Send report"}
+								</button>
+								<button
+									type="button"
+									onclick={() => (reportingId = null)}
+									class="cursor-pointer rounded px-3 py-1 font-bold text-tan hover:bg-tan-hover"
+								>
+									Cancel
+								</button>
+							</div>
+						</div>
+					{:else}
+						{@const shot = lightbox}
+						<button
+							type="button"
+							onclick={() => openReport(shot)}
+							class="cursor-pointer rounded px-3 py-1 font-bold text-tan hover:bg-tan-hover hover:text-orange"
+						>
+							Report
+						</button>
+					{/if}
+				</div>
 			{/if}
 		</div>
 	{/if}

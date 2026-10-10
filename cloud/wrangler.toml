@@ -297,6 +297,17 @@ PER_USER_SCREENSHOTS_PER_HOUR = "20"
 # strip read runs on every /games/[id] render — on the shared budget a crawl of
 # game pages would decide when profiles stop showing screenshots.
 SCREENSHOT_VIEW_PER_HOUR = "600"
+# Per-account hourly ceiling on screenshot REPORTS (moderation layer 2,
+# cloud/src/screenshots/moderation.ts). What it bounds is the admin queue, not
+# the endpoint: the composite PK on screenshot_reports already holds a reporter
+# to one report per screenshot, so one account can only inflate the queue by
+# working through the corpus.
+#
+# Charged on success, unlike PER_USER_SCREENSHOTS_PER_HOUR above, which charges
+# before the classifier runs. The counter's rows ARE the reports' accountability
+# record and are KEEP_FOREVER (cloud/src/retention.ts), so a row per refused
+# attempt would accumulate in a list nothing prunes.
+PER_USER_SCREENSHOT_REPORTS_PER_HOUR = "20"
 # Public base of the R2 custom domain in front of SCREENSHOT_BUCKET. The Worker
 # builds screenshot URLs from this plus the object key, so the host is config
 # and the key layout is code. Must stay in step with the hostnames in the
@@ -454,6 +465,7 @@ CHALLENGE_VIEW_PER_HOUR = "600"
 CHALLENGE_LINK_VIEW_PER_HOUR = "600"
 PER_USER_SCREENSHOTS_PER_HOUR = "20"
 SCREENSHOT_VIEW_PER_HOUR = "600"
+PER_USER_SCREENSHOT_REPORTS_PER_HOUR = "20"
 SCREENSHOT_BASE_URL = "https://img.staging.per-ankh.app"
 # Same zone as prod — img.staging.per-ankh.app is a hostname in per-ankh.app,
 # which is why one purge token covers both, and why this is the same id. See

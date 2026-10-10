@@ -76,7 +76,13 @@ import {
 	handleUserScreenshots,
 } from "./screenshots/handlers";
 import { handleDevScreenshotImage } from "./screenshots/dev-images";
+import {
+	handleAdminListScreenshots,
+	handleScreenshotModerate,
+	handleScreenshotReport,
+} from "./screenshots/moderation";
 import type { ScreenshotsEnv } from "./screenshots/handlers";
+import type { ScreenshotModerationEnv } from "./screenshots/moderation";
 import { handleCollectionCreate, handleCollectionsList } from "./collections";
 import type { CollectionsEnv } from "./collections";
 import { handleListOnlineIds, handleRemoveOnlineId } from "./online-ids";
@@ -194,6 +200,7 @@ interface Env
 		ChannelsEnv,
 		FeaturedVideosEnv,
 		ScreenshotsEnv,
+		ScreenshotModerationEnv,
 		GlobalStatsEnv,
 		HomeSummaryEnv,
 		OpponentsEnv,
@@ -447,6 +454,21 @@ const ROUTES: RouteSpec[] = [
 		route: "DELETE /v1/games/:id/screenshots/:screenshot_id",
 		handler: (r, e, m) => handleScreenshotDelete(m![1], m![2], r, e),
 	},
+	// A viewer's report — moderation layer 2's entry point
+	// (cloud/src/screenshots/moderation.ts). Nested under the game like the
+	// upload and the delete above it, because the report is about a
+	// screenshot and a screenshot belongs to a game. The admin end of the
+	// same queue lives under /v1/admin/screenshots.
+	{
+		method: "POST",
+		match: {
+			kind: "regex",
+			regex:
+				/^\/v1\/games\/([A-Za-z0-9_-]{21})\/screenshots\/([A-Za-z0-9_-]{21})\/report$/,
+		},
+		route: "POST /v1/games/:id/screenshots/:screenshot_id/report",
+		handler: (r, e, m) => handleScreenshotReport(m![1], m![2], r, e),
+	},
 
 	// Local-only image server. In production no Worker is in the image path at
 	// all — the R2 custom domain and the zone's transformation layer serve the
@@ -531,6 +553,27 @@ const ROUTES: RouteSpec[] = [
 		},
 		route: "DELETE /v1/admin/featured-videos/:platform/:video_id",
 		handler: (r, e, m) => handleUnfeatureVideo(m![1], m![2], r, e),
+	},
+
+	// Site-admin: the screenshot moderation queue (the classifier's uncertain
+	// band plus what viewers have reported) and the decisions taken on it.
+	// Same gate as the endpoints above — 404 to everyone else.
+	{
+		method: "GET",
+		match: { kind: "path", path: "/v1/admin/screenshots" },
+		route: "GET /v1/admin/screenshots",
+		handler: (r, e) => handleAdminListScreenshots(r, e),
+	},
+	{
+		// Not nested under the game: an admin reaches a screenshot from the
+		// queue, which spans every game, and screenshot_id is a primary key.
+		method: "POST",
+		match: {
+			kind: "regex",
+			regex: /^\/v1\/admin\/screenshots\/([A-Za-z0-9_-]{21})\/moderate$/,
+		},
+		route: "POST /v1/admin/screenshots/:screenshot_id/moderate",
+		handler: (r, e, m) => handleScreenshotModerate(m![1], r, e),
 	},
 
 	// Site-admin: run the opponent-recommendation rebuild now instead of

@@ -143,8 +143,8 @@ export const RETENTION_BUCKETS: readonly RetentionBucket[] = [
 			// An owner removing their own screenshot
 			// (screenshots/handlers.ts). The same window and the same role as
 			// `delete` for a game: the row is gone, so this is the only record
-			// that it existed. A report's resolution is a different weight and
-			// gets KEEP_FOREVER when screenshot_report arrives.
+			// that it existed. A report and a moderation decision are a
+			// different weight and are KEEP_FOREVER below.
 			"screenshot_delete",
 		],
 	},
@@ -170,6 +170,18 @@ export const KEEP_FOREVER: readonly string[] = [
 	"tournament_export",
 	"delete_game",
 	"nuke_user",
+	// Screenshot moderation (screenshots/moderation.ts). A report is one
+	// person saying a published image is wrong and a `screenshot_moderate` row
+	// is an admin deciding what to do about it — the two halves of an
+	// accountability record, and the only durable one for either: a resolved
+	// report keeps no reason history, and a hidden row says who hid it but not
+	// what was reported or when it was read.
+	//
+	// `screenshot_report` is also the counter behind the per-account report
+	// ceiling, which is why the report endpoint charges it on success only —
+	// a row per refused attempt would accumulate in a list nothing prunes.
+	"screenshot_report",
+	"screenshot_moderate",
 ];
 
 export interface RetentionSweepResult {

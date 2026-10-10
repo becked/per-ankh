@@ -44,13 +44,16 @@ export const load: PageLoad = async ({ fetch, url }) => {
 	// not be blocked by a budget it doesn't spend.
 	//
 	// The featured set is the Featured tab's whole content, and is unaffected by
-	// the section filters — it's a curated list, not a slice of the corpus.
+	// the section filters — it's a curated list, not a slice of the corpus. The
+	// screenshot queue is the same: moderation spans every game, so a section
+	// filter would hide rows that still need a decision.
 	const [
 		{ games: outOfDateGames },
 		{ games: allGames },
 		tournaments,
 		owner,
 		featuredVideos,
+		screenshots,
 	] = await Promise.all([
 		cloudApi.adminListOutOfDate(PARSER_VERSION, { fetch, filter }),
 		cloudApi.adminListAllGames({ fetch, filter }),
@@ -61,6 +64,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
 			? cloudApi.getUserProfile(filter.user_id, { fetch }).catch(() => null)
 			: Promise.resolve(null),
 		cloudApi.listFeaturedVideos({ fetch }),
+		cloudApi.adminListScreenshots({ fetch }),
 	]);
 	return {
 		user,
@@ -70,6 +74,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
 		tournaments: tournaments.tournaments,
 		ownerName: owner?.display_name ?? null,
 		featuredVideos,
+		screenshots,
 		meta: {
 			title: "Admin - Per-Ankh",
 			description: "Per-Ankh site administration.",

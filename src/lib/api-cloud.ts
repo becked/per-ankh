@@ -10,6 +10,7 @@ import type {
 	Objective,
 } from "$lib/challenges/types";
 import type { FullGameData } from "$lib/parser/types";
+import type { ScreenshotReportReason } from "$lib/screenshots/report-reasons";
 import {
 	DEFAULT_GLOBAL_PERIOD,
 	DEFAULT_GLOBAL_SLICE,
@@ -483,12 +484,19 @@ export interface GameScreenshot {
 	// shots from across all of a user's games, so each tile names and links
 	// the game it belongs to. Raw fields, formatted by formatGameTitle the way
 	// every other surface formats a game's title.
-	game?: {
-		game_name: string | null;
-		display_name: string | null;
-		user_nation: string | null;
-		total_turns: number | null;
-	};
+	game?: ScreenshotGameFields;
+}
+
+// The game a screenshot belongs to, as every screenshot payload names it: raw
+// title fields rather than a rendered string, because formatGameTitle is where
+// every surface in the app derives a game's title. One type because three
+// readers have it — the profile gallery, the admin queue, and the admin
+// queue's featured list.
+export interface ScreenshotGameFields {
+	game_name: string | null;
+	display_name: string | null;
+	user_nation: string | null;
+	total_turns: number | null;
 }
 
 // The 201 from POST /v1/games/:id/screenshots: the row the Worker stored,
@@ -509,6 +517,81 @@ export interface UploadedScreenshot {
 	status: "published" | "in_review";
 	created_at: string;
 }
+
+// One open report on a screenshot, as the admin queue reads it. The reporter's
+// identity is joined live rather than snapshotted, so a rename is reflected
+// here too — the stance the featured-video read takes.
+export interface ScreenshotReport {
+	// One of SCREENSHOT_REPORT_REASONS ($lib/screenshots/report-reasons), which
+	// is also where its label comes from. Typed as string because the Worker
+	// can ship a reason a browser on the previous deploy doesn't know, and a
+	// report that renders as a raw id is better than one that vanishes.
+	reason: string;
+	created_at: string;
+	reporter: {
+		user_id: string;
+		display_name: string | null;
+		slug: string | null;
+	};
+}
+
+// One row of the admin moderation tab (issue #289, step 6) — the screenshot,
+// who uploaded it, which game it is from, what the classifier thought, and
+// what anyone has reported about it.
+export interface ModerationScreenshot {
+	screenshot_id: string;
+	game_id: string;
+	url: string;
+	thumb_url: string;
+	width: number;
+	height: number;
+	caption: string | null;
+	created_at: string;
+	// `in_review` is the classifier's uncertain band: hidden, but its object
+	// is still in R2, so it is the one state `unhide` can act on. `hidden`
+	// means an admin hid it, which deleted the object — a closed decision,
+	// and one neither list below actually carries: a hide resolves the
+	// reports that prompted it and clears the star, so the row drops out of
+	// both legs. It is in the union because `status` describes a row rather
+	// than a list, not because a surface should branch on it.
+	status: "published" | "in_review" | "hidden";
+	// The home strip's star (step 7 renders it). Null when unstarred.
+	featured_at: string | null;
+	uploader: {
+		user_id: string;
+		display_name: string | null;
+		slug: string | null;
+	};
+	game: ScreenshotGameFields;
+	// The probabilities stored on the row at upload, never recomputed, plus
+	// which questions the CURRENT bands say tripped. Empty `tripped` on a
+	// queued row means the band that queued it has since moved.
+	clef: {
+		is_old_world: number;
+		contains_nsfw: number;
+		contains_gore: number;
+		is_a_photograph: number;
+		game_screenshot_confidence: number;
+		tripped: string[];
+	};
+	reports: ScreenshotReport[];
+}
+
+// Two lists, each in the order its surface wants: the queue is what needs a
+// decision, oldest first, and `featured` is the home strip's inventory,
+// newest first. A published screenshot with an open report is in both — it
+// needs a decision and it is on the home page.
+export interface ScreenshotModerationLists {
+	queue: ModerationScreenshot[];
+	featured: ModerationScreenshot[];
+}
+
+// The decisions POST /v1/admin/screenshots/:id/moderate takes. `hide` and
+// `unhide` are not symmetric: a hide deletes the stored object, so only a
+// classifier-queued row can be put back, and unhiding an admin-hidden one is
+// refused with 409 OBJECT_REMOVED.
+export type ScreenshotModerationAction =
+	"hide" | "unhide" | "star" | "unstar" | "resolve_reports";
 
 export class ApiError extends Error {
 	constructor(
@@ -1176,6 +1259,27 @@ export const cloudApi = {
 		});
 	},
 
+	// Report a screenshot — moderation layer 2's entry point. Signed-in only
+	// (a report names who filed it), and refused with 409 OWN_SCREENSHOT on
+	// the caller's own shot, which has a delete instead.
+	//
+	// The answer is the same whether the report was recorded, had its reason
+	// updated, or was dropped because an admin already resolved one from this
+	// reporter: which of those happened is the queue's business, and a caller
+	// who could tell them apart could read a moderation decision off it.
+	reportScreenshot: async (
+		gameId: string,
+		screenshotId: string,
+		reason: ScreenshotReportReason,
+		opts?: CallOpts,
+	): Promise<void> => {
+		await postJson<{ ok: true }>(
+			`/games/${gameId}/screenshots/${screenshotId}/report`,
+			{ reason },
+			opts,
+		);
+	},
+
 	// Accept the one-time screenshot terms that uploadScreenshot refuses
 	// without. Set-once server-side: a second call returns the original
 	// acceptance rather than recording a new one, since a re-POST is not a
@@ -1283,6 +1387,34 @@ export const cloudApi = {
 		await request(
 			`/admin/featured-videos/${encodeURIComponent(platform)}/${encodeURIComponent(videoId)}`,
 			{ ...opts, method: "DELETE" },
+		);
+	},
+
+	// --- Screenshot moderation (site admin) ---
+
+	// The moderation tab's whole payload: the queue that needs a decision and
+	// the starred set that is on the home page. Uncapped — the 5-per-game cap
+	// bounds the table and both legs are small slices of it.
+	adminListScreenshots: async (
+		opts?: CallOpts,
+	): Promise<ScreenshotModerationLists> => {
+		const res = await request("/admin/screenshots", opts);
+		return res.json() as Promise<ScreenshotModerationLists>;
+	},
+
+	// One decision on one screenshot. `hide` is terminal — it deletes the
+	// stored object and purges both its URLs — so the caller confirms first;
+	// `unhide` answers 409 OBJECT_REMOVED on a row that has already been
+	// hidden, because there are no bytes left to publish.
+	adminModerateScreenshot: async (
+		screenshotId: string,
+		action: ScreenshotModerationAction,
+		opts?: CallOpts,
+	): Promise<void> => {
+		await postJson<{ ok: true }>(
+			`/admin/screenshots/${screenshotId}/moderate`,
+			{ action },
+			opts,
 		);
 	},
 

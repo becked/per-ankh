@@ -1,0 +1,32 @@
+-- Who hid a screenshot (issue #289, step 6) — which is also what tells the
+-- two hidden states apart.
+--
+-- Migration 0050 gave game_screenshots a single `hidden_at`, and its header
+-- already names the pair that column covers: a review-band upload is stored
+-- hidden with its object still in R2, awaiting a decision, while an admin hide
+-- deletes the object and purges it from the edge. Every READER is indifferent
+-- to the difference — `hidden_at IS NULL` is the only filter either gallery
+-- applies — but the admin queue is not, because the two differ in whether
+-- there are still bytes to put back:
+--
+--   hidden_at IS NOT NULL AND hidden_by IS NULL  the classifier queued it.
+--                                                The object is in R2, so the
+--                                                queue can approve it.
+--   hidden_by IS NOT NULL                        an admin hid it. The object
+--                                                is gone and purged, so there
+--                                                is nothing to restore and the
+--                                                row is a closed decision.
+--
+-- Without this column those two are one state, and the queue would offer to
+-- unhide a row whose bytes no longer exist — which restores a tile that
+-- renders broken — and would keep asking for a decision an admin already made.
+--
+-- The `featured_by` shape from 0050, which is the shape `resolved_by` on
+-- screenshot_reports uses too: a moderation decision records who made it.
+-- Nullable with no default, so every existing row reads as classifier-queued,
+-- which is what every existing hidden row actually is (nothing has ever
+-- written an admin hide — this migration ships with the endpoint that does).
+--
+-- No index. The admin queue's legs are a partial scan of a table the
+-- 5-per-game cap bounds at ~5k rows, which 0050 already decided is scannable.
+ALTER TABLE game_screenshots ADD COLUMN hidden_by TEXT REFERENCES users(user_id);
