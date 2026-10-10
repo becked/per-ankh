@@ -18,6 +18,7 @@
 import {
 	adoptTrustedFrontend,
 	cloudCorsHeaders,
+	jsonResponse,
 	type TrustedFrontendEnv,
 } from "./util";
 import { instrumentD1, staleTolerantSession } from "./d1";
@@ -1440,14 +1441,11 @@ function dispatch(
 		}
 	}
 	// 404 — echo the request Origin so error responses still allow the
-	// caller that asked.
+	// caller that asked. Through jsonResponse rather than hand-built: it is
+	// the same body and headers, and it is what carries the `private,
+	// no-store` default (util.ts) onto a response no route owns.
 	const cors = cloudCorsHeaders(env, request);
-	return Promise.resolve(
-		new Response(JSON.stringify({ error: "Not found" }), {
-			status: 404,
-			headers: { "Content-Type": "application/json", ...cors },
-		}),
-	);
+	return Promise.resolve(jsonResponse({ error: "Not found" }, 404, cors));
 }
 
 export default {
@@ -1487,15 +1485,14 @@ export default {
 				logError("unhandled_handler_error", err);
 				const requestId = getRequestId();
 				const cors = cloudCorsHeaders(env, request);
-				response = new Response(
-					JSON.stringify({
-						error: "Internal server error",
-						request_id: requestId,
-					}),
-					{
-						status: 500,
-						headers: { "Content-Type": "application/json", ...cors },
-					},
+				// Also through jsonResponse, and here the default it carries is
+				// load-bearing rather than tidy: this body names one request's id,
+				// so it is the one response on the API that must never be replayed
+				// to a second caller.
+				response = jsonResponse(
+					{ error: "Internal server error", request_id: requestId },
+					500,
+					cors,
 				);
 			}
 

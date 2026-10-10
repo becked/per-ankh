@@ -86,6 +86,24 @@ export function cloudCorsHeaders(
 	return headers;
 }
 
+// The default response shape for every JSON endpoint — and, with it, the
+// default *cache* posture for the whole API.
+//
+// `private, no-store` is here rather than at the call sites because omitting
+// a `Cache-Control` is not an opt-out of caching: Workers Cache sits in front
+// of the Worker (`[cache]` in cloud/wrangler.toml), and a `200` that says
+// nothing gets RFC 9111 heuristic freshness — 7200 seconds. `Cookie` is not
+// in the cache key and our session *is* a cookie, so a signed-in GET is
+// indistinguishable from an anonymous one to that cache: a header-less
+// response is a response shared between viewers. `GET /v1/auth/me` and
+// `GET /v1/users/me/online-ids` return `discord_id` and `online_id` through
+// here and say nothing about caching, which is the shape of the argument —
+// the default has to be the safe one, and opting *in* the deliberate act.
+//
+// A route that wants to be shared declares it by building its own Response
+// with a `public, …` directive, and says so in the ROUTES table — see
+// `sharedCache` in cloud/src/index.ts and the guard in
+// cloud/src/shared-cache-routes.test.ts.
 export function jsonResponse(
 	body: Record<string, unknown>,
 	status: number,
@@ -95,6 +113,7 @@ export function jsonResponse(
 		status,
 		headers: {
 			"Content-Type": "application/json",
+			"Cache-Control": "private, no-store",
 			...cors,
 		},
 	});
