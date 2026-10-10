@@ -1187,7 +1187,7 @@
 								>{formatScheduledWithLocal(part.scheduled_at, use12Hour)}<span
 									class="text-muted"
 								>
-									· {formatRelativeToNow(part.scheduled_at)}</span
+									· {formatRelativeToNow(part.scheduled_at, "local")}</span
 								></span
 							>
 						</div>
