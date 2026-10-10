@@ -264,7 +264,7 @@
 					     reason they are shared as rules: the account page renders
 					     the same text under a date instead. -->
 					<p class="mb-3 mt-2 text-sm leading-relaxed text-gray-300">
-						By uploading you agree to these terms.
+						Uploading constitutes agreement to these terms.
 					</p>
 					<div class="flex flex-wrap items-center gap-2">
 						<button

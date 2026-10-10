@@ -5,22 +5,32 @@
      because the rules are the part that has to stay true in both places, and
      a second copy of them is a second thing to keep true.
 
-     What is deliberately NOT here is the framing: "by uploading you agree" is
-     false on a settings page, and a date is meaningless beside a picker. Each
-     surface supplies its own one line, so the shared text needs no voice that
-     works for both. -->
+     What is deliberately NOT here is the framing: "uploading constitutes
+     agreement" is false on a settings page, and a date is meaningless beside
+     a picker. Each surface supplies its own one line, so the rules themselves
+     address nobody — third person throughout, which is the only voice that
+     reads right under both of those lines. -->
 <div class="space-y-2 text-sm leading-relaxed text-gray-300">
 	<p>
-		Screenshots appear on the game's page and on your profile, where anyone can
-		see them.
+		A screenshot uploaded to Per Ankh is displayed publicly: on the page of the
+		game to which it is attached, on the profile of the account that uploaded it
+		(the uploader), and, where a site administrator has selected it, on the Per
+		Ankh home page. Each screenshot is credited to its uploader.
 	</p>
 	<p>
-		Every upload is screened automatically before it is stored. One the
-		screening isn't sure about waits for a site admin to look at it.
+		Every image is screened automatically before it is stored. An image that the
+		screening does not resolve is withheld until a site administrator has
+		reviewed it.
 	</p>
 	<p>
-		A screenshot has to be from your own &ldquo;Old World&rdquo; game, and must
-		contain nothing illegal, sexual or graphic. Any screenshot can be taken down
-		at any time.
+		A screenshot must be taken from the uploader's own &ldquo;Old World&rdquo;
+		game. Neither a screenshot nor its caption may contain material that is
+		illegal, sexual or graphic; abuse or harassment; or personal information
+		concerning any other person.
+	</p>
+	<p>
+		Per Ankh may remove any screenshot at any time. An uploader may delete their
+		own screenshots at any time. A game may not be made private while any
+		screenshot remains attached to it.
 	</p>
 </div>

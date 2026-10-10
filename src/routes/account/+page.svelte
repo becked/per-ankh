@@ -448,8 +448,8 @@
 						<div class="text-sm font-bold text-tan">Screenshot terms</div>
 						<p class="mt-2 text-sm text-gray-400">
 							{data.user.screenshot_terms_accepted_at
-								? `You agreed on ${formatDate(data.user.screenshot_terms_accepted_at)}.`
-								: "You haven't agreed to these yet. The first screenshot you upload will ask."}
+								? `Accepted on ${formatDate(data.user.screenshot_terms_accepted_at)}.`
+								: "Not yet accepted. The first screenshot upload will ask for agreement."}
 						</p>
 						<div class="mt-2">
 							<ScreenshotTerms />
