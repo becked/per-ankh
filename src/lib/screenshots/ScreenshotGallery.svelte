@@ -1,9 +1,22 @@
 <script lang="ts">
-	// The grid both screenshot surfaces render (issue #289, step 5): a game's
-	// Screenshots view and the profile Screenshots tab. One component, because
-	// the two differ only in what a tile has to say — the profile shows shots
-	// from across all a user's games, so its tiles name and link the game,
-	// while a game's own view is already under that game's header.
+	// Both screenshot surfaces (issue #289, step 5): a game's Screenshots view
+	// and the profile Screenshots tab. One component, because the two differ
+	// only in how much room a shot gets and in what it has to say — the
+	// profile shows shots from across all a user's games, so it names and
+	// links the game, while a game's own view is already under that game's
+	// header.
+	//
+	// Two layouts over one set of behaviour, chosen by `layout`. `panels`
+	// gives each screenshot a `surface` card with the picture on the left and
+	// what is known about it on the right — the caption its uploader wrote,
+	// when it was uploaded, its controls — which is the shape the tournament
+	// Videos view gives a part's angles and the admin queue gives a shot under
+	// judgement. `grid` is the dense tile ramp. Both ramp their columns with
+	// the width — panels one to three, tiles two to five — so what separates
+	// them is how wide a column is allowed to get, not whether there is one.
+	// The lightbox, the delete, the report and the star are the same code
+	// either way; what the two differ in is an item's chrome and where its
+	// controls sit.
 	//
 	// A tile can be `in_review`: the classifier queued it, and both reads send
 	// such a row to its uploader alone. It badges itself and keeps its delete,
@@ -15,10 +28,17 @@
 	// itself, which is the only place the full 1600 px variant is ever served.
 	// Neither URL is assembled here — see GameScreenshot in api-cloud.
 	//
-	// One grid at every width rather than one per surface. A game has at most
-	// five screenshots, which is what lets its strip read as a row, and the
-	// profile's set is bounded at a hundred; a single column ramp serves both
-	// and is one thing to keep in step with the thumbnail's 8:5 shape.
+	// Each layout keeps one column ramp at every width rather than one per
+	// surface: the profile's set is bounded at a hundred, a game's at five,
+	// and one ramp apiece is one thing to keep in step with the thumbnail's
+	// 8:5 shape.
+	//
+	// Both layouts are sized to that thumbnail, and that is a constraint
+	// rather than a preference — it is the feature's ONLY Cloudflare Images
+	// transformation, and the count is bounded by the free tier rather than by
+	// taste (public-urls.ts has the arithmetic). So a panel's picture stays
+	// inside what 640 px covers at 2x instead of minting a second variant for
+	// the wider box it could otherwise fill.
 	//
 	// Three controls, one per viewer: the owner's delete, everyone else's
 	// report, and a site admin's star for the home strip.
@@ -43,12 +63,13 @@
 	import StarMark from "$lib/ui/StarMark.svelte";
 	import { confirmDialog } from "$lib/ui/confirm";
 	import { loginBounce } from "$lib/utils/safe-next";
-	import { formatGameTitle } from "$lib/utils/formatting";
+	import { formatGameTitle, formatLongDate } from "$lib/utils/formatting";
 
 	let {
 		screenshots = $bindable(),
 		canDelete = false,
 		showGame = false,
+		layout = "grid",
 	}: {
 		// Bindable because a delete removes the tile OPTIMISTICALLY: Browser TTL
 		// is 7200, so an uploader who waited for the round trip could keep
@@ -67,6 +88,12 @@
 		// Name and link each tile's game. True on the profile tab, where a tile
 		// is the only thing that says which game it came from.
 		showGame?: boolean;
+		// How much room one screenshot gets: a card each, picture beside
+		// description, or the dense tile ramp. The grid is the default because
+		// it is the denser of the two, which is what the surface bounded at a
+		// hundred shots needs; a game's own view, capped at five, asks for
+		// panels.
+		layout?: "grid" | "panels";
 	} = $props();
 
 	let lightbox = $state<GameScreenshot | null>(null);
@@ -269,120 +296,230 @@
 	<p class="mb-3 text-sm font-bold text-danger">{error}</p>
 {/if}
 
-<div
-	class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
->
-	{#each screenshots as shot (shot.screenshot_id)}
-		<figure class="min-w-0">
-			<div class="relative">
-				<button
-					type="button"
-					onclick={() => open(shot)}
-					class="block w-full cursor-pointer overflow-hidden rounded bg-surface-deep transition hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange"
-					aria-label={shot.caption
-						? `View screenshot: ${shot.caption}`
-						: "View screenshot"}
-				>
-					<!-- 8:5, the thumbnail's own shape, so the box the grid reserves
-					     is the box the image fills and no row resizes as tiles
-					     arrive. The transformation already cropped to it; object-cover
-					     is here for the rounding, not to crop. -->
-					<img
-						src={shot.thumb_url}
-						alt={shot.caption ?? "Game screenshot"}
-						width="640"
-						height="400"
-						loading="lazy"
-						class="aspect-[8/5] w-full object-cover"
-					/>
-				</button>
-				{#if shot.status === "in_review"}
-					<!-- Only an uploader is ever sent a queued row, so this badge is
-					     also the only thing on screen that says why nobody else can
-					     see the tile. Bottom-left, clear of the delete above it. -->
-					<span
-						class="absolute bottom-1 left-1 rounded bg-black/70 px-1.5 py-0.5 text-xs font-bold text-orange"
-						title="A site admin will look at this before anyone else can see it"
-					>
-						In review
-					</span>
-				{/if}
-				{#if canDelete}
-					<!-- Always visible, never hover-only: a hover reveal has no
-					     equivalent on touch, and this is the owner's only route to
-					     making a game private again. -->
-					<button
-						type="button"
-						onclick={() => remove(shot)}
-						class="absolute right-1 top-1 cursor-pointer rounded bg-black/60 p-1 text-red-400 transition-colors hover:bg-black/80 hover:text-red-300"
-						aria-label="Delete screenshot"
-						title="Delete screenshot"
-					>
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							class="block h-3.5 w-3.5"
-							fill="none"
-							viewBox="0 0 24 24"
-							stroke="currentColor"
-							stroke-width="2"
-						>
-							<path
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								d="M6 18L18 6M6 6l12 12"
-							/>
-						</svg>
-					</button>
-				{/if}
-				{#if canStar && shot.status === "published"}
-					<!-- Top-left, the corner opposite the owner's delete, so an admin
-					     looking at their own gallery has both. Always visible rather
-					     than revealed on hover — the delete's reasoning, which applies
-					     harder here: a control whose point is to be where a screenshot
-					     is come across cannot be one that touch never offers.
-					     Published rows only: `star` answers 409 on a hidden one, and
-					     the only in_review tiles an admin is ever sent are their own.
-					     Filled = on the home strip. -->
-					<button
-						type="button"
-						onclick={() => toggleStar(shot)}
-						disabled={starring.has(shot.screenshot_id)}
-						aria-pressed={shot.featured}
-						aria-label={shot.featured
-							? "Remove from the home strip"
-							: "Star for the home strip"}
-						title={shot.featured
-							? "Remove from the home strip"
-							: "Star for the home strip"}
-						class="absolute left-1 top-1 cursor-pointer rounded bg-black/60 p-1 transition-colors hover:bg-black/80 disabled:cursor-not-allowed disabled:opacity-50 {shot.featured
-							? 'text-orange'
-							: 'text-tan'}"
-					>
-						<StarMark class="block h-3.5 w-3.5" filled={shot.featured} />
-					</button>
-				{/if}
-			</div>
-			{#if shot.caption || showGame}
-				<figcaption class="mt-1 min-w-0 text-xs">
+{#snippet picture(shot: GameScreenshot, className: string)}
+	<button
+		type="button"
+		onclick={() => open(shot)}
+		class="block cursor-pointer overflow-hidden rounded bg-surface-deep transition hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange {className}"
+		aria-label={shot.caption
+			? `View screenshot: ${shot.caption}`
+			: "View screenshot"}
+	>
+		<!-- 8:5, the thumbnail's own shape, so the box the layout reserves is the
+		     box the image fills and nothing resizes as tiles arrive. The
+		     transformation already cropped to it; object-cover is here for the
+		     rounding, not to crop. -->
+		<img
+			src={shot.thumb_url}
+			alt={shot.caption ?? "Game screenshot"}
+			width="640"
+			height="400"
+			loading="lazy"
+			class="aspect-[8/5] w-full object-cover"
+		/>
+	</button>
+{/snippet}
+
+{#snippet inReviewBadge(className: string)}
+	<!-- Only an uploader is ever sent a queued row, so this is also the only
+	     thing on screen that says why nobody else can see the screenshot. In
+	     the grid it rides the picture's bottom-left corner, clear of the
+	     delete above it; in a panel it is a badge in the text column, which is
+	     where that layout keeps everything it has to say. -->
+	<span
+		class="font-bold text-orange {className}"
+		title="A site admin will look at this before anyone else can see it"
+	>
+		In review
+	</span>
+{/snippet}
+
+{#snippet gameLink(shot: GameScreenshot, className: string)}
+	<!-- Into that game's screenshots view, not its analyst view: the link is on
+	     a screenshot, and that is the view the screenshot is on. -->
+	<a
+		href={resolve("/games/[id]/screenshots", { id: shot.game_id })}
+		class="block truncate text-gray-400 hover:text-orange hover:underline {className}"
+	>
+		{gameTitle(shot)}
+	</a>
+{/snippet}
+
+{#snippet deleteControl(shot: GameScreenshot, className: string)}
+	<!-- Always visible, never hover-only: a hover reveal has no equivalent on
+	     touch, and this is the owner's only route to making a game private
+	     again. The caller places it — a corner of the picture in the grid, the
+	     panel's own control row in the stack — while the icon, the labels and
+	     the handler are the same either way. -->
+	<button
+		type="button"
+		onclick={() => remove(shot)}
+		class="cursor-pointer text-red-400 transition-colors hover:text-red-300 {className}"
+		aria-label="Delete screenshot"
+		title="Delete screenshot"
+	>
+		<svg
+			xmlns="http://www.w3.org/2000/svg"
+			class="block h-3.5 w-3.5"
+			fill="none"
+			viewBox="0 0 24 24"
+			stroke="currentColor"
+			stroke-width="2"
+		>
+			<path
+				stroke-linecap="round"
+				stroke-linejoin="round"
+				d="M6 18L18 6M6 6l12 12"
+			/>
+		</svg>
+	</button>
+{/snippet}
+
+{#snippet starControl(shot: GameScreenshot, className: string)}
+	<!-- Opposite the owner's delete wherever both are offered, so an admin
+	     looking at their own gallery has the two of them without either
+	     covering the other. Always visible rather than revealed on hover — the
+	     delete's reasoning, which applies harder here: a control whose point is
+	     to be where a screenshot is come across cannot be one that touch never
+	     offers. Published rows only: `star` answers 409 on a hidden one, and
+	     the only in_review shots an admin is ever sent are their own.
+	     Filled = on the home strip. -->
+	<button
+		type="button"
+		onclick={() => toggleStar(shot)}
+		disabled={starring.has(shot.screenshot_id)}
+		aria-pressed={shot.featured}
+		aria-label={shot.featured
+			? "Remove from the home strip"
+			: "Star for the home strip"}
+		title={shot.featured
+			? "Remove from the home strip"
+			: "Star for the home strip"}
+		class="cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50 {shot.featured
+			? 'text-orange'
+			: 'text-tan'} {className}"
+	>
+		<StarMark class="block h-3.5 w-3.5" filled={shot.featured} />
+	</button>
+{/snippet}
+
+{#if layout === "panels"}
+	<!-- Columns of at most 40rem — a bit more than twice the picture's 18rem, so
+	     the text column is about as wide as the picture beside it and a lone
+	     panel can't stretch to the page's full width. The cap is the track's own
+	     maximum rather than a max-width on the panel, which is what keeps the
+	     cells flush: a capped panel inside a 1fr track would leave slack inside
+	     every cell instead of once at the end of the row.
+	     One, two, then three across. `lg` is where two fit (a 478px cell still
+	     seats the 288px picture with its text beside it) and `2xl` is where
+	     three do; one step earlier each would be a cell too narrow for the row
+	     the panel is. Three is the ceiling in practice — the page itself is
+	     capped at `screen-2xl`, which is narrower than four of these tracks. -->
+	<div
+		class="grid grid-cols-[minmax(0,40rem)] gap-3 lg:grid-cols-[repeat(2,minmax(0,40rem))] 2xl:grid-cols-[repeat(3,minmax(0,40rem))]"
+	>
+		{#each screenshots as shot (shot.screenshot_id)}
+			{@const uploaded = formatLongDate(shot.created_at)}
+			<figure class="flex flex-col gap-3 rounded-lg bg-surface p-3 sm:flex-row">
+				<!-- 18rem, which is both a ceiling and the row's whole width: the
+				     picture is the one element here whose size is settled elsewhere
+				     (640 px covering 2x, see the note above), so it keeps that box
+				     and the text takes what is left. Below `sm` the two stack, where
+				     the cap is what keeps the picture inside a 320 px viewport
+				     without letting it grow to a 639 px one and go soft. -->
+				{@render picture(shot, "w-full max-w-[18rem] sm:flex-none")}
+				<!-- figcaption is the figure's last child, where the spec puts it, so
+				     the controls sit inside it rather than in a wrapper that would
+				     take the caption out of the figure altogether. -->
+				<figcaption class="flex min-w-0 flex-1 flex-col gap-1.5">
 					{#if shot.caption}
-						<p class="truncate text-tan" title={shot.caption}>{shot.caption}</p>
+						<!-- Wrapped, not truncated: the caption is what the uploader had
+						     to say about the picture, and this layout exists to have room
+						     for it. 200 characters (SCREENSHOT_CAPTION_MAX) at this width
+						     stays inside the picture's own height, so a long one doesn't
+						     grow the panel. -->
+						<p class="text-sm text-tan">{shot.caption}</p>
 					{/if}
 					{#if showGame}
-						<!-- Into that game's screenshots view, not its analyst view: the
-						     link is on a screenshot, and that is the view the
-						     screenshot is on. -->
-						<a
-							href={resolve("/games/[id]/screenshots", { id: shot.game_id })}
-							class="block truncate text-gray-400 hover:text-orange hover:underline"
-						>
-							{gameTitle(shot)}
-						</a>
+						{@render gameLink(shot, "text-sm")}
+					{/if}
+					{#if uploaded}
+						<!-- Named, because a bare date beside a picture says nothing about
+						     which date it is. Longhand, as the terms panel's signature
+						     reads it, rather than the short form a dense row needs. -->
+						<p class="text-xs text-muted">Uploaded {uploaded}</p>
+					{/if}
+					{#if shot.status === "in_review"}
+						{@render inReviewBadge(
+							"w-fit rounded bg-orange/15 px-2 py-0.5 text-[10px] uppercase tracking-wide",
+						)}
+					{/if}
+					{#if canDelete || (canStar && shot.status === "published")}
+						<!-- The panel's own control row, off the picture and at the foot of
+						     the column: in a layout with a text column, a control belongs
+						     with the text rather than over the image it acts on. `mt-auto`
+						     holds it at the bottom whatever the caption's length. -->
+						<div class="mt-auto flex items-center gap-2 pt-1">
+							{#if canStar && shot.status === "published"}
+								{@render starControl(
+									shot,
+									"rounded bg-surface-raised p-1.5 hover:bg-surface-raised-hover",
+								)}
+							{/if}
+							{#if canDelete}
+								{@render deleteControl(
+									shot,
+									"rounded bg-surface-raised p-1.5 hover:bg-surface-raised-hover",
+								)}
+							{/if}
+						</div>
 					{/if}
 				</figcaption>
-			{/if}
-		</figure>
-	{/each}
-</div>
+			</figure>
+		{/each}
+	</div>
+{:else}
+	<div
+		class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
+	>
+		{#each screenshots as shot (shot.screenshot_id)}
+			<figure class="min-w-0">
+				<div class="relative">
+					{@render picture(shot, "w-full")}
+					{#if shot.status === "in_review"}
+						{@render inReviewBadge(
+							"absolute bottom-1 left-1 rounded bg-black/70 px-1.5 py-0.5 text-xs",
+						)}
+					{/if}
+					{#if canDelete}
+						{@render deleteControl(
+							shot,
+							"absolute right-1 top-1 rounded bg-black/60 p-1 hover:bg-black/80",
+						)}
+					{/if}
+					{#if canStar && shot.status === "published"}
+						{@render starControl(
+							shot,
+							"absolute left-1 top-1 rounded bg-black/60 p-1 hover:bg-black/80",
+						)}
+					{/if}
+				</div>
+				{#if shot.caption || showGame}
+					<figcaption class="mt-1 min-w-0 text-xs">
+						{#if shot.caption}
+							<p class="truncate text-tan" title={shot.caption}>
+								{shot.caption}
+							</p>
+						{/if}
+						{#if showGame}
+							{@render gameLink(shot, "")}
+						{/if}
+					</figcaption>
+				{/if}
+			</figure>
+		{/each}
+	</div>
+{/if}
 
 <FullscreenDialog bind:open={lightboxOpen} onclose={() => (lightbox = null)}>
 	{#if lightbox}

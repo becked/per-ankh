@@ -503,6 +503,11 @@ export interface GameScreenshot {
 	// server's to write — so an optimistic flip sets this field's whole truth
 	// instead of standing a client clock in for a value it doesn't have.
 	featured: boolean;
+	// When it was uploaded, as an ISO instant — the Worker normalises the
+	// column's `datetime('now')` text in SQL, so this is safe to hand to the
+	// date helpers in $lib/utils/formatting. Rendered by the panel layout, the
+	// one gallery shape with room to say more about a shot than its caption.
+	created_at: string;
 	// Present only on GET /v1/users/:id/screenshots: the profile tab shows
 	// shots from across all of a user's games, so each tile names and links
 	// the game it belongs to. Raw fields, formatted by formatGameTitle the way

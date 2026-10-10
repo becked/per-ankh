@@ -63,6 +63,7 @@ import {
 	cloudCorsHeaders,
 	errorResponse,
 	getClientIp,
+	isoInstantSql,
 	jsonResponse,
 	parseJsonBody,
 } from "../util";
@@ -455,6 +456,12 @@ export async function handleScreenshotUpload(
 	// than bound, so a queued row carries the same datetime('now') format as
 	// every other timestamp in the schema — a mixed format in one column
 	// would break ordering on it.
+	//
+	// What RETURNING projects is the other half of that: the column keeps its
+	// stored format and the RESPONSE carries an ISO instant, because the
+	// client prepends this row straight onto the gallery it just uploaded
+	// from and a panel there states the upload date. Sent raw it would be the
+	// one tile on screen parsed as local time.
 	let inserted: InsertedRow | null = null;
 	try {
 		inserted = await env.SHARE_DB.prepare(
@@ -469,7 +476,7 @@ export async function handleScreenshotUpload(
 			         WHERE game_id = ? AND hidden_by IS NULL) < ?
 			   AND (SELECT COUNT(*) FROM game_screenshots
 			         WHERE user_id = ? AND hidden_by IS NULL) < ?
-			 RETURNING created_at, hidden_at`,
+			 RETURNING ${isoInstantSql("created_at")} AS created_at, hidden_at`,
 		)
 			.bind(
 				screenshotId,
@@ -583,6 +590,10 @@ interface ScreenshotRow {
 	caption: string | null;
 	hidden_at: string | null;
 	featured_at: string | null;
+	// An ISO instant, not the column's own text: every reader of this row
+	// projects it through isoInstantSql, because a gallery renders it as a
+	// date. See serializeScreenshot.
+	created_at: string;
 }
 
 // The game columns the profile tab needs to name and link the game a shot
@@ -638,6 +649,15 @@ function serializeScreenshot(env: ScreenshotUrlEnv, row: ScreenshotRow) {
 		// six tiles it has room for. What the client decides from `is_admin` is
 		// whether to render a control, not what is true.
 		featured: row.featured_at != null,
+		// When the screenshot was uploaded — the one piece of a shot's own
+		// history a gallery states, beside the caption its uploader wrote.
+		// Every SELECT that feeds this serializer projects the column through
+		// isoInstantSql (util.ts), because `datetime('now')` text parses as
+		// LOCAL time in a browser and would render as the wrong day for any
+		// viewer behind UTC. The upload 201 normalises its RETURNING the same
+		// way, so a tile the client prepends from that response carries the
+		// same shape as one that came from a read.
+		created_at: row.created_at,
 	};
 }
 
@@ -675,7 +695,7 @@ export async function handleGameScreenshots(
 	// "newest first" means. The sort is over at most five rows.
 	const rows = await env.SHARE_DB.prepare(
 		`SELECT screenshot_id, game_id, r2_key, width, height, caption, hidden_at,
-		        featured_at
+		        featured_at, ${isoInstantSql("created_at")} AS created_at
 		 FROM game_screenshots
 		 WHERE game_id = ?
 		   AND (hidden_at IS NULL OR (hidden_by IS NULL AND user_id = ?))
@@ -723,6 +743,7 @@ export async function handleUserScreenshots(
 	const rows = await env.SHARE_DB.prepare(
 		`SELECT s.screenshot_id, s.game_id, s.r2_key, s.width, s.height, s.caption,
 		        s.hidden_at, s.featured_at,
+		        ${isoInstantSql("s.created_at")} AS created_at,
 		        g.game_name, g.display_name, g.user_nation, g.total_turns
 		 FROM game_screenshots s
 		 JOIN games g ON g.game_id = s.game_id
@@ -843,6 +864,7 @@ export async function handleFeaturedScreenshots(
 		const rows = await env.SHARE_DB.prepare(
 			`SELECT s.screenshot_id, s.game_id, s.r2_key, s.width, s.height,
 			        s.caption, s.hidden_at, s.featured_at,
+			        ${isoInstantSql("s.created_at")} AS created_at,
 			        g.game_name, g.display_name, g.user_nation, g.total_turns,
 			        s.user_id, ${displayNameSql("u")} AS uploader_name,
 			        u.slug AS uploader_slug, u.discord_id, u.avatar_hash

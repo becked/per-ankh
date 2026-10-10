@@ -22,6 +22,7 @@ import {
 	errorResponse,
 	getClientIp,
 	isAllowedRedirectUri,
+	isoInstantSql,
 	isSecureRequest,
 	jsonResponse,
 	parseAllowedOrigins,
@@ -773,14 +774,14 @@ export async function handleMe(
 		return errorResponse("Unauthorized", 401, cors, "UNAUTHORIZED");
 	}
 
-	// `screenshot_terms_accepted_at` is written as D1's datetime('now') text
-	// ("YYYY-MM-DD HH:MM:SS", always UTC), which the Date parser reads as local
-	// time and shifts by the runtime's offset — the reason `cooldownMessage`
-	// (users.ts) reassembles the same column shape by hand. Normalised here in
-	// SQL instead, because what the client helpers document taking is an ISO
-	// instant, and this is the one place this value is read for display.
+	// `screenshot_terms_accepted_at` is written as D1's datetime('now') text,
+	// which the Date parser reads as local time and shifts by the runtime's
+	// offset — the reason `cooldownMessage` (users.ts) reassembles the same
+	// column shape by hand. Normalised in SQL instead, because what the client
+	// helpers document taking is an ISO instant; isoInstantSql (util.ts) holds
+	// the shape and the full reasoning.
 	const row = await env.SHARE_DB.prepare(
-		`SELECT user_id, discord_id, ${displayNameSql("users")} AS display_name, avatar_hash, slug, default_game_public, stream_url, open_to_matches, strftime('%Y-%m-%dT%H:%M:%SZ', screenshot_terms_accepted_at) AS screenshot_terms_accepted_at FROM users WHERE user_id = ?`,
+		`SELECT user_id, discord_id, ${displayNameSql("users")} AS display_name, avatar_hash, slug, default_game_public, stream_url, open_to_matches, ${isoInstantSql("screenshot_terms_accepted_at")} AS screenshot_terms_accepted_at FROM users WHERE user_id = ?`,
 	)
 		.bind(session.data.user_id)
 		.first<

@@ -1,9 +1,10 @@
 <script lang="ts">
-	// A game's screenshots, the third of its views — the grid that used to be a
-	// panel on the analyst view. It shares the [id] layout's load (no load of
-	// its own) and the header above it, so switching to it makes no request:
-	// the list is the one the layout already read, held in the shared state the
-	// camera in that header writes to (screenshots-context).
+	// A game's screenshots, the third of its views — a panel per shot, grown
+	// out of the single panel they shared on the analyst view. It shares the
+	// [id] layout's load (no load of its own) and the header above it, so
+	// switching to it makes no request: the list is the one the layout already
+	// read, held in the shared state the camera in that header writes to
+	// (screenshots-context).
 	import type { PageData } from "./$types";
 	import { autohideScroll } from "$lib/actions/autohideScroll";
 	import GameHeader from "$lib/game-detail/GameHeader.svelte";
@@ -29,25 +30,32 @@
 					tournamentLink={data.tournamentLink}
 					challengeLink={data.challengeLink}
 				/>
-				<!-- The tray the tiles rest on — `surface`, the step a Panel sits at,
-				     but without a Panel's heading: the segment in the toggle above
-				     already reads "Screenshots", and this view holds nothing else
-				     for a heading to tell apart.
-				     The empty state is reachable by link alone, on a game whose
-				     screenshots have all been deleted — the toggle offers no segment
-				     for an empty one. -->
-				<section class="rounded-lg bg-surface p-3">
-					{#if screenshots.list.length === 0}
+				{#if screenshots.list.length === 0}
+					<!-- Reachable by link alone, on a game whose screenshots have all
+					     been deleted — the toggle offers no segment for an empty one.
+					     A `surface` box of its own, since there is no panel here for
+					     it to be inside. -->
+					<section class="rounded-lg bg-surface p-3">
 						<div class="py-8 text-center text-sm text-gray-400">
 							No screenshots.
 						</div>
-					{:else}
-						<ScreenshotGallery
-							bind:screenshots={screenshots.list}
-							canDelete={data.isOwner}
-						/>
-					{/if}
-				</section>
+					</section>
+				{:else}
+					<!-- A panel per screenshot, with the picture beside what is known
+					     about it: five at most on a game, which is what gives each one
+					     the room its caption and its date need.
+					     Straight onto the page, with no tray under them — the panels
+					     ARE the cards, and `Panel`'s own ladder puts a `surface` card
+					     on the page background. A tray would also have to be wider
+					     than the capped grid it held, which is a well with a corner
+					     standing empty. No heading either: the segment in the toggle
+					     above already reads "Screenshots". -->
+					<ScreenshotGallery
+						bind:screenshots={screenshots.list}
+						canDelete={data.isOwner}
+						layout="panels"
+					/>
+				{/if}
 			</div>
 		</div>
 	</main>
