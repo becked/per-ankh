@@ -190,16 +190,32 @@ const GLOBAL_STATS_BUDGET: ReadBudget = {
 // (cloudCorsHeaders), which is what keeps the origin-specific CORS headers from
 // being served to the wrong origin out of a shared cache.
 //
-// It is also half the herd control a cold key has: every colo answers its
-// second and later requests from the edge, which takes a version bump from
-// "one recompute per request" to roughly one per colo. The other half is the
-// hourly warm (STATS_WARM_CRON, stats/precompute.ts), which rebuilds any of
-// the four unfaceted bundles that a bump orphaned and so bounds the cold
-// window to one interval. Design §12 wanted that warm at deploy time instead;
-// it is a cron because a deploy step would need an app session the wrangler
-// toolchain has no way to mint. Whether the two hold together is the trigger
-// for a single-flight lock, which the design defers until they measurably
-// don't.
+// That `s-maxage` is live as of `[cache]` (cloud/wrangler.toml, issue #291)
+// and was inert before it — Workers run *before* the cache, so until that
+// block existed this directive reached browsers and intermediaries only and no
+// colo answered anything. Which is also why the route carries `sharedCache` in
+// the ROUTES table (index.ts): storing this response for other viewers is a
+// decision now rather than a wish.
+//
+// It is also half the herd control a cold key has — by collapsing rather than
+// by a second request finding a warm entry: Workers Cache collapses concurrent
+// requests per cache key per data center, so the colo's herd never reaches the
+// handler at all. The other half is the hourly warm
+// (STATS_WARM_CRON, stats/precompute.ts), which rebuilds any of the four
+// unfaceted bundles that a bump orphaned and so bounds the cold window to one
+// interval. Design §12 wanted that warm at deploy time instead; it is a cron
+// because a deploy step would need an app session the wrangler toolchain has no
+// way to mint. Whether the two hold together is the trigger for a single-flight
+// lock, which the design defers until they measurably don't — and collapsing
+// may well be that lock, which is a decision to re-read once there is a cache
+// hit rate to read it against.
+//
+// One caveat the directive itself carries: `s-maxage` disables both
+// `stale-while-revalidate` and `stale-if-error`, so the edge will not serve a
+// stale bundle while a new one builds. That is the shape to revisit (max-age +
+// stale-while-revalidate, with cdn-cache-control for the edge-only TTL) if the
+// cold window turns out to matter; it is left alone here because retuning TTLs
+// is a separate decision from having a cache at all.
 function globalStatsResponse(
 	body: ChartBundleCore | RecordsBundle,
 	cors: Record<string, string>,

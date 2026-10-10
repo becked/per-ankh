@@ -558,7 +558,9 @@ the next feature.
 
 ### 6.1 Telemetry sinks: Workers Logs + OpenTelemetry export + tracing (issue #150)
 
-> **Status: none of this has ever run.** Every `[observability]` block described here landed on the `perf/d1-instrumentation` branch and `main` has no observability config at all, so no version of it has been deployed. **Read this section as researched, not observed.** Claims about what Cloudflare indexes, what the export delivers, and what a record looks like on arrival come from vendor documentation, and vendor documentation has already proved wrong here once (§6.1.4 on `cloudflare.colo`). §6.1.5 is the checklist that converts this section from researched to observed; until it has been run, do not build anything on a specific field being queryable.
+> **Status: deployed since 2026-07-30, still unverified.** The `[observability]` blocks have been on `main` and in every release since (`feat(cloud): configure Workers Logs and an OTLP log export`), and the two export destinations exist — that is the provisioning half of §6.1.5 item 2, confirmed out-of-band. What has *not* happened is the rest of that checklist: items 1, 3, 4, 5 and 6 are unrun. **So read the specifics of this section as researched, not observed.** Claims about what Cloudflare indexes, what the export delivers, and what a record looks like on arrival come from vendor documentation, and vendor documentation has already proved wrong here once (§6.1.4 on `cloudflare.colo`). Until §6.1.5 has been run, do not build anything on a specific field being queryable.
+>
+> **Item 1 is now a standing data-loss hazard rather than a pre-flight check.** If the access line arrives as one opaque `message` string instead of indexed fields, the cause is `emit()` in `cloud/src/log.ts`, and everything collected since 2026-07-30 is unusable. Running it is overdue.
 >
 > Two claims **are** observed, both from source rather than docs: `db.query.text` excludes bound values (§6.1.4) and the `ctx.tracing` API is exposed at our compatibility date (§6.1.4). The second is narrower than it looks — `enterSpan` was exercised at that date, `startActiveSpan` (what `dispatch()` actually calls) was not, and §6.1.4 says what that rests on.
 
@@ -692,7 +694,7 @@ Everything above is vendor documentation until this is run once (§6.1 status no
 - If `route`, `colo`, `d1_wall_ms` appear as filterable fields → the claim holds, strike this item.
 - If the line arrives as a single `message` string → **`emit()` in `cloud/src/log.ts` is the cause.** It calls `console.log(JSON.stringify(line, replacer))`, so it logs a *string*; Cloudflare's structured-logging examples all pass an *object*, and the documented behavior for a string argument is `{message: "…"}`. The fix is passing the object, but the replacer exists to coerce stray `Error`s to `{name, message}` — so apply it before logging rather than dropping it. Fixing this later means discarding the data collected until then.
 
-**2. Do both destinations actually receive?** A destination name with no match, or a typo, exports nothing forever with no error on either side (§6.1.2). Confirm in Honeycomb that log records *and* spans arrive — separately; one working does not imply the other, they are different destinations.
+**2. Do both destinations actually receive?** A destination name with no match, or a typo, exports nothing forever with no error on either side (§6.1.2). **Provisioning: confirmed out-of-band — both `per-ankh-logs` and `per-ankh-traces` exist.** That removes the typo failure mode, not the delivery question: still confirm in Honeycomb that log records *and* spans arrive — separately; one working does not imply the other, they are different destinations.
 
 **3. Which dataset(s) appear, and do prod and staging split?** Depends on what Cloudflare sets `service.name` to (§6.1.2). Note the actual dataset name(s). If prod and staging share one, every prod percentile needs a `cloudflare.script_name` filter and that should be stated wherever those queries get written down.
 
@@ -705,6 +707,49 @@ Everything above is vendor documentation until this is run once (§6.1 status no
 - **Do the spans have a real duration, and do D1/R2 spans nest under them?** A wrapper span with a correct `route` and a ~0ms duration is the silent failure the `.finally(() => span.end())` form exists to prevent; a p95 built on it would be wrong rather than absent. Ours is pinned by the integration tests, but only against a stand-in — the platform's half has still never run against the real exporter.
 
 **6. Sanity-check the event burn.** §6.1.4 estimates ~900k spans + ~90k log lines/month against Honeycomb's 20M. Check the actual rate after a day against Honeycomb's usage view. `head_sampling_rate` is 1 on both sinks precisely because the estimate says there is room; if the real number is an order of magnitude off, that is the setting to revisit.
+
+### 6.2 Smart Placement + Workers Cache (issues #150, #291)
+
+Two `cloud/wrangler.toml` blocks that change *where* the Worker runs and *whether it runs at all*. Both shipped in one change because the second is unsafe without the Worker-side work that came with it, and both label themselves per request — so they separate by request attribute rather than by deploy boundary, and one deploy costs no attribution.
+
+```toml
+[placement]
+mode = "smart"
+
+[cache]
+enabled = true
+```
+
+Both are **inheritable**, so staging moves with prod and neither block is duplicated into `[env.staging]`. Neither goes on the root `wrangler.toml`: that Worker carries an `[assets]` binding, and pinning it would drag static-asset serving to ENAM for every visitor.
+
+**What placement buys.** The regional storage this Worker reaches — both D1 databases and the R2 bucket; `SESSIONS_KV` is global — is all in ENAM, so a Worker started at the visitor's colo paid a cross-region round trip per *query*. Placement turns N crossings per API call into one. `mode = "smart"` rather than `region = "aws:us-east-1"` because we do not know which cloud region the D1 primary lives in (there is no published mapping, and D1's own location hint is soft) — and because smart reverts a placement that measures slower, where a wrong region hint is silent and permanent.
+
+**What the cache buys.** Cloudflare checks the cache before running the Worker, and — the ordering that makes this better than the KV design #150 originally drew — *before placement is considered*. So a Sydney hit is served in Sydney and crosses nothing, where a KV read would happen inside a Worker that placement has moved to ENAM. Request collapsing (per cache key, per data center) is the herd control `cloud/src/stats/handlers.ts` wanted, for free.
+
+**What makes the cache safe**, and what must stay true. An unheadered `200` gets RFC 9111 heuristic freshness (7200s) and `Cookie` is **not** in the cache key, so turning this on alone would serve one visitor's `discord_id` to everyone for two hours:
+
+- `jsonResponse` (`cloud/src/util.ts`) emits `private, no-store` by default.
+- Routes that may be shared declare `sharedCache` in the ROUTES table (`cloud/src/index.ts`), audited in `cloud/src/shared-cache-routes.test.ts`.
+
+A route that builds its own `Response` bypasses the first of those, so a new one is the thing to look at in review. The GETs that do, at the time of writing: the nine in the shared table above, the ZIP streams (`zipStreamResponse` and the admin download, all `private`), and the tournament CSV export — which had no directive at all, which is what the audit found, and now says `private, no-store`.
+
+**Two consequences, recorded so they do not read as regressions.**
+
+- **`GET /v1/auth/me` gets slower.** For an anonymous visitor it does no storage work at all (missing cookie → 401), so it is served at the visitor's colo today and will cross to ENAM after placement — as a *serial prefix* on every page load, since `src/routes/+layout.ts` awaits it before any page load runs. Accepted: one crossing added to a request that does nothing, against two to five removed from the calls behind it. Eliminating it needs a `+layout.server.ts` that reads the cookie, which converts a universal load to a server load.
+- **Read budgets stop recording on a cache hit, and so does the access log.** A hit means no invocation, so `enforceReadRateLimit` never runs and no access line is emitted. That is fine on its own terms (a hit costs us nothing) but it changes what the ceilings in `[vars]` *mean*, and it blinds the `route × colo` p95 §6.1 exists to measure exactly on the traffic the cache fixed.
+
+#### 6.2.1 Verification after the deploy
+
+Neither block can be confirmed from this repo — both are platform behavior on a deployed environment, and `served_by_region` / `served_by_primary` are `undefined` under `wrangler dev`.
+
+**Placement.**
+
+- `cf-placement` on any API response: `remote-*` means the Worker ran away from the visitor (placed), `local-*` means it ran at their colo.
+- Placement status via `GET /accounts/{account_id}/workers/services/{worker_name}`. `SUCCESS` answers the region question empirically — whatever it returns *is* the measurement a `region` hint would have been guessing at. **`INSUFFICIENT_INVOCATIONS` is the live risk** at ~3k invocations/day spread across colos; that, and only that, is the signal to pin `region = "aws:us-east-1"` (justified as the Ashburn metro, verifiable afterwards by `cf-placement: remote-IAD`).
+- `UNSUPPORTED_APPLICATION` means Cloudflare reverted it as slower — a result, not a failure.
+- `D1Result.meta.served_by_region` / `served_by_primary` are the direct read on which region served a query. Referenced nowhere in the codebase today.
+
+**Cache.** A hit runs no Worker, so it reads as the gap between edge requests and Worker invocations, and as the *absence* of an access-log line — §6.1's observability-goes-blind point in its usable form. The exact per-invocation cache field to group on is a §6.1.5-style confirmation, not an assumption. `Cf-Cache-Status` on a cold vs. warm request is the quick check; it hits prod, so it needs an explicit go-ahead.
 
 ## 7. Explicitly NOT doing
 
