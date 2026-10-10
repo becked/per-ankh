@@ -42,6 +42,7 @@ import {
 } from "../schemas/screenshot";
 import { sessionFromRequest, type SessionEnv } from "../session";
 import type { EventsEnv, QueryableD1 } from "../d1";
+import { MIN_LONG_EDGE } from "../../../src/lib/screenshots/stored-variant";
 import {
 	base64Encode,
 	cloudCorsHeaders,
@@ -111,7 +112,11 @@ export function screenshotsPerHour(env: ScreenshotsEnv): number {
 // contains the game, and a ~1.2-2.5 band refused 5 of the 12 real images the
 // corpus started from while a landscape camera photo at 4:3 sat comfortably
 // inside it.
-const MIN_LONG_EDGE = 640;
+//
+// The number is imported rather than written here because the browser applies
+// the same floor to the same bytes before spending an upload on them, and the
+// eval excludes the images it refuses from every band — three readings of one
+// threshold (stored-variant.ts). This is still the only one that enforces it.
 
 // The ceiling is on PIXELS, not on the long edge: Clef's binding limit is
 // 8 MiB decoded, and decoded RGBA bites on non-16:9 shapes (1920x1200 on a

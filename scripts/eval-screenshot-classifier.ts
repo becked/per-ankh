@@ -92,6 +92,13 @@ import {
 	type ClefResult,
 	type GateVerdict,
 } from "../cloud/src/screenshots/clef";
+import {
+	MIN_LONG_EDGE,
+	STORED_MAX_LONG_EDGE,
+	STORED_MAX_PIXELS,
+	STORED_WEBP_QUALITY,
+	storedDimensions,
+} from "../src/lib/screenshots/stored-variant";
 import { flagInt, flagString, parseFlags, printJson } from "./lib/cli";
 import {
 	bold,
@@ -106,25 +113,19 @@ import {
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const CORPUS_DIR = resolve(REPO_ROOT, "test-data/screenshots");
 
-// ─── The stored variant (upload-path step 1) ────────────────────────────────
-// Long edge 1600 px, area capped at ~1.8 MP. The cap is on pixel count rather
-// than long edge because Clef's binding limit is 8 MiB decoded and that bites
-// on non-16:9 shapes: 1920x1080 decodes to 7.91 MiB and squeaks under, while
-// 1920x1200 on a 16:10 display is 8.79 MiB and over. 1.8 MP decodes to
-// 6.87 MiB, which is safe for 16:9, 16:10 and 4:3 alike.
-const STORED_MAX_LONG_EDGE = 1600;
-const STORED_MAX_PIXELS = 1_800_000;
-// Chrome's default quality for `convertToBlob({ type: "image/webp" })`, which
-// is what the client worker will call. Keep the two in step — the classifier
-// sees these bytes.
-const STORED_WEBP_QUALITY = 80;
-
-// ─── The free pre-filter (upload-path step 3) ───────────────────────────────
-// A quality floor for the strip tile and the thumbnail, not a guess at what
-// the image is. Applied to the stored variant, which is what the Worker
-// receives. An image the gate already rejects must not contribute to a band,
-// so these are classified for information and excluded from the statistics.
-const MIN_LONG_EDGE = 640;
+// ─── The stored variant and the free pre-filter ─────────────────────────────
+// Imported, not restated: what the browser's own re-encode produces (upload
+// path step 1) and the floor the endpoint applies to it (step 3) are the same
+// numbers this script's sharp mirror has to hit, or the bands below are a
+// statement about bytes nothing stores. Why each number is what it is lives
+// beside it in stored-variant.ts.
+//
+// The one part Node cannot reproduce is the resampler: sharp's lanczos3
+// against the browser's `resizeQuality: "high"`.
+//
+// An image the gate already rejects must not contribute to a band, so the
+// ones under MIN_LONG_EDGE are classified for information and excluded from
+// the statistics.
 
 // ─── Variants ───────────────────────────────────────────────────────────────
 // The variant lives in two places — the model path and the body's required
@@ -184,17 +185,6 @@ function classOf(name: string): ImageClass | null {
 	return null;
 }
 
-// Upload-path step 1, in Node. The scale factor takes the long edge from
-// whichever dimension is larger — input is not reliably a landscape full
-// screen, and a portrait crop is a normal upload, not an outlier.
-function storedScale(width: number, height: number): number {
-	return Math.min(
-		1,
-		STORED_MAX_LONG_EDGE / Math.max(width, height),
-		Math.sqrt(STORED_MAX_PIXELS / (width * height)),
-	);
-}
-
 async function loadCorpus(limit: number | null): Promise<CorpusImage[]> {
 	const entries = (await readdir(CORPUS_DIR)).filter(
 		(f) => classOf(f) !== null,
@@ -211,9 +201,9 @@ async function loadCorpus(limit: number | null): Promise<CorpusImage[]> {
 		// and the browser's createImageBitmap honours it too.
 		const srcWidth = meta.autoOrient.width;
 		const srcHeight = meta.autoOrient.height;
-		const scale = storedScale(srcWidth, srcHeight);
-		const width = Math.max(1, Math.round(srcWidth * scale));
-		const height = Math.max(1, Math.round(srcHeight * scale));
+		// Upload-path step 1, in Node: the same target the browser worker
+		// computes, from dimensions read the same way it reads them.
+		const { width, height } = storedDimensions(srcWidth, srcHeight);
 		const webp = await sharp(src)
 			.autoOrient()
 			.resize(width, height, { fit: "fill" })

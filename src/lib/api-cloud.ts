@@ -457,6 +457,29 @@ export interface UploadGameResponse {
 	challenge_submitted?: boolean;
 }
 
+// The 201 from POST /v1/games/:id/screenshots: the row the Worker stored,
+// plus the public img.per-ankh.app URL it built from the object key.
+export interface UploadedScreenshot {
+	screenshot_id: string;
+	game_id: string;
+	url: string;
+	width: number;
+	height: number;
+	size_bytes: number;
+	caption: string | null;
+	// `in_review` is a stored-but-hidden row: the classifier's uncertain
+	// middle band routes to the admin queue, and no reader renders it until
+	// an admin acts. An upload can therefore succeed without becoming
+	// visible, which is why the uploader is told which of the two happened.
+	status: "published" | "in_review";
+	created_at: string;
+}
+
+// Mirrors SCREENSHOT_CAPTION_MAX in cloud/src/schemas/screenshot.ts. The
+// Worker is the validator; this is the input's own maxlength, so the limit is
+// met by the field refusing a 201st character rather than by a 400.
+export const SCREENSHOT_CAPTION_MAX = 200;
+
 export class ApiError extends Error {
 	constructor(
 		public status: number,
@@ -1054,6 +1077,48 @@ export const cloudApi = {
 	deleteGame: async (id: string, opts?: CallOpts): Promise<void> => {
 		await request(`/games/${id}`, { ...opts, method: "DELETE" });
 	},
+
+	// --- Screenshots (issue #289) ---
+
+	// Attach a screenshot to a public game the caller owns. Multipart like
+	// uploadGame — an `image` part carrying the WebP the browser re-encoded
+	// ($lib/screenshots/downscale) plus an optional `caption` — so don't set
+	// Content-Type; the browser's boundary is the point.
+	//
+	// Every refusal arrives as ApiError carrying a message written to be
+	// shown verbatim, so callers don't restate the rule in a second place.
+	// The one code worth branching on is 403 TERMS_NOT_ACCEPTED: it means the
+	// terms below haven't been accepted, and it is charged no classifier call
+	// and no rate-limit attempt, so accept-and-retry costs the user nothing.
+	// 422 SCREENSHOT_REJECTED additionally carries `{ questions }` naming the
+	// classifier questions that refused it — for the admin queue and the
+	// logs; the message is what the uploader is shown.
+	uploadScreenshot: async (
+		gameId: string,
+		formData: FormData,
+		opts?: CallOpts,
+	): Promise<{ screenshot: UploadedScreenshot }> => {
+		const res = await request(`/games/${gameId}/screenshots`, {
+			...opts,
+			method: "POST",
+			body: formData,
+		});
+		return res.json() as Promise<{ screenshot: UploadedScreenshot }>;
+	},
+
+	// Accept the one-time screenshot terms that uploadScreenshot refuses
+	// without. Set-once server-side: a second call returns the original
+	// acceptance rather than recording a new one, since a re-POST is not a
+	// second agreement. There is no revoke — removing the screenshots is the
+	// reversible act.
+	acceptScreenshotTerms: (
+		opts?: CallOpts,
+	): Promise<{ screenshot_terms_accepted_at: string }> =>
+		postJson<{ screenshot_terms_accepted_at: string }>(
+			"/users/me/screenshot-terms",
+			{ accepted: true },
+			opts,
+		),
 
 	// --- Admin (site-admin only; non-admin requests get 404) ---
 

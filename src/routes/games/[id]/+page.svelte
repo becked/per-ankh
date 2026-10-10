@@ -5,11 +5,21 @@
 	import type { PageData } from "./$types";
 	import { GameDetailView } from "$lib/game-detail";
 	import GameHeader from "$lib/game-detail/GameHeader.svelte";
+	import { getGameVisibility } from "$lib/game-detail/visibility-context.svelte";
+	import ScreenshotUploader from "$lib/screenshots/ScreenshotUploader.svelte";
+	import Panel from "$lib/ui/Panel.svelte";
 	import { autohideScroll } from "$lib/actions/autohideScroll";
 
 	let { data }: { data: PageData } = $props();
 	const game = $derived(data.game);
 	const gameId = $derived(page.params.id ?? "");
+
+	// The owner's screenshot upload, on the analyst view only — the map view
+	// shares GameHeader but is a full-bleed map with no room for a panel. The
+	// lock's state comes from the [id] layout's shared visibility rather than
+	// the load's `is_public`, so publishing a game from the header reveals the
+	// picker without a reload (issue #289).
+	const visibility = getGameVisibility();
 
 	// Links to the old Map tab (/games/[id]#map) land on the map view, replacing
 	// the entry rather than adding one. The view isn't mounted while the hash is
@@ -40,6 +50,11 @@
 					challengeLink={data.challengeLink}
 				/>
 				{#if !isMapHash}
+					{#if data.isOwner}
+						<Panel title="Screenshots" class="mb-4">
+							<ScreenshotUploader {gameId} isPublic={visibility.isPublic} />
+						</Panel>
+					{/if}
 					<GameDetailView {game} />
 				{/if}
 			</div>
