@@ -506,6 +506,30 @@ export interface ScreenshotGameFields {
 	total_turns: number | null;
 }
 
+// One tile of the home page's curated strip (issue #289, step 7): a starred
+// screenshot, the game it came from, and who uploaded it.
+//
+// `game` is required where GameScreenshot leaves it optional — a tile on the
+// landing page has no surrounding header to say which game it is from, so the
+// strip always names one. `uploader` is here and on no other gallery payload
+// for the same reason: the two galleries are already under the name of the
+// person whose shots they are, and this one spans everybody. Identity is
+// joined live rather than snapshotted, so a rename follows.
+//
+// `status` rides along from the shared serializer and is always "published":
+// a hidden screenshot can't be starred, and a takedown clears the star.
+export interface FeaturedScreenshot extends GameScreenshot {
+	game: ScreenshotGameFields;
+	uploader: {
+		user_id: string;
+		// Non-null, unlike the admin queue's: this payload's identity join is
+		// an inner one over NOT NULL columns, so there is no nameless tile.
+		display_name: string;
+		slug: string | null;
+		avatar_url: string;
+	};
+}
+
 // The 201 from POST /v1/games/:id/screenshots: the row the Worker stored,
 // plus the public img.per-ankh.app URLs it built from the object key.
 export interface UploadedScreenshot {
@@ -1251,6 +1275,20 @@ export const cloudApi = {
 		const res = await request(`/users/${userId}/screenshots`, opts);
 		return (await (res.json() as Promise<{ screenshots: GameScreenshot[] }>))
 			.screenshots;
+	},
+
+	// The admin-starred set, newest star first — the home page's curated strip,
+	// and the only screenshot surface a visitor meets without navigating to a
+	// game or a profile. Public read like the two above, but viewer-independent
+	// and edge-cached for a minute, which is why it spends no per-IP budget: the
+	// curation is admin-only, the result isn't.
+	getFeaturedScreenshots: async (
+		opts?: CallOpts,
+	): Promise<FeaturedScreenshot[]> => {
+		const res = await request("/featured-screenshots", opts);
+		return (
+			await (res.json() as Promise<{ screenshots: FeaturedScreenshot[] }>)
+		).screenshots;
 	},
 
 	// Remove one of the caller's own screenshots. Permanent — the row, the

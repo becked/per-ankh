@@ -47,19 +47,25 @@ export function gameScreenshotPrefix(gameId: string): string {
 	return `${SCREENSHOT_KEY_ROOT}${gameId}/`;
 }
 
+// What addressing an object actually needs: the base URL, and nothing else.
+// Narrower than ScreenshotStorageEnv so a read that holds no bucket and no
+// purge credentials can still build a tile's URL — the home strip
+// (handleFeaturedScreenshots), whose env is deliberately that small.
+export type ScreenshotUrlEnv = Pick<
+	ScreenshotStorageEnv,
+	"SCREENSHOT_BASE_URL"
+>;
+
 // The URL shapes themselves live in $lib/screenshots/public-urls, read by the
 // admin CLI as well — see that module's header. What these three add is the
 // binding of the base URL to this environment's var, which is the only part
 // the Worker owns.
-export function screenshotUrl(
-	env: ScreenshotStorageEnv,
-	r2Key: string,
-): string {
+export function screenshotUrl(env: ScreenshotUrlEnv, r2Key: string): string {
 	return screenshotObjectUrl(env.SCREENSHOT_BASE_URL, r2Key);
 }
 
 export function screenshotThumbUrl(
-	env: ScreenshotStorageEnv,
+	env: ScreenshotUrlEnv,
 	r2Key: string,
 ): string {
 	return screenshotThumbnailUrl(env.SCREENSHOT_BASE_URL, r2Key);

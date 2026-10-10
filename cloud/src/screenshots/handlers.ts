@@ -39,9 +39,12 @@ import {
 	screenshotThumbUrl,
 	screenshotUrl,
 	type ScreenshotStorageEnv,
+	type ScreenshotUrlEnv,
 } from "./storage";
 import { readWebpSize } from "./webp";
+import { buildAvatarUrl } from "../auth";
 import { countEventsSince, isBlobLike } from "../games";
+import { displayNameSql } from "../identity";
 import { beginR2Op, logError, setLogField, setSecurityReason } from "../log";
 import {
 	ceilingFrom,
@@ -591,7 +594,19 @@ interface ScreenshotGameRow extends ScreenshotRow {
 	total_turns: number | null;
 }
 
-function serializeScreenshot(env: ScreenshotsEnv, row: ScreenshotRow) {
+// Both reads that name a shot's game serialize it from here, so a column
+// added to the row above lands on both rather than on whichever one was being
+// edited. The profile tab's payload and the home strip's are the two.
+function serializeScreenshotGame(row: ScreenshotGameRow) {
+	return {
+		game_name: row.game_name,
+		display_name: row.display_name,
+		user_nation: row.user_nation,
+		total_turns: row.total_turns,
+	};
+}
+
+function serializeScreenshot(env: ScreenshotUrlEnv, row: ScreenshotRow) {
 	return {
 		screenshot_id: row.screenshot_id,
 		game_id: row.game_id,
@@ -703,17 +718,144 @@ export async function handleUserScreenshots(
 		{
 			screenshots: (rows.results ?? []).map((r) => ({
 				...serializeScreenshot(env, r),
-				game: {
-					game_name: r.game_name,
-					display_name: r.display_name,
-					user_nation: r.user_nation,
-					total_turns: r.total_turns,
-				},
+				game: serializeScreenshotGame(r),
 			})),
 		},
 		200,
 		cors,
 	);
+}
+
+// ---------- The curated home strip ----------
+
+// The strip needs no session, no bucket and no classifier — the table, the
+// public base its tiles are addressed from, and the CORS origins. Narrow on
+// purpose, the shape featured.ts gives its public video feed: the handler's
+// own type is what says a session read would break the shared cache below.
+export interface PublicFeaturedScreenshotsEnv extends ScreenshotUrlEnv {
+	SHARE_DB: QueryableD1;
+	ALLOWED_ORIGINS: string;
+}
+
+// How many starred screenshots the home page carries. Six because it has to
+// read as a strip rather than as a grid, and the column ramp it renders at is
+// 2 / 3 / 6 — every one of those divides six, so no width leaves an orphan
+// tile. The client applies no cap of its own: this LIMIT is the strip's
+// size, the way MAX_FEATURED_FEED_VIDEOS is the video feed's.
+export const MAX_FEATURED_SCREENSHOTS = 6;
+
+// One strip tile. The game columns are the profile tab's, because a tile on
+// the landing page has no surrounding header to say which game it came from;
+// the uploader columns credit the person who took it, joined live rather than
+// snapshotted — the stance featured.ts takes, for its reason: a rename should
+// follow here too.
+//
+// `uploader_name` is non-null where the admin queue's is nullable, and that is
+// the join rather than a choice: this one is inner (a screenshot's user_id is
+// a NOT NULL foreign key) over two NOT NULL columns, so there is no nameless
+// tile for a fallback to cover.
+interface FeaturedScreenshotRow extends ScreenshotGameRow {
+	user_id: string;
+	uploader_name: string;
+	uploader_slug: string | null;
+	discord_id: string;
+	avatar_hash: string | null;
+}
+
+function serializeFeaturedScreenshot(
+	env: PublicFeaturedScreenshotsEnv,
+	row: FeaturedScreenshotRow,
+) {
+	return {
+		...serializeScreenshot(env, row),
+		game: serializeScreenshotGame(row),
+		uploader: {
+			user_id: row.user_id,
+			display_name: row.uploader_name,
+			slug: row.uploader_slug,
+			avatar_url: buildAvatarUrl(row.discord_id, row.avatar_hash),
+		},
+	};
+}
+
+// GET /v1/featured-screenshots — the home page's curated strip, newest star
+// first. Only admin-starred screenshots reach it (the `star` decision in
+// moderation.ts is what puts one here), which is the whole point: everywhere
+// else a visitor has to navigate to a game or a profile to meet a screenshot.
+//
+// Ordered by `featured_at`, not `created_at`, and that is the one place these
+// two feeds differ: the video feed orders by the video's own date because a
+// star there promotes an entry inside a feed that exists anyway, while this
+// strip IS the curation, so its order is the order the stars were given. A
+// re-star keeps its original timestamp (COALESCE in moderation.ts), so
+// pressing the button twice doesn't move a screenshot to the front.
+//
+// VIEWER-INDEPENDENT, unlike both gallery reads, and the cache header rests on
+// that: a shared edge cache cannot hold a response whose contents depend on
+// who asked. So there is no session read here, and the queued-row leg the
+// galleries carry has nothing to do anyway — `star` refuses a hidden row, and
+// a takedown clears the star.
+//
+// `hidden_at IS NULL` is in the WHERE regardless, because without it this
+// reader would be correct only while those two writers stay coordinated. It is
+// the one screenshot surface a visitor meets without asking for it, so it
+// filters on the column itself rather than on the invariant.
+//
+// Outside the `screenshot_view` budget, like the three video feeds the home
+// load fires beside it. That budget exists because a gallery read is
+// session-dependent and therefore uncacheable at the edge; this one answers
+// every visitor the same bytes for 60s, so the second request in a crawl never
+// reaches the Worker. Best-effort for featured.ts's reason: a D1 hiccup drops
+// the strip rather than 500-ing the landing page.
+export async function handleFeaturedScreenshots(
+	request: Request,
+	env: PublicFeaturedScreenshotsEnv,
+): Promise<Response> {
+	const cors = cloudCorsHeaders(env, request);
+	let screenshots: ReturnType<typeof serializeFeaturedScreenshot>[] = [];
+	try {
+		// rowid breaks the tie because featured_at is datetime('now') at
+		// one-second resolution, so two stars given in the same second tie on it.
+		// What it falls back to is insertion order, which is upload order and not
+		// star order — what the tiebreak buys is that the order is STABLE, which
+		// a shared-cached response needs: two viewers served a minute apart, one
+		// from the edge and one from the origin, must not see the strip in two
+		// different orders.
+		const rows = await env.SHARE_DB.prepare(
+			`SELECT s.screenshot_id, s.game_id, s.r2_key, s.width, s.height,
+			        s.caption, s.hidden_at,
+			        g.game_name, g.display_name, g.user_nation, g.total_turns,
+			        s.user_id, ${displayNameSql("u")} AS uploader_name,
+			        u.slug AS uploader_slug, u.discord_id, u.avatar_hash
+			 FROM game_screenshots s
+			 JOIN games g ON g.game_id = s.game_id
+			 JOIN users u ON u.user_id = s.user_id
+			 WHERE s.featured_at IS NOT NULL AND s.hidden_at IS NULL
+			 ORDER BY s.featured_at DESC, s.rowid DESC
+			 LIMIT ?`,
+		)
+			.bind(MAX_FEATURED_SCREENSHOTS)
+			.all<FeaturedScreenshotRow>();
+		screenshots = (rows.results ?? []).map((r) =>
+			serializeFeaturedScreenshot(env, r),
+		);
+	} catch (e) {
+		logError("featured_screenshots_fetch_failed", e);
+	}
+
+	// The sibling feed's headers, and for its reasons: shared-cacheable for a
+	// minute so repeated home loads don't re-run the joins at the origin, no
+	// browser cache so a new star shows up on reload, and Vary: Origin because
+	// the CORS headers are origin-specific on a shared response.
+	return new Response(JSON.stringify({ screenshots }), {
+		status: 200,
+		headers: {
+			"Content-Type": "application/json",
+			"Cache-Control": "public, max-age=0, s-maxage=60",
+			...cors,
+			Vary: "Origin",
+		},
+	});
 }
 
 // ---------- Delete ----------

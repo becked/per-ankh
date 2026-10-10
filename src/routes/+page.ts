@@ -235,9 +235,12 @@ export const load: PageLoad = async ({ fetch, parent, url }) => {
 	// of the anon_read budget. Same rule as every sibling loader, via
 	// rethrowRateLimit.
 	//
-	// The three video feeds are deliberately outside the read budgets and answer
-	// 200 by construction — each handler swallows its own upstream failures to
-	// an empty list — so there is no 429 for them to re-throw.
+	// The three video feeds and the curated screenshot strip are deliberately
+	// outside the read budgets and answer 200 by construction — each handler
+	// swallows its own upstream failures to an empty list — so there is no 429
+	// for them to re-throw. The strip's read is the one screenshot read with no
+	// budget, because it is viewer-independent and therefore edge-cacheable,
+	// where the two galleries are neither.
 	//
 	// The season board is the asymmetry worth naming: /players re-throws its own
 	// 429 because a spent budget there means the archive walk that spent it, and
@@ -254,6 +257,7 @@ export const load: PageLoad = async ({ fetch, parent, url }) => {
 		creatorVideos,
 		tournamentVideos,
 		featuredVideos,
+		featuredScreenshots,
 		featured,
 		seasonBoard,
 		homeSummary,
@@ -266,6 +270,7 @@ export const load: PageLoad = async ({ fetch, parent, url }) => {
 		cloudApi.getCreatorVideos({ fetch }).catch(() => []),
 		cloudApi.getTournamentVideos({ fetch }).catch(() => []),
 		cloudApi.getFeaturedVideos({ fetch }).catch(() => []),
+		cloudApi.getFeaturedScreenshots({ fetch }).catch(() => []),
 		loadFeaturedTournament(fetch),
 		cloudApi
 			.getPlayerLeaderboard({ fetch, since: season.since, until: season.until })
@@ -294,6 +299,10 @@ export const load: PageLoad = async ({ fetch, parent, url }) => {
 			? yourSeason(seasonBoard.players, user, profile?.summary ?? null)
 			: null,
 		homeSummary: homeSummary.summary,
+		// The curated strip, already capped and ordered by the Worker — a star is
+		// the whole selection here, so there is nothing to merge or re-sort and no
+		// second cap to disagree with its LIMIT.
+		screenshots: featuredScreenshots,
 		// Featured videos lead the strip; the rest follow newest-first. Capped
 		// after the promotion, so the strip still carries a full twelve.
 		videos: featuredFirst(merged, featuredVideos).slice(0, VIDEO_STRIP_SIZE),

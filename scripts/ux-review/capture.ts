@@ -76,12 +76,15 @@ const REDIRECT_ROUTES = [
 // left: with no videos the Recent Videos panel drops and the games feed
 // widens to the full row with its cards two-up; with no featured video the
 // hero loses its video tile and the tournament panel stands alone; with no
-// public games the feed swaps in its empty-state copy. Live local feeds never
-// produce any of that, so we stub the endpoints backing them.
-const COLD_VIDEO_FEEDS: Record<string, unknown> = {
+// starred screenshots the Screenshots strip drops out of the row above the
+// discovery grid; with no public games the feed swaps in its empty-state copy.
+// Live local feeds never produce any of that, so we stub the endpoints backing
+// them.
+const COLD_HOME_FEEDS: Record<string, unknown> = {
 	"**/v1/creator-videos*": { videos: [] },
 	"**/v1/tournament-videos*": { videos: [] },
 	"**/v1/featured-videos*": { videos: [] },
+	"**/v1/featured-screenshots*": { screenshots: [] },
 };
 const COLD_GAME_FEED: Record<string, unknown> = {
 	"**/v1/games/public-recent*": { games: [] },
@@ -95,11 +98,11 @@ interface ColdState {
 	stubs: Record<string, unknown>;
 }
 const HOME_COLD_STATES: ColdState[] = [
-	{ key: "cold-feed", title: "Cold feed", stubs: COLD_VIDEO_FEEDS },
+	{ key: "cold-feed", title: "Cold feed", stubs: COLD_HOME_FEEDS },
 	{
 		key: "cold-start",
 		title: "Cold start",
-		stubs: { ...COLD_VIDEO_FEEDS, ...COLD_GAME_FEED },
+		stubs: { ...COLD_HOME_FEEDS, ...COLD_GAME_FEED },
 	},
 ];
 

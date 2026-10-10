@@ -70,6 +70,7 @@ import {
 } from "./challenges/handlers";
 import {
 	handleAcceptScreenshotTerms,
+	handleFeaturedScreenshots,
 	handleGameScreenshots,
 	handleScreenshotDelete,
 	handleScreenshotUpload,
@@ -1219,6 +1220,18 @@ const ROUTES: RouteSpec[] = [
 		match: { kind: "path", path: "/v1/featured-videos" },
 		route: "GET /v1/featured-videos",
 		handler: (r, e) => handlePublicFeaturedVideos(r, e),
+	},
+	// The home page's curated screenshot strip — the admin-starred set, newest
+	// star first (cloud/src/screenshots/handlers.ts). Public, and the one
+	// screenshot read with no per-IP budget: it is viewer-independent, so unlike
+	// the two galleries it is shared-cacheable at the edge. Non-starred
+	// screenshots never reach the home page; the star itself is one of the
+	// decisions under /v1/admin/screenshots.
+	{
+		method: "GET",
+		match: { kind: "path", path: "/v1/featured-screenshots" },
+		route: "GET /v1/featured-screenshots",
+		handler: (r, e) => handleFeaturedScreenshots(r, e),
 	},
 	// User-facing tournament endpoints
 	{
