@@ -77,6 +77,7 @@ interface ReadScreenshot {
 	width: number;
 	height: number;
 	caption: string | null;
+	status: "published" | "in_review";
 	game?: {
 		game_name: string | null;
 		display_name: string | null;
@@ -158,25 +159,62 @@ describe("GET /v1/games/:id/screenshots", () => {
 		expect(shot.game).toBeUndefined();
 	});
 
-	it("hides a queued screenshot from the strip while keeping its object", async () => {
+	it("sends a queued screenshot to its uploader and to nobody else", async () => {
 		const { user, gameId } = await readyUser();
 		const visible = await upload(user, gameId);
 		answer = () => clefResponse(QUEUED);
 		const queued = await upload(user, gameId);
+		answer = () => clefResponse(CLEAN);
 
-		const body = await expectOk<{ screenshots: ReadScreenshot[] }>(
-			await gameShots(gameId),
-		);
-		expect(body.screenshots.map((s) => s.screenshot_id)).toEqual([visible]);
 		// Not deleted — it is waiting on an admin, so the bytes are still there.
 		expect(await objectKeys(gameId)).toHaveLength(2);
-		// Nor to its own uploader: `hidden_at` is the only filter, and it does
-		// not know who is asking.
+
+		// Anonymous, and any other account, see the published row only.
+		const anon = await expectOk<{ screenshots: ReadScreenshot[] }>(
+			await gameShots(gameId),
+		);
+		expect(anon.screenshots.map((s) => s.screenshot_id)).toEqual([visible]);
+		const stranger = await makeUser();
+		const theirs = await expectOk<{ screenshots: ReadScreenshot[] }>(
+			await gameShots(gameId, stranger),
+		);
+		expect(theirs.screenshots.map((s) => s.screenshot_id)).toEqual([visible]);
+
+		// The uploader sees both, the queued one marked — it holds a slot and
+		// pins the game public, so the owner needs a tile to delete.
 		const owner = await expectOk<{ screenshots: ReadScreenshot[] }>(
 			await gameShots(gameId, user),
 		);
-		expect(owner.screenshots.map((s) => s.screenshot_id)).toEqual([visible]);
-		expect(queued).toBeTruthy();
+		expect(owner.screenshots.map((s) => s.screenshot_id)).toEqual([
+			queued,
+			visible,
+		]);
+		expect(owner.screenshots.map((s) => s.status)).toEqual([
+			"in_review",
+			"published",
+		]);
+	});
+
+	it("sends a taken-down screenshot to nobody, its uploader included", async () => {
+		const { user, gameId } = await readyUser();
+		const id = await upload(user, gameId);
+		// Hidden the way a takedown leaves the row: the columns, written here
+		// rather than through the admin endpoint, which this file has no admin
+		// for — moderation.test.ts drives the endpoint itself.
+		await env.SHARE_DB.prepare(
+			`UPDATE game_screenshots
+			    SET hidden_at = datetime('now'), hidden_by = ?
+			  WHERE screenshot_id = ?`,
+		)
+			.bind(user.userId, id)
+			.run();
+
+		for (const as of [undefined, user]) {
+			const body = await expectOk<{ screenshots: ReadScreenshot[] }>(
+				await gameShots(gameId, as),
+			);
+			expect(body.screenshots).toEqual([]);
+		}
 	});
 
 	it("answers an empty strip for a game with none, and for no such game", async () => {
@@ -220,7 +258,7 @@ describe("GET /v1/users/:user_id/screenshots", () => {
 		expect(body.screenshots[0].game?.total_turns).toBe(50);
 	});
 
-	it("leaves another user's shots out, and queued ones too", async () => {
+	it("leaves another user's shots out, and applies the queued rule too", async () => {
 		const { user, gameId } = await readyUser();
 		await upload(user, gameId);
 		answer = () => clefResponse(QUEUED);
@@ -235,31 +273,45 @@ describe("GET /v1/users/:user_id/screenshots", () => {
 		);
 		expect(mine.screenshots).toHaveLength(1);
 		expect(mine.screenshots[0].game_id).toBe(gameId);
+
+		// The same rule as the strip, on the same column: the profile's own
+		// owner sees the queued row, and another signed-in account does not.
+		const asOwner = await expectOk<{ screenshots: ReadScreenshot[] }>(
+			await userShots(user.userId, user),
+		);
+		expect(asOwner.screenshots.map((s) => s.status)).toEqual([
+			"in_review",
+			"published",
+		]);
+		const asOther = await expectOk<{ screenshots: ReadScreenshot[] }>(
+			await userShots(user.userId, other.user),
+		);
+		expect(asOther.screenshots).toHaveLength(1);
 	});
 
-	it("drives the profile's has_screenshots flag off the same filter", async () => {
+	it("drives the profile's has_screenshots flag off the same rule", async () => {
 		const { user, gameId } = await readyUser();
-		const before = await expectOk<{ has_screenshots: boolean }>(
-			await request.get({ path: `/v1/users/${user.userId}` }),
-		);
-		expect(before.has_screenshots).toBe(false);
+		const flag = async (as?: TestUser): Promise<boolean> => {
+			const body = await expectOk<{ has_screenshots: boolean }>(
+				await request.get({ path: `/v1/users/${user.userId}`, as }),
+			);
+			return body.has_screenshots;
+		};
+		expect(await flag()).toBe(false);
 
-		// A queued upload is not a tab: the flag tests `hidden_at IS NULL`, the
-		// same predicate the read applies, so the trigger can't disagree with
-		// the payload in either direction.
+		// A queued upload is a tab for its own uploader and for nobody else:
+		// the flag applies the predicate the read applies, against the same
+		// viewer, so the trigger can't disagree with the payload in either
+		// direction — an empty tab or a hidden row with nowhere to delete it.
 		answer = () => clefResponse(QUEUED);
 		await upload(user, gameId);
-		const queued = await expectOk<{ has_screenshots: boolean }>(
-			await request.get({ path: `/v1/users/${user.userId}` }),
-		);
-		expect(queued.has_screenshots).toBe(false);
-
 		answer = () => clefResponse(CLEAN);
+		expect(await flag()).toBe(false);
+		expect(await flag(await makeUser())).toBe(false);
+		expect(await flag(user)).toBe(true);
+
 		await upload(user, gameId);
-		const after = await expectOk<{ has_screenshots: boolean }>(
-			await request.get({ path: `/v1/users/${user.userId}` }),
-		);
-		expect(after.has_screenshots).toBe(true);
+		expect(await flag()).toBe(true);
 	});
 });
 

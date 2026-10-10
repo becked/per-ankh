@@ -21,6 +21,7 @@ import { seedGame } from "../../helpers/games";
 import { postMultipart, request } from "../../helpers/requests";
 import { screenshotForm } from "../../helpers/screenshot-image";
 import { SCORE_ID } from "../../../src/screenshots/clef";
+import { MAX_SCREENSHOTS_PER_GAME } from "../../../src/screenshots/handlers";
 import { PER_USER_SCREENSHOT_REPORTS_PER_HOUR } from "../../../src/screenshots/moderation";
 import { gameScreenshotPrefix } from "../../../src/screenshots/storage";
 
@@ -662,6 +663,98 @@ describe("POST /v1/admin/screenshots/:screenshot_id/moderate", () => {
 		expect(metadata.screenshot_id).toBe(id);
 		expect(metadata.game_id).toBe(gameId);
 		expect(metadata.action).toBe("star");
+	});
+});
+
+// ---------- What a takedown releases, and what a queued row keeps ----------
+
+// The two guards that count stored screenshots, against the distinction
+// `hidden_by` draws. A taken-down row has no object, so it holds no slot and
+// pins nothing; a queued row's object IS in R2 and public, so it holds both —
+// which is why the galleries show a queued row to its uploader, and why they
+// show a taken-down one to nobody.
+describe("the storage guards and the two hidden states", () => {
+	it("releases the game's slot that the taken-down row was holding", async () => {
+		const { user, gameId } = await readyUser();
+		const ids: string[] = [];
+		for (let i = 0; i < MAX_SCREENSHOTS_PER_GAME; i++) {
+			ids.push(await upload(user, gameId));
+		}
+		await expectErrorCode(
+			await postMultipart({
+				path: `/v1/games/${gameId}/screenshots`,
+				form: screenshotForm(),
+				as: user,
+			}),
+			{ status: 409, code: "GAME_SCREENSHOT_LIMIT" },
+		);
+
+		await expectOk(await moderate(ids[0], "takedown", admin));
+
+		// The row is still there — it is the moderation record — and the slot
+		// is free, because the object it was holding is gone.
+		expect(await hiddenColumns(ids[0])).not.toBeNull();
+		const replacement = await upload(user, gameId);
+		expect(replacement).toBeTruthy();
+	});
+
+	it("lets the game be made private again once nothing public is left", async () => {
+		const { user, gameId } = await readyUser();
+		const id = await upload(user, gameId);
+		const makePrivate = (): Promise<Response> =>
+			request.patch({
+				path: `/v1/games/${gameId}`,
+				as: user,
+				body: { is_public: false },
+			});
+
+		await expectErrorCode(await makePrivate(), {
+			status: 409,
+			code: "HAS_SCREENSHOTS",
+		});
+
+		await expectOk(await moderate(id, "takedown", admin));
+		await expectOk(await makePrivate());
+	});
+
+	it("keeps both while the row is only queued, which the owner can see", async () => {
+		const { user, gameId } = await readyUser();
+		const queued = await uploadQueued(user, gameId);
+
+		// Its object is public — unlinked, ungated — so the game stays public.
+		await expectErrorCode(
+			await request.patch({
+				path: `/v1/games/${gameId}`,
+				as: user,
+				body: { is_public: false },
+			}),
+			{ status: 409, code: "HAS_SCREENSHOTS" },
+		);
+		// And the owner is sent the row, so the remedy that refusal names has
+		// a tile to be pressed on.
+		const strip = await expectOk<{
+			screenshots: { screenshot_id: string; status: string }[];
+		}>(
+			await request.get({ path: `/v1/games/${gameId}/screenshots`, as: user }),
+		);
+		expect(strip.screenshots).toEqual([
+			expect.objectContaining({ screenshot_id: queued, status: "in_review" }),
+		]);
+
+		// Pressed: the row goes, and the game can be made private.
+		await expectOk(
+			await request.delete({
+				path: `/v1/games/${gameId}/screenshots/${queued}`,
+				as: user,
+			}),
+		);
+		await expectOk(
+			await request.patch({
+				path: `/v1/games/${gameId}`,
+				as: user,
+				body: { is_public: false },
+			}),
+		);
 	});
 });
 

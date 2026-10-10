@@ -3039,8 +3039,17 @@ export async function handleGamePatch(
 		// be a game whose images carry on being public anyway — the invariant
 		// has to hold here or it holds nowhere. Removing the screenshots is
 		// the way to make such a game private.
+		//
+		// `hidden_by IS NULL` is the filter the storage caps use, for the
+		// reason stated there: a taken-down row's object was deleted, so it
+		// has nothing left to keep public and nothing to pin. A
+		// classifier-queued row DOES pin the game, because its object is
+		// public — unlinked but ungated — which is why both galleries send
+		// such a row to its uploader: this refusal has to name a remedy they
+		// can reach.
 		const screenshots = await env.SHARE_DB.prepare(
-			"SELECT COUNT(*) AS count FROM game_screenshots WHERE game_id = ?",
+			`SELECT COUNT(*) AS count FROM game_screenshots
+			 WHERE game_id = ? AND hidden_by IS NULL`,
 		)
 			.bind(gameId)
 			.first<{ count: number }>();

@@ -480,6 +480,13 @@ export interface GameScreenshot {
 	width: number;
 	height: number;
 	caption: string | null;
+	// `in_review` is a row only its own uploader is sent: the classifier
+	// queued it, so nobody else's payload carries it, and the tile badges
+	// itself so the owner knows why it is theirs alone. The badge is also
+	// what makes the quota slot it holds visible — a queued row counts
+	// against the caps and pins its game public. A taken-down row reaches no
+	// payload at all, which is why `hidden` is not in this union.
+	status: "published" | "in_review";
 	// Present only on GET /v1/users/:id/screenshots: the profile tab shows
 	// shots from across all of a user's games, so each tile names and links
 	// the game it belongs to. Raw fields, formatted by formatGameTitle the way
@@ -511,9 +518,10 @@ export interface UploadedScreenshot {
 	size_bytes: number;
 	caption: string | null;
 	// `in_review` is a stored-but-hidden row: the classifier's uncertain
-	// middle band routes to the admin queue, and no reader renders it until
-	// an admin acts. An upload can therefore succeed without becoming
-	// visible, which is why the uploader is told which of the two happened.
+	// middle band routes to the admin queue, and only the uploader's own
+	// galleries render it until an admin acts. An upload can therefore
+	// succeed without becoming visible to anyone else, which is why the
+	// uploader is told which of the two happened.
 	status: "published" | "in_review";
 	created_at: string;
 }
@@ -1233,7 +1241,8 @@ export const cloudApi = {
 
 	// One uploader's screenshots across all their games, newest first — the
 	// profile Screenshots tab's lazy payload, on the same budget. Each row
-	// carries its `game`, which the game read above leaves out.
+	// carries its `game`, which the game read above leaves out. Both reads
+	// send a classifier-queued row to its own uploader and to nobody else.
 	getUserScreenshots: async (
 		userId: string,
 		opts?: CallOpts,

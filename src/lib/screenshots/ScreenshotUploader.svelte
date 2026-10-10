@@ -72,12 +72,11 @@
 	// with the same result, so it falls through to the error line instead.
 	let termsPrompted = $state(false);
 
-	// The preview is for bytes nothing else is showing. An accepted upload is
-	// on the strip the moment onUploaded fires, so holding the preview up after
-	// that would put the same image on screen twice.
-	const showPreview = $derived(
-		!(phase === "done" && uploaded?.status === "published"),
-	);
+	// The preview is for bytes nothing else is showing. Every stored upload is
+	// on the strip the moment onUploaded fires — a queued one included, badged
+	// "In review" — so holding the preview up after that would put the same
+	// image on screen twice.
+	const showPreview = $derived(!(phase === "done" && uploaded != null));
 
 	const resized = $derived.by(() => {
 		const p = prepared;
@@ -158,7 +157,9 @@
 			const res = await cloudApi.uploadScreenshot(gameId, form);
 			uploaded = res.screenshot;
 			phase = "done";
-			if (res.screenshot.status === "published") onUploaded?.(res.screenshot);
+			// A queued row goes on the strip too: its uploader is the one viewer
+			// the reads send it to, and it is their only route to removing it.
+			onUploaded?.(res.screenshot);
 		} catch (err) {
 			if (err instanceof UnauthorizedError) {
 				await bounceToLogin();
@@ -304,7 +305,7 @@
 					<p class="mb-3 text-sm text-gray-400">
 						{uploaded.status === "published"
 							? "It's on this game now."
-							: "The screening wasn't sure about this one, so a site admin will look at it before it appears."}
+							: "The screening wasn't sure about this one. It's on your strip marked In review, and a site admin will look at it before anyone else can see it."}
 					</p>
 					<label
 						class="inline-flex cursor-pointer items-center gap-2 {SECONDARY_BTN}"

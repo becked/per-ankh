@@ -5,6 +5,11 @@
 	// from across all a user's games, so its tiles name and link the game,
 	// while a game's own strip is already under that game's header.
 	//
+	// A tile can be `in_review`: the classifier queued it, and both reads send
+	// such a row to its uploader alone. It badges itself and keeps its delete,
+	// because it holds a quota slot and pins its game public until it is
+	// either published by an admin or removed here.
+	//
 	// Tiles are the Worker's thumbnail URL, a single Cloudflare Images
 	// transformation of the stored object; clicking one opens the stored object
 	// itself, which is the only place the full 1600 px variant is ever served.
@@ -224,6 +229,17 @@
 						class="aspect-[8/5] w-full object-cover"
 					/>
 				</button>
+				{#if shot.status === "in_review"}
+					<!-- Only an uploader is ever sent a queued row, so this badge is
+					     also the only thing on screen that says why nobody else can
+					     see the tile. Bottom-left, clear of the delete above it. -->
+					<span
+						class="absolute bottom-1 left-1 rounded bg-black/70 px-1.5 py-0.5 text-xs font-bold text-orange"
+						title="A site admin will look at this before anyone else can see it"
+					>
+						In review
+					</span>
+				{/if}
 				{#if canDelete}
 					<!-- Always visible, never hover-only: a hover reveal has no
 					     equivalent on touch, and this is the owner's only route to

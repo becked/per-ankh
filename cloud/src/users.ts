@@ -543,17 +543,18 @@ async function buildUserProfile(
 		)
 			.bind(userId, userId, userId, userId, userId)
 			.first<{ participates: number }>(),
-		// Does this user have any visible screenshot — the same "render the
-		// tab?" role `channels` plays for Videos and `participates` for
-		// Tournaments, with the shots themselves loading lazily via
-		// GET /v1/users/:id/screenshots when the tab opens.
+		// Does this user have any screenshot THIS VIEWER can see — the same
+		// "render the tab?" role `channels` plays for Videos and
+		// `participates` for Tournaments, with the shots themselves loading
+		// lazily via GET /v1/users/:id/screenshots when the tab opens.
 		//
-		// `hidden_at IS NULL` is the test because it is the filter that
-		// read applies, so the flag can't disagree with the payload in
-		// either direction: an account whose only upload is sitting in the
-		// review band has no tab rather than an empty one. Visibility needs
-		// no leg of its own — a screenshot requires a public game, so there
-		// is nothing here an owner can see that a visitor can't.
+		// The predicate is the one that read applies, so the flag can't
+		// disagree with the payload in either direction. That is what makes
+		// it viewer-dependent: a classifier-queued row is a tab for its own
+		// uploader, who can delete it from there, and no tab for anybody
+		// else. Visibility still needs no leg of its own — a screenshot
+		// requires a public game — and the comparison costs nothing extra,
+		// since `vis` above already read the session.
 		//
 		// Index-backed on idx_game_screenshots_user (0050), and an EXISTS
 		// rather than a COUNT so it stops at the first row. That matters on
@@ -562,9 +563,12 @@ async function buildUserProfile(
 		env.SHARE_DB.prepare(
 			`SELECT EXISTS (
 			          SELECT 1 FROM game_screenshots
-			          WHERE user_id = ? AND hidden_at IS NULL) AS has_screenshots`,
+			          WHERE user_id = ?
+			            AND (hidden_at IS NULL
+			                 OR (hidden_by IS NULL AND user_id = ?))
+			        ) AS has_screenshots`,
 		)
-			.bind(userId)
+			.bind(userId, session?.data.user_id ?? null)
 			.first<{ has_screenshots: number }>(),
 	]);
 

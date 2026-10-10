@@ -86,6 +86,16 @@ export interface ScreenshotsEnv
 // COUNT(*) ...) < n` is one atomic decision in SQLite. The gates are still
 // worth their reads — they refuse before the Clef call, so a user at their cap
 // gets a clear answer instead of an inference bill.
+//
+// A TAKEN-DOWN row (`hidden_by` set) counts against neither, and nor does it
+// pin its game public — handleGamePatch's HAS_SCREENSHOTS uses this same
+// filter. Its object was deleted, so the slot holds nothing: charging it
+// would bill an account for a moderation record it cannot see, and would
+// leave the game permanently public with no remedy its owner could carry out.
+// A CLASSIFIER-QUEUED row (`hidden_at` set, `hidden_by` null) does count,
+// because its object IS in R2 — bytes stored on the uploader's behalf, on a
+// public host — and both galleries show such a row to its uploader, so the
+// slot it holds is visible and removable rather than a mystery.
 export const MAX_SCREENSHOTS_PER_GAME = 5;
 export const MAX_SCREENSHOTS_PER_ACCOUNT = 100;
 
@@ -267,9 +277,10 @@ export async function handleScreenshotUpload(
 		);
 	}
 
-	// Gate 3 — the per-game cap.
+	// Gate 3 — the per-game cap, over the rows the Caps note says count.
 	const perGame = await env.SHARE_DB.prepare(
-		"SELECT COUNT(*) AS count FROM game_screenshots WHERE game_id = ?",
+		`SELECT COUNT(*) AS count FROM game_screenshots
+		 WHERE game_id = ? AND hidden_by IS NULL`,
 	)
 		.bind(gameId)
 		.first<CountRow>();
@@ -282,9 +293,10 @@ export async function handleScreenshotUpload(
 		);
 	}
 
-	// Gate 4 — the per-account cap.
+	// Gate 4 — the per-account cap, same filter and same reason.
 	const perAccount = await env.SHARE_DB.prepare(
-		"SELECT COUNT(*) AS count FROM game_screenshots WHERE user_id = ?",
+		`SELECT COUNT(*) AS count FROM game_screenshots
+		 WHERE user_id = ? AND hidden_by IS NULL`,
 	)
 		.bind(userId)
 		.first<CountRow>();
@@ -449,8 +461,10 @@ export async function handleScreenshotUpload(
 			    game_screenshot_probabilities, hidden_at)
 			 SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
 			        CASE WHEN ? = 1 THEN datetime('now') END
-			 WHERE (SELECT COUNT(*) FROM game_screenshots WHERE game_id = ?) < ?
-			   AND (SELECT COUNT(*) FROM game_screenshots WHERE user_id = ?) < ?
+			 WHERE (SELECT COUNT(*) FROM game_screenshots
+			         WHERE game_id = ? AND hidden_by IS NULL) < ?
+			   AND (SELECT COUNT(*) FROM game_screenshots
+			         WHERE user_id = ? AND hidden_by IS NULL) < ?
 			 RETURNING created_at, hidden_at`,
 		)
 			.bind(
@@ -534,11 +548,23 @@ export async function handleScreenshotUpload(
 
 // ---------- Reads ----------
 
-// One stored screenshot, as both galleries render it. `hidden_at` is the only
-// filter either read applies — a screenshot requires a public game, enforced
-// at the upload endpoint and again by handleGamePatch's HAS_SCREENSHOTS
-// refusal, so there is no is_public join on this table and nothing downstream
-// should add one (migration 0050 says so at the top).
+// One stored screenshot, as both galleries render it.
+//
+// Both reads apply ONE rule, and it is the only viewer-dependent thing on
+// either path: a published row goes to everyone, a classifier-queued row goes
+// to its uploader alone, and a taken-down row goes to nobody — its object was
+// deleted, so an owner's tile could only render broken.
+//
+// The queued leg is what makes the HAS_SCREENSHOTS refusal honest. A queued
+// row holds a quota slot and pins its game public, and while no surface
+// rendered it its owner had no tile to delete — so the remedy that refusal
+// names ("remove this game's screenshots") was one nobody could carry out.
+// The tile badges itself from `status` below.
+//
+// Visibility still needs no leg of its own: a screenshot requires a public
+// game, enforced at the upload endpoint and again by that refusal, so there
+// is no is_public join on this table and nothing downstream should add one
+// (migration 0050 says so at the top).
 //
 // Both URLs are built here rather than derived by the client, because the
 // thumbnail's transformation options are also what the purge has to name: a
@@ -551,6 +577,7 @@ interface ScreenshotRow {
 	width: number;
 	height: number;
 	caption: string | null;
+	hidden_at: string | null;
 }
 
 // The game columns the profile tab needs to name and link the game a shot
@@ -573,10 +600,16 @@ function serializeScreenshot(env: ScreenshotsEnv, row: ScreenshotRow) {
 		width: row.width,
 		height: row.height,
 		caption: row.caption,
+		// The upload 201's own vocabulary, and only two of its three values
+		// can arrive here: a taken-down row is filtered out by both reads, so
+		// `in_review` means "waiting on an admin, and you are the only viewer
+		// who is sent it".
+		status: row.hidden_at == null ? "published" : "in_review",
 	};
 }
 
-// GET /v1/games/:id/screenshots — one game's strip, newest first. Public.
+// GET /v1/games/:id/screenshots — one game's strip, newest first. Public,
+// with the owner-only queued leg the Reads note above describes.
 //
 // No LIMIT: the 5-per-game cap bounds this to five rows, and a second number
 // here would be a display cap that could disagree with the storage one.
@@ -595,18 +628,26 @@ export async function handleGameScreenshots(
 	);
 	if (rl) return rl;
 
+	// Who is asking, for the queued leg alone. The budget above is IP-keyed,
+	// so this is the one identity lookup on the path, and an anonymous reader
+	// binds null — `user_id = NULL` is never true in SQLite, so the leg
+	// simply does not fire rather than needing a branch of its own.
+	const session = await sessionFromRequest(env, request);
+	const viewerId = session?.data.user_id ?? null;
+
 	// rowid breaks the tie, not screenshot_id: created_at is
 	// datetime('now') at one-second resolution, so two uploads in the same
 	// second order arbitrarily on created_at alone, and a nanoid tiebreak
 	// would be stable but random. rowid is insertion order, which is what
 	// "newest first" means. The sort is over at most five rows.
 	const rows = await env.SHARE_DB.prepare(
-		`SELECT screenshot_id, game_id, r2_key, width, height, caption
+		`SELECT screenshot_id, game_id, r2_key, width, height, caption, hidden_at
 		 FROM game_screenshots
-		 WHERE game_id = ? AND hidden_at IS NULL
+		 WHERE game_id = ?
+		   AND (hidden_at IS NULL OR (hidden_by IS NULL AND user_id = ?))
 		 ORDER BY created_at DESC, rowid DESC`,
 	)
-		.bind(gameId)
+		.bind(gameId, viewerId)
 		.all<ScreenshotRow>();
 
 	return jsonResponse(
@@ -619,7 +660,9 @@ export async function handleGameScreenshots(
 }
 
 // GET /v1/users/:user_id/screenshots — one uploader's shots across all their
-// games, newest first. Public, and the profile Screenshots tab's lazy payload.
+// games, newest first. The profile Screenshots tab's lazy payload, public on
+// the same rule as the strip: this user's queued rows only when this user is
+// the one reading.
 //
 // No LIMIT here either, for the same reason: the 100-per-account cap bounds
 // it. `user_id` is carried on the row rather than joined from the game (the
@@ -640,15 +683,20 @@ export async function handleUserScreenshots(
 	);
 	if (rl) return rl;
 
+	const session = await sessionFromRequest(env, request);
+	const viewerId = session?.data.user_id ?? null;
+
 	const rows = await env.SHARE_DB.prepare(
 		`SELECT s.screenshot_id, s.game_id, s.r2_key, s.width, s.height, s.caption,
+		        s.hidden_at,
 		        g.game_name, g.display_name, g.user_nation, g.total_turns
 		 FROM game_screenshots s
 		 JOIN games g ON g.game_id = s.game_id
-		 WHERE s.user_id = ? AND s.hidden_at IS NULL
+		 WHERE s.user_id = ?
+		   AND (s.hidden_at IS NULL OR (s.hidden_by IS NULL AND s.user_id = ?))
 		 ORDER BY s.created_at DESC, s.rowid DESC`,
 	)
-		.bind(userId)
+		.bind(userId, viewerId)
 		.all<ScreenshotGameRow>();
 
 	return jsonResponse(
@@ -676,7 +724,9 @@ interface OwnedScreenshotRow {
 
 // DELETE /v1/games/:id/screenshots/:screenshot_id — the uploader removes their
 // own screenshot. Permanent: there is no hidden-but-kept state for an owner,
-// only for the classifier's uncertain band and the admin takedown.
+// only for the classifier's uncertain band and the admin takedown. A queued
+// row is deletable, and since both reads send it to its uploader there is a
+// tile to press — which is what makes the HAS_SCREENSHOTS remedy reachable.
 //
 // This endpoint is what makes the HAS_SCREENSHOTS refusal honest. Without it a
 // game with a screenshot could not be made private by any route its owner has
