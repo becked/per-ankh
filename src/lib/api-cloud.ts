@@ -468,7 +468,7 @@ export interface UploadGameResponse {
 	challenge_submitted?: boolean;
 }
 
-// One stored screenshot as either gallery reads it: the game-detail strip and
+// One stored screenshot as either gallery reads it: a game's Screenshots view and
 // the profile Screenshots tab render the same tile from this.
 //
 // Both URLs come from the Worker rather than being assembled here. `url` is
@@ -1268,7 +1268,7 @@ export const cloudApi = {
 		return res.json() as Promise<{ screenshot: UploadedScreenshot }>;
 	},
 
-	// One game's screenshots, newest first — the game-detail strip. Public
+	// One game's screenshots, newest first — a game's Screenshots view. Public
 	// read on its own per-IP budget, with one viewer-dependent leg: a
 	// review-band upload is sent to its own uploader, marked `in_review`, and
 	// to nobody else until an admin publishes it.

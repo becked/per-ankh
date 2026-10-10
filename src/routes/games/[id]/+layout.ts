@@ -74,11 +74,12 @@ function mapApiErrorToPage(err: unknown): never {
 	throw err;
 }
 
-// Game detail load, shared by both views of a game: the analyst view
-// (/games/[id]) and the map view (/games/[id]/map). As a layout load it runs
-// once for the pair, so switching views makes no second request — but only
-// while the success path never reads `url`. SvelteKit reruns a load that has
-// read `url` on every URL change; today it's read only in the 401 branch.
+// Game detail load, shared by all three views of a game: the analyst view
+// (/games/[id]), the map view (/games/[id]/map) and the screenshots view
+// (/games/[id]/screenshots). As a layout load it runs once for the set, so
+// switching views makes no second request — but only while the success path
+// never reads `url`. SvelteKit reruns a load that has read `url` on every URL
+// change; today it's read only in the 401 branch.
 //
 // The API's `GET /v1/games/:id` is unified — it serves owners (full
 // payload, with `is_public` injected) and anonymous viewers of public
@@ -106,6 +107,20 @@ export const load: LayoutLoad = async ({ params, fetch, url }) => {
 		.getGameChallengeLink(params.id, { fetch })
 		.then((res) => res.link)
 		.catch(() => null);
+	// The screenshots, for all three views rather than for the one that renders
+	// them: the header's view toggle offers the Screenshots segment only when
+	// there is something in it, so every view has to know whether there is.
+	// One read here serves the set — this load takes only params.id, so a
+	// switch between views still makes no second request.
+	//
+	// Best-effort, like the two link reads above. The gallery has its own per-IP
+	// budget (SCREENSHOT_VIEW_PER_HOUR), above ANON_READS_PER_HOUR so it is
+	// never what a real visitor meets first — and when it does fire, or D1
+	// hiccups, the game renders with no Screenshots segment rather than
+	// 429-ing a page whose subject is the save.
+	const screenshotsPromise = cloudApi
+		.getGameScreenshots(params.id, { fetch })
+		.catch(() => []);
 
 	let game;
 	try {
@@ -142,6 +157,7 @@ export const load: LayoutLoad = async ({ params, fetch, url }) => {
 	// the page render. Issued above, concurrently with the game read.
 	const tournamentLink = await linkPromise;
 	const challengeLink = await challengeLinkPromise;
+	const screenshots = await screenshotsPromise;
 
 	return {
 		game,
@@ -149,6 +165,7 @@ export const load: LayoutLoad = async ({ params, fetch, url }) => {
 		collections,
 		tournamentLink,
 		challengeLink,
+		screenshots,
 		meta: buildMeta(game),
 	};
 };

@@ -1,9 +1,9 @@
 <script lang="ts">
-	// The grid both screenshot surfaces render (issue #289, step 5): the
-	// game-detail strip and the profile Screenshots tab. One component, because
+	// The grid both screenshot surfaces render (issue #289, step 5): a game's
+	// Screenshots view and the profile Screenshots tab. One component, because
 	// the two differ only in what a tile has to say — the profile shows shots
 	// from across all a user's games, so its tiles name and link the game,
-	// while a game's own strip is already under that game's header.
+	// while a game's own view is already under that game's header.
 	//
 	// A tile can be `in_review`: the classifier queued it, and both reads send
 	// such a row to its uploader alone. It badges itself and keeps its delete,
@@ -368,8 +368,11 @@
 						<p class="truncate text-tan" title={shot.caption}>{shot.caption}</p>
 					{/if}
 					{#if showGame}
+						<!-- Into that game's screenshots view, not its analyst view: the
+						     link is on a screenshot, and that is the view the
+						     screenshot is on. -->
 						<a
-							href={resolve("/games/[id]", { id: shot.game_id })}
+							href={resolve("/games/[id]/screenshots", { id: shot.game_id })}
 							class="block truncate text-gray-400 hover:text-orange hover:underline"
 						>
 							{gameTitle(shot)}

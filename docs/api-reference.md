@@ -111,7 +111,7 @@ The three tournament read buckets are split by the *surface that spends them*, n
 | user search | 60 / hr per user | `GET /v1/users/search` |
 | `user_search_public` | 300 / hr per user | `GET /v1/users/public-search` |
 | `slug_claim_attempt` | 15 / hr per user | `POST` + `DELETE /v1/users/me/slug` (counts attempts, not successes) |
-| `screenshot_view` | 600 / hr per IP | `GET /v1/games/:id/screenshots` + `GET /v1/users/:user_id/screenshots` — ONE budget for both, because each is one read per gallery viewed; its own rather than a share of `anon_read` because the strip read runs on every `/games/[id]` render. Own ceiling var (`SCREENSHOT_VIEW_PER_HOUR`) |
+| `screenshot_view` | 600 / hr per IP | `GET /v1/games/:id/screenshots` + `GET /v1/users/:user_id/screenshots` — ONE budget for both, because each is one read per gallery viewed; its own rather than a share of `anon_read` because the game's gallery read runs on every game render (the client reads it in the game's shared layout, so once for whichever of its views is entered). Own ceiling var (`SCREENSHOT_VIEW_PER_HOUR`) |
 | `screenshot_upload_attempt` | 20 / hr per user | `POST /v1/games/:id/screenshots` (counts attempts, not successes — a refused upload spends a classifier call and no quota, so the 5-per-game / 100-per-account caps bound storage and only this bounds inference spend). Tighter than the save-upload ceiling on purpose: saves get bulk-reuploaded whenever `PARSER_VERSION` moves, screenshots never do. Own ceiling var (`PER_USER_SCREENSHOTS_PER_HOUR`) |
 | `screenshot_report` | 20 / hr per user | `POST /v1/games/:id/screenshots/:screenshot_id/report` (counts successes, **not** attempts — unlike `screenshot_upload_attempt` above, these rows are the reports' own accountability record and are `KEEP_FOREVER`, so a row per refused attempt would accumulate in a list nothing prunes. The composite PK already holds a reporter to one report per screenshot, so what this bounds is the queue). Own ceiling var (`PER_USER_SCREENSHOT_REPORTS_PER_HOUR`) |
 | upload / download | per-user + per-IP + global | game upload / download |
@@ -304,7 +304,7 @@ Delete a game and its blobs.
 - **Notes:** Blocked while linked to any tournament whose status ≠ `complete`, and while the game is a run on a challenge that has not closed (the submission row would cascade away with it). Deletes R2 objects then the D1 row (child tables cascade) — including every `screenshots/{game_id}/…` object, listed by prefix from the screenshots bucket.
 
 ### `GET /v1/games/:id/screenshots`
-One game's screenshots, newest first — the strip on the game page.
+One game's screenshots, newest first — the game's **Screenshots** view, and what decides whether that view's segment appears in the game's view toggle at all.
 
 - **Auth:** None. Every screenshot's object is public (a screenshot requires a public game), so its metadata is too. The session is read all the same, for the owner-only leg under Notes.
 - **Path:** `id` (21-char).
@@ -319,7 +319,7 @@ One uploader's screenshots across all their games, newest first — the profile 
 - **Path:** `user_id` (21-char).
 - **Response 200:** as `GET /v1/games/:id/screenshots`, with each row additionally carrying `game: { game_name, display_name, user_nation, total_turns }` — the raw title fields, formatted client-side by `formatGameTitle`, so a tile can name and link the game it came from.
 - **Errors:** `429 RATE_LIMIT_SCREENSHOT_VIEW` (the same budget — see below).
-- **Notes:** Shares one per-IP budget with the game strip rather than taking its own: both are one read per gallery viewed, so there is nothing a second budget would protect (unlike the challenge/tournament *view* vs *link* split, which divided surfaces with different fan-out). Its own budget rather than a share of `anon_read` because the strip read runs on every `/games/[id]` render. Uncapped — the 100-per-account storage cap bounds the result. Whether the tab renders at all is [`GET /v1/users/:user_id`](#get-v1usersuser_id)'s `has_screenshots`, which applies this same rule against the same viewer, so the trigger can't disagree with this payload.
+- **Notes:** Shares one per-IP budget with the game's gallery rather than taking its own: both are one read per gallery viewed, so there is nothing a second budget would protect (unlike the challenge/tournament *view* vs *link* split, which divided surfaces with different fan-out). Its own budget rather than a share of `anon_read` because the game's gallery read runs on every game render (see [Rate limiting](#rate-limiting)). Uncapped — the 100-per-account storage cap bounds the result. Whether the tab renders at all is [`GET /v1/users/:user_id`](#get-v1usersuser_id)'s `has_screenshots`, which applies this same rule against the same viewer, so the trigger can't disagree with this payload.
 
 ### `GET /v1/featured-screenshots`
 The admin-starred set, newest star first — the home page's curated strip. Non-starred screenshots never reach `/`.

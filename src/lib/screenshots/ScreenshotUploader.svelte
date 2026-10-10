@@ -1,5 +1,7 @@
 <script lang="ts">
-	// The owner's upload control for a game's screenshots (issue #289, step 4).
+	// The owner's upload control for a game's screenshots (issue #289, step 4) —
+	// the camera popover in the game header (GameActions), which is the only
+	// thing that writes to a game's screenshots.
 	//
 	// Pick → downscale in a worker → preview → POST. The preview is the WebP
 	// that will be stored, not the file that was picked: the browser re-encodes
@@ -45,10 +47,11 @@
 		// display rule. Read from the shared visibility state, so flipping the
 		// header's lock changes this without a reload.
 		isPublic: boolean;
-		// Called only for a screenshot that is actually visible, so the strip
-		// above can show it without a reload. A review-band upload is stored
-		// hidden and no reader renders it, so it reports nothing — the done
-		// state below is what tells the uploader it is queued.
+		// Called for every stored upload, a classifier-queued one included:
+		// both gallery reads send such a row to its uploader and to nobody
+		// else, and the uploader is who is looking. The caller prepends it to
+		// the game's shared list, which is what makes the header's Screenshots
+		// segment appear — and lead to the new tile — without a reload.
 		// eslint-disable-next-line no-unused-vars -- parameter in callback signature
 		onUploaded?: (screenshot: UploadedScreenshot) => void;
 	} = $props();
@@ -72,12 +75,6 @@
 	// terms problem — prompting again would send the user round the same loop
 	// with the same result, so it falls through to the error line instead.
 	let termsPrompted = $state(false);
-
-	// The preview is for bytes nothing else is showing. Every stored upload is
-	// on the strip the moment onUploaded fires — a queued one included, badged
-	// "In review" — so holding the preview up after that would put the same
-	// image on screen twice.
-	const showPreview = $derived(!(phase === "done" && uploaded != null));
 
 	const resized = $derived.by(() => {
 		const p = prepared;
@@ -216,8 +213,8 @@
 
 {#if !isPublic}
 	<p class="text-sm text-gray-400">
-		Screenshots live on a public game. Use the lock above to make this one
-		public.
+		Screenshots live on a public game. Use the lock beside the camera to make
+		this one public.
 	</p>
 {:else}
 	{#if error}
@@ -232,34 +229,32 @@
 	{:else if phase === "preparing"}
 		<p class="text-sm text-tan">Preparing…</p>
 	{:else if prepared}
-		<div class="flex flex-col gap-3 sm:flex-row sm:items-start">
-			{#if showPreview}
-				<PanelInset class="sm:w-80 sm:flex-none">
-					<!-- The local preview, not the stored object's URL: they are the
+		<div class="flex flex-col gap-3">
+			<PanelInset>
+				<!-- The local preview, not the stored object's URL: they are the
 				     same bytes, and fetching the public URL here would warm the
 				     edge cache for an object a review-band upload is holding
 				     hidden.
-				     It is dropped once an ACCEPTED upload is done, because the
-				     strip above is now showing that screenshot and two copies of
-				     one image is one too many. A queued upload keeps it: nothing
-				     else renders a hidden row, so this is the only place its
-				     uploader can see what they sent. -->
-					<img
-						src={prepared.preview}
-						alt="Screenshot preview"
-						class="w-full rounded"
-					/>
-					<p class="mt-1 text-xs text-gray-400">
-						{prepared.variant.width}×{prepared.variant.height}
-						{#if resized}
-							· resized from {prepared.variant.sourceWidth}×{prepared.variant
-								.sourceHeight}
-						{/if}
-					</p>
-				</PanelInset>
-			{/if}
+				     It stays up through the done state, because this control is a
+				     popover in the header and the gallery it added to is a view
+				     away — so the preview is the only thing that shows the
+				     uploader what landed, which was true of a queued upload
+				     before and is now true of an accepted one as well. -->
+				<img
+					src={prepared.preview}
+					alt="Screenshot preview"
+					class="w-full rounded"
+				/>
+				<p class="mt-1 text-xs text-gray-400">
+					{prepared.variant.width}×{prepared.variant.height}
+					{#if resized}
+						· resized from {prepared.variant.sourceWidth}×{prepared.variant
+							.sourceHeight}
+					{/if}
+				</p>
+			</PanelInset>
 
-			<div class="min-w-0 flex-1">
+			<div class="min-w-0">
 				{#if phase === "terms"}
 					<h3 class="mb-2 text-sm font-bold text-tan">
 						Before your first screenshot
@@ -295,8 +290,8 @@
 					</p>
 					<p class="mb-3 text-sm text-gray-400">
 						{uploaded.status === "published"
-							? "It's on this game now."
-							: "The screening wasn't sure about this one. It's on your strip marked In review, and a site admin will look at it before anyone else can see it."}
+							? "It's on this game's Screenshots view now."
+							: "The screening wasn't sure about this one. It's on your Screenshots view marked In review, and a site admin will look at it before anyone else can see it."}
 					</p>
 					<label
 						class="inline-flex cursor-pointer items-center gap-2 {SECONDARY_BTN}"

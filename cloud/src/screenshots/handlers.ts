@@ -80,7 +80,7 @@ export interface ScreenshotsEnv
 
 // ---------- Caps ----------
 
-// Five per game is what lets the game-detail strip read as one row at every
+// Five per game is what lets a game's Screenshots view read as one row at every
 // width; the account number bounds storage and moderation attention.
 //
 // Both are enforced structurally, in the INSERT, rather than by the
@@ -127,11 +127,12 @@ export function screenshotsPerHour(env: ScreenshotsEnv): number {
 // ---------- The read budget ----------
 
 // Per-IP hourly ceiling on the two gallery reads, and its own budget rather
-// than a share of anon_read: the game strip is one read per /games/[id]
-// render, so on the shared budget a crawl of game pages would decide when the
-// profile tab starts refusing — and anon_read is already the tightest ceiling
-// the pages that spend it meet (the tournament_link_view argument, for the
-// same incident).
+// than a share of anon_read: a game's gallery is one read per game render —
+// the client reads it in the game's shared layout, so once for whichever of
+// its views is entered — so on the shared budget a crawl of game pages would
+// decide when the profile tab starts refusing, and anon_read is already the
+// tightest ceiling the pages that spend it meet (the tournament_link_view
+// argument, for the same incident).
 //
 // ONE budget for both reads, where the challenge and tournament link reads
 // each took their own. The split there was between surfaces with different

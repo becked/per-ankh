@@ -1,9 +1,14 @@
 <script lang="ts">
-	// Spans both views of a game (analysis and map) so the one piece of state
-	// they share — the owner's visibility toggle — survives a switch between
-	// them (see visibility-context). Each page renders its own header; this
-	// layout renders only its children.
+	// Spans all three views of a game (analysis, map and screenshots) so the
+	// state they share survives a switch between them: the owner's visibility
+	// toggle (see visibility-context) and the game's screenshots (see
+	// screenshots-context). Each page renders its own header; this layout
+	// renders only its children.
 	import { untrack, type Snippet } from "svelte";
+	import {
+		GameScreenshots,
+		setGameScreenshots,
+	} from "$lib/game-detail/screenshots-context.svelte";
 	import {
 		GameVisibility,
 		setGameVisibility,
@@ -21,15 +26,23 @@
 		new GameVisibility(data.game.is_public ?? false),
 	);
 
+	// The screenshots, on the same terms: constructed here so the SSR'd HTML
+	// carries the strip and the Screenshots segment, rather than both arriving
+	// on hydration.
+	// svelte-ignore state_referenced_locally
+	const screenshots = setGameScreenshots(new GameScreenshots(data.screenshots));
+
 	// Re-sync when the route navigates to a different game. Only the match id
 	// is tracked; the body reads via untrack(). This avoids clobbering an
-	// in-flight optimistic visibility toggle if the layout is revalidated for
-	// the same game (e.g. invalidateAll() from a rename) — the new server
-	// `is_public` would race the optimistic flip.
+	// in-flight optimistic write if the layout is revalidated for the same game
+	// (e.g. invalidateAll() from a rename): the new server `is_public` would
+	// race the lock's optimistic flip, and the reloaded list would race a
+	// screenshot delete still in flight and put its tile back.
 	$effect(() => {
 		data.game.game_details.match_id;
 		untrack(() => {
 			visibility.isPublic = data.game.is_public ?? false;
+			screenshots.list = data.screenshots;
 		});
 	});
 </script>

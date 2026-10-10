@@ -1,6 +1,6 @@
 <script lang="ts">
 	// One user's screenshots across all their games, newest first — the same
-	// grid the game-detail strip renders, with each tile naming and linking the
+	// grid a game's Screenshots view renders, with each tile naming and linking the
 	// game it came from, which on this surface is the only thing that does.
 	// The grid sits in a recessed (sunken) panel so the tiles read as a well
 	// within the tab, matching the Videos tab beside it.

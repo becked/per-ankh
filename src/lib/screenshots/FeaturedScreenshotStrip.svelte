@@ -49,12 +49,14 @@ Six across at `lg`, which is the strip's own cap (MAX_FEATURED_SCREENSHOTS):
 	{#each screenshots as shot (shot.screenshot_id)}
 		<figure class="group relative min-w-0">
 			<!--
-      Stretched link over the whole tile, into the game the screenshot is of.
+      Stretched link over the whole tile, into that game's screenshots view —
+      where the screenshot that was clicked is, rather than the game's analyst
+      view, which is one segment away from it.
       The uploader's link in the caption sits above it (higher z-index) so it
       wins clicks on the avatar and the name, the pattern VideoCard uses.
       -->
 			<a
-				href={resolve("/games/[id]", { id: shot.game_id })}
+				href={resolve("/games/[id]/screenshots", { id: shot.game_id })}
 				class="absolute inset-0 z-10 rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange"
 				aria-label={gameTitle(shot)}
 			></a>
