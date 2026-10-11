@@ -12,6 +12,92 @@ compatibility_flags = ["nodejs_als"]
 # Wrangler creates the DNS record automatically
 routes = [{ pattern = "api.per-ankh.app", custom_domain = true }]
 
+# Run the Worker next to its data instead of next to the visitor (issue #150).
+#
+# The regional storage this Worker reaches is all in ENAM — both D1 databases
+# and the R2 bucket (SESSIONS_KV is global and pays no crossing) — so a Worker
+# started at the visitor's colo pays a cross-region round trip *per query*,
+# not per request. Handlers here issue several: a home page load spends six
+# read-budget COUNT(*)s across its API calls, each one ahead of the rows the
+# call it gates actually wants. Placement moves the isolate to the data and
+# turns N crossings per call into one.
+#
+# `mode = "smart"` rather than a `region` hint, though Cloudflare's own
+# selection table puts a "single back-end service in a known cloud region" in
+# the Region row. We do not know the region: there is no published mapping
+# from a D1 location to a cloud region, and D1's own location hint is soft
+# ("the nearest possible location (by latency)"). An unknown infrastructure
+# location is the Smart row by that same table's criterion, and the asymmetry
+# settles it — smart reverts itself (UNSUPPORTED_APPLICATION) if the placement
+# measures slower, while a wrong `region` pins the Worker to the wrong
+# continent silently and permanently.
+#
+# It is also how the region question gets *answered*: read placement status
+# (GET /accounts/{account_id}/workers/services/{worker_name}) and the
+# `cf-placement` response header after a deploy. SUCCESS with `remote-IAD` is
+# the measurement a hint would have been guessing at. INSUFFICIENT_INVOCATIONS
+# is the live risk at ~3k invocations/day spread across colos — that, and only
+# that, is the signal to pin `region = "aws:us-east-1"`.
+#
+# Two things this deliberately does not touch. The `scheduled` handler is
+# unaffected (placement applies to fetch), so the nightly precompute gets
+# nothing from it. And the root wrangler.toml — the SvelteKit Worker — must
+# NOT get this block: it carries an `[assets]` binding, and pinning that
+# Worker would drag static-asset serving to ENAM for every visitor.
+#
+# Inheritable (wrangler's config normalizer resolves it against the top-level
+# env), so staging moves with it. Do not duplicate it into [env.staging].
+[placement]
+mode = "smart"
+
+# A response cache in FRONT of the Worker (issue #291).
+#
+# Cloudflare Workers run before the cache, so a `new Response()` built here had
+# never reached a shared cache — which is why the `s-maxage` directives in the
+# handlers were inert, constraining browsers and intermediaries only. This
+# block is the supported way to change that: Cloudflare checks the cache before
+# running the Worker, and on a hit the Worker does not run at all.
+#
+# It composes with placement rather than competing with it, and in the order
+# that matters: the cache is always consulted *before* placement is
+# considered, and the lower tier sits in the data center closest to the
+# visitor. So a Sydney hit is served in Sydney and crosses nothing — where a
+# KV-based cache (the shape #150 originally designed) would be read *inside*
+# the Worker, which after placement is in ENAM, and so would pay the crossing
+# on every request. Request collapsing — per cache key, per data center — is
+# the herd control the /stats handlers want on a cold key, for free.
+#
+# THE PREREQUISITE, because enabling this naively is a cross-user leak and not
+# a perf change: a `200` with no `Cache-Control` gets RFC 9111 heuristic
+# freshness (7200 seconds), and `Cookie` is not in the cache key. Our session
+# *is* a cookie and we never use `Authorization`, so a signed-in GET is
+# indistinguishable from an anonymous one to this cache. What makes it safe is
+# in the Worker, not here:
+#
+#   - `jsonResponse` emits `private, no-store` by default (cloud/src/util.ts),
+#     so a route that never thought about caching cannot be shared.
+#   - The routes that may be shared declare it (`sharedCache` in
+#     cloud/src/index.ts), with the audit pinned by
+#     cloud/src/shared-cache-routes.test.ts.
+#
+# Turning this on without both is what leaks `GET /v1/auth/me`'s discord_id
+# and `GET /v1/users/me/online-ids`'s online_id to everyone for two hours.
+# They ship in the same unit of work for that reason.
+#
+# No compatibility_date bump: `[cache]` mandates no minimum date — the gate is
+# Wrangler >= 4.69.0 (>= 4.107.0 for per-entrypoint overrides) and
+# cloud/package.json's `^4.0.0` resolves to 4.147.0. Per-entrypoint
+# overrides would not help anyway: every GET route spec shares the default
+# entrypoint, so there is no per-route opt-in and the default posture above is
+# the only lever.
+#
+# Worker version is in the cache key by default, so every deploy starts cold —
+# the same shape the KV stats bundles already have. Inheritable like
+# `[placement]`, so staging gets it too; don't duplicate it into
+# [env.staging].
+[cache]
+enabled = true
+
 # Two independent telemetry paths, both with a 7-day queryable window in
 # Cloudflare plus an OTLP export for longer retention:
 #
@@ -390,6 +476,10 @@ SESSION_COOKIE_NAME = "session"
 #     script name, so staging and prod stay distinguishable at the
 #     destination; spans carry it as the cloudflare.script_name resource
 #     attribute, present on every span.
+#   - placement and cache ARE inherited (verified against wrangler's config
+#     normalizer, which resolves both against the top-level env) — staging
+#     runs in the same region and behind the same response cache as prod, and
+#     duplicating either block here would only let the two drift.
 #   - main / compatibility_date / compatibility_flags are inherited; not
 #     repeated here.
 #

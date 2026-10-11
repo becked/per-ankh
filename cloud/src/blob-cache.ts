@@ -1,11 +1,18 @@
 // Per-POP Cache API tier in front of the R2 reads for `games/*`.
 //
 // Workers run *before* Cloudflare's edge cache, so a body built with
-// `new Response()` is never stored at the edge — the `s-maxage` directives on
-// the game routes constrain browsers and intermediaries only. Without a tier
-// here every blob read is a full round trip to the bucket's ENAM region, for
-// every viewer worldwide; R2 buckets are single-region and cannot be
-// replicated, so caching is the only lever available. See issue #150.
+// `new Response()` reaches a shared cache only where one is put in front of
+// the Worker deliberately — which `[cache]` now does (cloud/wrangler.toml,
+// issue #291). Before that the `s-maxage` directives on the game routes
+// constrained browsers and intermediaries only. Without a tier here every
+// blob read is a full round trip to the bucket's ENAM region, for every
+// viewer worldwide; R2 buckets are single-region and cannot be replicated, so
+// caching is the only lever available. See issue #150.
+//
+// Workers Cache does not make this redundant, and the next two bullets are
+// exactly why: it stores whole responses keyed on the URL, while this stores
+// R2 object bytes ahead of both the authorization read and the per-request
+// PII strip. Different invalidation surfaces — keep both.
 //
 // This caches the *R2 object bytes*, not the HTTP response, and that choice is
 // what keeps the invalidation surface to a single path:

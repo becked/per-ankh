@@ -86,6 +86,46 @@ export function cloudCorsHeaders(
 	return headers;
 }
 
+// Whether a cache **shared between viewers** may store a response carrying
+// this directive. The question `[cache]` (cloud/wrangler.toml) asks of every
+// response this Worker returns, and the one the enforcement in index.ts
+// answers.
+//
+// `null` is a yes, which is the whole reason there is a default worth
+// enforcing: an unheadered `200` gets RFC 9111 heuristic freshness, 7200s.
+// Only `private` and `no-store` are a no — `no-cache` is not one of them, it
+// requires revalidation before reuse rather than forbidding the entry.
+//
+// Tokens, not a substring match: this is what the drift guard's regex over
+// source literals cannot be (`shared-cache-routes.test.ts`), since
+// `max-age=300`, `s-maxage=60` and a directive assembled at runtime are all
+// storable and spelled differently.
+export function allowsSharedStorage(directive: string | null): boolean {
+	if (directive === null) return true;
+	return !directive
+		.split(",")
+		.map((d) => d.trim().toLowerCase().split("=")[0])
+		.some((name) => name === "private" || name === "no-store");
+}
+
+// The default response shape for every JSON endpoint — and, with it, the
+// default *cache* posture for the whole API.
+//
+// `private, no-store` is here rather than at the call sites because omitting
+// a `Cache-Control` is not an opt-out of caching: Workers Cache sits in front
+// of the Worker (`[cache]` in cloud/wrangler.toml), and a `200` that says
+// nothing gets RFC 9111 heuristic freshness — 7200 seconds. `Cookie` is not
+// in the cache key and our session *is* a cookie, so a signed-in GET is
+// indistinguishable from an anonymous one to that cache: a header-less
+// response is a response shared between viewers. `GET /v1/auth/me` and
+// `GET /v1/users/me/online-ids` return `discord_id` and `online_id` through
+// here and say nothing about caching, which is the shape of the argument —
+// the default has to be the safe one, and opting *in* the deliberate act.
+//
+// A route that wants to be shared declares it by building its own Response
+// with a `public, …` directive, and says so in the ROUTES table — see
+// `sharedCache` in cloud/src/index.ts and the guard in
+// cloud/src/shared-cache-routes.test.ts.
 export function jsonResponse(
 	body: Record<string, unknown>,
 	status: number,
@@ -96,6 +136,12 @@ export function jsonResponse(
 		headers: {
 			"Content-Type": "application/json",
 			...cors,
+			// Below `...cors`, so the posture cannot be overridden by the one
+			// argument every route on the API shares — the same reason
+			// handleGameDetail puts its `Vary` there (games.ts). Nothing passes
+			// a directive in `cors` today and nothing should: `cloudCorsHeaders`
+			// has no idea who is asking or what the body holds.
+			"Cache-Control": "private, no-store",
 		},
 	});
 }

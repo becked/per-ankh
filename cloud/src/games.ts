@@ -2581,50 +2581,56 @@ export async function handlePublicRecentGames(
 	const gameIds = games.map((g) => g.game_id);
 	const placeholders = gameIds.map(() => "?").join(", ");
 
-	// Player summaries for every game in the list — humans AND AI. The
-	// sparkline renders every nation; AI lines fill in the picture of how
-	// the game played out, not just the human seats.
-	//
-	// cities_total / techs_completed / laws_count + is_winner power the
-	// home's Nations-card-style featured-player block, mirroring the
-	// Overview tab's per-player card.
-	const playerRows = await env.SHARE_DB.prepare(
-		`SELECT game_id, player_index, player_name, nation, is_human, is_uploader,
-		        is_winner, final_points, cities_total, techs_completed, laws_count
-		 FROM player_summaries
-		 WHERE game_id IN (${placeholders})
-		 ORDER BY game_id, player_index`,
-	)
-		.bind(...gameIds)
-		.all<{
-			game_id: string;
-			player_index: number;
-			player_name: string;
-			nation: string | null;
-			is_human: number;
-			is_uploader: number;
-			is_winner: number;
-			final_points: number | null;
-			cities_total: number | null;
-			techs_completed: number | null;
-			laws_count: number | null;
-		}>();
-
-	// Per-turn victory points for every player — humans and AI.
-	const seriesRows = await env.SHARE_DB.prepare(
-		`SELECT game_id, player_index, turn, points, momentum
-		 FROM game_player_turn
-		 WHERE game_id IN (${placeholders})
-		 ORDER BY game_id, player_index, turn`,
-	)
-		.bind(...gameIds)
-		.all<{
-			game_id: string;
-			player_index: number;
-			turn: number;
-			points: number | null;
-			momentum: number | null;
-		}>();
+	// The two fan-outs go out together: both bind only `gameIds` and neither
+	// reads the other, so awaiting them in sequence paid a second crossing to
+	// ENAM for nothing. Three blocking round trips rather than four — the
+	// game list above still has to land first, since it is what supplies
+	// `gameIds`.
+	const [playerRows, seriesRows] = await Promise.all([
+		// Player summaries for every game in the list — humans AND AI. The
+		// sparkline renders every nation; AI lines fill in the picture of how
+		// the game played out, not just the human seats.
+		//
+		// cities_total / techs_completed / laws_count + is_winner power the
+		// home's Nations-card-style featured-player block, mirroring the
+		// Overview tab's per-player card.
+		env.SHARE_DB.prepare(
+			`SELECT game_id, player_index, player_name, nation, is_human, is_uploader,
+			        is_winner, final_points, cities_total, techs_completed, laws_count
+			 FROM player_summaries
+			 WHERE game_id IN (${placeholders})
+			 ORDER BY game_id, player_index`,
+		)
+			.bind(...gameIds)
+			.all<{
+				game_id: string;
+				player_index: number;
+				player_name: string;
+				nation: string | null;
+				is_human: number;
+				is_uploader: number;
+				is_winner: number;
+				final_points: number | null;
+				cities_total: number | null;
+				techs_completed: number | null;
+				laws_count: number | null;
+			}>(),
+		// Per-turn victory points for every player — humans and AI.
+		env.SHARE_DB.prepare(
+			`SELECT game_id, player_index, turn, points, momentum
+			 FROM game_player_turn
+			 WHERE game_id IN (${placeholders})
+			 ORDER BY game_id, player_index, turn`,
+		)
+			.bind(...gameIds)
+			.all<{
+				game_id: string;
+				player_index: number;
+				turn: number;
+				points: number | null;
+				momentum: number | null;
+			}>(),
+	]);
 
 	// Index series rows by (game_id, player_index) so the assembly loop
 	// stays O(N) instead of N² scans. Skip NULL points: games uploaded
@@ -2909,9 +2915,20 @@ export async function handleGameDetail(
 	};
 	const bodyText = JSON.stringify(transformed);
 
-	// Vary: Cookie keeps the public-cache key correct. Scrapers send no
-	// Cookie header → single edge cache key. Cookie-bearing requests bypass
-	// the public cache (correctness > hit rate). Origin must also be in
+	// Vary: Cookie keeps the shared-cache key correct, and Workers Cache
+	// honors it with no allowlist (`[cache]`, cloud/wrangler.toml). Scrapers
+	// and signed-out visitors send no Cookie header → one key, which can only
+	// ever hold the stripOnlineIds body below. An owner's request carries a
+	// different Cookie string *and* takes the `private, no-store` branch, so
+	// their blob is never stored at all.
+	//
+	// A cookie-bearing non-owner does not bypass that cache — it gets a
+	// per-cookie entry. Cookie values are compared verbatim, with no
+	// normalization, so every distinct string is its own stored variant. Two
+	// consequences, neither a hole: the "served in the visitor's own colo,
+	// crosses nothing" win reaches signed-out viewers and scrapers rather than
+	// signed-in ones, whose variant is theirs alone; and any Cloudflare-managed
+	// cookie a visitor picks up forks another entry. Origin must also be in
 	// Vary so the credentialed-CORS response isn't reused for a different
 	// origin — combine both rather than letting `...cors` clobber Cookie.
 	return new Response(bodyText, {

@@ -515,7 +515,8 @@ describe("GET /v1/stats caching", () => {
 	it("lets the edge cache the response and keeps it out of the browser's", async () => {
 		// Byte-identical for every viewer and at most nightly fresh, so it takes
 		// the same header the other public reads carry. max-age=0 so a reload
-		// after the night's precompute shows the new numbers.
+		// after the night's precompute is bounded by the shared cache's 60s
+		// rather than by a browser TTL.
 		const res = await get("?slice=duel", "203.0.113.24");
 		expect(res.headers.get("Cache-Control")).toBe(
 			"public, max-age=0, s-maxage=60",

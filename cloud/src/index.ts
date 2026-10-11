@@ -17,13 +17,16 @@
 
 import {
 	adoptTrustedFrontend,
+	allowsSharedStorage,
 	cloudCorsHeaders,
+	jsonResponse,
 	type TrustedFrontendEnv,
 } from "./util";
 import { instrumentD1, staleTolerantSession } from "./d1";
 import type { QueryableD1 } from "./d1";
 import {
 	emitAccessLog,
+	getLogContext,
 	getRequestId,
 	logError,
 	logEvent,
@@ -273,6 +276,40 @@ interface RouteSpec {
 	//
 	// Adding one here also needs an entry in stale-tolerant-routes.test.ts.
 	staleTolerant?: true;
+	// This route's response may be stored in a cache **shared between
+	// viewers**, and its handler builds its own `Cache-Control` saying so.
+	// Omitted — the default — means the response is for its caller only, which
+	// is what `jsonResponse` emits (`private, no-store`, util.ts) and what the
+	// wrapper in `fetch` rewrites any other posture to.
+	//
+	// So the flag is what makes a handler's `public, …` directive *reachable*,
+	// not a note that it has one: an unflagged route serving one is forced
+	// private on the way out and logs `shared_cache_directive_forced`.
+	//
+	// The declaration matters because Workers Cache runs in front of the
+	// Worker (`[cache]`, cloud/wrangler.toml): on a hit the handler does not
+	// run, so nothing authorizes, rate-limits or audits, and the key holds the
+	// path and query string but *not* the `Cookie` header our session rides
+	// in. Flagging a route is therefore a claim that its body does not depend
+	// on who asked — or that a `Vary` makes the dependence part of the key.
+	//
+	// Two things disqualify a route:
+	//
+	//   - The body differs by session. `GET /v1/users/:user_id/stats` picks
+	//     `viewerScope` off the session and includes the owner's *private*
+	//     games; the KV layer already keys on that scope for the same reason
+	//     (stats/cache.ts), and a shared HTTP entry would reopen what it
+	//     closes. `Vary: Cookie` is the exception that makes one safe —
+	//     `GET /v1/games/:id` serves two bodies on one URL and names Cookie in
+	//     its `Vary`, so the cookie-less (PII-stripped) variant is the only
+	//     one a shared key can hold.
+	//   - Its gate is on *what* the caller may see rather than on what they
+	//     may spend. A hit answers an anonymous request from a signed-in
+	//     visitor's response, so a 401 the handler would have returned never
+	//     happens.
+	//
+	// Adding one here also needs an entry in shared-cache-routes.test.ts.
+	sharedCache?: true;
 }
 
 const ROUTES: RouteSpec[] = [
@@ -354,6 +391,22 @@ const ROUTES: RouteSpec[] = [
 		match: { kind: "path", path: "/v1/games/public-recent" },
 		route: "GET /v1/games/public-recent",
 		handler: (r, e) => handlePublicRecentGames(r, e),
+		// Three SHARE_DB queries, all SELECT: the game list, then the player
+		// and series fan-outs it feeds. Both `events` touches — the anon_read
+		// count and its audit insert — go through EVENTS_DB, so neither
+		// anchors the session's bookmark.
+		//
+		// Unlike the two profile-stats routes further down it persists its
+		// answer nowhere, so the 24h-KV-entry care that makes first-primary
+		// load-bearing there does not arise here: the response is the only
+		// thing a replica read reaches, and it already tells browsers
+		// `max-age=300`. Replica lag is orders of magnitude inside what the
+		// route itself accepts.
+		staleTolerant: true,
+		// Nothing here reads the session, so there is no viewer-dependent body
+		// to leak — the PII stance is the same for every caller (display_name
+		// and the in-game player_name, no online_ids). The clean case.
+		sharedCache: true,
 	},
 	// The played-games leaderboard — what /players reads, all-time and per-season
 	// windows alike. Anonymous, and on its own per-IP budget
@@ -365,6 +418,9 @@ const ROUTES: RouteSpec[] = [
 		match: { kind: "path", path: "/v1/stats/players" },
 		route: "GET /v1/stats/players",
 		handler: (r, e) => handlePlayerLeaderboard(r, e),
+		// Anonymous and sessionless — the board named in the URL is the whole
+		// input, and the window is a query parameter, so it is in the key.
+		sharedCache: true,
 	},
 	{
 		method: "GET",
@@ -387,6 +443,12 @@ const ROUTES: RouteSpec[] = [
 		route: "GET /v1/games/:id",
 		// Passes ctx so the per-POP blob cache can fill in the background.
 		handler: (r, e, m, c) => handleGameDetail(m![1], r, e, c),
+		// The one route that serves two bodies on one URL — the owner's, and
+		// the `stripOnlineIds` variant everyone else gets. Safe to share only
+		// because it names Cookie in its `Vary` (games.ts), which puts the
+		// distinction into the cache key, and answers the owner `private,
+		// no-store` so that body is never stored at all.
+		sharedCache: true,
 	},
 	{
 		method: "GET",
@@ -1167,6 +1229,14 @@ const ROUTES: RouteSpec[] = [
 		match: { kind: "path", path: "/v1/stats" },
 		route: "GET /v1/stats",
 		handler: (r, e, _m, c) => handleGlobalStats(r, e, c),
+		// Byte-identical for every viewer, per the gate's own reasoning above:
+		// the session is on who may spend an aggregation, not on what they get
+		// to see. Note what sharing therefore means — a hit does not run the
+		// handler, so an anonymous caller can be answered from a signed-in
+		// one's response. That is the gate's purpose satisfied rather than
+		// bypassed (a hit spends nothing), but it is the consequence to
+		// re-read if the payload ever starts depending on the viewer.
+		sharedCache: true,
 	},
 	// The record boards over the same selection. Everything above applies —
 	// same gate, same `global_stats_view` budget, same ?slice= / ?nation=, same
@@ -1178,6 +1248,8 @@ const ROUTES: RouteSpec[] = [
 		match: { kind: "path", path: "/v1/stats/records" },
 		route: "GET /v1/stats/records",
 		handler: (r, e, _m, c) => handleGlobalRecords(r, e, c),
+		// Same corpus, same gate, same consequence.
+		sharedCache: true,
 	},
 	// The home page's stats panels — the three bundle fields they draw, over the
 	// unfaceted `duel` slice. Public where /v1/stats is session-gated, because
@@ -1191,6 +1263,9 @@ const ROUTES: RouteSpec[] = [
 		match: { kind: "path", path: "/v1/home-summary" },
 		route: "GET /v1/home-summary",
 		handler: (r, e) => handleHomeSummary(r, e),
+		// Public and sessionless, and it reads one precomputed KV entry over a
+		// fixed slice — no parameters at all, so one body for everyone.
+		sharedCache: true,
 	},
 	// Cross-creator home feed — newest uploads across all users' linked
 	// channels, merged newest-first for the home page's "Latest from creators"
@@ -1200,6 +1275,8 @@ const ROUTES: RouteSpec[] = [
 		match: { kind: "path", path: "/v1/creator-videos" },
 		route: "GET /v1/creator-videos",
 		handler: (r, e, _m, c) => handleCreatorVideos(r, e, c),
+		// One pre-assembled feed, identical for every caller.
+		sharedCache: true,
 	},
 	// The other half of that strip — newest uploads across every visible
 	// tournament's admin-set playlist, merged newest-first. Per-playlist KV
@@ -1210,6 +1287,11 @@ const ROUTES: RouteSpec[] = [
 		match: { kind: "path", path: "/v1/tournament-videos" },
 		route: "GET /v1/tournament-videos",
 		handler: (r, e, _m, c) => handleTournamentVideosFeed(r, e, c),
+		// Which tournaments contribute is viewer-independent *by construction*
+		// — anything past `setup`, plus `setup` with signups open — a choice
+		// docs/api-reference.md already records as made because this response
+		// is shared-cacheable.
+		sharedCache: true,
 	},
 	// The third home video feed — the site-admin featured set (see
 	// cloud/src/featured.ts), newest first. Read straight from D1 rather than
@@ -1220,6 +1302,10 @@ const ROUTES: RouteSpec[] = [
 		match: { kind: "path", path: "/v1/featured-videos" },
 		route: "GET /v1/featured-videos",
 		handler: (r, e) => handlePublicFeaturedVideos(r, e),
+		// A small curated table read straight from D1 — public, sessionless
+		// and outside every rate-limit budget, which is most of why it is also
+		// the synthetic-check probe (docs/cloud-deploy-plan.md §6).
+		sharedCache: true,
 	},
 	// The home page's curated screenshot strip — the admin-starred set, newest
 	// star first (cloud/src/screenshots/handlers.ts). Public, and the one
@@ -1232,6 +1318,10 @@ const ROUTES: RouteSpec[] = [
 		match: { kind: "path", path: "/v1/featured-screenshots" },
 		route: "GET /v1/featured-screenshots",
 		handler: (r, e) => handleFeaturedScreenshots(r, e),
+		// Reads no session at all — one D1 query bound to a constant cap — so
+		// there is only ever one body, the same one the three video feeds
+		// above answer every visitor with.
+		sharedCache: true,
 	},
 	// User-facing tournament endpoints
 	{
@@ -1280,6 +1370,21 @@ export const ROUTE_KEYS: readonly string[] = ROUTES.map((r) => r.route);
 export const STALE_TOLERANT_ROUTE_KEYS: readonly string[] = ROUTES.filter(
 	(r) => r.staleTolerant,
 ).map((r) => r.route);
+
+// The routes whose responses may be stored in a cache shared between viewers,
+// exported for the drift guard in cloud/src/shared-cache-routes.test.ts. Same
+// two-edit shape as the flag above, and for the same reason: with Workers
+// Cache in front of the Worker a shared entry is served without the handler
+// running, so what a reviewer has to establish is that the body does not
+// depend on who asked.
+export const SHARED_CACHE_ROUTE_KEYS: readonly string[] = ROUTES.filter(
+	(r) => r.sharedCache,
+).map((r) => r.route);
+
+// The same set, by the route key the log context carries, for the enforcement
+// in `fetch` below. Membership is what makes a shared directive *reachable*;
+// everything else is rewritten private on the way out.
+const SHARED_CACHE_ROUTES = new Set(SHARED_CACHE_ROUTE_KEYS);
 
 // Derive the per-request env from the raw bindings: split the events handle
 // off, and give `staleTolerant` routes a Sessions API handle for everything
@@ -1428,14 +1533,11 @@ function dispatch(
 		}
 	}
 	// 404 — echo the request Origin so error responses still allow the
-	// caller that asked.
+	// caller that asked. Through jsonResponse rather than hand-built: it is
+	// the same body and headers, and it is what carries the `private,
+	// no-store` default (util.ts) onto a response no route owns.
 	const cors = cloudCorsHeaders(env, request);
-	return Promise.resolve(
-		new Response(JSON.stringify({ error: "Not found" }), {
-			status: 404,
-			headers: { "Content-Type": "application/json", ...cors },
-		}),
-	);
+	return Promise.resolve(jsonResponse({ error: "Not found" }, 404, cors));
 }
 
 export default {
@@ -1475,23 +1577,84 @@ export default {
 				logError("unhandled_handler_error", err);
 				const requestId = getRequestId();
 				const cors = cloudCorsHeaders(env, request);
-				response = new Response(
-					JSON.stringify({
-						error: "Internal server error",
-						request_id: requestId,
-					}),
-					{
-						status: 500,
-						headers: { "Content-Type": "application/json", ...cors },
-					},
+				// Also through jsonResponse, and here the default it carries is
+				// load-bearing rather than tidy: this body names one request's id,
+				// so it is the one response on the API that must never be replayed
+				// to a second caller.
+				response = jsonResponse(
+					{ error: "Internal server error", request_id: requestId },
+					500,
+					cors,
 				);
 			}
 
-			// Surface request_id to the client. Re-wrap so headers are mutable
-			// even when the handler returned a Response with frozen headers
-			// (e.g. R2 streams).
+			// Re-wrap so headers are mutable even when the handler returned a
+			// Response with frozen headers (e.g. R2 streams).
 			response = new Response(response.body, response);
-			response.headers.set("X-Request-Id", getRequestId() ?? "");
+
+			// Apply the cache posture the ROUTES table declares, rather than
+			// trusting each handler to have built it.
+			//
+			// `jsonResponse` carries the `private, no-store` default (util.ts),
+			// but a handler that builds its own Response inherits nothing from
+			// it — which is how the tournament CSV export came to carry no
+			// directive at all, found by reading the GET surface rather than by
+			// the guard that exists for exactly this. The matched route is
+			// already on the log context, so here the invariant can be
+			// *applied* instead of audited: a response a shared cache would
+			// store, on a route no reviewer flagged `sharedCache`, is rewritten
+			// before it leaves. That covers the silent hand-built case, every
+			// spelling of a storable directive, and the `cors` argument, which
+			// no regex over source literals can.
+			//
+			// Not narrowed to GET. A shared cache only stores GET today, but
+			// which methods are storable under which directives is a second
+			// rule to get right, and `private, no-store` is true of every
+			// response that did not ask to be shared.
+			//
+			// It does reach one response a client reuses: the OPTIONS
+			// preflight above, hand-built and so carrying no directive before
+			// this. Its reuse is unchanged — the CORS-preflight cache is a
+			// store of its own rather than the HTTP cache, keyed on
+			// origin/URL/method/header name/credentials and expiring on
+			// `Access-Control-Max-Age` alone (86400 in cloudCorsHeaders,
+			// util.ts; browsers cap it lower). Nothing in populating, matching
+			// or clearing it reads `Cache-Control` — Fetch § CORS-preflight
+			// cache.
+			const route = getLogContext()?.route;
+			const declared = route != null && SHARED_CACHE_ROUTES.has(route);
+			const built = response.headers.get("Cache-Control");
+			let shareable = allowsSharedStorage(built);
+			if (!declared && shareable) {
+				// A directive that was *present* and storable is drift worth a
+				// line: a handler asked for a hit rate it is not getting, and
+				// the fix is a flag plus a reviewed entry, not a retry. The
+				// absent case is the ordinary one — every hand-built 204 — and
+				// says nothing. `route` by hand because the event envelope
+				// carries request_id and user_id but not the matched route
+				// (log.ts), and the route is the whole content of this line.
+				if (built !== null) {
+					logWarn("shared_cache_directive_forced", {
+						route,
+						directive: built,
+					});
+				}
+				response.headers.set("Cache-Control", "private, no-store");
+				shareable = false;
+			}
+
+			// Surface request_id to the client — on every response that belongs
+			// to one caller, and only those. A stored entry outlives the
+			// request that filled it, so on a shareable response this header
+			// would hand every later caller, for the whole `s-maxage`, an id
+			// that is someone else's; and since a hit runs no Worker and emits
+			// no access line, it resolves to no log entry of theirs either.
+			// That is the one flow the header exists for (a bug report naming
+			// an id an operator can grep), so omitting it beats serving a
+			// replayed one. Documented in docs/api-reference.md.
+			if (!shareable) {
+				response.headers.set("X-Request-Id", getRequestId() ?? "");
+			}
 			emitAccessLog(response);
 			// Skiff security-event tee (issue #71). Reads the same log context,
 			// writes to the dedicated SECURITY_DB via ctx.waitUntil. Fully

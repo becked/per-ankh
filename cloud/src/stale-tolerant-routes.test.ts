@@ -1,6 +1,7 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { STALE_TOLERANT_ROUTE_KEYS } from "./index";
+import { sourceFiles } from "./source-files";
 
 // (`node:fs` / `import.meta.url` typed by test-node.d.ts — the worker tsconfig
 // ships @cloudflare/workers-types only; this test runs on Vitest's Node pool.)
@@ -26,6 +27,12 @@ const REVIEWED: Record<string, string> = {
 	// both payloads, and a miss on either runs the one SELECT-only build that
 	// writes both KV keys.
 	"GET /v1/users/:user_id/stats/records": "SELECT-only call graph",
+	// Three SELECTs on SHARE_DB (the public game list, then the player and
+	// series fan-outs). The anon_read count and its audit insert are the only
+	// writes anywhere in the call graph and both run on EVENTS_DB. Nothing
+	// persists what this route read — unlike the two above, it has no KV
+	// entry — so the answer lives only as long as the response.
+	"GET /v1/games/public-recent": "SELECT-only call graph",
 };
 
 // `events` is both audit log and rate-limit counter, so it always runs on the
@@ -57,16 +64,6 @@ const SRC_DIR = new URL(".", import.meta.url);
 const EVENTS_WRITE_RE =
 	/([\w.]+)\s*\.prepare\(\s*[`"]\s*INSERT(?:\s+OR\s+\w+)?\s+INTO\s+events\b/gi;
 const EVENTS_HANDLE = "env.EVENTS_DB";
-
-function sourceFiles(dir: URL, prefix = ""): string[] {
-	return readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
-		if (e.isDirectory()) {
-			return sourceFiles(new URL(`${e.name}/`, dir), `${prefix}${e.name}/`);
-		}
-		if (!e.name.endsWith(".ts") || e.name.endsWith(".test.ts")) return [];
-		return [`${prefix}${e.name}`];
-	});
-}
 
 describe("stale-tolerant routes", () => {
 	const flagged = new Set(STALE_TOLERANT_ROUTE_KEYS);
