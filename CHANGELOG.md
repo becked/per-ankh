@@ -1,5 +1,17 @@
 # Changelog
 
+## [2026-10-11-922167b] - 2026-10-11
+
+### Fixes
+
+- (screenshots) keep a game's screenshots across a re-import — [519d08b](https://github.com/becked/per-ankh/commit/519d08bb2da79ccbcd81cb3533b6e4ae4766cc45)
+- (screenshots) drop the upload floor to 400 px on the long edge — [922167b](https://github.com/becked/per-ankh/commit/922167b8233cf39a27047cea4a978c08c7434a30)
+
+### Other
+
+- (screenshots) say that a re-import keeps the gallery — [2395dfc](https://github.com/becked/per-ankh/commit/2395dfc409098ff7fcfb81a91f40538dbe98c3f3)
+- (screenshots) seed the upload instant the restore has to carry — [2b50c03](https://github.com/becked/per-ankh/commit/2b50c03e7da04a036c20c6b74a581331bdd1eb73)
+
 ## [2026-10-11-17e78cd] - 2026-10-11
 
 ### Features
