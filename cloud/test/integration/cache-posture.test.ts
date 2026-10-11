@@ -45,7 +45,7 @@ describe("cache posture on the way out", () => {
 
 	it("keeps the directive a declared route's handler built", async () => {
 		// GET /v1/featured-videos is flagged sharedCache and builds its own
-		// `public, …`. Enforcement must not touch it, or the nine reviewed
+		// `public, …`. Enforcement must not touch it, or the ten reviewed
 		// routes would all quietly stop being cacheable.
 		const res = await request.get({ path: "/v1/featured-videos" });
 		expect(res.status).toBe(200);
