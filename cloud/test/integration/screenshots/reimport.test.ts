@@ -46,7 +46,18 @@ async function upload(
 	);
 }
 
+// A fixture's upload instant: long before the re-import, and distinct per row
+// within a game. Both tables default `created_at` to `datetime('now')` and the
+// restore binds it (reimport.ts), so a fixture that let the column default
+// would compare equal whether or not the restore carried it — the re-import's
+// own stamp lands inside the same second. Distinct because both galleries order
+// on the column, which would otherwise leave the payload's order to the
+// tie-break.
+const uploadedAt = (minute: number): string =>
+	`2026-01-02 03:${String(minute).padStart(2, "0")}:00`;
+
 interface SeedOpts {
+	readonly createdAt: string;
 	readonly caption?: string;
 	readonly featuredBy?: TestUser;
 	readonly hiddenAt?: boolean;
@@ -57,7 +68,7 @@ async function seedScreenshot(
 	gameId: string,
 	owner: TestUser,
 	screenshotId: string,
-	opts: SeedOpts = {},
+	opts: SeedOpts,
 ): Promise<string> {
 	await env.SHARE_DB.prepare(
 		`INSERT INTO game_screenshots
@@ -65,11 +76,11 @@ async function seedScreenshot(
 		    caption, is_old_world, contains_nsfw, contains_gore,
 		    is_a_photograph, game_screenshot_confidence,
 		    game_screenshot_probabilities, featured_at, featured_by,
-		    hidden_at, hidden_by)
+		    hidden_at, hidden_by, created_at)
 		 VALUES (?, ?, ?, ?, 1920, 1080, 204800, ?,
 		         0.82, 0.02, 0.03, 0.04, 3.6, '{"4":0.6}',
 		         CASE WHEN ? IS NULL THEN NULL ELSE datetime('now') END, ?,
-		         CASE WHEN ? = 1 THEN datetime('now') END, ?)`,
+		         CASE WHEN ? = 1 THEN datetime('now') END, ?, ?)`,
 	)
 		.bind(
 			screenshotId,
@@ -81,6 +92,7 @@ async function seedScreenshot(
 			opts.featuredBy?.userId ?? null,
 			opts.hiddenAt || opts.hiddenBy ? 1 : 0,
 			opts.hiddenBy?.userId ?? null,
+			opts.createdAt,
 		)
 		.run();
 	return screenshotId;
@@ -89,25 +101,31 @@ async function seedScreenshot(
 async function seedReport(
 	screenshotId: string,
 	reporter: TestUser,
+	createdAt: string,
 	resolvedBy?: TestUser,
 ): Promise<void> {
 	await env.SHARE_DB.prepare(
 		`INSERT INTO screenshot_reports
-		   (screenshot_id, reporter_user_id, reason, resolved_at, resolved_by)
+		   (screenshot_id, reporter_user_id, reason, resolved_at, resolved_by,
+		    created_at)
 		 VALUES (?, ?, 'not_old_world',
-		         CASE WHEN ? IS NULL THEN NULL ELSE datetime('now') END, ?)`,
+		         CASE WHEN ? IS NULL THEN NULL ELSE datetime('now') END, ?, ?)`,
 	)
 		.bind(
 			screenshotId,
 			reporter.userId,
 			resolvedBy?.userId ?? null,
 			resolvedBy?.userId ?? null,
+			createdAt,
 		)
 		.run();
 }
 
-// `SELECT *` on purpose: the restore writes every column, so a column added to
-// either table is compared here without this file being touched.
+// `SELECT *` on purpose: a column added to either table is compared here
+// without this file being touched. What it cannot do is notice a column the
+// restore drops back to its default, since both sides then read the same —
+// that one needs a fixture value the default could not produce, the way
+// `uploadedAt` gives `created_at` one.
 function screenshotRows(gameId: string): Promise<Record<string, unknown>[]> {
 	return env.SHARE_DB.prepare(
 		"SELECT * FROM game_screenshots WHERE game_id = ? ORDER BY screenshot_id",
@@ -150,22 +168,24 @@ describe("re-import of a game with screenshots", () => {
 			first.game_id,
 			owner,
 			"shot-published-00000",
-			{ caption: "The second city" },
+			{ createdAt: uploadedAt(1), caption: "The second city" },
 		);
 		await seedScreenshot(first.game_id, owner, "shot-starred-000000", {
+			createdAt: uploadedAt(2),
 			featuredBy: admin,
 		});
 		await seedScreenshot(first.game_id, owner, "shot-queued-0000000", {
+			createdAt: uploadedAt(3),
 			hiddenAt: true,
 		});
 		const takenDown = await seedScreenshot(
 			first.game_id,
 			owner,
 			"shot-takendown-00000",
-			{ hiddenBy: admin },
+			{ createdAt: uploadedAt(4), hiddenBy: admin },
 		);
-		await seedReport(published, reporter);
-		await seedReport(takenDown, reporter, admin);
+		await seedReport(published, reporter, uploadedAt(5));
+		await seedReport(takenDown, reporter, uploadedAt(6), admin);
 
 		const screenshotsBefore = await screenshotRows(first.game_id);
 		const reportsBefore = await reportRows(first.game_id);
@@ -186,9 +206,11 @@ describe("re-import of a game with screenshots", () => {
 		const nonce = "reimport-gallery-fixture";
 		const first = await upload(owner, nonce);
 		await seedScreenshot(first.game_id, owner, "gallery-published-000", {
+			createdAt: uploadedAt(1),
 			caption: "Chariots",
 		});
 		await seedScreenshot(first.game_id, owner, "gallery-starred-0000", {
+			createdAt: uploadedAt(2),
 			featuredBy: admin,
 		});
 
