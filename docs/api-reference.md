@@ -65,7 +65,9 @@ Auth is a session cookie (name `session`; `session_staging` on staging), `Domain
 
 ### Response & error envelope
 
-Success bodies are endpoint-specific JSON (or a binary stream for downloads/exports). Errors are `{ "error": string, "code"?: string }`, with optional extra fields (e.g. `qualifier_count`). Every response carries an `X-Request-Id` header; unhandled `500`s also include `request_id` in the body.
+Success bodies are endpoint-specific JSON (or a binary stream for downloads/exports). Errors are `{ "error": string, "code"?: string }`, with optional extra fields (e.g. `qualifier_count`). Unhandled `500`s also include `request_id` in the body.
+
+Every response that belongs to a single caller carries an `X-Request-Id` header. A response a shared cache may store does not — the endpoints listed under [Caching](#caching), and for `GET /v1/games/:id` its non-owner body only. That omission is deliberate: a stored entry outlives the request that filled it, so the header would hand every later caller the request id of whoever filled it, and a cache hit emits no access-log line for the caller to be found in anyway. Quote the id from a `private` response; on a shared one, quote the URL and the time.
 
 ### Identifiers
 
@@ -129,7 +131,7 @@ A **shared cache runs in front of the Worker** (`[cache]` in `cloud/wrangler.tom
 - A `200` with **no** `Cache-Control` is not opted out — it gets RFC 9111 heuristic freshness, 7200 seconds.
 - `Cookie` is **not** in the cache key. The key is the path and query string (plus the Worker version); the session cookie this API authenticates with is invisible to it, as is `Authorization`. `Vary` *is* honored, so `Vary: Cookie` is the one way to put the viewer into the key.
 
-So the default is closed: every JSON response carries **`Cache-Control: private, no-store`** unless its endpoint says otherwise below. Endpoints that may be stored in a shared cache declare it in the route table (`sharedCache`, `cloud/src/index.ts`) and are audited by `cloud/src/shared-cache-routes.test.ts`; they are exactly these:
+So the default is closed, and applied rather than merely conventional: a response on an endpoint that did not declare itself shareable is rewritten **`Cache-Control: private, no-store`** on the way out, whatever its handler built. Endpoints that may be stored in a shared cache declare it in the route table (`sharedCache`, `cloud/src/index.ts`) and are audited by `cloud/src/shared-cache-routes.test.ts`; they are exactly these:
 
 | Endpoint | Directive | Why it is shareable |
 | --- | --- | --- |

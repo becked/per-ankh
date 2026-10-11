@@ -1,7 +1,8 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { SHARED_CACHE_ROUTE_KEYS } from "./index";
-import { errorResponse, jsonResponse } from "./util";
+import { sourceFiles } from "./source-files";
+import { allowsSharedStorage, errorResponse, jsonResponse } from "./util";
 
 // (`node:fs` / `import.meta.url` typed by test-node.d.ts — the worker tsconfig
 // ships @cloudflare/workers-types only; this test runs on Vitest's Node pool.)
@@ -9,13 +10,19 @@ import { errorResponse, jsonResponse } from "./util";
 // Guards the cache posture of the GET surface, now that Workers Cache runs in
 // front of the Worker (`[cache]` in cloud/wrangler.toml).
 //
-// Two halves, the same shape as stale-tolerant-routes.test.ts. A route whose
-// response may be stored in a cache shared between viewers carries
-// `sharedCache` in the ROUTES table and an entry here saying why that is safe;
-// a route in one and not the other fails this file. And because the hazard is
-// a response that says nothing at all — an unheadered `200` gets 7200s of
-// heuristic freshness under a key that holds no `Cookie` — the default itself
-// is pinned below rather than left to inspection.
+// What actually *holds* the invariant is the wrapper in index.ts: a response a
+// shared cache would store, on a route not flagged `sharedCache`, is rewritten
+// `private, no-store` before it leaves. This file is the review record that
+// enforcement reads from, plus the two things enforcement cannot say —
+//
+//   - which routes a reviewer cleared, and why (REVIEWED below, matched
+//     against the flags in the ROUTES table in both directions);
+//   - the per-file inventory of handlers that build a `public, …` directive,
+//     so a new one shows up in a diff as a count that has to be changed.
+//
+// Same shape as stale-tolerant-routes.test.ts. The postures the enforcement
+// stands on — `jsonResponse`'s default and the predicate it decides with — are
+// pinned below rather than left to inspection.
 
 // Every route allowed into a shared cache, with the audit that justified it.
 // A route qualifies only if its body does not depend on who asked, or if a
@@ -73,25 +80,21 @@ const PUBLIC_DIRECTIVE_SITES: Record<string, number> = {
 const SRC_DIR = new URL(".", import.meta.url);
 
 // The directive literal, not the header name: `private, no-store` and
-// `private, max-age=…` are the postures that need no review, and a response
-// that sets nothing is caught by the default instead. Matches inside a ternary
-// (handleGameDetail) as readily as a plain property, which is the form a
-// second two-body route would reach for.
+// `private, max-age=…` are the postures that need no review. Matches inside a
+// ternary (handleGameDetail) as readily as a plain property, which is the form
+// a second two-body route would reach for.
 //
-// Inline literals only. A directive assembled at runtime is out of a regex's
-// reach — declare `sharedCache` because the invariant says so, not because
-// this test can see you.
+// One spelling, deliberately, and it is *not* what makes an undeclared
+// directive unreachable — the wrapper is. A regex over source literals cannot
+// be the line here: what makes a response storable is the absence of
+// `private`/`no-store`, so `"max-age=300"`, `"s-maxage=60"` and the
+// template-literal form (`blob-cache.ts`, where it is handed to `cache.put`
+// and never to a client) are all storable and spelled differently, and a
+// hand-built `Response` that sets nothing at all is spelled not at all. That
+// whole class is enforcement's job. What this count is for is keeping the
+// inventory above honest: a handler that starts building a shared directive
+// changes a number here, in a diff, next to the reason it is allowed.
 const PUBLIC_DIRECTIVE_RE = /"public,\s*max-age=/g;
-
-function sourceFiles(dir: URL, prefix = ""): string[] {
-	return readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
-		if (e.isDirectory()) {
-			return sourceFiles(new URL(`${e.name}/`, dir), `${prefix}${e.name}/`);
-		}
-		if (!e.name.endsWith(".ts") || e.name.endsWith(".test.ts")) return [];
-		return [`${prefix}${e.name}`];
-	});
-}
 
 describe("the default cache posture", () => {
 	// The prerequisite for everything else in this file: opting *in* is the
@@ -111,13 +114,63 @@ describe("the default cache posture", () => {
 	});
 
 	it("is not overridable through the cors argument", () => {
-		// `...cors` spreads after the default in jsonResponse, so a caller that
-		// put a directive in there would silently win. Nothing does today and
-		// nothing should — the posture belongs on the response, not on the CORS
-		// helper that every route shares.
-		const headers = jsonResponse({}, 200, { Vary: "Origin" }).headers;
+		// The default spreads *after* `...cors` in jsonResponse, so a caller
+		// that puts a directive in there loses. Nothing does today and nothing
+		// should — the posture belongs on the response, not on the CORS helper
+		// that every route on the API shares. Everything else in `cors` still
+		// lands, which is the other half of why the order is safe to fix.
+		const headers = jsonResponse({}, 200, {
+			"Cache-Control": "public, max-age=3600",
+			Vary: "Origin",
+		}).headers;
 		expect(headers.get("Cache-Control")).toBe("private, no-store");
 		expect(headers.get("Vary")).toBe("Origin");
+	});
+});
+
+// The predicate the wrapper decides with (util.ts). It answers "may a cache
+// shared between viewers store this?", which is the question the `[cache]`
+// block asks — not "does this say `public`?". Everything here that is `true`
+// is a response the wrapper rewrites on an unflagged route.
+describe("allowsSharedStorage", () => {
+	it("treats a missing directive as storable", () => {
+		// The hazard the whole posture exists for: an unheadered `200` gets
+		// 7200s of RFC 9111 heuristic freshness under a key with no Cookie in
+		// it. This is the case a regex over source literals cannot see at all.
+		expect(allowsSharedStorage(null)).toBe(true);
+	});
+
+	it("reads the spellings a `public, max-age=` scan misses", () => {
+		for (const directive of [
+			"max-age=300",
+			"s-maxage=60",
+			"public, s-maxage=60",
+			"max-age=0, s-maxage=60",
+			"public",
+			"no-cache",
+		]) {
+			expect(allowsSharedStorage(directive), directive).toBe(true);
+		}
+	});
+
+	it("accepts only `private` or `no-store` as a refusal", () => {
+		for (const directive of [
+			"private, no-store",
+			"private, max-age=300",
+			"no-store",
+			"PRIVATE, NO-STORE",
+			"public, no-store",
+			'private="set-cookie", max-age=60',
+		]) {
+			expect(allowsSharedStorage(directive), directive).toBe(false);
+		}
+	});
+
+	it("matches directive tokens, not substrings", () => {
+		// `no-cache` contains neither, and a value that merely mentions one in
+		// a parameter is not the directive. Splitting on `,` and `=` is what
+		// keeps both straight.
+		expect(allowsSharedStorage("no-cache, max-age=0")).toBe(true);
 	});
 });
 

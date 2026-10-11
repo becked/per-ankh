@@ -1,6 +1,8 @@
-// Ambient Node surfaces used only by unit tests that run on Vitest's Node pool
-// (routes-doc.test.ts, which reads docs/api-reference.md from disk, and
-// stale-tolerant-routes.test.ts, which walks cloud/src/ for events writes).
+// Ambient Node surfaces used only by code that runs on Vitest's Node pool:
+// the unit tests that read from disk (routes-doc.test.ts against
+// docs/api-reference.md, and the two invariant guards that scan cloud/src/ for
+// an inline literal), plus source-files.ts, the directory walk those two
+// guards share.
 // The worker tsconfig ships @cloudflare/workers-types only — no @types/node —
 // deliberately, so Node globals don't leak into worker source. These narrow
 // declarations keep `tsc --noEmit` happy without that. This file has no

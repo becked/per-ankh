@@ -292,12 +292,22 @@ export async function handleTournamentExport(
 			"Content-Type": "application/zip",
 			"Content-Disposition": `attachment; filename="${tournament.slug}-export.zip"`,
 			// Explicit because this response is built by hand and so inherits
-			// nothing from jsonResponse (util.ts) — and it was the one GET on
-			// the API building its own Response with no `Cache-Control` at all.
-			// It needs one: the standings CSV here is the full admin shape, and
-			// an unheadered `200` is cacheable in front of the Worker for 7200s
-			// under a key that holds no cookie — i.e. served to the callers this
-			// route 403s.
+			// nothing from jsonResponse (util.ts) — and it was the only
+			// *cacheable* GET on the API building its own Response with no
+			// `Cache-Control` at all. (`handleDevLogin`'s hand-built 302 has
+			// none either and needs none: it is dark in prod, and its
+			// `Set-Cookie` bypasses the cache regardless.) It needs one: the
+			// standings CSV here is the full admin shape, and an unheadered
+			// `200` is cacheable in front of the Worker for 7200s under a key
+			// that holds no cookie — i.e. served to the callers this route
+			// 403s.
+			//
+			// Belt-and-braces as of the enforcement in index.ts, which would
+			// rewrite this response private on the way out anyway — the route
+			// is not flagged `sharedCache`. Kept because the posture of a
+			// hand-built response reads better at the response than inferred
+			// from a table, and the reason above is the part that doesn't
+			// survive deletion.
 			"Cache-Control": "private, no-store",
 		},
 	});

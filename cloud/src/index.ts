@@ -17,6 +17,7 @@
 
 import {
 	adoptTrustedFrontend,
+	allowsSharedStorage,
 	cloudCorsHeaders,
 	jsonResponse,
 	type TrustedFrontendEnv,
@@ -25,6 +26,7 @@ import { instrumentD1, staleTolerantSession } from "./d1";
 import type { QueryableD1 } from "./d1";
 import {
 	emitAccessLog,
+	getLogContext,
 	getRequestId,
 	logError,
 	logEvent,
@@ -277,7 +279,12 @@ interface RouteSpec {
 	// This route's response may be stored in a cache **shared between
 	// viewers**, and its handler builds its own `Cache-Control` saying so.
 	// Omitted — the default — means the response is for its caller only, which
-	// is what `jsonResponse` emits (`private, no-store`, util.ts).
+	// is what `jsonResponse` emits (`private, no-store`, util.ts) and what the
+	// wrapper in `fetch` rewrites any other posture to.
+	//
+	// So the flag is what makes a handler's `public, …` directive *reachable*,
+	// not a note that it has one: an unflagged route serving one is forced
+	// private on the way out and logs `shared_cache_directive_forced`.
 	//
 	// The declaration matters because Workers Cache runs in front of the
 	// Worker (`[cache]`, cloud/wrangler.toml): on a hit the handler does not
@@ -1370,6 +1377,11 @@ export const SHARED_CACHE_ROUTE_KEYS: readonly string[] = ROUTES.filter(
 	(r) => r.sharedCache,
 ).map((r) => r.route);
 
+// The same set, by the route key the log context carries, for the enforcement
+// in `fetch` below. Membership is what makes a shared directive *reachable*;
+// everything else is rewritten private on the way out.
+const SHARED_CACHE_ROUTES = new Set(SHARED_CACHE_ROUTE_KEYS);
+
 // Derive the per-request env from the raw bindings: split the events handle
 // off, and give `staleTolerant` routes a Sessions API handle for everything
 // else. One session per request — sharing one across requests would let
@@ -1572,11 +1584,63 @@ export default {
 				);
 			}
 
-			// Surface request_id to the client. Re-wrap so headers are mutable
-			// even when the handler returned a Response with frozen headers
-			// (e.g. R2 streams).
+			// Re-wrap so headers are mutable even when the handler returned a
+			// Response with frozen headers (e.g. R2 streams).
 			response = new Response(response.body, response);
-			response.headers.set("X-Request-Id", getRequestId() ?? "");
+
+			// Apply the cache posture the ROUTES table declares, rather than
+			// trusting each handler to have built it.
+			//
+			// `jsonResponse` carries the `private, no-store` default (util.ts),
+			// but a handler that builds its own Response inherits nothing from
+			// it — which is how the tournament CSV export came to carry no
+			// directive at all, found by reading the GET surface rather than by
+			// the guard that exists for exactly this. The matched route is
+			// already on the log context, so here the invariant can be
+			// *applied* instead of audited: a response a shared cache would
+			// store, on a route no reviewer flagged `sharedCache`, is rewritten
+			// before it leaves. That covers the silent hand-built case, every
+			// spelling of a storable directive, and the `cors` argument, which
+			// no regex over source literals can.
+			//
+			// Not narrowed to GET. A shared cache only stores GET today, but
+			// which methods are storable under which directives is a second
+			// rule to get right, and `private, no-store` is true of every
+			// response that did not ask to be shared.
+			const route = getLogContext()?.route;
+			const declared = route != null && SHARED_CACHE_ROUTES.has(route);
+			const built = response.headers.get("Cache-Control");
+			let shareable = allowsSharedStorage(built);
+			if (!declared && shareable) {
+				// A directive that was *present* and storable is drift worth a
+				// line: a handler asked for a hit rate it is not getting, and
+				// the fix is a flag plus a reviewed entry, not a retry. The
+				// absent case is the ordinary one — every hand-built 204 — and
+				// says nothing. `route` by hand because the event envelope
+				// carries request_id and user_id but not the matched route
+				// (log.ts), and the route is the whole content of this line.
+				if (built !== null) {
+					logWarn("shared_cache_directive_forced", {
+						route,
+						directive: built,
+					});
+				}
+				response.headers.set("Cache-Control", "private, no-store");
+				shareable = false;
+			}
+
+			// Surface request_id to the client — on every response that belongs
+			// to one caller, and only those. A stored entry outlives the
+			// request that filled it, so on a shareable response this header
+			// would hand every later caller, for the whole `s-maxage`, an id
+			// that is someone else's; and since a hit runs no Worker and emits
+			// no access line, it resolves to no log entry of theirs either.
+			// That is the one flow the header exists for (a bug report naming
+			// an id an operator can grep), so omitting it beats serving a
+			// replayed one. Documented in docs/api-reference.md.
+			if (!shareable) {
+				response.headers.set("X-Request-Id", getRequestId() ?? "");
+			}
 			emitAccessLog(response);
 			// Skiff security-event tee (issue #71). Reads the same log context,
 			// writes to the dedicated SECURITY_DB via ctx.waitUntil. Fully
