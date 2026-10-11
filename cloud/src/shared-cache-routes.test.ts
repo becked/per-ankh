@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { SHARED_CACHE_ROUTE_KEYS } from "./index";
+import { ROUTE_KEYS, SHARED_CACHE_ROUTE_KEYS } from "./index";
 import { sourceFiles } from "./source-files";
 import { allowsSharedStorage, errorResponse, jsonResponse } from "./util";
 
@@ -231,5 +231,30 @@ describe("public directives stay declared", () => {
 				`block). Flag the route \`sharedCache\` in ROUTES, add it to REVIEWED\n` +
 				`above, and update the count for its file here.`,
 		).toEqual(PUBLIC_DIRECTIVE_SITES);
+	});
+});
+
+// docs/cloud-deploy-plan.md §6.2 is the one place in prose that still counts
+// this surface. Five other sites repeated the same figures and all six went
+// stale together on the #294 merge, which nothing caught — so the rest now
+// describe the surface without counting it, and this paragraph keeps the
+// numbers because the latency argument there needs their scale. Derived from
+// ROUTES rather than restated, which is what makes the staleness
+// uncompilable: the count is in a diff next to the route that changed it.
+const DEPLOY_PLAN = new URL("../../docs/cloud-deploy-plan.md", import.meta.url);
+
+describe("the GET-surface counts in docs/cloud-deploy-plan.md", () => {
+	it("match the ROUTES table", () => {
+		const gets = ROUTE_KEYS.filter((k) => k.startsWith("GET ")).length;
+		const flagged = SHARED_CACHE_ROUTE_KEYS.length;
+		const phrase =
+			`the ${gets - flagged} unflagged GET routes ` +
+			`(${gets} in the ROUTES table, ${flagged} flagged)`;
+		// Boolean rather than the document, so a failure prints the sentence to
+		// write instead of seven hundred lines of deploy plan.
+		expect(
+			readFileSync(DEPLOY_PLAN, "utf8").includes(phrase),
+			`docs/cloud-deploy-plan.md must read "${phrase}".`,
+		).toBe(true);
 	});
 });

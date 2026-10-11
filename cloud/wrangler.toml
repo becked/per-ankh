@@ -87,7 +87,7 @@ mode = "smart"
 # No compatibility_date bump: `[cache]` mandates no minimum date — the gate is
 # Wrangler >= 4.69.0 (>= 4.107.0 for per-entrypoint overrides) and
 # cloud/package.json's `^4.0.0` resolves to 4.147.0. Per-entrypoint
-# overrides would not help anyway: all 55 GET route specs share the default
+# overrides would not help anyway: every GET route spec shares the default
 # entrypoint, so there is no per-route opt-in and the default posture above is
 # the only lever.
 #
