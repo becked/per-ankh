@@ -5,11 +5,10 @@
 // nothing is cached, and from then on every path that removes one has to clear
 // the edge as well as the bucket.
 //
-// Why it exists at all: no Worker sits in the image path. Every object is
-// public and served from an R2 custom domain with a 30-day Edge TTL, so there
-// is no per-request gate to re-evaluate after a row is hidden or deleted —
-// the edge keeps serving the copy it holds. Purge-by-URL is the only
-// invalidation there is.
+// The call itself is purgeCachedUrls (src/lib/screenshots/purge-cache.ts),
+// shared with the admin CLI, which makes the same request against the same
+// zone from a Node script with no bindings. What is here is the Worker's half:
+// where the credentials come from, and what a failure reads like in the log.
 //
 // Deliberately not a module that knows what a screenshot is: it takes URLs.
 // Which URLs one screenshot has is storage.ts's answer (the object plus its
@@ -17,6 +16,7 @@
 // owner's delete, the game delete and the admin takedown share one list.
 
 import { logError } from "../log";
+import { purgeCachedUrls } from "../../../src/lib/screenshots/purge-cache";
 
 export interface ScreenshotPurgeEnv {
 	// The zone the image hosts live in. A var rather than a secret — a zone id
@@ -29,13 +29,7 @@ export interface ScreenshotPurgeEnv {
 	CLOUDFLARE_PURGE_TOKEN?: string;
 }
 
-// The API's own ceiling on a purge-by-URL call. A game delete clears two URLs
-// per screenshot against a 5-per-game cap, so a single game is well inside it
-// — the chunking is for the list-by-prefix case, which can turn up objects no
-// row names.
-const MAX_URLS_PER_PURGE = 30;
-
-// Purge a set of URLs, chunked, logging rather than throwing.
+// Purge a set of URLs, logging rather than throwing.
 //
 // Logged in the `orphaned_blob` style, and for the same reason: nothing else
 // will ever notice. A failed purge means a deleted or hidden image is still
@@ -68,35 +62,23 @@ export async function purgeUrls(
 		return;
 	}
 
-	for (let i = 0; i < urls.length; i += MAX_URLS_PER_PURGE) {
-		const files = urls.slice(i, i + MAX_URLS_PER_PURGE);
-		try {
-			const res = await fetch(
-				`https://api.cloudflare.com/client/v4/zones/${zoneId}/purge_cache`,
-				{
-					method: "POST",
-					headers: {
-						Authorization: `Bearer ${token}`,
-						"Content-Type": "application/json",
-					},
-					body: JSON.stringify({ files }),
-				},
-			);
-			if (!res.ok) {
-				// The body carries Cloudflare's own error array, which is the
-				// difference between a scope problem and a bad URL. Bounded,
-				// because an error body is not a size we control.
-				const detail = (await res.text()).slice(0, 500);
-				logError("screenshot_purge_failed", new Error(`HTTP ${res.status}`), {
-					...context,
-					urls: files.length,
-					detail,
-				});
-			}
-		} catch (e) {
-			logError("screenshot_purge_failed", e, {
+	const results = await purgeCachedUrls({ zoneId, token, urls });
+	for (const result of results) {
+		if (result.kind === "purged") continue;
+		// `detail` carries Cloudflare's own error array, which is the
+		// difference between a scope problem and a bad URL; an unreachable
+		// chunk has the thrown error instead, so its stack survives into the
+		// log.
+		if (result.kind === "refused") {
+			logError("screenshot_purge_failed", new Error(`HTTP ${result.status}`), {
 				...context,
-				urls: files.length,
+				urls: result.files.length,
+				detail: result.detail,
+			});
+		} else {
+			logError("screenshot_purge_failed", result.error, {
+				...context,
+				urls: result.files.length,
 			});
 		}
 	}

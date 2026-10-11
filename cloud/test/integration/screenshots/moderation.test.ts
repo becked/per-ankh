@@ -191,6 +191,16 @@ async function objectKeys(gameId: string): Promise<string[]> {
 	return listed.objects.map((o) => o.key);
 }
 
+async function reportEvents(reporter: TestUser): Promise<number> {
+	const row = await env.SHARE_DB.prepare(
+		`SELECT COUNT(*) AS count FROM events
+		 WHERE event_type = 'screenshot_report' AND user_id = ?`,
+	)
+		.bind(reporter.userId)
+		.first<{ count: number }>();
+	return row?.count ?? 0;
+}
+
 async function reportRows(
 	screenshotId: string,
 ): Promise<{ reason: string; resolved_at: string | null }[]> {
@@ -322,6 +332,13 @@ describe("POST /v1/games/:id/screenshots/:screenshot_id/report", () => {
 		// And it stays out of the queue.
 		const body = await expectOk<Lists>(await lists(admin));
 		expect(body.queue).toEqual([]);
+
+		// And nothing was recorded for the dropped repeat. The upsert wrote
+		// nothing, so a second audit row would say a report was filed when none
+		// was — in a list nothing prunes — and would spend a slot of the
+		// reporter's hourly budget, which is counted out of these rows. The
+		// first report's row is the one that stays.
+		expect(await reportEvents(reporter)).toBe(1);
 	});
 
 	it("lets a second reporter report the same screenshot", async () => {
@@ -348,22 +365,10 @@ describe("POST /v1/games/:id/screenshots/:screenshot_id/report", () => {
 			await report(gameId, "0123456789abcdefghijk", "other", reporter),
 			{ status: 404, code: "NOT_FOUND" },
 		);
-		const afterRefusal = await env.SHARE_DB.prepare(
-			`SELECT COUNT(*) AS count FROM events
-			 WHERE event_type = 'screenshot_report' AND user_id = ?`,
-		)
-			.bind(reporter.userId)
-			.first<{ count: number }>();
-		expect(afterRefusal?.count).toBe(0);
+		expect(await reportEvents(reporter)).toBe(0);
 
 		await expectOk(await report(gameId, id, "other", reporter));
-		const afterReport = await env.SHARE_DB.prepare(
-			`SELECT COUNT(*) AS count FROM events
-			 WHERE event_type = 'screenshot_report' AND user_id = ?`,
-		)
-			.bind(reporter.userId)
-			.first<{ count: number }>();
-		expect(afterReport?.count).toBe(1);
+		expect(await reportEvents(reporter)).toBe(1);
 	});
 
 	it("refuses past the hourly ceiling", async () => {
@@ -444,6 +449,23 @@ describe("GET /v1/admin/screenshots", () => {
 		expect(body.queue.map((r) => r.screenshot_id)).toEqual([starred]);
 		expect(body.featured.map((r) => r.screenshot_id)).toEqual([starred]);
 		expect(body.queue[0].featured_at).not.toBeNull();
+	});
+
+	it("carries both of its dates as ISO instants", async () => {
+		const { user, gameId } = await readyUser();
+		const id = await upload(user, gameId);
+		const reporter = await makeUser();
+		await expectOk(await report(gameId, id, "other", reporter));
+
+		// The card prints both — the upload date beside the uploader, the
+		// report date beside the reporter — through formatDate, which is
+		// `new Date(text)`. D1's own datetime('now') text parses as LOCAL
+		// time, so either one sent raw lands a day either side for any admin
+		// not on UTC. Both go through isoInstantSql, like the galleries' rows.
+		const instant = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
+		const row = (await expectOk<Lists>(await lists(admin))).queue[0];
+		expect(row.created_at).toMatch(instant);
+		expect(row.reports[0].created_at).toMatch(instant);
 	});
 
 	it("carries the game's title fields so a row can name its game", async () => {

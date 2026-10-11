@@ -268,18 +268,11 @@ export function readClefAnswers(result: unknown, label = "clef"): ClefAnswers {
 
 // ─── Bands ──────────────────────────────────────────────────────────────────
 
-// Which band each question feeds, which is also which direction it runs. The
-// eval's derivation and the gate below both read this, so the two cannot
-// disagree about which end of a distribution is the dangerous one.
+// Which band a question feeds, which is also which direction it runs: whether
+// a HIGH probability is the dangerous one, and whether the corpus can set an
+// auto-reject bound at all.
 export type BandKind =
 	"reject-legit-only" | "reject-separated" | "accept-loose";
-
-export const BAND_KIND: Record<string, BandKind> = {
-	is_old_world: "accept-loose",
-	contains_nsfw: "reject-legit-only",
-	contains_gore: "reject-legit-only",
-	is_a_photograph: "reject-separated",
-};
 
 // Crossing reviewAt routes an upload to the admin queue; crossing rejectAt
 // refuses it outright. Null means the corpus cannot set that bound — which,
@@ -391,3 +384,15 @@ export const BANDS: readonly GateBand[] = [
 		rejectAt: 0.79,
 	},
 ];
+
+// Each question's direction, keyed for the eval — DERIVED from the bands above
+// rather than written out a second time. The eval reads this to decide which
+// draw endangers a band (worstCase in scripts/eval-screenshot-classifier.ts)
+// and gateVerdict reads `kind` off the band itself, so the two have to agree
+// about which end of a distribution is the dangerous one. Written twice they
+// agreed only while both copies were edited together: flipping one literal
+// would have the eval fit a bound on the opposite tail from the one production
+// applies, and nothing would fail.
+export const BAND_KIND: Record<string, BandKind> = Object.fromEntries(
+	BANDS.map((band) => [band.question, band.kind]),
+);

@@ -1,7 +1,8 @@
-// A game's public/private state, shared by its two views (the analyst view at
-// /games/[id] and the map view at /games/[id]/map). The [id] layout constructs
-// one instance and provides it via context; each view's GameHeader binds its
-// GameActions lock to it.
+// A game's public/private state, shared by all three of its views (the analyst
+// view at /games/[id], the map view at /games/[id]/map and the screenshots view
+// at /games/[id]/screenshots). The [id] layout constructs one instance and
+// provides it via context; each view's GameHeader binds its GameActions lock
+// to it.
 //
 // It lives above the views because the lock is optimistic: the toggle flips
 // `isPublic` and saves it, but never refetches (rename and collection moves

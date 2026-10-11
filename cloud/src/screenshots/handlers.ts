@@ -32,6 +32,7 @@ import {
 	trippedQuestions,
 	type ClefAnswers,
 } from "./clef";
+import { OBJECT_STORED_WHERE, VISIBLE_TO_VIEWER_WHERE } from "./scope";
 import {
 	deleteScreenshotObject,
 	removeScreenshot,
@@ -91,15 +92,9 @@ export interface ScreenshotsEnv
 // worth their reads — they refuse before the Clef call, so a user at their cap
 // gets a clear answer instead of an inference bill.
 //
-// A TAKEN-DOWN row (`hidden_by` set) counts against neither, and nor does it
-// pin its game public — handleGamePatch's HAS_SCREENSHOTS uses this same
-// filter. Its object was deleted, so the slot holds nothing: charging it
-// would bill an account for a moderation record it cannot see, and would
-// leave the game permanently public with no remedy its owner could carry out.
-// A CLASSIFIER-QUEUED row (`hidden_at` set, `hidden_by` null) does count,
-// because its object IS in R2 — bytes stored on the uploader's behalf, on a
-// public host — and both galleries show such a row to its uploader, so the
-// slot it holds is visible and removable rather than a mystery.
+// WHICH ROWS COUNT is OBJECT_STORED_WHERE (scope.ts), shared with the INSERT's
+// own guards below and with handleGamePatch's HAS_SCREENSHOTS refusal — the
+// same question in all three places, which is why it is written once.
 export const MAX_SCREENSHOTS_PER_GAME = 5;
 export const MAX_SCREENSHOTS_PER_ACCOUNT = 100;
 
@@ -285,7 +280,7 @@ export async function handleScreenshotUpload(
 	// Gate 3 — the per-game cap, over the rows the Caps note says count.
 	const perGame = await env.SHARE_DB.prepare(
 		`SELECT COUNT(*) AS count FROM game_screenshots
-		 WHERE game_id = ? AND hidden_by IS NULL`,
+		 WHERE game_id = ? AND ${OBJECT_STORED_WHERE}`,
 	)
 		.bind(gameId)
 		.first<CountRow>();
@@ -301,7 +296,7 @@ export async function handleScreenshotUpload(
 	// Gate 4 — the per-account cap, same filter and same reason.
 	const perAccount = await env.SHARE_DB.prepare(
 		`SELECT COUNT(*) AS count FROM game_screenshots
-		 WHERE user_id = ? AND hidden_by IS NULL`,
+		 WHERE user_id = ? AND ${OBJECT_STORED_WHERE}`,
 	)
 		.bind(userId)
 		.first<CountRow>();
@@ -473,9 +468,9 @@ export async function handleScreenshotUpload(
 			 SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
 			        CASE WHEN ? = 1 THEN datetime('now') END
 			 WHERE (SELECT COUNT(*) FROM game_screenshots
-			         WHERE game_id = ? AND hidden_by IS NULL) < ?
+			         WHERE game_id = ? AND ${OBJECT_STORED_WHERE}) < ?
 			   AND (SELECT COUNT(*) FROM game_screenshots
-			         WHERE user_id = ? AND hidden_by IS NULL) < ?
+			         WHERE user_id = ? AND ${OBJECT_STORED_WHERE}) < ?
 			 RETURNING ${isoInstantSql("created_at")} AS created_at, hidden_at`,
 		)
 			.bind(
@@ -561,16 +556,11 @@ export async function handleScreenshotUpload(
 
 // One stored screenshot, as both galleries render it.
 //
-// Both reads apply ONE rule, and it is the only viewer-dependent thing on
-// either path: a published row goes to everyone, a classifier-queued row goes
-// to its uploader alone, and a taken-down row goes to nobody — its object was
-// deleted, so an owner's tile could only render broken.
-//
-// The queued leg is what makes the HAS_SCREENSHOTS refusal honest. A queued
-// row holds a quota slot and pins its game public, and while no surface
-// rendered it its owner had no tile to delete — so the remedy that refusal
-// names ("remove this game's screenshots") was one nobody could carry out.
-// The tile badges itself from `status` below.
+// Both reads apply ONE rule — VISIBLE_TO_VIEWER_WHERE (scope.ts), which is
+// also what the profile's has_screenshots flag is derived from, so the flag
+// cannot disagree with the payload in either direction. It is the only
+// viewer-dependent thing on either path. The tile badges itself from `status`
+// below.
 //
 // Visibility still needs no leg of its own: a screenshot requires a public
 // game, enforced at the upload endpoint and again by that refusal, so there
@@ -694,12 +684,13 @@ export async function handleGameScreenshots(
 	// would be stable but random. rowid is insertion order, which is what
 	// "newest first" means. The sort is over at most five rows.
 	const rows = await env.SHARE_DB.prepare(
-		`SELECT screenshot_id, game_id, r2_key, width, height, caption, hidden_at,
-		        featured_at, ${isoInstantSql("created_at")} AS created_at
-		 FROM game_screenshots
-		 WHERE game_id = ?
-		   AND (hidden_at IS NULL OR (hidden_by IS NULL AND user_id = ?))
-		 ORDER BY created_at DESC, rowid DESC`,
+		`SELECT s.screenshot_id, s.game_id, s.r2_key, s.width, s.height, s.caption,
+		        s.hidden_at, s.featured_at,
+		        ${isoInstantSql("s.created_at")} AS created_at
+		 FROM game_screenshots s
+		 WHERE s.game_id = ?
+		   AND ${VISIBLE_TO_VIEWER_WHERE}
+		 ORDER BY s.created_at DESC, s.rowid DESC`,
 	)
 		.bind(gameId, viewerId)
 		.all<ScreenshotRow>();
@@ -748,7 +739,7 @@ export async function handleUserScreenshots(
 		 FROM game_screenshots s
 		 JOIN games g ON g.game_id = s.game_id
 		 WHERE s.user_id = ?
-		   AND (s.hidden_at IS NULL OR (s.hidden_by IS NULL AND s.user_id = ?))
+		   AND ${VISIBLE_TO_VIEWER_WHERE}
 		 ORDER BY s.created_at DESC, s.rowid DESC`,
 	)
 		.bind(userId, viewerId)

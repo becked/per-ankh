@@ -55,6 +55,7 @@ import { captureOnlineIds } from "./online-ids";
 import { momentumCurve } from "./momentum";
 import { MOMENTUM_MODEL_VERSION } from "./generated/momentum";
 import { beginR2Op, logError, logWarn, setLogField } from "./log";
+import { OBJECT_STORED_WHERE } from "./screenshots/scope";
 import {
 	deleteGameScreenshots,
 	type ScreenshotStorageEnv,
@@ -3040,16 +3041,16 @@ export async function handleGamePatch(
 		// has to hold here or it holds nowhere. Removing the screenshots is
 		// the way to make such a game private.
 		//
-		// `hidden_by IS NULL` is the filter the storage caps use, for the
-		// reason stated there: a taken-down row's object was deleted, so it
-		// has nothing left to keep public and nothing to pin. A
+		// OBJECT_STORED_WHERE is the filter the storage caps use, and it is
+		// the same question here: a taken-down row's object was deleted, so it
+		// has nothing left to keep public and nothing to pin, while a
 		// classifier-queued row DOES pin the game, because its object is
-		// public — unlinked but ungated — which is why both galleries send
-		// such a row to its uploader: this refusal has to name a remedy they
-		// can reach.
+		// public — unlinked but ungated. Which is why both galleries send such
+		// a row to its uploader: this refusal has to name a remedy they can
+		// reach.
 		const screenshots = await env.SHARE_DB.prepare(
 			`SELECT COUNT(*) AS count FROM game_screenshots
-			 WHERE game_id = ? AND hidden_by IS NULL`,
+			 WHERE game_id = ? AND ${OBJECT_STORED_WHERE}`,
 		)
 			.bind(gameId)
 			.first<{ count: number }>();

@@ -30,9 +30,18 @@
 
 	let { screenshots }: { screenshots: ScreenshotModerationLists } = $props();
 
-	// Which screenshot is mid-write, so its own buttons can't be pressed twice
-	// and the others stay usable. Keyed by id rather than a boolean, because
-	// the two lists can hold the same screenshot.
+	// Which screenshot is mid-write, read as presence only: EVERY control on
+	// the tab disables while one decision is in flight. That is the Featured
+	// tab's shape (`removing`, FeaturedVideosTable) and it is what an action
+	// here wants on top of it — each one ends in invalidateAll(), so both
+	// lists are about to be replaced wholesale and a second decision pressed
+	// meanwhile would be aimed at a row that is on its way out. The id is what
+	// is held rather than a flag, again like the sibling, so a later control
+	// that wants to mark its own card has it.
+	//
+	// The gallery's star is the other shape — a keyed set, so only the pressed
+	// star disables (ScreenshotGallery). Curating a strip is several presses in
+	// a row, and nothing there reloads the page.
 	let busy = $state<string | null>(null);
 
 	function gameTitle(shot: ModerationScreenshot): string {

@@ -49,6 +49,7 @@ import type { EventsEnv, QueryableD1 } from "../d1";
 import {
 	cloudCorsHeaders,
 	errorResponse,
+	isoInstantSql,
 	jsonResponse,
 	parseJsonBody,
 } from "../util";
@@ -171,7 +172,7 @@ export async function handleScreenshotReport(
 	// — and a repeat after an admin resolved it does nothing: the image has not
 	// changed, so re-reporting it is re-litigating a decision, and the WHERE on
 	// the upsert is what makes "no appeal path" true in both directions.
-	await env.SHARE_DB.prepare(
+	const write = await env.SHARE_DB.prepare(
 		`INSERT INTO screenshot_reports (screenshot_id, reporter_user_id, reason)
 		 VALUES (?, ?, ?)
 		 ON CONFLICT(screenshot_id, reporter_user_id) DO UPDATE SET
@@ -182,11 +183,25 @@ export async function handleScreenshotReport(
 		.bind(screenshotId, userId, body.body.reason)
 		.run();
 
-	await recordScreenshotEvent(env, "screenshot_report", userId, request, {
-		screenshot_id: screenshotId,
-		game_id: gameId,
-		reason: body.body.reason,
-	});
+	// `meta.changes === 0` is the dropped case — the upsert's WHERE refused it,
+	// so no report was filed or corrected. Reachable in ordinary use: the
+	// control comes back on reload (the lightbox's `reported` set is not
+	// persisted), so a reporter whose report was resolved can press it again.
+	//
+	// Gated here, rather than recorded regardless, because this row is what
+	// this ceiling bounds and it is KEEP_FOREVER — a row per attempt that
+	// landed nowhere would accumulate in a list nothing prunes, and would read
+	// as a report that was never filed. It is also what charges the reporter's
+	// hourly budget (countEventsSince above reads these rows), so the two
+	// follow one decision. What the reporter is told does not change either
+	// way.
+	if (write.meta.changes > 0) {
+		await recordScreenshotEvent(env, "screenshot_report", userId, request, {
+			screenshot_id: screenshotId,
+			game_id: gameId,
+			reason: body.body.reason,
+		});
+	}
 
 	// The same answer either way, deliberately: whether a report was recorded,
 	// updated or dropped as already-resolved is the queue's business, and a
@@ -209,9 +224,16 @@ interface ModerationRow {
 	width: number;
 	height: number;
 	caption: string | null;
+	// An ISO instant, not the column's own text — MODERATION_COLUMNS projects
+	// it through isoInstantSql, because the card renders it as a date and
+	// `datetime('now')` text parses as LOCAL time in a browser. The galleries'
+	// rows carry the same shape for the same reason (handlers.ts).
 	created_at: string;
 	hidden_at: string | null;
 	hidden_by: string | null;
+	// Raw, and the only timestamp here that is: the card reads it as
+	// starred-or-not and never prints it. Project it like created_at above if
+	// a surface ever states when a star was given.
 	featured_at: string | null;
 	is_old_world: number;
 	contains_nsfw: number;
@@ -230,6 +252,8 @@ interface ModerationRow {
 interface ReportRow {
 	screenshot_id: string;
 	reason: string;
+	// An ISO instant, like the row's own created_at above — the card prints
+	// this one too, beside the reporter.
 	created_at: string;
 	reporter_user_id: string;
 	reporter_name: string | null;
@@ -241,7 +265,8 @@ interface ReportRow {
 // present on both by construction.
 const MODERATION_COLUMNS = `
 	s.screenshot_id, s.game_id, s.r2_key, s.width, s.height, s.caption,
-	s.created_at, s.hidden_at, s.hidden_by, s.featured_at,
+	${isoInstantSql("s.created_at")} AS created_at,
+	s.hidden_at, s.hidden_by, s.featured_at,
 	s.is_old_world, s.contains_nsfw, s.contains_gore, s.is_a_photograph,
 	s.game_screenshot_confidence,
 	s.user_id, ${displayNameSql("u")} AS uploader_name, u.slug AS uploader_slug,
@@ -369,7 +394,8 @@ export async function handleAdminListScreenshots(
 	// only ever sit on rows the queue above already selected, so there is no
 	// id list to thread through and nothing to narrow it by.
 	const reports = await env.SHARE_DB.prepare(
-		`SELECT r.screenshot_id, r.reason, r.created_at, r.reporter_user_id,
+		`SELECT r.screenshot_id, r.reason,
+		        ${isoInstantSql("r.created_at")} AS created_at, r.reporter_user_id,
 		        ${displayNameSql("u")} AS reporter_name, u.slug AS reporter_slug
 		 FROM screenshot_reports r
 		 JOIN users u ON u.user_id = r.reporter_user_id
@@ -533,11 +559,18 @@ export async function handleScreenshotModerate(
 			// COALESCE on both, so re-starring an already-starred screenshot
 			// keeps the timestamp the home strip orders by instead of jumping
 			// it to the front of its own strip.
+			//
+			// `AND hidden_at IS NULL` is the pre-check above held at write
+			// time, the way `approve` holds its own: a takedown landing between
+			// the SELECT and this statement would otherwise leave a starred row
+			// with no object. The home strip filters `hidden_at` itself, but
+			// the admin tab's featured list does not, so such a row would sit
+			// there offering Unstar.
 			await env.SHARE_DB.prepare(
 				`UPDATE game_screenshots
 				    SET featured_at = COALESCE(featured_at, datetime('now')),
 				        featured_by = COALESCE(featured_by, ?)
-				  WHERE screenshot_id = ?`,
+				  WHERE screenshot_id = ? AND hidden_at IS NULL`,
 			)
 				.bind(adminUserId, screenshotId)
 				.run();

@@ -31,6 +31,7 @@ import { displayNameSql } from "./identity";
 import { logError } from "./log";
 import { UserSearchQuerySchema } from "./schemas/tournament";
 import { ClaimSlugSchema, SlugSchema } from "./schemas/user";
+import { VISIBLE_TO_VIEWER_WHERE } from "./screenshots/scope";
 import { sessionFromRequest, type SessionEnv } from "./session";
 import { USER_MATCHES_WHERE, type TournamentEnv } from "./tournament/data";
 import {
@@ -548,13 +549,16 @@ async function buildUserProfile(
 		// `participates` for Tournaments, with the shots themselves loading
 		// lazily via GET /v1/users/:id/screenshots when the tab opens.
 		//
-		// The predicate is the one that read applies, so the flag can't
-		// disagree with the payload in either direction. That is what makes
-		// it viewer-dependent: a classifier-queued row is a tab for its own
-		// uploader, who can delete it from there, and no tab for anybody
-		// else. Visibility still needs no leg of its own — a screenshot
-		// requires a public game — and the comparison costs nothing extra,
-		// since `vis` above already read the session.
+		// VISIBLE_TO_VIEWER_WHERE is the predicate that read applies, shared
+		// for the reason the match half shares USER_MATCHES_WHERE: one rule,
+		// so the flag can't disagree with the payload in either direction and
+		// a later change to visibility can't leave the tab reachable-but-empty
+		// or hidden-but-populated. That is also what makes it viewer-dependent
+		// — a classifier-queued row is a tab for its own uploader, who can
+		// delete it from there, and no tab for anybody else. Visibility needs
+		// no leg of its own, since a screenshot requires a public game, and
+		// the comparison costs nothing extra: `vis` above already read the
+		// session.
 		//
 		// Index-backed on idx_game_screenshots_user (0050), and an EXISTS
 		// rather than a COUNT so it stops at the first row. That matters on
@@ -562,10 +566,9 @@ async function buildUserProfile(
 		// carries no rate limit of its own.
 		env.SHARE_DB.prepare(
 			`SELECT EXISTS (
-			          SELECT 1 FROM game_screenshots
-			          WHERE user_id = ?
-			            AND (hidden_at IS NULL
-			                 OR (hidden_by IS NULL AND user_id = ?))
+			          SELECT 1 FROM game_screenshots s
+			          WHERE s.user_id = ?
+			            AND ${VISIBLE_TO_VIEWER_WHERE}
 			        ) AS has_screenshots`,
 		)
 			.bind(userId, session?.data.user_id ?? null)
