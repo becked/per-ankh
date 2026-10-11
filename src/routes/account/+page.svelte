@@ -569,7 +569,7 @@
 				<FeaturedVideosTable
 					rows={myFeaturedRows}
 					title="Featured videos"
-					description="Your own uploads, pinned to the top of the Videos tab on your profile — everyone who visits sees them first, signed in or not. Feature one from the pin on any of your video cards there. Each row is a snapshot taken when you featured it, so it stays on the tab after it drops out of your channel's feed."
+					description="Your own uploads, pinned to the top of the Videos tab on your profile — every visitor sees them first, signed in or not."
 					onRemove={(video) => setMyFeatured(video, false)}
 					showUploader={false}
 				/>

@@ -196,9 +196,15 @@ function mergeVideoFeeds(
 // entries — so the snapshot is the entry that is always there, and dropping the
 // feed copy is also what keeps one video from rendering twice and crashing the
 // keyed {#each} with each_key_duplicate.
+//
+// Featured leads the parameters as well as the list, which is the signature the
+// Worker's own featuredFirst takes (cloud/src/channels.ts, for the profile
+// Videos tab). The two can't share an implementation across that boundary, and
+// their list types are structurally close enough that a swapped call would
+// typecheck, so the order is what keeps one from being read for the other.
 function featuredFirst(
-	merged: TournamentVideo[],
 	featured: FeaturedVideo[],
+	merged: TournamentVideo[],
 ): TournamentVideo[] {
 	const keys = new Set(featured.map(videoKey));
 	return [
@@ -305,6 +311,6 @@ export const load: PageLoad = async ({ fetch, parent, url }) => {
 		screenshots: featuredScreenshots,
 		// Featured videos lead the strip; the rest follow newest-first. Capped
 		// after the promotion, so the strip still carries a full twelve.
-		videos: featuredFirst(merged, featuredVideos).slice(0, VIDEO_STRIP_SIZE),
+		videos: featuredFirst(featuredVideos, merged).slice(0, VIDEO_STRIP_SIZE),
 	};
 };

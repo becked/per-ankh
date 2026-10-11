@@ -43,17 +43,36 @@ export interface FeaturedVideosEnv
 // the whole set, so it has to see all of it.
 const MAX_FEATURED_FEED_VIDEOS = 12;
 
-// One row of the read query: the stored snapshot, plus the uploader's live
-// identity from the LEFT JOIN (all four join columns null when the row names no
-// Per-Ankh user). `platform` is typed as the union because the write schema
-// only accepts platforms with a registered provider.
-export interface FeaturedVideoRow {
+// The stored half of a featured row: the fields the platform owns, frozen when
+// the video was featured. Both featured tables carry exactly these, which is
+// what lets one column list and one mapping serve both reads. `platform` is
+// typed as the union because the write schemas only accept platforms with a
+// registered provider.
+export interface FeaturedSnapshotRow {
 	platform: VideoPlatform;
 	video_id: string;
 	url: string;
 	title: string;
 	thumbnail_url: string | null;
 	published_at: string;
+}
+
+// Those columns plus the uploader's live identity from the join — the list both
+// featured reads select verbatim, so the fields they return can't drift apart:
+// this module's admin set, and the owner-scoped twin (selectUserFeaturedVideos,
+// cloud/src/channels.ts). The aliases are the caller's contract — `f` the
+// snapshot table, `u` the joined `users` row — and so is the join itself: LEFT
+// here, where a row may name no Per-Ankh user, INNER there, where the owner IS
+// the uploader.
+export const FEATURED_SNAPSHOT_COLUMNS = `f.platform, f.video_id, f.url, f.title, f.thumbnail_url,
+        f.published_at, f.user_id,
+        ${displayNameSql("u")} AS display_name,
+        u.slug, u.discord_id, u.avatar_hash`;
+
+// One row of this module's read: the snapshot, the uploader's live identity
+// from the LEFT JOIN (all four join columns null when the row names no Per-Ankh
+// user), and the unlinked-channel attribution only the admin set stores.
+export interface FeaturedVideoRow extends FeaturedSnapshotRow {
 	uploader_name: string | null;
 	uploader_url: string | null;
 	user_id: string | null;
@@ -61,6 +80,25 @@ export interface FeaturedVideoRow {
 	slug: string | null;
 	discord_id: string | null;
 	avatar_hash: string | null;
+}
+
+// The platform-owned half of a featured row, mapped — what both reads return
+// before each puts its own attribution on top.
+export function featuredSnapshotVideo(row: FeaturedSnapshotRow): Video {
+	return {
+		id: row.video_id,
+		title: row.title,
+		url: row.url,
+		thumbnail_url: row.thumbnail_url,
+		published_at: row.published_at,
+		platform: row.platform,
+		// Featured rows are D1 snapshots taken when a video was featured, and
+		// neither table has a duration column — so this is null for every
+		// featured video, not merely unknown for some. Typed as Video rather than
+		// left inferred so the next field added to Video fails here instead of
+		// silently shipping a featured card that is missing it.
+		duration_seconds: null,
+	};
 }
 
 // Attribute one row's uploader, three ways — the same discrimination the
@@ -74,20 +112,7 @@ export interface FeaturedVideoRow {
 // or avatar to render without it, so a row whose join came back empty falls
 // through to the next branch rather than producing a nameless card.
 export function attributeFeaturedVideo(row: FeaturedVideoRow) {
-	const base: Video = {
-		id: row.video_id,
-		title: row.title,
-		url: row.url,
-		thumbnail_url: row.thumbnail_url,
-		published_at: row.published_at,
-		platform: row.platform,
-		// Featured rows are D1 snapshots taken when a video was starred, and the
-		// table has no duration column — so this is null for every featured
-		// video, not merely unknown for some. Typed as Video rather than left
-		// inferred so the next field added to Video fails here instead of
-		// silently shipping a featured card that is missing it.
-		duration_seconds: null,
-	};
+	const base = featuredSnapshotVideo(row);
 	if (
 		row.user_id != null &&
 		row.display_name != null &&
@@ -120,10 +145,8 @@ async function selectFeaturedVideos(
 	cap?: number,
 ): Promise<ReturnType<typeof attributeFeaturedVideo>[]> {
 	const statement = db.prepare(
-		`SELECT f.platform, f.video_id, f.url, f.title, f.thumbnail_url,
-		        f.published_at, f.uploader_name, f.uploader_url, f.user_id,
-		        ${displayNameSql("u")} AS display_name,
-		        u.slug, u.discord_id, u.avatar_hash
+		`SELECT ${FEATURED_SNAPSHOT_COLUMNS},
+		        f.uploader_name, f.uploader_url
 		 FROM featured_videos f
 		 LEFT JOIN users u ON u.user_id = f.user_id
 		 ORDER BY f.published_at DESC${cap != null ? " LIMIT ?" : ""}`,

@@ -12,7 +12,9 @@
 // same read. It lives in this module rather than beside the site-admin set
 // (cloud/src/featured.ts) because both ends of the write are here — it is
 // validated against this module's channel feeds, and the only read that
-// renders it is this module's public profile read.
+// renders it is this module's public profile read. Unfeaturing hides a row
+// rather than deleting it, so a video the feed has since dropped can still be
+// put back (migration 0052).
 //
 // Multi-platform by construction — every platform-specific concern is behind
 // the provider registry; YouTube ships first, Twitch et al. register a
@@ -20,6 +22,11 @@
 
 import * as v from "valibot";
 import { buildAvatarUrl } from "./auth";
+import {
+	FEATURED_SNAPSHOT_COLUMNS,
+	featuredSnapshotVideo,
+	type FeaturedSnapshotRow,
+} from "./featured";
 import { displayNameSql } from "./identity";
 import { logError } from "./log";
 import { AddChannelSchema } from "./schemas/channel";
@@ -42,7 +49,6 @@ import {
 	ChannelResolutionError,
 	type Video,
 	type VideoEnv,
-	type VideoPlatform,
 } from "./video/types";
 import type { QueryableD1 } from "./d1";
 
@@ -262,9 +268,12 @@ function attributedChannelVideos(
 
 // One profile's uploads across every channel its owner has linked, each tagged
 // with that owner. Two callers: the public read below, and the feature write
-// further down — which validates against exactly the feed the tab renders, so
-// any video a user can see a pin on is one they can pin. Unsorted and uncapped;
-// both callers impose their own.
+// further down, which snapshots out of this feed — so what a user can feature
+// for the first time is what their channels are currently publishing (each
+// channel's MAX_VIDEOS most recent uploads, cloud/src/video/youtube.ts), not
+// everything they have ever uploaded. A video they have featured before needs
+// no entry here, because its snapshot is already stored. Unsorted and
+// uncapped; both callers impose their own.
 async function userChannelVideos(
 	env: ChannelsEnv,
 	ctx: ExecutionContext,
@@ -285,14 +294,10 @@ async function userChannelVideos(
 // One row of the owner-featured read: the stored snapshot (migration 0051),
 // plus the owner's live identity from the join. The same split the admin set
 // makes — the platform's fields are frozen, identity is not — with no
-// attribution to discriminate, because here the owner IS the uploader.
-interface UserFeaturedVideoRow {
-	platform: VideoPlatform;
-	video_id: string;
-	url: string;
-	title: string;
-	thumbnail_url: string | null;
-	published_at: string;
+// attribution to discriminate, because here the owner IS the uploader, which
+// is also why the join's four columns are non-null where that set has them
+// nullable.
+interface UserFeaturedVideoRow extends FeaturedSnapshotRow {
 	user_id: string;
 	display_name: string;
 	slug: string | null;
@@ -302,7 +307,8 @@ interface UserFeaturedVideoRow {
 
 // One user's featured videos, newest first — the read behind both the public
 // profile read and the owner's own list, so the snapshot columns and the
-// identity join can't drift apart between them.
+// identity join can't drift apart between them, and so a row the owner has
+// taken down disappears from both at once (unfeatured_at, migration 0052).
 //
 // The join is inner for the same reason CHANNELS_WITH_OWNER_SQL's is:
 // user_featured_videos.user_id is an ON DELETE CASCADE foreign key, so a row
@@ -313,32 +319,19 @@ async function selectUserFeaturedVideos(
 ): Promise<CreatorVideo[]> {
 	const rows = await db
 		.prepare(
-			`SELECT f.platform, f.video_id, f.url, f.title, f.thumbnail_url,
-			        f.published_at, f.user_id,
-			        ${displayNameSql("u")} AS display_name,
-			        u.slug, u.discord_id, u.avatar_hash
+			`SELECT ${FEATURED_SNAPSHOT_COLUMNS}
 			 FROM user_featured_videos f
 			 JOIN users u ON u.user_id = f.user_id
-			 WHERE f.user_id = ?
+			 WHERE f.user_id = ? AND f.unfeatured_at IS NULL
 			 ORDER BY f.published_at DESC`,
 		)
 		.bind(userId)
 		.all<UserFeaturedVideoRow>();
 
 	return (rows.results ?? []).map((row): CreatorVideo => ({
-		id: row.video_id,
-		title: row.title,
-		url: row.url,
-		thumbnail_url: row.thumbnail_url,
-		published_at: row.published_at,
-		platform: row.platform,
-		// The table has no duration column, so this is null for every
-		// featured video rather than merely unknown for some — the same gap
-		// the admin snapshots carry (attributeFeaturedVideo in
-		// cloud/src/featured.ts). Typed as CreatorVideo rather than left
-		// inferred so the next field added to Video fails here instead of
-		// silently shipping a featured card that is missing it.
-		duration_seconds: null,
+		// The platform's fields, including the duration_seconds neither featured
+		// table has a column for (featuredSnapshotVideo, cloud/src/featured.ts).
+		...featuredSnapshotVideo(row),
 		user_id: row.user_id,
 		display_name: row.display_name,
 		slug: row.slug,
@@ -457,8 +450,18 @@ export async function handleListMyFeaturedVideos(
 // The admin write can accept a snapshot body (cloud/src/featured.ts) because
 // its caller is trusted; this one can't.
 //
+// The feed is the limit as well as the source: it carries each channel's
+// MAX_VIDEOS most recent uploads, so there is nothing to snapshot a video that
+// has aged out of it from — which is why a row the caller already holds is the
+// second way in. Featuring one of those is a flip of `unfeatured_at`
+// (migration 0052), restoring the snapshot stored when the video was still in
+// the feed, so taking an old upload off the tab stays undoable. What the
+// refusal is left meaning is a video this user has neither published lately nor
+// featured before — somebody else's upload, in other words, which is what
+// keeps "their own upload" true of every row.
+//
 // Upserts on (user_id, platform, video_id), like that write: re-featuring a
-// video already in the set refreshes its snapshot (a re-titled video, a rotated
+// video still in the feed refreshes its snapshot (a re-titled video, a rotated
 // thumbnail) rather than failing, which also makes the pin safe to press twice.
 export async function handleFeatureMyVideo(
 	request: Request,
@@ -478,8 +481,23 @@ export async function handleFeatureMyVideo(
 	const feed = await userChannelVideos(env, ctx, session.data.user_id);
 	const video = feed.find((v) => v.platform === platform && v.id === video_id);
 	if (!video) {
+		// Nothing to snapshot — but if the caller has featured this video before,
+		// the row they took down still holds the one taken while it was in the
+		// feed. `changes` is what says they did: the statement is scoped to their
+		// own user_id, and it always writes featured_at, so a match is a row and
+		// no match is a video that was never theirs to feature.
+		const restored = await env.SHARE_DB.prepare(
+			`UPDATE user_featured_videos
+			    SET unfeatured_at = NULL, featured_at = datetime('now')
+			  WHERE user_id = ? AND platform = ? AND video_id = ?`,
+		)
+			.bind(session.data.user_id, platform, video_id)
+			.run();
+		if ((restored.meta?.changes ?? 0) > 0) {
+			return jsonResponse({ ok: true }, 200, cors);
+		}
 		return errorResponse(
-			"That video isn't one of your channels' uploads.",
+			"That video isn't among your channels' recent uploads.",
 			400,
 			cors,
 			"VIDEO_NOT_IN_CHANNELS",
@@ -495,7 +513,8 @@ export async function handleFeatureMyVideo(
 		   title         = excluded.title,
 		   thumbnail_url = excluded.thumbnail_url,
 		   published_at  = excluded.published_at,
-		   featured_at   = datetime('now')`,
+		   featured_at   = datetime('now'),
+		   unfeatured_at = NULL`,
 	)
 		.bind(
 			session.data.user_id,
@@ -515,6 +534,11 @@ export async function handleFeatureMyVideo(
 // mirroring handleDeleteChannel and the admin unfeature: the pin on a card and
 // the Featured tab's Remove can both reach a row, and neither should have to
 // know which got there first.
+//
+// The row is kept and dated rather than deleted (migration 0052). It carries
+// the only copy of a snapshot the feed can no longer supply, so dropping it is
+// what made taking an old upload off the tab permanent; both reads filter
+// `unfeatured_at IS NULL`, so nothing renders meanwhile.
 export async function handleUnfeatureMyVideo(
 	platform: string,
 	videoId: string,
@@ -528,8 +552,9 @@ export async function handleUnfeatureMyVideo(
 	}
 
 	await env.SHARE_DB.prepare(
-		`DELETE FROM user_featured_videos
-		 WHERE user_id = ? AND platform = ? AND video_id = ?`,
+		`UPDATE user_featured_videos
+		    SET unfeatured_at = datetime('now')
+		  WHERE user_id = ? AND platform = ? AND video_id = ?`,
 	)
 		.bind(session.data.user_id, platform, videoId)
 		.run();

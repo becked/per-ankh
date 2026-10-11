@@ -4,7 +4,9 @@
 //
 // The ordering rule itself is unit-tested beside the source (featuredFirst in
 // channels.test.ts). What only an isolate can pin is the handler: that the
-// write refuses a video that isn't one of the caller's own uploads, that the
+// write refuses a video the caller has neither published lately nor featured
+// before, that it restores one they have (an unfeature keeps the row, so the
+// snapshot is still there when the feed no longer carries the video), that the
 // snapshot it stores comes from the channel feed rather than from the body,
 // that an anonymous visitor gets the owner's picks at the front of the tab, and
 // that a featured video outlives the feed it came from.
@@ -214,6 +216,48 @@ describe("POST /v1/auth/featured-videos", () => {
 		expect((await myFeatured(creator)).videos).toHaveLength(0);
 	});
 
+	it("refuses an upload that left the feed and was never featured", async () => {
+		// A cached channel holds its MAX_VIDEOS most recent uploads, so there is
+		// nothing to snapshot this one from, and no row to restore either — the
+		// caller's own older upload is refused with the same code as a
+		// stranger's. The case below is what separates the two.
+		await seedChannel(CREATOR_CHANNEL, [NEWEST, MIDDLE]);
+
+		await expectErrorCode(
+			await request.post({
+				path: PATH,
+				as: creator,
+				body: { platform: "youtube", video_id: OLDEST.id },
+			}),
+			{ status: 400, code: "VIDEO_NOT_IN_CHANNELS" },
+		);
+		expect((await myFeatured(creator)).videos).toHaveLength(0);
+	});
+
+	it("restores one the caller featured before it left the feed", async () => {
+		const body = { platform: "youtube", video_id: OLDEST.id };
+		await expectOk(await request.post({ path: PATH, as: creator, body }));
+
+		// The feed moves on, and the owner takes the video off their tab. The row
+		// is kept, so the snapshot taken while the video was still in the feed is
+		// what the second press puts back — there is nothing else left to write
+		// it from.
+		await seedChannel(CREATOR_CHANNEL, [NEWEST, MIDDLE]);
+		await expectOk(
+			await request.delete({
+				path: `${PATH}/youtube/${OLDEST.id}`,
+				as: creator,
+			}),
+		);
+		expect((await myFeatured(creator)).videos).toHaveLength(0);
+
+		await expectOk(await request.post({ path: PATH, as: creator, body }));
+
+		const { videos } = await myFeatured(creator);
+		expect(videos.map((v) => v.id)).toEqual([OLDEST.id]);
+		expect(videos[0].title).toBe(OLDEST.title);
+	});
+
 	it("refreshes the snapshot when the same video is featured twice", async () => {
 		const body = { platform: "youtube", video_id: OLDEST.id };
 		await expectOk(await request.post({ path: PATH, as: creator, body }));
@@ -269,7 +313,7 @@ describe("GET /v1/auth/featured-videos", () => {
 });
 
 describe("DELETE /v1/auth/featured-videos/:platform/:video_id", () => {
-	it("unfeatures, and stays successful when the row is already gone", async () => {
+	it("unfeatures, and stays successful when the row is already down", async () => {
 		await expectOk(
 			await request.post({
 				path: PATH,
@@ -281,8 +325,33 @@ describe("DELETE /v1/auth/featured-videos/:platform/:video_id", () => {
 		await expectOk(await request.delete({ path, as: creator }));
 		expect((await myFeatured(creator)).videos).toHaveLength(0);
 		// Idempotent: the pin on a card and the Featured tab's Remove can both
-		// reach a row, and neither has to know which got there first.
+		// reach a row, and neither has to know which got there first — nor, now
+		// that the row is kept, whether it is already down.
 		await expectOk(await request.delete({ path, as: creator }));
+	});
+
+	it("takes the video off the public tab too, not just the owner's list", async () => {
+		await expectOk(
+			await request.post({
+				path: PATH,
+				as: creator,
+				body: { platform: "youtube", video_id: OLDEST.id },
+			}),
+		);
+		// Aged out of the feed, so the kept row is the only thing that could
+		// render it: the public read has to filter on the same column, or an
+		// unfeature would clear the owner's list and leave the video on their
+		// profile for everyone else.
+		await seedChannel(CREATOR_CHANNEL, [NEWEST, MIDDLE]);
+		await expectOk(
+			await request.delete({
+				path: `${PATH}/youtube/${OLDEST.id}`,
+				as: creator,
+			}),
+		);
+
+		const { videos } = await profileVideos(creator.userId);
+		expect(videos.map((v) => v.id)).toEqual([NEWEST.id, MIDDLE.id]);
 	});
 
 	it("requires a session", async () => {
