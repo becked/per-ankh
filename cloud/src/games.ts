@@ -55,6 +55,12 @@ import { captureOnlineIds } from "./online-ids";
 import { momentumCurve } from "./momentum";
 import { MOMENTUM_MODEL_VERSION } from "./generated/momentum";
 import { beginR2Op, logError, logWarn, setLogField } from "./log";
+import {
+	gameScreenshotInsert,
+	loadScreenshotsForGame,
+	screenshotReportInsert,
+	type GameScreenshotState,
+} from "./screenshots/reimport";
 import { OBJECT_STORED_WHERE } from "./screenshots/scope";
 import {
 	deleteGameScreenshots,
@@ -1905,6 +1911,14 @@ export async function handleGameUpload(
 	// REPLACEd games row, so it's re-inserted inside the batch (rescored when
 	// this upload is a run, verbatim otherwise).
 	let existingSubmission: ChallengeSubmissionRow | null = null;
+	// And the game's screenshots, with the reports filed against them — the
+	// cascade takes both, nothing rebuilds either, and a re-import says
+	// nothing about them (screenshots/reimport.ts). Empty on every
+	// first-upload path and on a re-import of a game with no screenshots.
+	let existingScreenshots: GameScreenshotState = {
+		screenshots: [],
+		reports: [],
+	};
 	if (existing) {
 		const cmp = compareSemver(blob.parser_version, existing.parser_version);
 		if (cmp <= 0) {
@@ -1996,6 +2010,7 @@ export async function handleGameUpload(
 			).results ?? [];
 
 		existingSubmission = await loadSubmissionForGame(env.SHARE_DB, gameId);
+		existingScreenshots = await loadScreenshotsForGame(env.SHARE_DB, gameId);
 
 		if (linkedMatchIds.length > 0) {
 			const newUploaderNation =
@@ -2093,9 +2108,11 @@ export async function handleGameUpload(
 	// row uses INSERT OR REPLACE — REPLACE fires ON DELETE CASCADE on the
 	// child tables (player_summaries, game_player_turn, tech_events,
 	// law_events) so the fresh child INSERTs in this batch land into a
-	// cleared slate. created_at and is_public are preserved from the
-	// existing row; a first upload instead seeds is_public from the
-	// uploader's default-visibility preference (see isPublicForUpload).
+	// cleared slate. It reaches every other child too, including the ones no
+	// blob can rebuild — restored below, after the derived rows. created_at
+	// and is_public are preserved from the existing row; a first upload
+	// instead seeds is_public from the uploader's default-visibility
+	// preference (see isPublicForUpload).
 	const winnerIndex = blob.match_metadata.winner?.winner_player_xml_id ?? null;
 	const gameRow = buildGameRow({
 		gameId,
@@ -2164,6 +2181,24 @@ export async function handleGameUpload(
 		allStatements.push(
 			env.SHARE_DB.prepare(challengeSubmissionInsert.sql).bind(
 				...challengeSubmissionInsert.bindings(restored),
+			),
+		);
+	}
+	// Then the screenshots and the reports against them, back verbatim: the
+	// same capture-and-reinsert as the submission above, batched for the same
+	// reason. Screenshots before reports — a report's FK target is its
+	// screenshot row, as the games row above is theirs.
+	for (const s of existingScreenshots.screenshots) {
+		allStatements.push(
+			env.SHARE_DB.prepare(gameScreenshotInsert.sql).bind(
+				...gameScreenshotInsert.bindings(s),
+			),
+		);
+	}
+	for (const r of existingScreenshots.reports) {
+		allStatements.push(
+			env.SHARE_DB.prepare(screenshotReportInsert.sql).bind(
+				...screenshotReportInsert.bindings(r),
 			),
 		);
 	}
