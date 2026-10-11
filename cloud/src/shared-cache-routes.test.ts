@@ -55,14 +55,18 @@ const REVIEWED: Record<string, string> = {
 	// chosen *because* this response is shared (docs/api-reference.md).
 	"GET /v1/tournament-videos": "no session read",
 	"GET /v1/featured-videos": "no session read",
+	// The home page's starred screenshot strip. Sessionless like the feeds
+	// above it, and ordered `featured_at DESC, rowid DESC` so the body a
+	// stored entry holds is the one the origin would have built.
+	"GET /v1/featured-screenshots": "no session read",
 };
 
 // Every source site that hands a client a shared-cache directive, by file.
 // The map is the other direction of the guard: the flags above say which
 // routes a reviewer cleared, and this says no *handler* started serving
 // `public` without one. Counts, not routes, because the mapping isn't 1:1 —
-// `globalStatsResponse` serves two routes from one site, so nine flags stand
-// on eight sites.
+// `globalStatsResponse` serves two routes from one site, so ten flags stand
+// on nine sites.
 const PUBLIC_DIRECTIVE_SITES: Record<string, number> = {
 	// handleCreatorVideos.
 	"channels.ts": 1,
@@ -70,6 +74,8 @@ const PUBLIC_DIRECTIVE_SITES: Record<string, number> = {
 	"featured.ts": 1,
 	// handlePublicRecentGames, and handleGameDetail's non-owner branch.
 	"games.ts": 2,
+	// handleFeaturedScreenshots.
+	"screenshots/handlers.ts": 1,
 	// globalStatsResponse (both /stats reads), handlePlayerLeaderboard,
 	// handleHomeSummary.
 	"stats/handlers.ts": 3,

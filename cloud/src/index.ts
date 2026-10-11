@@ -1318,6 +1318,10 @@ const ROUTES: RouteSpec[] = [
 		match: { kind: "path", path: "/v1/featured-screenshots" },
 		route: "GET /v1/featured-screenshots",
 		handler: (r, e) => handleFeaturedScreenshots(r, e),
+		// Reads no session at all — one D1 query bound to a constant cap — so
+		// there is only ever one body, the same one the three video feeds
+		// above answer every visitor with.
+		sharedCache: true,
 	},
 	// User-facing tournament endpoints
 	{

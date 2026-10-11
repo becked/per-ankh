@@ -141,8 +141,9 @@ So the default is closed, and applied rather than merely conventional: a respons
 | `GET /v1/stats/players` | `public, max-age=300, s-maxage=60` | anonymous; board and window are query parameters |
 | `GET /v1/home-summary` | `public, max-age=0, s-maxage=60` | anonymous, no parameters |
 | `GET /v1/creator-videos`, `GET /v1/tournament-videos`, `GET /v1/featured-videos` | `public, max-age=0, s-maxage=60` | pre-assembled feeds, identical for every caller |
+| `GET /v1/featured-screenshots` | `public, max-age=0, s-maxage=60` | reads no session; the admin-starred strip is the same bytes for every visitor |
 
-The `s-maxage` values on those were inert before this cache existed — they constrained browsers and intermediaries only, since a Worker-generated response never reached Cloudflare's cache. They are live now, which is what makes the "edge-cached 60s" notes on the video and stats endpoints below descriptions rather than intentions.
+The `s-maxage` values on those were inert before this cache existed — they constrained browsers and intermediaries only, since a Worker-generated response never reached Cloudflare's cache. They are live now, which is what makes the "edge-cached 60s" notes on the video, screenshot and stats endpoints below descriptions rather than intentions.
 
 Downloads and exports are streams rather than JSON and carry their own directive: `private, max-age=300` for the save and challenge-map ZIPs, `private, max-age=0` for the admin download, `private, no-store` for the tournament CSV export.
 
