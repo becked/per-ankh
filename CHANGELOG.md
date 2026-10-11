@@ -1,5 +1,62 @@
 # Changelog
 
+## [2026-10-11-17e78cd] - 2026-10-11
+
+### Features
+
+- (screenshots) Clef threshold eval for the upload gate — [f1e4c05](https://github.com/becked/per-ankh/commit/f1e4c05ddd5d7929df4e5bae3b206f3f0257eecf)
+- (screenshots) upload gate — Clef screening, caps, terms — [0d97814](https://github.com/becked/per-ankh/commit/0d978147597e535d4f7b7a8493711df63c6d4a09)
+- (screenshots) client-side downscale + upload UI — [3449acb](https://github.com/becked/per-ankh/commit/3449acbdac7daf8aca7fdf7fe8d789475706aad3)
+- (screenshots) profile tab, game strip, and the owner's delete — [cb36b82](https://github.com/becked/per-ankh/commit/cb36b828e690e93278916fa09831e8f4ff26b9a0)
+- (screenshots) report endpoint + admin moderation queue — [dedcd83](https://github.com/becked/per-ankh/commit/dedcd830d29e3b5aded69ca595ec28b15e510939)
+- (screenshots) the curated home strip, from one public read of the starred set — [0699066](https://github.com/becked/per-ankh/commit/0699066e5fbbd6a1072b695625a1f7e9a1ee2f94)
+- (screenshots) the admin star where a screenshot is come across — [87c926f](https://github.com/becked/per-ankh/commit/87c926f234c767adb5242d58182d7971d7408c76)
+- (screenshots) a ceiling on what the browser will try to decode — [b3dfe15](https://github.com/becked/per-ankh/commit/b3dfe1592df528f8a23e5d37f28365c8c6646797)
+- (screenshots) the terms outside an upload, and the disclaimer's line about players' content — [b751b88](https://github.com/becked/per-ankh/commit/b751b88c70d0296a42ff65b515154608c83d569e)
+- (screenshots) a view of their own, reached from a camera in the header — [6ddf539](https://github.com/becked/per-ankh/commit/6ddf5393988760af1d6c17e56b173459b2c8b0f3)
+- (screenshots) terms that name every surface a screenshot reaches, in the third person — [3d70d5c](https://github.com/becked/per-ankh/commit/3d70d5c6b742fcc4959cc0a0d211bed8fdcc7008)
+- (screenshots) the acceptance date as the terms panel's signature, in longhand — [f0fda07](https://github.com/becked/per-ankh/commit/f0fda079e90a3e6f9bc8e367f122a0e072e975a3)
+- (screenshots) a panel each, the picture beside what is known about it — [82d8d1c](https://github.com/becked/per-ankh/commit/82d8d1c4a9a75b286308830a65e411034896e0ab)
+- (cloud) declare which GET routes may be shared between viewers — [a9873a2](https://github.com/becked/per-ankh/commit/a9873a2bc231cce6b20db3120dc4f3bdc5bd1053)
+- (videos) let a creator feature their own videos on their profile — [741727b](https://github.com/becked/per-ankh/commit/741727b8cb07bed97bd98f91fc858176ec54c7d9)
+
+### Fixes
+
+- (screenshots) review fixes on the step 4 upload path — [6e31354](https://github.com/becked/per-ankh/commit/6e3135417ee7dba9c213b17c9394067eff4761b7)
+- (screenshots) read the purge zone id from wrangler.toml, not the shell — [f6be104](https://github.com/becked/per-ankh/commit/f6be1041134be46d3301bc0b59929f2a25fad36b)
+- (screenshots) release what a takedown holds, and show a queued row to its owner — [85bdcf1](https://github.com/becked/per-ankh/commit/85bdcf1f6ec92f0aa8ef96e9e6d947c79fb01ed7)
+- (cloud) default every JSON response to private, no-store — [0076919](https://github.com/becked/per-ankh/commit/0076919b4c34b26051838a277e127fbb30d5ff1d)
+- (cloud) enforce the cache posture the route table declares — [9fe9b49](https://github.com/becked/per-ankh/commit/9fe9b49cfad84fc8b457ff88a4877b0f131ea1c4)
+- (cloud) declare the starred screenshot strip shared-cacheable — [fe0d5a0](https://github.com/becked/per-ankh/commit/fe0d5a02cc9cdacb879dac1c75004d971b8d8205)
+- (cloud) keep a failed feed read out of the shared cache — [7495341](https://github.com/becked/per-ankh/commit/7495341d5f3364efc704d969f353816cb6b7fc1b)
+- (videos) make taking a video off your own tab undoable — [4f008d6](https://github.com/becked/per-ankh/commit/4f008d6494aed91dc91bb51b7e37fa64d12ecbde)
+
+### Performance
+
+- (cloud) take public-recent to two query waves — [f3491d4](https://github.com/becked/per-ankh/commit/f3491d4aa8afcb3fd63ae70f414da2bb474a75b8)
+- (cloud) run the Worker in ENAM and cache its public reads in front of it — [d6967f6](https://github.com/becked/per-ankh/commit/d6967f60ac88d5e592574e631c634f6a8c3ce83d)
+
+### Other
+
+- remove the dead bake:screenshots baker — [d54ab4e](https://github.com/becked/per-ankh/commit/d54ab4e2d898f51b034110554b4d449258de6af3)
+- add test-data/screenshots for the Clef threshold eval — [e3c494a](https://github.com/becked/per-ankh/commit/e3c494ace6adbfbcd5b5f2fddeb719f5762c0fa6)
+- (screenshots) flat prefix naming for the eval corpus — [3b6d9cc](https://github.com/becked/per-ankh/commit/3b6d9ccf4322ef5623535057deb5878b330d3528)
+- (screenshots) two corpus classes, safety bands from legitimate images — [39d97b9](https://github.com/becked/per-ankh/commit/39d97b98a227f3ee0e88c03a8f077407c3bb2fdf)
+- (screenshots) don't assert where the eval's output lives — [962f590](https://github.com/becked/per-ankh/commit/962f590b3a21a5f0292a31c07c7aee66ae76107c)
+- (screenshots) rename the admin hide/unhide actions to takedown/approve — [3bc7935](https://github.com/becked/per-ankh/commit/3bc793593a3625b2fd439f9887aa3585e4e58f5c)
+- (screenshots) correct the five comments that said hidden_at was the only reader filter — [12f6648](https://github.com/becked/per-ankh/commit/12f6648623ecff1527377716c5887d1a71460102)
+- (screenshots) one copy of each predicate, one copy of the purge call — [fa90438](https://github.com/becked/per-ankh/commit/fa90438e226de9067abe0d444fc623fe36d4f2dd)
+- (screenshots) one glyph, one tab order, one migration, three views — [a069ed3](https://github.com/becked/per-ankh/commit/a069ed356ac203576d666d8e1bda6b7ec391b65a)
+- (cloud) say what the edge cache does, now that there is one — [6ae94fe](https://github.com/becked/per-ankh/commit/6ae94fec7dd6c66ed8d27111094388fef0d11101)
+- (cloud) correct the comments that still read `s-maxage` as inert — [ba6eb2b](https://github.com/becked/per-ankh/commit/ba6eb2b5c53dc2c0324b5ada11ce48ec956b4357)
+- (cloud) budget the cache's own hop on the private path — [ca3d0e5](https://github.com/becked/per-ankh/commit/ca3d0e5e60be9d4e198391185769900e5139804b)
+- (cloud) record what the posture does to the CORS preflight — [d6fb409](https://github.com/becked/per-ankh/commit/d6fb40928f6402516148373eaab0cad8746cebb2)
+- (cloud) correct the route counts the screenshots merge invalidated — [825988f](https://github.com/becked/per-ankh/commit/825988f6269d98290b8b7158a3b1fd174ab41a98)
+- (cloud) derive the deploy plan's GET-surface counts from ROUTES — [a7f138c](https://github.com/becked/per-ankh/commit/a7f138ce5f79e33c493d687c808c13515c30ac9d)
+- (featured) one Featured videos table for both settings surfaces — [244fefd](https://github.com/becked/per-ankh/commit/244fefde09db09207c6182ef440da4b7b6ff2dbc)
+- (screenshots) move the upload picker into a modal — [b7f411c](https://github.com/becked/per-ankh/commit/b7f411c4966968f16c581b25f25ed2fa9037d238)
+- (screenshots) take the camera's trigger from bits-ui — [17e78cd](https://github.com/becked/per-ankh/commit/17e78cd0195f7c755dbba7800b65a7f2792e805f)
+
 ## [2026-10-07-7529669] - 2026-10-07
 
 ### Features
