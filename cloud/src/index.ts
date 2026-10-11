@@ -1607,6 +1607,16 @@ export default {
 			// which methods are storable under which directives is a second
 			// rule to get right, and `private, no-store` is true of every
 			// response that did not ask to be shared.
+			//
+			// It does reach one response a client reuses: the OPTIONS
+			// preflight above, hand-built and so carrying no directive before
+			// this. Its reuse is unchanged — the CORS-preflight cache is a
+			// store of its own rather than the HTTP cache, keyed on
+			// origin/URL/method/header name/credentials and expiring on
+			// `Access-Control-Max-Age` alone (86400 in cloudCorsHeaders,
+			// util.ts; browsers cap it lower). Nothing in populating, matching
+			// or clearing it reads `Cache-Control` — Fetch § CORS-preflight
+			// cache.
 			const route = getLogContext()?.route;
 			const declared = route != null && SHARED_CACHE_ROUTES.has(route);
 			const built = response.headers.get("Cache-Control");
