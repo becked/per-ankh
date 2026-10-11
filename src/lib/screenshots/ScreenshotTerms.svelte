@@ -10,7 +10,7 @@
      a picker. Each surface supplies its own one line, so the rules themselves
      address nobody — third person throughout, which is the only voice that
      reads right under both of those lines. -->
-<div class="space-y-3 text-sm leading-relaxed text-gray-300">
+<div class="space-y-3 text-sm leading-relaxed text-gray-400">
 	<p>
 		A screenshot uploaded to Per Ankh is displayed publicly: on the page of the
 		game to which it is attached, on the profile of the account that uploaded it

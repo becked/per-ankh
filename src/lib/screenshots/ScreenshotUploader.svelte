@@ -1,7 +1,8 @@
 <script lang="ts">
 	// The owner's upload control for a game's screenshots (issue #289, step 4) —
-	// the camera popover in the game header (GameActions), which is the only
-	// thing that writes to a game's screenshots.
+	// the body of the camera modal in the game header (ScreenshotUploadModal,
+	// opened from GameActions), which is the only thing that writes to a game's
+	// screenshots.
 	//
 	// Pick → downscale in a worker → preview → POST. The preview is the WebP
 	// that will be stored, not the file that was picked: the browser re-encodes
@@ -236,14 +237,17 @@
 				     edge cache for an object a review-band upload is holding
 				     hidden.
 				     It stays up through the done state, because this control is a
-				     popover in the header and the gallery it added to is a view
+				     modal over the header and the gallery it added to is a view
 				     away — so the preview is the only thing that shows the
 				     uploader what landed, which was true of a queued upload
-				     before and is now true of an accepted one as well. -->
+				     before and is now true of an accepted one as well.
+				     Capped at 45vh and sized by aspect rather than stretched to
+				     the width: a portrait screenshot would otherwise stand taller
+				     than the modal and push the caption and Upload out of it. -->
 				<img
 					src={prepared.preview}
 					alt="Screenshot preview"
-					class="w-full rounded"
+					class="mx-auto max-h-[45vh] w-auto max-w-full rounded"
 				/>
 				<p class="mt-1 text-xs text-gray-400">
 					{prepared.variant.width}×{prepared.variant.height}
@@ -263,7 +267,7 @@
 					<!-- The line that makes the rules above an agreement, and the
 					     reason they are shared as rules: the account page renders
 					     the same text under a date instead. -->
-					<p class="mb-3 mt-2 text-sm leading-relaxed text-gray-300">
+					<p class="mb-3 mt-2 text-sm leading-relaxed text-gray-400">
 						Uploading constitutes agreement to these terms.
 					</p>
 					<div class="flex flex-wrap items-center gap-2">
