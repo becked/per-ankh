@@ -1,0 +1,21 @@
+-- Unfeaturing one of your own videos is a flip, not a delete: the row stays
+-- here with `unfeatured_at` set, so pressing the pin again puts the video back
+-- on the tab.
+--
+-- Deleting it could not be undone. The feature write snapshots a video out of
+-- the owner's channel feed (handleFeatureMyVideo, cloud/src/channels.ts), and
+-- that feed carries each channel's twelve most recent uploads — so once a video
+-- has aged out of it the row IS the only copy of the fields the platform owns,
+-- and there is nothing left to write a new one from. A creator who took an old
+-- upload off their tab and changed their mind was told the video wasn't among
+-- their channels' recent uploads: their own video, on their own tab a moment
+-- earlier. The snapshot exists because the feed moves on (0051) — keeping it
+-- through an unfeature is that same argument, one step further.
+--
+-- NULL means featured, the way `hidden_at IS NULL` means visible on
+-- game_screenshots (0050): the reads filter on this column alone rather than on
+-- two writers staying coordinated. Rows accumulate — one per video a user has
+-- ever featured, bounded by what they have uploaded — and the feature write
+-- clears the column rather than inserting a second row, since the PK is
+-- unchanged.
+ALTER TABLE user_featured_videos ADD COLUMN unfeatured_at TEXT;

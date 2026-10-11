@@ -12,11 +12,18 @@
 	// showUploader={false} and gets the date pill alone. The video still carries
 	// its uploader there, which is what lets the admin star below snapshot who
 	// uploaded it.
+	//
+	// The admin star is on every card, because featuring is site-wide. The
+	// owner's pin is not: it promotes a video within its uploader's own Videos
+	// tab, which is the only surface that renders that order, so it takes a
+	// prop — a card on the home strip or a tournament's page is somebody's video
+	// too, and a pin there would promote it somewhere the viewer isn't looking.
 	import type {
 		CreatorVideo,
 		RecentVideo,
 		YouTubeAttributedVideo,
 	} from "$lib/api-cloud";
+	import FeaturedPin from "$lib/FeaturedPin.svelte";
 	import FeaturedStar from "$lib/FeaturedStar.svelte";
 	import ProfileLink from "$lib/ProfileLink.svelte";
 	import { formatRelativeToNow } from "$lib/utils/formatting";
@@ -24,13 +31,19 @@
 	let {
 		video,
 		showUploader = true,
+		ownerCanFeature = false,
 	}: {
 		video: RecentVideo | CreatorVideo | YouTubeAttributedVideo;
 		showUploader?: boolean;
+		// True on a surface where the video's uploader may feature it — their own
+		// profile Videos tab. FeaturedPin still renders nothing for anyone but
+		// that uploader.
+		ownerCanFeature?: boolean;
 	} = $props();
 
 	// A linked Per-Ankh user (home feed + matched tournament uploads): avatar +
-	// display name linking to their profile.
+	// display name linking to their profile, and the narrowed video the owner's
+	// pin needs — a video with no Per-Ankh uploader has no owner to feature it.
 	const uploader = $derived("user_id" in video ? video : null);
 	// An unlinked YouTube uploader (tournament playlist only): channel name
 	// linking out to the channel, no avatar. Only when there's no Per-Ankh user.
@@ -39,7 +52,7 @@
 	);
 </script>
 
-<!-- `group` is what reveals the admin star below on hover. -->
+<!-- `group` is what reveals the star and pin below on hover. -->
 <div
 	class="group relative rounded-lg p-3 transition duration-150 hover:-translate-y-0.5 hover:shadow-lg"
 	style="background-color: rgb(var(--color-surface-raised));"
@@ -101,6 +114,9 @@
 		>
 			{formatRelativeToNow(video.published_at)}
 		</span>
+		{#if ownerCanFeature && uploader}
+			<FeaturedPin video={uploader} />
+		{/if}
 		<FeaturedStar {video} />
 	</div>
 
