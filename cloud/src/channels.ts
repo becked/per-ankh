@@ -360,10 +360,12 @@ export async function handleCreatorVideos(
 	// returns an empty strip rather than 500-ing the page. Per-channel fetches
 	// already swallow their own upstream failures to [] (getRecentVideosCached).
 	let videos: CreatorVideo[] = [];
+	let failed = false;
 	try {
 		videos = await buildCreatorFeed(env, ctx);
 	} catch (e) {
 		logError("creator_feed_fetch_failed", e);
+		failed = true;
 	}
 	// Edge-cache 60s (s-maxage) so repeated home hits don't re-run the join +
 	// KV fan-out at the origin — live as of `[cache]` (cloud/wrangler.toml),
@@ -372,11 +374,23 @@ export async function handleCreatorVideos(
 	// waiting out the shared 60s rather than a TTL of their own: within a
 	// minute on reload, not immediately. Vary: Origin because the CORS headers
 	// are origin-specific and the response is shared-cacheable.
+	//
+	// A failed read is the exception, and the shared cache is what makes it
+	// one: the empty feed above answers ONE failed request, so storing it
+	// serves that single failure to every visitor for the next 60s instead of
+	// being retried on the next request. So the directive follows the body
+	// rather than the route. `private, no-store` also restores `X-Request-Id`
+	// on the degraded response — the wrapper reads the directive a handler
+	// built, not the `sharedCache` flag (index.ts) — which gives the
+	// `creator_feed_fetch_failed` line an id a caller can quote. The three
+	// sibling feeds do the same.
 	return new Response(JSON.stringify({ videos }), {
 		status: 200,
 		headers: {
 			"Content-Type": "application/json",
-			"Cache-Control": "public, max-age=0, s-maxage=60",
+			"Cache-Control": failed
+				? "private, no-store"
+				: "public, max-age=0, s-maxage=60",
 			...cors,
 			Vary: "Origin",
 		},

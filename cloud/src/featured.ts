@@ -173,16 +173,23 @@ export async function handlePublicFeaturedVideos(
 ): Promise<Response> {
 	const cors = cloudCorsHeaders(env, request);
 	let videos: ReturnType<typeof attributeFeaturedVideo>[] = [];
+	let failed = false;
 	try {
 		videos = await selectFeaturedVideos(env.SHARE_DB, MAX_FEATURED_FEED_VIDEOS);
 	} catch (e) {
 		logError("featured_feed_fetch_failed", e);
+		failed = true;
 	}
+	// `private, no-store` when the read failed, so one failure is not stored
+	// and served to every visitor for 60s (handleCreatorVideos, channels.ts,
+	// has the full reasoning).
 	return new Response(JSON.stringify({ videos }), {
 		status: 200,
 		headers: {
 			"Content-Type": "application/json",
-			"Cache-Control": "public, max-age=0, s-maxage=60",
+			"Cache-Control": failed
+				? "private, no-store"
+				: "public, max-age=0, s-maxage=60",
 			...cors,
 			Vary: "Origin",
 		},

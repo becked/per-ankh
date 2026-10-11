@@ -844,6 +844,7 @@ export async function handleFeaturedScreenshots(
 ): Promise<Response> {
 	const cors = cloudCorsHeaders(env, request);
 	let screenshots: ReturnType<typeof serializeFeaturedScreenshot>[] = [];
+	let failed = false;
 	try {
 		// rowid breaks the tie because featured_at is datetime('now') at
 		// one-second resolution, so two stars given in the same second tie on it.
@@ -873,17 +874,23 @@ export async function handleFeaturedScreenshots(
 		);
 	} catch (e) {
 		logError("featured_screenshots_fetch_failed", e);
+		failed = true;
 	}
 
 	// The sibling feed's headers, and for its reasons: shared-cacheable for a
 	// minute so repeated home loads don't re-run the joins at the origin, no
 	// browser cache so a new star shows up on reload, and Vary: Origin because
-	// the CORS headers are origin-specific on a shared response.
+	// the CORS headers are origin-specific on a shared response. Including
+	// `private, no-store` when the read failed, so one failure is not stored
+	// and served to every visitor for 60s (handleCreatorVideos, channels.ts,
+	// has the full reasoning).
 	return new Response(JSON.stringify({ screenshots }), {
 		status: 200,
 		headers: {
 			"Content-Type": "application/json",
-			"Cache-Control": "public, max-age=0, s-maxage=60",
+			"Cache-Control": failed
+				? "private, no-store"
+				: "public, max-age=0, s-maxage=60",
 			...cors,
 			Vary: "Origin",
 		},

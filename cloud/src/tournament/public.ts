@@ -1017,22 +1017,29 @@ export async function handleTournamentVideosFeed(
 	// D1 hiccup empties this half of the strip rather than 500-ing the page.
 	// Per-playlist fetch failures already swallow to [] (getVideosCached).
 	let videos: AttributedVideo[] = [];
+	let failed = false;
 	try {
 		videos = await buildTournamentFeed(env, ctx);
 	} catch (e) {
 		logError("tournament_feed_fetch_failed", e);
+		failed = true;
 	}
 	// Same caching as the creator feed: 60s at the edge so repeated home hits
 	// don't re-run the D1 read + KV fan-out, no browser cache so an admin who
 	// just set a playlist waits out that shared 60s on reload rather than a
 	// browser TTL — within a minute, not immediately, now that `s-maxage` is
 	// live (channels.ts). Vary: Origin because the CORS headers are
-	// origin-specific and the response is shared-cacheable.
+	// origin-specific and the response is shared-cacheable. And
+	// `private, no-store` when the read failed, so one failure is not stored
+	// and served to every visitor for 60s (handleCreatorVideos, channels.ts,
+	// has the full reasoning).
 	return new Response(JSON.stringify({ videos }), {
 		status: 200,
 		headers: {
 			"Content-Type": "application/json",
-			"Cache-Control": "public, max-age=0, s-maxage=60",
+			"Cache-Control": failed
+				? "private, no-store"
+				: "public, max-age=0, s-maxage=60",
 			...cors,
 			Vary: "Origin",
 		},
