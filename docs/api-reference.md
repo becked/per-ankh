@@ -519,7 +519,7 @@ The site-admin featured set (see [Site admin: featured videos](#site-admin-featu
 
 - **Auth:** Public — the same videos, and the same uploader identity, the creator strip and tournament playlists already serve to anyone. Outside the `anon_read` budget (no `429` here), like both sibling video feeds.
 - **Response 200:** `{ videos: FeaturedVideo[] }` — the same three-way uploader attribution as [`GET /v1/admin/featured-videos`](#get-v1adminfeatured-videos). Empty when nothing is featured.
-- **Notes:** Read straight from D1 — the set is a small curated table, not a platform fan-out, so there's no KV layer. Ordered `published_at DESC` (the video's own date, not when an admin starred it) and capped at 12, matching the strip. Edge-cached 60s (`s-maxage`), no browser cache, so a newly-starred video shows up on reload. Best-effort: a D1 failure answers an empty feed rather than 500-ing the home page.
+- **Notes:** Read straight from D1 — the set is a small curated table, not a platform fan-out, so there's no KV layer. Ordered `published_at DESC` (the video's own date, not when an admin starred it) and capped at 12, matching the strip. Edge-cached 60s (`s-maxage`), no browser cache, so a newly-starred video shows up within that minute on reload rather than waiting out a browser TTL. Best-effort: a D1 failure answers an empty feed rather than 500-ing the home page.
 
 ---
 

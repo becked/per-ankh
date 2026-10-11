@@ -1024,8 +1024,10 @@ export async function handleTournamentVideosFeed(
 	}
 	// Same caching as the creator feed: 60s at the edge so repeated home hits
 	// don't re-run the D1 read + KV fan-out, no browser cache so an admin who
-	// just set a playlist sees it on reload. Vary: Origin because the CORS
-	// headers are origin-specific and the response is shared-cacheable.
+	// just set a playlist waits out that shared 60s on reload rather than a
+	// browser TTL — within a minute, not immediately, now that `s-maxage` is
+	// live (channels.ts). Vary: Origin because the CORS headers are
+	// origin-specific and the response is shared-cacheable.
 	return new Response(JSON.stringify({ videos }), {
 		status: 200,
 		headers: {

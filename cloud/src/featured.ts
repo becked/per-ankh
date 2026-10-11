@@ -159,9 +159,11 @@ export async function handleListFeaturedVideos(
 // Response shaping mirrors the sibling public video feeds (handleCreatorVideos,
 // handleTournamentVideosFeed): best-effort, so a D1 hiccup answers an empty
 // feed rather than 500-ing the page the home load calls it from; 60s of edge
-// cache so repeated home hits don't re-run the join at the origin, with no
-// browser cache so an admin's star shows up on reload; and Vary: Origin because
-// the CORS headers are origin-specific on a shared-cacheable response.
+// cache so repeated home hits don't re-run the join at the origin, live at the
+// edge as of `[cache]` (channels.ts has the note), with no browser cache so an
+// admin's star shows up within that shared minute on reload rather than
+// waiting out a TTL of the viewer's own; and Vary: Origin because the CORS
+// headers are origin-specific on a shared-cacheable response.
 //
 // Deliberately outside the anon_read budget, like both siblings — the home page
 // fires all three on every anonymous load, and they answer 200 by construction.

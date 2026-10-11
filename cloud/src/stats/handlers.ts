@@ -185,8 +185,9 @@ const GLOBAL_STATS_BUDGET: ReadBudget = {
 // The payload is byte-identical for every viewer and changes at most nightly,
 // so it takes an edge cache — the same header the other public reads carry
 // (channels.ts, featured.ts, tournament/public.ts). No browser cache, so a
-// visitor who reloads after the nightly precompute sees the new numbers rather
-// than waiting out a client TTL. `cors` already carries Vary: Origin
+// visitor who reloads after the nightly precompute is waiting out the shared
+// 60s rather than a client TTL — within a minute, not immediately, for the
+// reason the next paragraph gives. `cors` already carries Vary: Origin
 // (cloudCorsHeaders), which is what keeps the origin-specific CORS headers from
 // being served to the wrong origin out of a shared cache.
 //
@@ -974,7 +975,8 @@ export interface HomeSummaryEnv extends StatsCacheEnv, EventsEnv {
 // Edge-cached like globalStatsResponse, and for the same reasons: the payload
 // is byte-identical for every viewer and changes at most nightly, and the edge
 // is what keeps a cold key from being one miss per request per colo. No browser
-// cache, so a reload after the nightly precompute shows the new numbers.
+// cache, so a reload after the nightly precompute shows the new numbers inside
+// the shared 60s — the same bound globalStatsResponse explains.
 export async function handleHomeSummary(
 	request: Request,
 	env: HomeSummaryEnv,

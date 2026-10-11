@@ -2915,9 +2915,20 @@ export async function handleGameDetail(
 	};
 	const bodyText = JSON.stringify(transformed);
 
-	// Vary: Cookie keeps the public-cache key correct. Scrapers send no
-	// Cookie header → single edge cache key. Cookie-bearing requests bypass
-	// the public cache (correctness > hit rate). Origin must also be in
+	// Vary: Cookie keeps the shared-cache key correct, and Workers Cache
+	// honors it with no allowlist (`[cache]`, cloud/wrangler.toml). Scrapers
+	// and signed-out visitors send no Cookie header → one key, which can only
+	// ever hold the stripOnlineIds body below. An owner's request carries a
+	// different Cookie string *and* takes the `private, no-store` branch, so
+	// their blob is never stored at all.
+	//
+	// A cookie-bearing non-owner does not bypass that cache — it gets a
+	// per-cookie entry. Cookie values are compared verbatim, with no
+	// normalization, so every distinct string is its own stored variant. Two
+	// consequences, neither a hole: the "served in the visitor's own colo,
+	// crosses nothing" win reaches signed-out viewers and scrapers rather than
+	// signed-in ones, whose variant is theirs alone; and any Cloudflare-managed
+	// cookie a visitor picks up forks another entry. Origin must also be in
 	// Vary so the credentialed-CORS response isn't reused for a different
 	// origin — combine both rather than letting `...cors` clobber Cookie.
 	return new Response(bodyText, {

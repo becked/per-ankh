@@ -366,10 +366,12 @@ export async function handleCreatorVideos(
 		logError("creator_feed_fetch_failed", e);
 	}
 	// Edge-cache 60s (s-maxage) so repeated home hits don't re-run the join +
-	// KV fan-out at the origin. No browser cache (max-age=0): a viewer who just
-	// added or removed a channel sees it on reload rather than waiting out a
-	// browser TTL — the freshness this rework is for. Vary: Origin because the
-	// CORS headers are origin-specific and the response is shared-cacheable.
+	// KV fan-out at the origin — live as of `[cache]` (cloud/wrangler.toml),
+	// having reached browsers and intermediaries only before that. No browser
+	// cache (max-age=0), so a viewer who just added or removed a channel is
+	// waiting out the shared 60s rather than a TTL of their own: within a
+	// minute on reload, not immediately. Vary: Origin because the CORS headers
+	// are origin-specific and the response is shared-cacheable.
 	return new Response(JSON.stringify({ videos }), {
 		status: 200,
 		headers: {
