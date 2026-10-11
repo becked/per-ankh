@@ -31,6 +31,7 @@ import { displayNameSql } from "./identity";
 import { logError } from "./log";
 import { UserSearchQuerySchema } from "./schemas/tournament";
 import { ClaimSlugSchema, SlugSchema } from "./schemas/user";
+import { VISIBLE_TO_VIEWER_WHERE } from "./screenshots/scope";
 import { sessionFromRequest, type SessionEnv } from "./session";
 import { USER_MATCHES_WHERE, type TournamentEnv } from "./tournament/data";
 import {
@@ -463,81 +464,116 @@ async function buildUserProfile(
 	const session = await sessionFromRequest(env, request);
 	const vis = session?.data.user_id === userId ? "" : " AND is_public = 1";
 	const noRuns = ` AND ${noChallengeRunsSql()}`;
-	const [countsRow, nationRow, dayRow, channelsRes, participationRow] =
-		await Promise.all([
-			env.SHARE_DB.prepare(
-				`SELECT COUNT(*) AS total,
-				        CAST(SUM(CASE WHEN user_won = 1 THEN 1 ELSE 0 END) AS REAL)
-				          / NULLIF(SUM(CASE WHEN user_won IS NOT NULL THEN 1 ELSE 0 END), 0)
-				          AS win_rate
-				 FROM games WHERE user_id = ?${vis}${noRuns}`,
-			)
-				.bind(userId)
-				.first<{ total: number; win_rate: number | null }>(),
-			env.SHARE_DB.prepare(
-				`SELECT user_nation FROM games
-				 WHERE user_id = ? AND user_nation IS NOT NULL${vis}${noRuns}
-				 GROUP BY user_nation
-				 ORDER BY COUNT(*) DESC, user_nation ASC
-				 LIMIT 1`,
-			)
-				.bind(userId)
-				.first<{ user_nation: string }>(),
-			env.SHARE_DB.prepare(
-				`SELECT CAST(strftime('%w', save_date) AS INTEGER) AS weekday
-				 FROM games WHERE user_id = ? AND save_date IS NOT NULL${vis}${noRuns}
-				 GROUP BY weekday
-				 ORDER BY COUNT(*) DESC, weekday ASC
-				 LIMIT 1`,
-			)
-				.bind(userId)
-				.first<{ weekday: number | null }>(),
-			// Linked video/stream channels — public, so the profile page can decide
-			// whether to render the "Videos" tab without a second request. Videos
-			// themselves load lazily via GET /v1/users/:id/videos when that tab opens.
-			env.SHARE_DB.prepare(
-				`SELECT platform, channel_url FROM user_video_channels
-				 WHERE user_id = ? ORDER BY platform`,
-			)
-				.bind(userId)
-				.all<{ platform: string; channel_url: string }>(),
-			// Does this user appear in tournaments at all — same "render the tab?"
-			// role `channels` plays for Videos, with the payload itself loading
-			// lazily via GET /v1/users/:id/tournaments when the tab opens.
-			//
-			// "Has an attributable match OR has cast": exactly the two sections that
-			// endpoint returns, so the flag can't disagree with the payload in either
-			// direction. Holding a slot is deliberately NOT the test — it's neither
-			// sufficient (a seat before round one, or one whose only match was a bye,
-			// renders nothing) nor necessary (a substituted-out player holds no slot
-			// yet keeps every match they played, via the report-time snapshot). The
-			// match half reuses USER_MATCHES_WHERE for that reason: one rule, so a
-			// later change to attribution can't leave the tab reachable-but-empty or
-			// hidden-but-populated.
-			//
-			// Two EXISTS, five index-backed legs, no table scan (verified with
-			// EXPLAIN QUERY PLAN): idx_matches_slot_a/b_user (0035) for the snapshot
-			// halves, idx_slots_user (0006) + idx_matches_slot_a/b (0006) for the live
-			// halves, idx_match_casters_user (0034) for the cast. The four attribution
-			// legs materialize as a UNION temp b-tree rather than short-circuiting,
-			// which the outer EXISTS then probes through the matches PK — bounded by
-			// one player's match count, so the cost is the id list, not a scan. The
-			// cast half is why that join table exists — the
-			// equivalent question against the `parts` blob is a nested json_each
-			// fan-out with no possible index, and it would run on every profile view
-			// WITHOUT a slot, which is most of them. A rate limit is deliberately NOT
-			// the answer here: it would add an `events` INSERT to the site's hottest
-			// public read (and newly 429 an endpoint every SSR page load hits) to
-			// avoid indexed reads.
-			env.SHARE_DB.prepare(
-				`SELECT EXISTS (
-				          SELECT 1 FROM tournament_matches m WHERE ${USER_MATCHES_WHERE})
-				     OR EXISTS (SELECT 1 FROM tournament_match_casters WHERE user_id = ?)
-				        AS participates`,
-			)
-				.bind(userId, userId, userId, userId, userId)
-				.first<{ participates: number }>(),
-		]);
+	const [
+		countsRow,
+		nationRow,
+		dayRow,
+		channelsRes,
+		participationRow,
+		screenshotsRow,
+	] = await Promise.all([
+		env.SHARE_DB.prepare(
+			`SELECT COUNT(*) AS total,
+			        CAST(SUM(CASE WHEN user_won = 1 THEN 1 ELSE 0 END) AS REAL)
+			          / NULLIF(SUM(CASE WHEN user_won IS NOT NULL THEN 1 ELSE 0 END), 0)
+			          AS win_rate
+			 FROM games WHERE user_id = ?${vis}${noRuns}`,
+		)
+			.bind(userId)
+			.first<{ total: number; win_rate: number | null }>(),
+		env.SHARE_DB.prepare(
+			`SELECT user_nation FROM games
+			 WHERE user_id = ? AND user_nation IS NOT NULL${vis}${noRuns}
+			 GROUP BY user_nation
+			 ORDER BY COUNT(*) DESC, user_nation ASC
+			 LIMIT 1`,
+		)
+			.bind(userId)
+			.first<{ user_nation: string }>(),
+		env.SHARE_DB.prepare(
+			`SELECT CAST(strftime('%w', save_date) AS INTEGER) AS weekday
+			 FROM games WHERE user_id = ? AND save_date IS NOT NULL${vis}${noRuns}
+			 GROUP BY weekday
+			 ORDER BY COUNT(*) DESC, weekday ASC
+			 LIMIT 1`,
+		)
+			.bind(userId)
+			.first<{ weekday: number | null }>(),
+		// Linked video/stream channels — public, so the profile page can decide
+		// whether to render the "Videos" tab without a second request. Videos
+		// themselves load lazily via GET /v1/users/:id/videos when that tab opens.
+		env.SHARE_DB.prepare(
+			`SELECT platform, channel_url FROM user_video_channels
+			 WHERE user_id = ? ORDER BY platform`,
+		)
+			.bind(userId)
+			.all<{ platform: string; channel_url: string }>(),
+		// Does this user appear in tournaments at all — same "render the tab?"
+		// role `channels` plays for Videos, with the payload itself loading
+		// lazily via GET /v1/users/:id/tournaments when the tab opens.
+		//
+		// "Has an attributable match OR has cast": exactly the two sections that
+		// endpoint returns, so the flag can't disagree with the payload in either
+		// direction. Holding a slot is deliberately NOT the test — it's neither
+		// sufficient (a seat before round one, or one whose only match was a bye,
+		// renders nothing) nor necessary (a substituted-out player holds no slot
+		// yet keeps every match they played, via the report-time snapshot). The
+		// match half reuses USER_MATCHES_WHERE for that reason: one rule, so a
+		// later change to attribution can't leave the tab reachable-but-empty or
+		// hidden-but-populated.
+		//
+		// Two EXISTS, five index-backed legs, no table scan (verified with
+		// EXPLAIN QUERY PLAN): idx_matches_slot_a/b_user (0035) for the snapshot
+		// halves, idx_slots_user (0006) + idx_matches_slot_a/b (0006) for the live
+		// halves, idx_match_casters_user (0034) for the cast. The four attribution
+		// legs materialize as a UNION temp b-tree rather than short-circuiting,
+		// which the outer EXISTS then probes through the matches PK — bounded by
+		// one player's match count, so the cost is the id list, not a scan. The
+		// cast half is why that join table exists — the
+		// equivalent question against the `parts` blob is a nested json_each
+		// fan-out with no possible index, and it would run on every profile view
+		// WITHOUT a slot, which is most of them. A rate limit is deliberately NOT
+		// the answer here: it would add an `events` INSERT to the site's hottest
+		// public read (and newly 429 an endpoint every SSR page load hits) to
+		// avoid indexed reads.
+		env.SHARE_DB.prepare(
+			`SELECT EXISTS (
+			          SELECT 1 FROM tournament_matches m WHERE ${USER_MATCHES_WHERE})
+			     OR EXISTS (SELECT 1 FROM tournament_match_casters WHERE user_id = ?)
+			        AS participates`,
+		)
+			.bind(userId, userId, userId, userId, userId)
+			.first<{ participates: number }>(),
+		// Does this user have any screenshot THIS VIEWER can see — the same
+		// "render the tab?" role `channels` plays for Videos and
+		// `participates` for Tournaments, with the shots themselves loading
+		// lazily via GET /v1/users/:id/screenshots when the tab opens.
+		//
+		// VISIBLE_TO_VIEWER_WHERE is the predicate that read applies, shared
+		// for the reason the match half shares USER_MATCHES_WHERE: one rule,
+		// so the flag can't disagree with the payload in either direction and
+		// a later change to visibility can't leave the tab reachable-but-empty
+		// or hidden-but-populated. That is also what makes it viewer-dependent
+		// — a classifier-queued row is a tab for its own uploader, who can
+		// delete it from there, and no tab for anybody else. Visibility needs
+		// no leg of its own, since a screenshot requires a public game, and
+		// the comparison costs nothing extra: `vis` above already read the
+		// session.
+		//
+		// Index-backed on idx_game_screenshots_user (0050), and an EXISTS
+		// rather than a COUNT so it stops at the first row. That matters on
+		// the site's hottest public read, which is also why this endpoint
+		// carries no rate limit of its own.
+		env.SHARE_DB.prepare(
+			`SELECT EXISTS (
+			          SELECT 1 FROM game_screenshots s
+			          WHERE s.user_id = ?
+			            AND ${VISIBLE_TO_VIEWER_WHERE}
+			        ) AS has_screenshots`,
+		)
+			.bind(userId, session?.data.user_id ?? null)
+			.first<{ has_screenshots: number }>(),
+	]);
 
 	return {
 		user_id: row.user_id,
@@ -556,6 +592,7 @@ async function buildUserProfile(
 		},
 		channels: channelsRes.results ?? [],
 		tournament_participant: (participationRow?.participates ?? 0) === 1,
+		has_screenshots: (screenshotsRow?.has_screenshots ?? 0) === 1,
 	};
 }
 

@@ -79,6 +79,25 @@ destinations = ["per-ankh-traces"]
 binding = "SHARE_BUCKET"
 bucket_name = "per-ankh-shares"
 
+# R2 storage for user-uploaded game screenshots (issue #289). A SECOND bucket
+# rather than a prefix in per-ankh-shares, because this one sits behind a
+# public R2 custom domain (img.per-ankh.app): the same domain over the shares
+# bucket would expose every save blob and ZIP by key. No Worker is in the image
+# read path — every object is public, so there is nothing to gate, and reads
+# cost no invocations.
+[[r2_buckets]]
+binding = "SCREENSHOT_BUCKET"
+bucket_name = "per-ankh-screenshots"
+
+# Workers AI, for the Clef call that screens a screenshot before it is stored
+# (cloud/src/screenshots/clef.ts). Account-level, so prod and staging bind the
+# same service; the model variant is pinned in code because the thresholds were
+# fitted to it. NOT covered by the `secrets.parity` preflight's binding check,
+# which reads the three [[table]] binding kinds — this one is a [section], so
+# it is listed there explicitly.
+[ai]
+binding = "AI"
+
 # D1 database for share index, cloud users/games, and event logging.
 #
 # Read replication is ENABLED on this database (`read_replication.mode =
@@ -256,6 +275,66 @@ HOME_SUMMARY_VIEW_PER_HOUR = "600"
 CHALLENGE_VIEW_PER_HOUR = "600"
 CHALLENGE_LINK_VIEW_PER_HOUR = "600"
 
+# === Screenshot upload limits ===
+# Hourly ceiling on screenshot upload ATTEMPTS per user, on the same lever and
+# with the same override caveat as the ceilings above. A different job from the
+# 5-per-game / 100-per-account caps in cloud/src/screenshots/handlers.ts: the
+# caps bound what is STORED, this bounds what is CLASSIFIED. A refused upload
+# spends a Clef call and no quota, so the caps bound an attacker's storage and
+# only this bounds their inference spend.
+#
+# Deliberately tighter than PER_USER_UPLOADS_PER_HOUR (100), because the two
+# have opposite shapes: saves get bulk-reuploaded whenever PARSER_VERSION
+# moves, screenshots never do. Twenty is four games' worth of strip in an hour
+# — well past human use — and bounds one account at ~$0.008 of classification
+# an hour.
+PER_USER_SCREENSHOTS_PER_HOUR = "20"
+# Per-IP hourly ceiling on the two gallery reads (the game-detail strip and the
+# profile Screenshots tab), on the same lever as the read ceilings above. One
+# budget for both, unlike the challenge/tournament view-vs-link split: those
+# divided surfaces with different fan-out, while these two are each one read per
+# gallery viewed. Its own budget rather than a share of anon_read, because the
+# strip read runs on every /games/[id] render — on the shared budget a crawl of
+# game pages would decide when profiles stop showing screenshots.
+SCREENSHOT_VIEW_PER_HOUR = "600"
+# Per-account hourly ceiling on screenshot REPORTS (moderation layer 2,
+# cloud/src/screenshots/moderation.ts). What it bounds is the admin queue, not
+# the endpoint: the composite PK on screenshot_reports already holds a reporter
+# to one report per screenshot, so one account can only inflate the queue by
+# working through the corpus.
+#
+# Charged on success, unlike PER_USER_SCREENSHOTS_PER_HOUR above, which charges
+# before the classifier runs. The counter's rows ARE the reports' accountability
+# record and are KEEP_FOREVER (cloud/src/retention.ts), so a row per refused
+# attempt would accumulate in a list nothing prunes.
+PER_USER_SCREENSHOT_REPORTS_PER_HOUR = "20"
+# Public base of the R2 custom domain in front of SCREENSHOT_BUCKET. The Worker
+# builds screenshot URLs from this plus the object key, so the host is config
+# and the key layout is code. Must stay in step with the hostnames in the
+# zone's Cache Rule and with `img-src` in svelte.config.js.
+SCREENSHOT_BASE_URL = "https://img.per-ankh.app"
+# Zone the image hosts live in, for purge-by-URL when a screenshot is deleted
+# (cloud/src/screenshots/purge.ts). A var and not a secret — a zone id is an
+# identifier — but still per-deploy, so it is declared in both blocks. One zone
+# covers both hostnames, so prod and staging carry the same value.
+#
+# Not a secret, so it lives here rather than in a secret or .dev.vars: a zone
+# id grants nothing on its own and the purge needs it TOGETHER WITH
+# CLOUDFLARE_PURGE_TOKEN, which is the credential and is set out-of-band. Same
+# id/credential split as DISCORD_CLIENT_ID (below) and DISCORD_CLIENT_SECRET,
+# and the `secrets.vars` preflight enforces it by name — a [vars] key ending
+# _SECRET/_KEY/_TOKEN/_PASSWORD fails that check, which is why the token can
+# never be moved up here.
+#
+# It also has to be VERSIONED WITH THE CODE that reads it. As a secret, a newly
+# created environment would deploy green and silently never purge, and
+# `secrets.parity` could not catch it — that check compares the [vars] key sets
+# in this file, and a secret is not in it.
+#
+# UNSET MEANS NO PURGE: the object is deleted and the edge keeps serving it for
+# up to the 30-day Edge TTL, logged as `screenshot_purge_unconfigured`.
+CLOUDFLARE_ZONE_ID = "bc571c481d1346e551d7ab169b325a9f"
+
 # === Cloud rewrite (/v1/auth/*, /v1/games/*) ===
 # CORS allowlist for new routes — comma-separated origins. Cookie-based
 # auth requires Access-Control-Allow-Credentials: true, which forbids the
@@ -266,6 +345,12 @@ ALLOWED_ORIGINS = "https://per-ankh.app,http://localhost:1420"
 DISCORD_CLIENT_ID = "1500901451034263604"
 # DISCORD_CLIENT_SECRET is set out-of-band:
 #   npx wrangler secret put DISCORD_CLIENT_SECRET
+# CLOUDFLARE_PURGE_TOKEN is the other required secret (`secrets.required`
+# checks both), a Cache Purge token scoped to the per-ankh.app zone. It clears
+# a deleted or hidden screenshot from the edge, which nothing else can do, and
+# must be set in BOTH environments:
+#   npx wrangler secret put CLOUDFLARE_PURGE_TOKEN
+#   npx wrangler secret put CLOUDFLARE_PURGE_TOKEN --env staging
 # YOUTUBE_API_KEY (also a secret, set out-of-band) has two uses, both in
 # cloud/src/video/youtube.ts: resolving an @handle / legacy /user/ channel URL
 # to its channel id when a user links a YouTube channel, and correcting the
@@ -308,8 +393,9 @@ SESSION_COOKIE_NAME = "session"
 #   - main / compatibility_date / compatibility_flags are inherited; not
 #     repeated here.
 #
-# Secrets are per-environment: DISCORD_CLIENT_SECRET (and optionally
-# ADMIN_DISCORD_ID) must be set with `wrangler secret put <NAME> --env staging`.
+# Secrets are per-environment: DISCORD_CLIENT_SECRET and CLOUDFLARE_PURGE_TOKEN
+# (and optionally ADMIN_DISCORD_ID) must be set with
+# `wrangler secret put <NAME> --env staging`.
 # ─────────────────────────────────────────────────────────────────────────────
 [env.staging]
 routes = [{ pattern = "api-staging.per-ankh.app", custom_domain = true }]
@@ -325,6 +411,16 @@ crons = ["17 4 * * *", "17 5 * * *", "17 6 * * *", "17 7 * * *", "37 * * * *"]
 [[env.staging.r2_buckets]]
 binding = "SHARE_BUCKET"
 bucket_name = "per-ankh-shares-staging"
+
+# Behind img.staging.per-ankh.app — a second-level subdomain, which Universal
+# SSL does not cover on a full-setup zone; R2's own custom-hostname
+# certificate does.
+[[env.staging.r2_buckets]]
+binding = "SCREENSHOT_BUCKET"
+bucket_name = "per-ankh-screenshots-staging"
+
+[env.staging.ai]
+binding = "AI"
 
 # Read replication is enabled here too — same out-of-band step as the prod
 # database (see the top-level SHARE_DB comment). Staging carries it so a
@@ -367,6 +463,14 @@ SEASON_VIEW_PER_HOUR = "600"
 HOME_SUMMARY_VIEW_PER_HOUR = "600"
 CHALLENGE_VIEW_PER_HOUR = "600"
 CHALLENGE_LINK_VIEW_PER_HOUR = "600"
+PER_USER_SCREENSHOTS_PER_HOUR = "20"
+SCREENSHOT_VIEW_PER_HOUR = "600"
+PER_USER_SCREENSHOT_REPORTS_PER_HOUR = "20"
+SCREENSHOT_BASE_URL = "https://img.staging.per-ankh.app"
+# Same zone as prod — img.staging.per-ankh.app is a hostname in per-ankh.app,
+# which is why one purge token covers both, and why this is the same id. See
+# the top-level block for why it is a var and not a secret.
+CLOUDFLARE_ZONE_ID = "bc571c481d1346e551d7ab169b325a9f"
 ALLOWED_ORIGINS = "https://staging.per-ankh.app"
 # Separate staging Discord OAuth app — paste its client ID:
 DISCORD_CLIENT_ID = "1512545079493922927"

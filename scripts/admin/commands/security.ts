@@ -57,7 +57,8 @@ export async function runNukeUser(
 	if (!opts.yes) {
 		const yes = await confirmNuke(
 			`NUKE USER: ${user.display_name} (${userId})\n` +
-				`  1. Delete ${gameCount} game(s) + their R2 blobs (json.gz + zip)\n` +
+				`  1. Delete ${gameCount} game(s) + their R2 blobs (json.gz + zip) and\n` +
+				`     any screenshots (objects + edge cache)\n` +
 				`  2. Clear tournament references (admin grants, own beta grant, and cast\n` +
 				`     appearances removed; slot claims, reported-by, and granted-by nulled)\n` +
 				`  3. Delete the user record + collections + online_ids\n` +

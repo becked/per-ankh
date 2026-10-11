@@ -22,6 +22,7 @@ import {
 	errorResponse,
 	getClientIp,
 	isAllowedRedirectUri,
+	isoInstantSql,
 	isSecureRequest,
 	jsonResponse,
 	parseAllowedOrigins,
@@ -46,7 +47,9 @@ export interface AuthEnv extends SessionEnv, EventsEnv {
 	DISCORD_CLIENT_ID: string;
 	DISCORD_CLIENT_SECRET: string;
 	// Dev-only login bypass. Truthy ONLY in cloud/.dev.vars (gitignored,
-	// local-only); prod never sets it. Gates handleDevLogin — see there.
+	// local-only); prod never sets it. Gates handleDevLogin — see there — and
+	// the dev screenshot image route (screenshots/dev-images.ts), which needs
+	// the same "this is a developer's machine" signal.
 	DEV_LOGIN?: string;
 }
 
@@ -771,8 +774,14 @@ export async function handleMe(
 		return errorResponse("Unauthorized", 401, cors, "UNAUTHORIZED");
 	}
 
+	// `screenshot_terms_accepted_at` is written as D1's datetime('now') text,
+	// which the Date parser reads as local time and shifts by the runtime's
+	// offset — the reason `cooldownMessage` (users.ts) reassembles the same
+	// column shape by hand. Normalised in SQL instead, because what the client
+	// helpers document taking is an ISO instant; isoInstantSql (util.ts) holds
+	// the shape and the full reasoning.
 	const row = await env.SHARE_DB.prepare(
-		`SELECT user_id, discord_id, ${displayNameSql("users")} AS display_name, avatar_hash, slug, default_game_public, stream_url, open_to_matches FROM users WHERE user_id = ?`,
+		`SELECT user_id, discord_id, ${displayNameSql("users")} AS display_name, avatar_hash, slug, default_game_public, stream_url, open_to_matches, ${isoInstantSql("screenshot_terms_accepted_at")} AS screenshot_terms_accepted_at FROM users WHERE user_id = ?`,
 	)
 		.bind(session.data.user_id)
 		.first<
@@ -780,6 +789,7 @@ export async function handleMe(
 				default_game_public: number;
 				stream_url: string | null;
 				open_to_matches: number;
+				screenshot_terms_accepted_at: string | null;
 			}
 		>();
 
@@ -862,6 +872,11 @@ export async function handleMe(
 			// Read by the preferences toggle and by the profile's Suggested tab,
 			// which tells a hidden viewer that the suggesting runs both ways.
 			open_to_matches: row.open_to_matches === 1,
+			// When this account agreed to the screenshot terms, null if it
+			// never has. Display only: the upload endpoint reads the column
+			// itself (screenshots/handlers.ts) and is the gate, so a client
+			// that ignores this still cannot upload without agreeing.
+			screenshot_terms_accepted_at: row.screenshot_terms_accepted_at,
 		},
 		200,
 		cors,

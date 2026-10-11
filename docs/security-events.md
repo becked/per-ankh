@@ -37,12 +37,15 @@ exclusive, so only the route reasons need to precede them):
 | # | reason | condition | route emitted |
 |---|--------|-----------|---------------|
 | 1 | `signup` | a new account was created | `POST /v1/auth/discord/callback` |
+| 1 | `terms_gate` | the screenshot upload terms have not been accepted | `POST /v1/games/:id/screenshots` |
 | 2 | `dev_login_probe` | any request to `/v1/auth/dev/login` | `<METHOD> /v1/auth/dev/login` |
 | 3 | `rate_limited` | status 429 | matched route |
 | 4 | `server_error` | status 5xx | matched route |
 | 5 | `admin_probe` | status 404 under `/v1/admin/*` | matched route, or `<METHOD> /v1/admin/*` |
 | 6 | `auth_fail` | status 401 or 403 | matched route |
 | – | (none) | otherwise | no row |
+
+Both handler-set reasons share slot 1 — they are set by different handlers, so they never compete.
 
 `signup` can't be inferred from status+route (a new account and a returning login
 are both `POST /v1/auth/discord/callback` → 200). `handleDiscordCallback`
@@ -51,6 +54,8 @@ and tags it with `setSecurityReason("signup")`; the classifier reads that handle
 override before falling back to the status/route rules. (Sign-up is otherwise
 fully open behind Discord OAuth — there is no invite-code or allowlist gate — so
 new-account volume is the abuse signal.)
+
+`terms_gate` is the same "not derivable here" case from the other direction. `POST /v1/games/:id/screenshots` refuses with `403 TERMS_NOT_ACCEPTED` until an account has accepted the upload terms, and that refusal is the designed *first step* of the upload flow — the client collects the agreement off it and retries. On the status rule alone it would record as `auth_fail`, once per new uploader, so the drain would carry one authentication failure per account that ever uploads a screenshot. Neither alternative was taken: moving the status off the 401/403 pair would change the documented API and the client's one branch, and exempting the code in the classifier would put a handler-specific carve-out inside a rule whose whole point is that status decides. Instead `handleScreenshotUpload` (`cloud/src/screenshots/handlers.ts`) calls `setSecurityReason("terms_gate")` before returning the 403 — the row is still emitted, and it is labelled truthfully.
 
 The "any status" route deliberately swallows the status-scoped signal: a 403 or
 a 429 on `/v1/auth/dev/login` records as `dev_login_probe`, not `auth_fail` /
@@ -120,6 +125,7 @@ a new value needs nothing on their side — but flag it so it isn't a surprise.
   `emitSecurityEvent` (the tee), `SECURITY_REASONS`.
 - `cloud/src/log.ts` — `setSecurityReason` / `getLogContext`.
 - `cloud/src/auth.ts` — the `signup` tag.
+- `cloud/src/screenshots/handlers.ts` — the `terms_gate` tag.
 - `cloud/src/retention.ts` — `sweepSecurityEvents`.
 - `cloud/src/index.ts` — the chokepoint call + the `scheduled` sweep.
 - `cloud/migrations-security/0001_security_events.sql` — schema.

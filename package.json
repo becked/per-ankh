@@ -13,6 +13,7 @@
 		"lint:fix": "eslint src --fix",
 		"format": "prettier --write .",
 		"format:check": "prettier --check .",
+		"eval:screenshots": "tsx scripts/eval-screenshot-classifier.ts",
 		"bake:terrain-3d": "tsx scripts/bake-terrain-3d.ts",
 		"bake:improvements": "tsx scripts/bake-improvements.ts",
 		"bake:resources": "tsx scripts/bake-resources.ts",
@@ -51,7 +52,6 @@
 		"bake:finalize": "tsx scripts/build-manifests.ts",
 		"bake:favicon": "node scripts/bake-favicon.mjs .",
 		"bake:og": "node scripts/make-og-default.mjs .",
-		"bake:screenshots": "node scripts/capture-home-screenshots.mjs",
 		"bake:all": "npm run bake:terrain-3d && npm run bake:improvements && npm run bake:resources && npm run bake:sprites && npm run bake:tech-names && npm run bake:improvement-names && npm run bake:improvement-builds && npm run bake:family-opinion && npm run bake:difficulty-names && npm run bake:game-option-names && npm run bake:goal-names && npm run bake:name-text && npm run bake:nation-names && npm run bake:project-icons && npm run bake:project-names && npm run bake:victory-ordering && npm run bake:map-options && npm run bake:law-classes && npm run bake:family-pools && npm run bake:atlas-pool && npm run bake:specialists && npm run bake:science-yields && npm run bake:unit-stats && npm run bake:starting-techs && npm run bake:family-colors && npm run bake:yield-colors && npm run bake:orders-sources && npm run bake:power-tiers && npm run bake:cognomens && npm run bake:wonders && npm run bake:dynasty-traits && npm run bake:theology-tiers && npm run bake:challenge-mirror && npm run bake:finalize"
 	},
 	"license": "MIT",

@@ -23,6 +23,7 @@ const TABS = new Set([
 	"stats",
 	"games",
 	"videos",
+	"screenshots",
 	"tournaments",
 	"suggested",
 ]);
@@ -68,9 +69,15 @@ export async function buildProfilePage(args: {
 
 	const tabRaw = url.searchParams.get("tab");
 
-	// Which tabs exist at all. Both are profile-level facts, so they also decide
-	// where a visitor lands, not just what renders — hence read before the tab.
+	// Which tabs exist at all. All three are profile-level facts, so they also
+	// decide where a visitor lands, not just what renders — hence read before
+	// the tab.
 	const hasChannels = profile.channels.length > 0;
+	// The flag counts the screenshots this viewer can see — the same rule the
+	// payload read applies — so an account whose only upload is in the review
+	// band gets the tab on its own profile, where it can delete the row, and
+	// nobody else gets an empty one.
+	const hasScreenshots = profile.has_screenshots;
 	// The flag is "holds a match OR has cast", so a dedicated caster who never
 	// plays still gets the tab.
 	const isTournamentParticipant = profile.tournament_participant;
@@ -91,6 +98,7 @@ export async function buildProfilePage(args: {
 	// a bare URL opens on — never to a hidden one, since defaultTab is only
 	// "tournaments" when that tab exists.
 	if (tab === "videos" && !hasChannels) tab = defaultTab;
+	if (tab === "screenshots" && !hasScreenshots) tab = defaultTab;
 	if (tab === "tournaments" && !isTournamentParticipant) tab = defaultTab;
 	// ?tab=suggested on someone else's profile — a shared link, or a guess —
 	// lands on their Overview rather than on a tab that isn't theirs to see.
@@ -111,6 +119,15 @@ export async function buildProfilePage(args: {
 	const videos =
 		tab === "videos"
 			? await cloudApi.getUserVideos(targetUserId, { fetch })
+			: [];
+
+	// Same lazy load for the screenshots. Gated on the flag as well as the tab
+	// so a stale ?tab=screenshots link doesn't spend a read budget slot on a
+	// profile that has none — the tab fell back above, and this is the fetch
+	// that would otherwise still run.
+	const screenshots =
+		tab === "screenshots" && hasScreenshots
+			? await cloudApi.getUserScreenshots(targetUserId, { fetch })
 			: [];
 
 	// Same lazy load for the tournament record — one request covering
@@ -158,6 +175,8 @@ export async function buildProfilePage(args: {
 		scope,
 		hasChannels,
 		videos,
+		hasScreenshots,
+		screenshots,
 		isTournamentParticipant,
 		tournamentRecord,
 		suggestions,
@@ -183,8 +202,10 @@ export type ProfilePageData = Awaited<ReturnType<typeof buildProfilePage>>;
 // redirect()/error() throws, which is what carries the id route's 307 out —
 // propagates untouched.
 //
-// The 429 reaches here through the Tournaments tab: getUserTournaments draws on
-// the per-IP tournament_view budget, the same one the /tournaments pages spend.
+// The 429 reaches here through two tabs: getUserTournaments draws on the per-IP
+// tournament_view budget, the same one the /tournaments pages spend, and
+// getUserScreenshots draws on screenshot_view, shared with the game-detail
+// strip.
 export function rethrowProfileLoadError(err: unknown, url: URL): never {
 	if (err instanceof UnauthorizedError) {
 		throw redirect(303, loginBounce(url));

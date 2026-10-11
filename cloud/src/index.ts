@@ -68,6 +68,22 @@ import {
 	handleGameChallengeLink,
 	handlePatchChallenge,
 } from "./challenges/handlers";
+import {
+	handleAcceptScreenshotTerms,
+	handleFeaturedScreenshots,
+	handleGameScreenshots,
+	handleScreenshotDelete,
+	handleScreenshotUpload,
+	handleUserScreenshots,
+} from "./screenshots/handlers";
+import { handleDevScreenshotImage } from "./screenshots/dev-images";
+import {
+	handleAdminListScreenshots,
+	handleScreenshotModerate,
+	handleScreenshotReport,
+} from "./screenshots/moderation";
+import type { ScreenshotsEnv } from "./screenshots/handlers";
+import type { ScreenshotModerationEnv } from "./screenshots/moderation";
 import { handleCollectionCreate, handleCollectionsList } from "./collections";
 import type { CollectionsEnv } from "./collections";
 import { handleListOnlineIds, handleRemoveOnlineId } from "./online-ids";
@@ -184,6 +200,8 @@ interface Env
 		TournamentAdminEnv,
 		ChannelsEnv,
 		FeaturedVideosEnv,
+		ScreenshotsEnv,
+		ScreenshotModerationEnv,
 		GlobalStatsEnv,
 		HomeSummaryEnv,
 		OpponentsEnv,
@@ -401,6 +419,74 @@ const ROUTES: RouteSpec[] = [
 		handler: (r, e, m) => handleGameDelete(m![1], r, e),
 	},
 
+	// A screenshot of a public game, screened by Clef before anything is
+	// stored (cloud/src/screenshots/). Nested under the game because the
+	// game is what a screenshot belongs to and what its R2 prefix is keyed
+	// by; the acceptance of the upload terms it requires is an account write,
+	// over with the other /v1/users/me/* routes.
+	{
+		method: "GET",
+		match: {
+			kind: "regex",
+			regex: /^\/v1\/games\/([A-Za-z0-9_-]{21})\/screenshots$/,
+		},
+		route: "GET /v1/games/:id/screenshots",
+		handler: (r, e, m) => handleGameScreenshots(m![1], r, e),
+	},
+	{
+		method: "POST",
+		match: {
+			kind: "regex",
+			regex: /^\/v1\/games\/([A-Za-z0-9_-]{21})\/screenshots$/,
+		},
+		route: "POST /v1/games/:id/screenshots",
+		handler: (r, e, m) => handleScreenshotUpload(m![1], r, e),
+	},
+	// The uploader's own removal. Permanent, and the remedy the
+	// HAS_SCREENSHOTS refusal on PATCH /v1/games/:id names — so it is the
+	// owner's route, not an admin one (the admin decisions are takedown /
+	// approve / star).
+	{
+		method: "DELETE",
+		match: {
+			kind: "regex",
+			regex:
+				/^\/v1\/games\/([A-Za-z0-9_-]{21})\/screenshots\/([A-Za-z0-9_-]{21})$/,
+		},
+		route: "DELETE /v1/games/:id/screenshots/:screenshot_id",
+		handler: (r, e, m) => handleScreenshotDelete(m![1], m![2], r, e),
+	},
+	// A viewer's report — moderation layer 2's entry point
+	// (cloud/src/screenshots/moderation.ts). Nested under the game like the
+	// upload and the delete above it, because the report is about a
+	// screenshot and a screenshot belongs to a game. The admin end of the
+	// same queue lives under /v1/admin/screenshots.
+	{
+		method: "POST",
+		match: {
+			kind: "regex",
+			regex:
+				/^\/v1\/games\/([A-Za-z0-9_-]{21})\/screenshots\/([A-Za-z0-9_-]{21})\/report$/,
+		},
+		route: "POST /v1/games/:id/screenshots/:screenshot_id/report",
+		handler: (r, e, m) => handleScreenshotReport(m![1], m![2], r, e),
+	},
+
+	// Local-only image server. In production no Worker is in the image path at
+	// all — the R2 custom domain and the zone's transformation layer serve the
+	// objects — which means that path has no local implementation, because it
+	// has no code. This route is what `SCREENSHOT_BASE_URL` points at under
+	// `./per-ankh dev` so the galleries render from the dev bucket. Dark in
+	// prod behind DEV_LOGIN + non-HTTPS, the handleDevLogin gate. Registered
+	// beside the screenshot routes rather than with /v1/auth/dev/login because
+	// it is screenshot machinery; see screenshots/dev-images.ts.
+	{
+		method: "GET",
+		match: { kind: "regex", regex: /^\/v1\/dev\/images\/(.+)$/ },
+		route: "GET /v1/dev/images/:key",
+		handler: (r, e, m) => handleDevScreenshotImage(m![1], r, e),
+	},
+
 	// Site-admin: bulk reparse across all users. Gated by ADMIN_DISCORD_ID
 	// secret inside each handler; failures return 404 to avoid leaking the
 	// endpoints' existence.
@@ -471,6 +557,27 @@ const ROUTES: RouteSpec[] = [
 		handler: (r, e, m) => handleUnfeatureVideo(m![1], m![2], r, e),
 	},
 
+	// Site-admin: the screenshot moderation queue (the classifier's uncertain
+	// band plus what viewers have reported) and the decisions taken on it.
+	// Same gate as the endpoints above — 404 to everyone else.
+	{
+		method: "GET",
+		match: { kind: "path", path: "/v1/admin/screenshots" },
+		route: "GET /v1/admin/screenshots",
+		handler: (r, e) => handleAdminListScreenshots(r, e),
+	},
+	{
+		// Not nested under the game: an admin reaches a screenshot from the
+		// queue, which spans every game, and screenshot_id is a primary key.
+		method: "POST",
+		match: {
+			kind: "regex",
+			regex: /^\/v1\/admin\/screenshots\/([A-Za-z0-9_-]{21})\/moderate$/,
+		},
+		route: "POST /v1/admin/screenshots/:screenshot_id/moderate",
+		handler: (r, e, m) => handleScreenshotModerate(m![1], r, e),
+	},
+
 	// Site-admin: run the opponent-recommendation rebuild now instead of
 	// waiting for tonight's cron. Same 404-to-everyone-else gate.
 	{
@@ -524,6 +631,16 @@ const ROUTES: RouteSpec[] = [
 		match: { kind: "path", path: "/v1/users/me/slug" },
 		route: "DELETE /v1/users/me/slug",
 		handler: (r, e) => handleReleaseSlug(r, e),
+	},
+
+	// The one-time screenshot upload terms. Set-once rather than a
+	// preference, so it is its own route and not a field on
+	// POST /v1/auth/settings.
+	{
+		method: "POST",
+		match: { kind: "path", path: "/v1/users/me/screenshot-terms" },
+		route: "POST /v1/users/me/screenshot-terms",
+		handler: (r, e) => handleAcceptScreenshotTerms(r, e),
 	},
 
 	// CSP violation reports — unauthenticated; the browser POSTs here
@@ -1010,6 +1127,19 @@ const ROUTES: RouteSpec[] = [
 		route: "GET /v1/users/:user_id/videos",
 		handler: (r, e, m, c) => handleUserVideos(m![1], r, e, c),
 	},
+	// Public screenshots across all of one user's games — the profile
+	// "Screenshots" tab's lazy payload, the same role the videos read above
+	// plays for its tab. The 21-char user_id can't collide with the
+	// /v1/users/me/* path routes registered further down.
+	{
+		method: "GET",
+		match: {
+			kind: "regex",
+			regex: /^\/v1\/users\/([A-Za-z0-9_-]{21})\/screenshots$/,
+		},
+		route: "GET /v1/users/:user_id/screenshots",
+		handler: (r, e, m) => handleUserScreenshots(m![1], r, e),
+	},
 	// Public tournament record for one player — enrollment + played/upcoming
 	// matches + cast appearances, in one lazy fetch for the profile's
 	// Tournaments tab. The 21-char user_id can't collide with the
@@ -1090,6 +1220,18 @@ const ROUTES: RouteSpec[] = [
 		match: { kind: "path", path: "/v1/featured-videos" },
 		route: "GET /v1/featured-videos",
 		handler: (r, e) => handlePublicFeaturedVideos(r, e),
+	},
+	// The home page's curated screenshot strip — the admin-starred set, newest
+	// star first (cloud/src/screenshots/handlers.ts). Public, and the one
+	// screenshot read with no per-IP budget: it is viewer-independent, so unlike
+	// the two galleries it is shared-cacheable at the edge. Non-starred
+	// screenshots never reach the home page; the star itself is one of the
+	// decisions under /v1/admin/screenshots.
+	{
+		method: "GET",
+		match: { kind: "path", path: "/v1/featured-screenshots" },
+		route: "GET /v1/featured-screenshots",
+		handler: (r, e) => handleFeaturedScreenshots(r, e),
 	},
 	// User-facing tournament endpoints
 	{

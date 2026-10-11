@@ -59,6 +59,15 @@ function r2Bucket(): string {
 	return getEnv(target === "staging" ? "staging" : "prod").r2Bucket;
 }
 
+// The screenshots bucket (issue #289) — a second bucket, so every R2 call
+// below takes which one it means. Exported because the one caller that wants
+// it, the game delete, reads the keys out of D1 and so names the bucket
+// itself; the public host those keys are served from lives in purge.ts, with
+// the URL building that needs it.
+export function screenshotBucketName(): string {
+	return getEnv(target === "staging" ? "staging" : "prod").screenshotBucket;
+}
+
 interface SpawnResult {
 	stdout: string;
 	stderr: string;
@@ -280,12 +289,16 @@ export async function kvBulkDelete(keys: string[]): Promise<void> {
 // runs with its cwd set to cloud/, so a relative --file would land there.
 // A missing key returns false rather than throwing (the same case the two
 // download routes 404 on), so a sweep can count misses instead of aborting.
-export async function r2Get(key: string, destPath: string): Promise<boolean> {
+export async function r2Get(
+	key: string,
+	destPath: string,
+	bucket: string = r2Bucket(),
+): Promise<boolean> {
 	const { stdout, stderr, code } = await runWrangler([
 		"r2",
 		"object",
 		"get",
-		`${r2Bucket()}/${key}`,
+		`${bucket}/${key}`,
 		"--file",
 		destPath,
 		...targetFlags(),
@@ -300,12 +313,15 @@ export async function r2Get(key: string, destPath: string): Promise<boolean> {
 	throw new Error(`wrangler r2 get failed (exit ${code}): ${stderr.trim()}`);
 }
 
-export async function r2Delete(key: string): Promise<void> {
+export async function r2Delete(
+	key: string,
+	bucket: string = r2Bucket(),
+): Promise<void> {
 	const { stderr, code } = await runWrangler([
 		"r2",
 		"object",
 		"delete",
-		`${r2Bucket()}/${key}`,
+		`${bucket}/${key}`,
 		...targetFlags(),
 	]);
 	if (code !== 0) {
@@ -327,11 +343,14 @@ export interface R2DeleteSummary {
 export async function r2DeleteMany(
 	keys: string[],
 	concurrency = 10,
+	bucket: string = r2Bucket(),
 ): Promise<R2DeleteSummary> {
 	const summary: R2DeleteSummary = { ok: 0, missing: 0, failed: 0, errors: [] };
 	for (let i = 0; i < keys.length; i += concurrency) {
 		const batch = keys.slice(i, i + concurrency);
-		const results = await Promise.allSettled(batch.map(r2Delete));
+		const results = await Promise.allSettled(
+			batch.map((key) => r2Delete(key, bucket)),
+		);
 		for (let j = 0; j < results.length; j++) {
 			const r = results[j];
 			if (r.status === "fulfilled") {

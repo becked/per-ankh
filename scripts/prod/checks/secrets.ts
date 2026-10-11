@@ -31,7 +31,13 @@ const CLOUD_DIR = resolve(REPO_ROOT, "cloud");
 // shared between the top level and named envs). If any are missing, OAuth
 // breaks and every login 500s. Keep this list in sync with the actual
 // wrangler.toml comments naming required secrets.
-const REQUIRED_SECRETS = ["DISCORD_CLIENT_SECRET"];
+// CLOUDFLARE_PURGE_TOKEN joins it with issue #289's readers: screenshot
+// objects are public and edge-cached with no Worker in the image path, so
+// purge-by-URL is the only invalidation there is. Missing, a deleted or hidden
+// screenshot keeps being served for up to the 30-day Edge TTL — which has no
+// other symptom, so a missing staging secret is worth catching here rather
+// than in a log line nobody is reading.
+const REQUIRED_SECRETS = ["DISCORD_CLIENT_SECRET", "CLOUDFLARE_PURGE_TOKEN"];
 
 interface SecretEntry {
 	name: string;
@@ -157,13 +163,21 @@ export async function checkVarsHygiene(): Promise<CheckResult> {
 
 // ─── secrets.parity ─────────────────────────────────────────────────────────
 // Wrangler does NOT inherit `vars` or bindings (d1_databases, kv_namespaces,
-// r2_buckets) into named envs — [env.staging] must redefine all of them. A
+// r2_buckets, ai) into named envs — [env.staging] must redefine all of them. A
 // var or binding added to the top level but forgotten in [env.staging] fails
 // silently at runtime, not at deploy. This check compares the prod and
 // staging definitions in the static tomls (key sets for vars — values may
-// legitimately differ; binding names for the three binding kinds).
+// legitimately differ; binding names for each binding kind).
 
+// Repeatable bindings, declared as [[table]] once per instance.
 const BINDING_TABLES = ["d1_databases", "kv_namespaces", "r2_buckets"];
+
+// Single-instance bindings, declared as one [section] with a `binding` key.
+// Wrangler doesn't inherit these either, and they are easy to miss precisely
+// because there is only ever one of them: a staging Worker with no [env.staging.ai]
+// has no AI binding at all, and the screenshot upload gate fails closed on
+// every request there while prod is fine.
+const BINDING_SECTIONS = ["ai"];
 
 // Minimal line-oriented toml scans, same approach as scanWranglerVars. They
 // only understand `[section]` / `[[table]]` headers and `KEY = value` lines —
@@ -248,19 +262,29 @@ export async function checkVarsParity(): Promise<CheckResult> {
 			}
 		}
 		// Binding-name parity for each binding kind.
-		for (const table of BINDING_TABLES) {
-			const prod = bindingNames(text, `[[${table}]]`);
-			const staging = bindingNames(text, `[[env.staging.${table}]]`);
+		const headers: [string, string][] = [
+			...BINDING_TABLES.map((t): [string, string] => [
+				`[[${t}]]`,
+				`[[env.staging.${t}]]`,
+			]),
+			...BINDING_SECTIONS.map((t): [string, string] => [
+				`[${t}]`,
+				`[env.staging.${t}]`,
+			]),
+		];
+		for (const [prodHeader, stagingHeader] of headers) {
+			const prod = bindingNames(text, prodHeader);
+			const staging = bindingNames(text, stagingHeader);
 			// Skip kinds the file doesn't use at all (the root toml has none).
 			if (prod.size === 0 && staging.size === 0) continue;
 			for (const b of setDiff(prod, staging)) {
 				problems.push(
-					`${path}: binding ${b} in [[${table}]] but missing from [[env.staging.${table}]]`,
+					`${path}: binding ${b} in ${prodHeader} but missing from ${stagingHeader}`,
 				);
 			}
 			for (const b of setDiff(staging, prod)) {
 				problems.push(
-					`${path}: binding ${b} in [[env.staging.${table}]] but missing from [[${table}]]`,
+					`${path}: binding ${b} in ${stagingHeader} but missing from ${prodHeader}`,
 				);
 			}
 		}

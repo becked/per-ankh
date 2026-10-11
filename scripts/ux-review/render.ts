@@ -19,6 +19,7 @@ const PAGE_LABELS: Record<string, string> = {
 	home: "Home",
 	"game-detail": "Game detail",
 	"game-map": "Map view",
+	"game-screenshots": "Screenshots view",
 	"user-profile": "User profile",
 	account: "Account",
 	tournaments: "Tournaments",
@@ -41,6 +42,9 @@ export function renderReadme({ meta, screens }: Bundle): string {
 			`game \`${meta.ids.gameId}\` · public user \`${meta.ids.userId}\` · ` +
 			`signed in as \`${meta.ids.authUserId}\`` +
 			(meta.ids.authLabel ? ` (${meta.ids.authLabel})` : "") +
+			(meta.ids.screenshotGameId
+				? ` · screenshots view on game \`${meta.ids.screenshotGameId}\``
+				: "") +
 			".\n",
 	);
 	lines.push("## How to review\n");

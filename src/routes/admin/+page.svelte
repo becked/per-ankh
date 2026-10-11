@@ -12,6 +12,7 @@
 	import BulkReindexModal from "$lib/BulkReindexModal.svelte";
 	import FeaturedVideosTable from "$lib/FeaturedVideosTable.svelte";
 	import { syncFeatured } from "$lib/featured-videos.svelte";
+	import ScreenshotModerationTable from "$lib/screenshots/ScreenshotModerationTable.svelte";
 	import Select from "$lib/ui/Select.svelte";
 	import { toast } from "$lib/ui/toast";
 	import UserAutocomplete from "$lib/ui/UserAutocomplete.svelte";
@@ -167,6 +168,9 @@
 					>Featured</Tabs.Trigger
 				>
 				<Tabs.Trigger value="ratings" class={triggerClass}>Ratings</Tabs.Trigger
+				>
+				<Tabs.Trigger value="screenshots" class={triggerClass}
+					>Screenshots</Tabs.Trigger
 				>
 			</Tabs.List>
 
@@ -359,6 +363,10 @@
 						</button>
 					</div>
 				</div>
+			</Tabs.Content>
+
+			<Tabs.Content value="screenshots">
+				<ScreenshotModerationTable screenshots={data.screenshots} />
 			</Tabs.Content>
 		</Tabs.Root>
 	</div>

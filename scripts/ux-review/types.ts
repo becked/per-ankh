@@ -14,15 +14,21 @@ export interface Breakpoint {
 export type Pass = "anon" | "auth";
 
 // The identities one run captures against.
-//   gameId      the public game whose detail tabs are walked
-//   userId      the public profile captured anonymously (the game's owner)
-//   authUserId  the user the signed-in pass is minted a session for
-//   authLabel   that user's discord_username, for display only
+//   gameId            the public game whose detail tabs are walked
+//   userId            the public profile captured anonymously (the game's
+//                     owner)
+//   authUserId        the user the signed-in pass is minted a session for
+//   authLabel         that user's discord_username, for display only
+//   screenshotGameId  the game the screenshots view is captured on — a second
+//                     game, because the walked one is random and almost never
+//                     has a screenshot. Null when no local game does, which
+//                     drops that view from the bundle.
 export interface ReviewIds {
 	gameId: string;
 	userId: string;
 	authUserId: string;
 	authLabel: string | null;
+	screenshotGameId: string | null;
 }
 
 // One (pass × page × tab) capture at one breakpoint. Exactly one of `buf`,

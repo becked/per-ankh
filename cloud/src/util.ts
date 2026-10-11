@@ -179,6 +179,23 @@ export function escapeLikeValue(value: string): string {
 	return value.replace(/[\\%_]/g, (c) => `\\${c}`);
 }
 
+// A timestamp column as an ISO instant, for a payload whose reader will parse
+// it as a date.
+//
+// Every timestamp in this schema is written as D1's `datetime('now')` text
+// ("YYYY-MM-DD HH:MM:SS", always UTC), and the `Date` parser reads that shape
+// as LOCAL time — so a column sent raw arrives shifted by the reader's own
+// offset, which within a day of midnight is the wrong date. Normalised in SQL
+// rather than in TS so the stored format stays untouched (a mixed format in
+// one column would break ordering on it) while what travels is the ISO
+// instant the client date helpers document taking.
+//
+// The caller names the alias, as displayNameSql's callers do:
+//   `SELECT ${isoInstantSql("created_at")} AS created_at …`
+export function isoInstantSql(column: string): string {
+	return `strftime('%Y-%m-%dT%H:%M:%SZ', ${column})`;
+}
+
 // True when `e` is D1 reporting a violated UNIQUE index on `qualified`
 // (a `table.column`, e.g. "users.slug").
 //
@@ -376,12 +393,19 @@ export function isTrustedFrontend(request: Request): boolean {
 	return request.headers.get(SSR_TRUSTED_HEADER) === "1";
 }
 
-// base64url encoding of an ArrayBuffer or Uint8Array, no padding.
-export function base64UrlEncode(buffer: ArrayBuffer | Uint8Array): string {
+// Standard base64 of an ArrayBuffer or Uint8Array, padded — what a JSON API
+// that takes bytes expects (the Clef call in screenshots/clef.ts embeds the
+// image this way, since remote URLs aren't accepted).
+export function base64Encode(buffer: ArrayBuffer | Uint8Array): string {
 	const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
 	let binary = "";
 	for (const b of bytes) binary += String.fromCharCode(b);
-	return btoa(binary)
+	return btoa(binary);
+}
+
+// base64url encoding of an ArrayBuffer or Uint8Array, no padding.
+export function base64UrlEncode(buffer: ArrayBuffer | Uint8Array): string {
+	return base64Encode(buffer)
 		.replace(/\+/g, "-")
 		.replace(/\//g, "_")
 		.replace(/=+$/, "");

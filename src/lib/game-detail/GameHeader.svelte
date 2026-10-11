@@ -1,9 +1,10 @@
 <script lang="ts">
-	// The header both views of a game share — the analyst view (/games/[id])
-	// and the map view (/games/[id]/map): the breadcrumb, the toggle between the
-	// two views, the actions, the save date, and the reparse banner. Each page
-	// mounts its own; the visibility state the lock binds to comes from the [id]
-	// layout (see visibility-context).
+	// The header a game's views share — the analyst view (/games/[id]), the map
+	// view (/games/[id]/map) and the screenshots view (/games/[id]/screenshots):
+	// the breadcrumb, the toggle between the views, the actions, the save date,
+	// and the reparse banner. Each page mounts its own; the visibility state the
+	// lock binds to and the screenshot list the camera adds to both come from
+	// the [id] layout (see visibility-context, screenshots-context).
 	import { page } from "$app/state";
 	import { resolve } from "$app/paths";
 	import type {
@@ -21,6 +22,7 @@
 	import ReimportButton from "$lib/ReimportButton.svelte";
 	import AdminReimportButton from "$lib/AdminReimportButton.svelte";
 	import GameActions from "$lib/GameActions.svelte";
+	import { getGameScreenshots } from "./screenshots-context.svelte";
 	import { getGameVisibility } from "./visibility-context.svelte";
 
 	let {
@@ -42,21 +44,40 @@
 	const gameId = $derived(page.params.id ?? "");
 
 	const visibility = getGameVisibility();
+	const screenshots = getGameScreenshots();
 
-	// The game's two views, and which one is showing — read from the route id
-	// (as the tournament view tabs do), so the toggle's pill marks the right
-	// view in the SSR'd first paint rather than sliding into place on
-	// hydration.
+	// The game's views, and which one is showing — read from the route id (as
+	// the tournament view tabs do), so the toggle's pill marks the right view in
+	// the SSR'd first paint rather than sliding into place on hydration.
+	//
+	// Screenshots is the third only once the game has one: it is a view of the
+	// uploads, so an empty segment would offer an empty page. The route itself
+	// stays reachable, and showing it is the second half of the condition —
+	// a link to it on a game whose screenshots have since been deleted would
+	// otherwise leave the toggle with no segment for the page it is on.
+	const isScreenshotsView = $derived(
+		page.route.id === "/games/[id]/screenshots",
+	);
 	const viewTabs = $derived([
 		{ href: resolve("/games/[id]", { id: gameId }), label: "Analysis" },
 		{ href: resolve("/games/[id]/map", { id: gameId }), label: "Map" },
+		...(screenshots.list.length > 0 || isScreenshotsView
+			? [
+					{
+						href: resolve("/games/[id]/screenshots", { id: gameId }),
+						label: "Screenshots",
+					},
+				]
+			: []),
 	]);
 	const activeViewIndex = $derived(
-		page.route.id === "/games/[id]/map"
-			? 1
-			: page.route.id === "/games/[id]"
-				? 0
-				: -1,
+		isScreenshotsView
+			? 2
+			: page.route.id === "/games/[id]/map"
+				? 1
+				: page.route.id === "/games/[id]"
+					? 0
+					: -1,
 	);
 
 	// Re-import banner: shown to owners when the stored parser_version is
@@ -165,6 +186,7 @@
 			{gameId}
 			{isOwner}
 			bind:isPublic={visibility.isPublic}
+			{screenshots}
 			{collections}
 			displayName={game.display_name ?? null}
 			gameName={game.game_details.game_name ?? null}

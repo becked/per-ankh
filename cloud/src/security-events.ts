@@ -25,6 +25,7 @@ export interface SecurityEventsEnv {
 // resolveSecurityEvent.
 export const SECURITY_REASONS = [
 	"signup", // new account created — handler-set (setSecurityReason), not derivable here
+	"terms_gate", // screenshot upload terms not yet accepted — handler-set, see below
 	"dev_login_probe", // any request to /v1/auth/dev/login
 	"rate_limited", // status 429
 	"server_error", // status 5xx
@@ -32,6 +33,16 @@ export const SECURITY_REASONS = [
 	"auth_fail", // status 401 or 403
 ] as const;
 
+// `terms_gate` is the same "not derivable here" case as `signup`, from the
+// other direction. The screenshot upload endpoint's first gate answers 403
+// TERMS_NOT_ACCEPTED until an account has accepted the terms, which the status
+// rule below would classify as `auth_fail` — and it fires on every account's
+// first screenshot, so the Skiff drain would carry one authentication failure
+// per new uploader. It is a false positive by construction: that 403 is the
+// designed first step of the upload flow. The handler tags it instead of the
+// status rule being bent, because moving the status would change the
+// documented API and exempting the code would put a handler-specific
+// carve-out inside a classifier whose whole rule is that status decides.
 export type SecurityReason = (typeof SECURITY_REASONS)[number];
 
 function isSecurityReason(value: string): value is SecurityReason {

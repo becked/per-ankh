@@ -11,8 +11,9 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { VISIBLE_TO_VIEWER_WHERE } from "../../cloud/src/screenshots/scope";
 import { readDotVars } from "../lib/dotvars";
-import { info } from "../lib/format";
+import { info, warn } from "../lib/format";
 import {
 	d1Query,
 	kvBulkDelete,
@@ -72,6 +73,25 @@ async function hasBlob(gameId: string): Promise<boolean> {
 	}
 }
 
+// The first candidate whose blob is present, probed a round at a time. Null
+// when none of them has one; what that means is the caller's to decide.
+async function firstWithBlob(candidates: GameRow[]): Promise<GameRow | null> {
+	for (let i = 0; i < candidates.length; i += PROBE_BATCH) {
+		const batch = candidates.slice(i, i + PROBE_BATCH);
+		const present = await Promise.all(batch.map((r) => hasBlob(r.game_id)));
+		const hit = present.indexOf(true);
+		if (hit !== -1) {
+			info(
+				`  ${batch[hit].game_id}: blob present ` +
+					`(probe ${i + hit + 1} of ${candidates.length})`,
+			);
+			return batch[hit];
+		}
+		info(`  ${i + batch.length}/${candidates.length} probed, no blob yet…`);
+	}
+	return null;
+}
+
 // Pick a public game that renders, plus its owner (who therefore has at
 // least one public game — what the anonymous profile pass needs).
 //
@@ -100,23 +120,51 @@ export async function discoverGame(): Promise<GameRow> {
 		);
 	}
 
-	for (let i = 0; i < candidates.length; i += PROBE_BATCH) {
-		const batch = candidates.slice(i, i + PROBE_BATCH);
-		const present = await Promise.all(batch.map((r) => hasBlob(r.game_id)));
-		const hit = present.indexOf(true);
-		if (hit !== -1) {
-			info(
-				`  ${batch[hit].game_id}: blob present ` +
-					`(probe ${i + hit + 1} of ${candidates.length})`,
-			);
-			return batch[hit];
-		}
-		info(`  ${i + batch.length}/${candidates.length} probed, no blob yet…`);
-	}
+	const found = await firstWithBlob(candidates);
+	if (found) return found;
 	throw new Error(
 		`Probed all ${candidates.length} public games; none has a blob in local ` +
 			`R2, so none would render. Upload a save locally or pass --game-id.`,
 	);
+}
+
+// A public game that holds a screenshot an anonymous visitor would be sent,
+// for the screenshots view and nothing else. The walked game is picked at
+// random and almost no game has a screenshot, so capturing
+// /games/[id]/screenshots on it would shoot the "No screenshots." state every
+// run — the one state that view has which the toggle above it never offers.
+//
+// Null rather than a throw when there is none to show: local D1 carrying no
+// screenshot is the ordinary case on a fresh checkout, and it drops one view
+// from the bundle the way a checkout with no tournament drops the tournament
+// detail page.
+//
+// The visibility rule is the Worker's own fragment, with the viewer bound as
+// NULL because this asks what the ANONYMOUS pass would see — the stricter of
+// the two passes, and the fragment's uploader leg cannot fire on a NULL
+// comparison (cloud/src/screenshots/scope.ts says so). A hand-copied
+// `hidden_at IS NULL` here would be one more reader of that rule holding only
+// while the copies happen to agree, and the symptom of a disagreement is a
+// capture of the empty state with no indication that it is wrong.
+export async function discoverScreenshotGame(): Promise<GameRow | null> {
+	let rows: GameRow[];
+	try {
+		rows = await d1Query<GameRow>(
+			"SELECT g.game_id AS game_id, g.user_id AS user_id " +
+				"FROM game_screenshots s JOIN games g ON g.game_id = s.game_id " +
+				`WHERE g.is_public = 1 AND ${VISIBLE_TO_VIEWER_WHERE.replace("?", "NULL")} ` +
+				"GROUP BY g.game_id ORDER BY RANDOM();",
+		);
+	} catch (e: unknown) {
+		// A checkout whose D1 predates the screenshots table reads as "no
+		// screenshot to capture", which is what it is — but so would a wrangler
+		// that cannot reach local D1 at all, so say which one happened rather
+		// than dropping a view in silence.
+		const msg = e instanceof Error ? e.message : String(e);
+		warn(`Screenshot-game discovery failed (${msg}); skipping that view.`);
+		return null;
+	}
+	return firstWithBlob(rows.filter((r) => r.game_id && r.user_id));
 }
 
 // ADMIN_DISCORD_ID from cloud/.dev.vars. Null when the file is absent or the

@@ -27,9 +27,10 @@ const API_ORIGIN = new URL(
 const REPORT_URI = `${API_ORIGIN}/v1/csp-report`;
 
 // Rewrite the production CSP header SvelteKit emits so it points at this
-// build's actual API origin: swap the prod origin in connect-src and
-// retarget report-uri. Idempotent — re-running on an already-patched
-// header is a no-op.
+// build's actual API origin: swap the prod origin in connect-src, retarget
+// report-uri, and — in dev only — admit the API origin to img-src, because
+// locally the Worker is also the image host. Idempotent — re-running on an
+// already-patched header is a no-op.
 function patchCspApiOrigin(header: string): string {
 	const directives = new Map<string, string[]>();
 	for (const part of header.split(";")) {
@@ -49,6 +50,23 @@ function patchCspApiOrigin(header: string): string {
 	}
 	if (directives.has("report-uri")) {
 		directives.set("report-uri", [REPORT_URI]);
+	}
+	// Under `vite dev` the image host is the API origin: production serves
+	// screenshots from img.per-ankh.app (an R2 custom domain, no Worker in the
+	// path), which has no local equivalent, so the dev Worker serves them from
+	// its own GET /v1/dev/images/* route instead. img-src has to name it or
+	// every tile is CSP-blocked rather than merely missing.
+	//
+	// `import.meta.env.DEV` and not `API_ORIGIN !== PROD_API_ORIGIN`, which is
+	// also true for a staging build: staging's images come from
+	// img.staging.per-ankh.app, already in the baked policy, so adding its API
+	// origin there would widen the policy for a host that serves no images.
+	if (import.meta.env.DEV) {
+		const imgSrc = directives.get("img-src") ?? [];
+		if (!imgSrc.includes(API_ORIGIN)) {
+			imgSrc.push(API_ORIGIN);
+			directives.set("img-src", imgSrc);
+		}
 	}
 	return [...directives.entries()]
 		.map(([name, values]) => `${name} ${values.join(" ")}`)

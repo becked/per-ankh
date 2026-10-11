@@ -41,6 +41,7 @@ export type ReadEventType = Extract<
 	| "home_summary_view"
 	| "challenge_view"
 	| "challenge_link_view"
+	| "screenshot_view"
 >;
 
 // A per-IP read budget: which events rows count toward it, and how it answers

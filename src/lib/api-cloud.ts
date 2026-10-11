@@ -10,6 +10,7 @@ import type {
 	Objective,
 } from "$lib/challenges/types";
 import type { FullGameData } from "$lib/parser/types";
+import type { ScreenshotReportReason } from "$lib/screenshots/report-reasons";
 import {
 	DEFAULT_GLOBAL_PERIOD,
 	DEFAULT_GLOBAL_SLICE,
@@ -167,6 +168,10 @@ export interface UserProfile {
 	// `channels` plays for Videos). A dedicated caster who never plays still
 	// gets the tab.
 	tournament_participant: boolean;
+	// Whether this user has any visible screenshot — the Screenshots tab's
+	// trigger, the role `channels` plays for Videos. The shots themselves load
+	// lazily via GET /v1/users/:id/screenshots when the tab opens.
+	has_screenshots: boolean;
 }
 
 export interface UserMe {
@@ -207,6 +212,12 @@ export interface UserMe {
 	// toggle and by the Suggested tab, which tells an opted-out viewer that
 	// the suggesting runs both ways.
 	open_to_matches: boolean;
+	// ISO instant the account agreed to the screenshot terms, null if it never
+	// has. Read by the account page's terms section to say which it is. Not a
+	// gate anywhere on the client: the uploader prompts off the endpoint's
+	// 403 TERMS_NOT_ACCEPTED rather than off this value, so the agreement is
+	// still collected by the one surface that can act on it.
+	screenshot_terms_accepted_at: string | null;
 }
 
 export interface GameListItem {
@@ -456,6 +467,185 @@ export interface UploadGameResponse {
 	// onto the challenge's leaderboard.
 	challenge_submitted?: boolean;
 }
+
+// One stored screenshot as either gallery reads it: a game's Screenshots view and
+// the profile Screenshots tab render the same tile from this.
+//
+// Both URLs come from the Worker rather than being assembled here. `url` is
+// the stored WebP on the public image host; `thumb_url` is the one Cloudflare
+// Images transformation of it the tile uses, and its options are also what a
+// delete has to purge — so a client that built its own would be a second copy
+// of them, and a disagreement would show as a deleted image that keeps
+// rendering.
+export interface GameScreenshot {
+	screenshot_id: string;
+	game_id: string;
+	url: string;
+	thumb_url: string;
+	// Of the stored variant. The lightbox reserves the image's box from them.
+	width: number;
+	height: number;
+	caption: string | null;
+	// `in_review` is a row only its own uploader is sent: the classifier
+	// queued it, so nobody else's payload carries it, and the tile badges
+	// itself so the owner knows why it is theirs alone. The badge is also
+	// what makes the quota slot it holds visible — a queued row counts
+	// against the caps and pins its game public. A taken-down row reaches no
+	// payload at all, which is why `hidden` is not in this union.
+	status: "published" | "in_review";
+	// On the home strip, which is a site admin's decision — the `star` action
+	// on POST /v1/admin/screenshots/:id/moderate. Sent to every viewer, because
+	// it is a fact about the row rather than about who asked; what `is_admin`
+	// decides is whether a tile renders the star that toggles it.
+	//
+	// A boolean rather than the `featured_at` column behind it: the control
+	// reads starred-or-not, and the timestamp the strip orders by is the
+	// server's to write — so an optimistic flip sets this field's whole truth
+	// instead of standing a client clock in for a value it doesn't have.
+	featured: boolean;
+	// When it was uploaded, as an ISO instant — the Worker normalises the
+	// column's `datetime('now')` text in SQL, so this is safe to hand to the
+	// date helpers in $lib/utils/formatting. Rendered by the panel layout, the
+	// one gallery shape with room to say more about a shot than its caption.
+	created_at: string;
+	// Present only on GET /v1/users/:id/screenshots: the profile tab shows
+	// shots from across all of a user's games, so each tile names and links
+	// the game it belongs to. Raw fields, formatted by formatGameTitle the way
+	// every other surface formats a game's title.
+	game?: ScreenshotGameFields;
+}
+
+// The game a screenshot belongs to, as every screenshot payload names it: raw
+// title fields rather than a rendered string, because formatGameTitle is where
+// every surface in the app derives a game's title. One type because three
+// readers have it — the profile gallery, the admin queue, and the admin
+// queue's featured list.
+export interface ScreenshotGameFields {
+	game_name: string | null;
+	display_name: string | null;
+	user_nation: string | null;
+	total_turns: number | null;
+}
+
+// One tile of the home page's curated strip (issue #289, step 7): a starred
+// screenshot, the game it came from, and who uploaded it.
+//
+// `game` is required where GameScreenshot leaves it optional — a tile on the
+// landing page has no surrounding header to say which game it is from, so the
+// strip always names one. `uploader` is here and on no other gallery payload
+// for the same reason: the two galleries are already under the name of the
+// person whose shots they are, and this one spans everybody. Identity is
+// joined live rather than snapshotted, so a rename follows.
+//
+// `status` rides along from the shared serializer and is always "published":
+// a hidden screenshot can't be starred, and a takedown clears the star. So is
+// `featured`, which is always true here — the star is what selects these rows.
+export interface FeaturedScreenshot extends GameScreenshot {
+	game: ScreenshotGameFields;
+	uploader: {
+		user_id: string;
+		// Non-null, unlike the admin queue's: this payload's identity join is
+		// an inner one over NOT NULL columns, so there is no nameless tile.
+		display_name: string;
+		slug: string | null;
+		avatar_url: string;
+	};
+}
+
+// The 201 from POST /v1/games/:id/screenshots: the row the Worker stored,
+// plus the public img.per-ankh.app URLs it built from the object key.
+export interface UploadedScreenshot {
+	screenshot_id: string;
+	game_id: string;
+	url: string;
+	thumb_url: string;
+	width: number;
+	height: number;
+	size_bytes: number;
+	caption: string | null;
+	// `in_review` is a stored-but-hidden row: the classifier's uncertain
+	// middle band routes to the admin queue, and only the uploader's own
+	// galleries render it until an admin acts. An upload can therefore
+	// succeed without becoming visible to anyone else, which is why the
+	// uploader is told which of the two happened.
+	status: "published" | "in_review";
+	created_at: string;
+}
+
+// One open report on a screenshot, as the admin queue reads it. The reporter's
+// identity is joined live rather than snapshotted, so a rename is reflected
+// here too — the stance the featured-video read takes.
+export interface ScreenshotReport {
+	// One of SCREENSHOT_REPORT_REASONS ($lib/screenshots/report-reasons), which
+	// is also where its label comes from. Typed as string because the Worker
+	// can ship a reason a browser on the previous deploy doesn't know, and a
+	// report that renders as a raw id is better than one that vanishes.
+	reason: string;
+	created_at: string;
+	reporter: {
+		user_id: string;
+		display_name: string | null;
+		slug: string | null;
+	};
+}
+
+// One row of the admin moderation tab (issue #289, step 6) — the screenshot,
+// who uploaded it, which game it is from, what the classifier thought, and
+// what anyone has reported about it.
+export interface ModerationScreenshot {
+	screenshot_id: string;
+	game_id: string;
+	url: string;
+	thumb_url: string;
+	width: number;
+	height: number;
+	caption: string | null;
+	created_at: string;
+	// `in_review` is the classifier's uncertain band: hidden, but its object
+	// is still in R2, so it is the one state `approve` can act on. `hidden`
+	// means an admin took it down, which deleted the object — a closed
+	// decision, and one neither list below actually carries: a takedown
+	// resolves the reports that prompted it and clears the star, so the row
+	// drops out of both legs. It is in the union because `status` describes a
+	// row rather than a list, not because a surface should branch on it.
+	status: "published" | "in_review" | "hidden";
+	// The home strip's star (step 7 renders it). Null when unstarred.
+	featured_at: string | null;
+	uploader: {
+		user_id: string;
+		display_name: string | null;
+		slug: string | null;
+	};
+	game: ScreenshotGameFields;
+	// The probabilities stored on the row at upload, never recomputed, plus
+	// which questions the CURRENT bands say tripped. Empty `tripped` on a
+	// queued row means the band that queued it has since moved.
+	clef: {
+		is_old_world: number;
+		contains_nsfw: number;
+		contains_gore: number;
+		is_a_photograph: number;
+		game_screenshot_confidence: number;
+		tripped: string[];
+	};
+	reports: ScreenshotReport[];
+}
+
+// Two lists, each in the order its surface wants: the queue is what needs a
+// decision, oldest first, and `featured` is the home strip's inventory,
+// newest first. A published screenshot with an open report is in both — it
+// needs a decision and it is on the home page.
+export interface ScreenshotModerationLists {
+	queue: ModerationScreenshot[];
+	featured: ModerationScreenshot[];
+}
+
+// The decisions POST /v1/admin/screenshots/:id/moderate takes. `takedown` and
+// `approve` are not symmetric: a takedown deletes the stored object, so only a
+// classifier-queued row can be approved, and approving a taken-down one is
+// refused with 409 OBJECT_REMOVED.
+export type ScreenshotModerationAction =
+	"takedown" | "approve" | "star" | "unstar" | "resolve_reports";
 
 export class ApiError extends Error {
 	constructor(
@@ -1055,6 +1245,125 @@ export const cloudApi = {
 		await request(`/games/${id}`, { ...opts, method: "DELETE" });
 	},
 
+	// --- Screenshots (issue #289) ---
+
+	// Attach a screenshot to a public game the caller owns. Multipart like
+	// uploadGame — an `image` part carrying the WebP the browser re-encoded
+	// ($lib/screenshots/downscale) plus an optional `caption` — so don't set
+	// Content-Type; the browser's boundary is the point.
+	//
+	// Every refusal arrives as ApiError carrying a message written to be
+	// shown verbatim, so callers don't restate the rule in a second place.
+	// The one code worth branching on is 403 TERMS_NOT_ACCEPTED: it means the
+	// terms below haven't been accepted, and it is charged no classifier call
+	// and no rate-limit attempt, so accept-and-retry costs the user nothing.
+	// 422 SCREENSHOT_REJECTED additionally carries `{ questions }` naming the
+	// classifier questions that refused it — for the admin queue and the
+	// logs; the message is what the uploader is shown.
+	uploadScreenshot: async (
+		gameId: string,
+		formData: FormData,
+		opts?: CallOpts,
+	): Promise<{ screenshot: UploadedScreenshot }> => {
+		const res = await request(`/games/${gameId}/screenshots`, {
+			...opts,
+			method: "POST",
+			body: formData,
+		});
+		return res.json() as Promise<{ screenshot: UploadedScreenshot }>;
+	},
+
+	// One game's screenshots, newest first — a game's Screenshots view. Public
+	// read on its own per-IP budget, with one viewer-dependent leg: a
+	// review-band upload is sent to its own uploader, marked `in_review`, and
+	// to nobody else until an admin publishes it.
+	getGameScreenshots: async (
+		gameId: string,
+		opts?: CallOpts,
+	): Promise<GameScreenshot[]> => {
+		const res = await request(`/games/${gameId}/screenshots`, opts);
+		return (await (res.json() as Promise<{ screenshots: GameScreenshot[] }>))
+			.screenshots;
+	},
+
+	// One uploader's screenshots across all their games, newest first — the
+	// profile Screenshots tab's lazy payload, on the same budget. Each row
+	// carries its `game`, which the game read above leaves out. Both reads
+	// send a classifier-queued row to its own uploader and to nobody else.
+	getUserScreenshots: async (
+		userId: string,
+		opts?: CallOpts,
+	): Promise<GameScreenshot[]> => {
+		const res = await request(`/users/${userId}/screenshots`, opts);
+		return (await (res.json() as Promise<{ screenshots: GameScreenshot[] }>))
+			.screenshots;
+	},
+
+	// The admin-starred set, newest star first — the home page's curated strip,
+	// and the only screenshot surface a visitor meets without navigating to a
+	// game or a profile. Public read like the two above, but viewer-independent
+	// and edge-cached for a minute, which is why it spends no per-IP budget: the
+	// curation is admin-only, the result isn't.
+	getFeaturedScreenshots: async (
+		opts?: CallOpts,
+	): Promise<FeaturedScreenshot[]> => {
+		const res = await request("/featured-screenshots", opts);
+		return (
+			await (res.json() as Promise<{ screenshots: FeaturedScreenshot[] }>)
+		).screenshots;
+	},
+
+	// Remove one of the caller's own screenshots. Permanent — the row, the
+	// object, and the edge cache — and the remedy the HAS_SCREENSHOTS refusal
+	// on a visibility change names, so a game with screenshots can be made
+	// private again. A viewer who already loaded the image can keep seeing it
+	// until the 2h Browser TTL expires, which no purge reaches.
+	deleteScreenshot: async (
+		gameId: string,
+		screenshotId: string,
+		opts?: CallOpts,
+	): Promise<void> => {
+		await request(`/games/${gameId}/screenshots/${screenshotId}`, {
+			...opts,
+			method: "DELETE",
+		});
+	},
+
+	// Report a screenshot — moderation layer 2's entry point. Signed-in only
+	// (a report names who filed it), and refused with 409 OWN_SCREENSHOT on
+	// the caller's own shot, which has a delete instead.
+	//
+	// The answer is the same whether the report was recorded, had its reason
+	// updated, or was dropped because an admin already resolved one from this
+	// reporter: which of those happened is the queue's business, and a caller
+	// who could tell them apart could read a moderation decision off it.
+	reportScreenshot: async (
+		gameId: string,
+		screenshotId: string,
+		reason: ScreenshotReportReason,
+		opts?: CallOpts,
+	): Promise<void> => {
+		await postJson<{ ok: true }>(
+			`/games/${gameId}/screenshots/${screenshotId}/report`,
+			{ reason },
+			opts,
+		);
+	},
+
+	// Accept the one-time screenshot terms that uploadScreenshot refuses
+	// without. Set-once server-side: a second call returns the original
+	// acceptance rather than recording a new one, since a re-POST is not a
+	// second agreement. There is no revoke — removing the screenshots is the
+	// reversible act.
+	acceptScreenshotTerms: (
+		opts?: CallOpts,
+	): Promise<{ screenshot_terms_accepted_at: string }> =>
+		postJson<{ screenshot_terms_accepted_at: string }>(
+			"/users/me/screenshot-terms",
+			{ accepted: true },
+			opts,
+		),
+
 	// --- Admin (site-admin only; non-admin requests get 404) ---
 
 	adminListOutOfDate: async (
@@ -1148,6 +1457,34 @@ export const cloudApi = {
 		await request(
 			`/admin/featured-videos/${encodeURIComponent(platform)}/${encodeURIComponent(videoId)}`,
 			{ ...opts, method: "DELETE" },
+		);
+	},
+
+	// --- Screenshot moderation (site admin) ---
+
+	// The moderation tab's whole payload: the queue that needs a decision and
+	// the starred set that is on the home page. Uncapped — the 5-per-game cap
+	// bounds the table and both legs are small slices of it.
+	adminListScreenshots: async (
+		opts?: CallOpts,
+	): Promise<ScreenshotModerationLists> => {
+		const res = await request("/admin/screenshots", opts);
+		return res.json() as Promise<ScreenshotModerationLists>;
+	},
+
+	// One decision on one screenshot. `takedown` is terminal — it deletes the
+	// stored object and purges both its URLs — so the caller confirms first;
+	// `approve` answers 409 OBJECT_REMOVED on a row that has already been
+	// taken down, because there are no bytes left to publish.
+	adminModerateScreenshot: async (
+		screenshotId: string,
+		action: ScreenshotModerationAction,
+		opts?: CallOpts,
+	): Promise<void> => {
+		await postJson<{ ok: true }>(
+			`/admin/screenshots/${screenshotId}/moderate`,
+			{ action },
+			opts,
 		);
 	},
 

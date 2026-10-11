@@ -8,6 +8,7 @@
 	import ProfileLink from "$lib/ProfileLink.svelte";
 	import RecentSaveCard from "$lib/RecentSaveCard.svelte";
 	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
+	import FeaturedScreenshotStrip from "$lib/screenshots/FeaturedScreenshotStrip.svelte";
 	import FeaturedTournamentPanel from "$lib/home/FeaturedTournamentPanel.svelte";
 	import CommunityToolsPanel from "$lib/home/CommunityToolsPanel.svelte";
 	import HomeStatsPanel from "$lib/home/HomeStatsPanel.svelte";
@@ -47,6 +48,12 @@
 	// games feed keeps its cards in one column; absent, the feed spans the row
 	// on its own and the cards go two-up.
 	const hasVideos = $derived(data.videos.length > 0);
+
+	// The curated strip is empty until an admin stars something, and a starred
+	// screenshot can stop being one (a takedown clears the star), so the panel
+	// drops out entirely rather than rendering its own empty state — the
+	// drop-a-region rule the videos column and the stats panel follow.
+	const hasScreenshots = $derived(data.screenshots.length > 0);
 </script>
 
 <main class="isolate flex flex-1 flex-col overflow-hidden">
@@ -272,6 +279,20 @@
 				-->
 				<CommunityToolsPanel />
 			</div>
+
+			<!--
+			The curated screenshots, on a full-width row of their own immediately
+			above the rest of the discovery region: these are 8:5 images that have to
+			read as one row, which a half-width column beside the games feed can't
+			give them. Only admin-starred screenshots are here — the strip IS the
+			curation, unlike a starred video, which is promoted to the front of a feed
+			that exists anyway.
+			-->
+			{#if hasScreenshots}
+				<Panel title="Screenshots" class="mb-4">
+					<FeaturedScreenshotStrip screenshots={data.screenshots} />
+				</Panel>
+			{/if}
 
 			<!--
 			Discovery grid (desktop): recent saves (left) → videos (right). A column

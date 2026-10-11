@@ -87,11 +87,19 @@ const config = {
 				// numbered subdomains (i1–i9.ytimg.com), so a wildcard is required.
 				// Add each new video platform's thumbnail host here as providers are
 				// added (e.g. Twitch: https://static-cdn.jtvnw.net).
+				//
+				// img[-.staging].per-ankh.app: user-uploaded game screenshots
+				// (issue #289), served from R2 custom domains. BOTH are listed
+				// because one CSP is built for both deploys. The thumbnail
+				// transformations are /cdn-cgi/image/… paths on the same hosts,
+				// so they need no entry of their own.
 				"img-src": [
 					"self",
 					"data:",
 					"https://cdn.discordapp.com",
 					"https://*.ytimg.com",
+					"https://img.per-ankh.app",
+					"https://img.staging.per-ankh.app",
 				],
 				"connect-src": [
 					"self",

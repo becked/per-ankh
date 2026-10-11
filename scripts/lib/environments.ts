@@ -17,6 +17,24 @@ export interface CloudEnv {
 	// wrangler.toml blocks (top-level for prod, [env.staging] for staging).
 	dbName: string;
 	r2Bucket: string;
+	// The screenshots bucket (issue #289) and the public R2 custom domain in
+	// front of it. A second bucket rather than a prefix in r2Bucket, because
+	// this one is public: the same domain over the shares bucket would expose
+	// every save blob and ZIP by key. The host is here as well as in the
+	// Worker's SCREENSHOT_BASE_URL because deleting a game's screenshots from
+	// the CLI has to purge their URLs, and the objects are edge-cached with no
+	// Worker in the image path to re-evaluate anything.
+	screenshotBucket: string;
+	imageHost: string;
+	// The Cloudflare zone both image hosts live in, mirroring the
+	// CLOUDFLARE_ZONE_ID var in the corresponding wrangler.toml block the way
+	// dbName and the two bucket names mirror theirs. The CLI needs it because
+	// purging a deleted screenshot from the edge is an API call against the
+	// zone, and purge permissions are zone-scoped — so one zone, one token,
+	// both hostnames. Not a credential: a zone id grants nothing without
+	// CLOUDFLARE_PURGE_TOKEN, which the operator exports and which never
+	// appears in this file.
+	zoneId: string;
 	frontendOrigin: string;
 	apiOrigin: string;
 	apiBase: string;
@@ -41,6 +59,9 @@ export const ENVIRONMENTS: Record<CloudEnvName, CloudEnv> = {
 		wranglerEnvFlag: [],
 		dbName: "per-ankh-share-index",
 		r2Bucket: "per-ankh-shares",
+		screenshotBucket: "per-ankh-screenshots",
+		imageHost: "https://img.per-ankh.app",
+		zoneId: "bc571c481d1346e551d7ab169b325a9f",
 		frontendOrigin: "https://per-ankh.app",
 		apiOrigin: "https://api.per-ankh.app",
 		apiBase: "https://api.per-ankh.app/v1",
@@ -53,6 +74,13 @@ export const ENVIRONMENTS: Record<CloudEnvName, CloudEnv> = {
 		wranglerEnvFlag: ["--env", "staging"],
 		dbName: "per-ankh-share-index-staging",
 		r2Bucket: "per-ankh-shares-staging",
+		screenshotBucket: "per-ankh-screenshots-staging",
+		imageHost: "https://img.staging.per-ankh.app",
+		// The same zone as prod: staging's hostnames are subdomains of it, so
+		// there is nothing that differs per target here. It is a field rather
+		// than a shared constant because every other per-target name is, and a
+		// second zone would otherwise have nowhere to go.
+		zoneId: "bc571c481d1346e551d7ab169b325a9f",
 		frontendOrigin: "https://staging.per-ankh.app",
 		apiOrigin: "https://api-staging.per-ankh.app",
 		apiBase: "https://api-staging.per-ankh.app/v1",
