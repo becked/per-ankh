@@ -13,7 +13,7 @@
 // what happens to a row after a human looks at it.
 //
 // THE TWO HIDDEN STATES are what most of this module is shaped by, and
-// migration 0051 is where they are written down:
+// migration 0050 is where they are written down:
 //
 //   hidden_at set, hidden_by null   the classifier queued it. The object is
 //                                   still in R2, so `approve` can publish it.
@@ -280,7 +280,7 @@ const MODERATION_FROM = `
 
 // A screenshot's state, as the queue has to reason about it. Derived from the
 // two columns rather than stored, so there is one definition of "hidden by an
-// admin" and it is the one migration 0051 documents.
+// admin" and it is the one migration 0050 documents.
 function statusOf(row: ModerationRow): "published" | "in_review" | "hidden" {
 	if (row.hidden_by != null) return "hidden";
 	return row.hidden_at == null ? "published" : "in_review";

@@ -1082,7 +1082,7 @@ All **Site admin** (`ADMIN_DISCORD_ID`). Non-admins receive `404 NOT_FOUND` (exi
 
 Moderation layer 2's human end: the classifier gates uploads (layer 1) and Cloudflare's CSAM scanning runs on the zone (layer 3); this is what sits between them. A row waiting in this queue was never published — the classifier's uncertain band is stored with `hidden_at` set and no reader renders it — so the queue carries the same weight as the classifier rather than less.
 
-**The two hidden states** are what these endpoints are shaped by (migration `0051`):
+**The two hidden states** are what these endpoints are shaped by (migration `0050`):
 
 | state | columns | meaning |
 | --- | --- | --- |

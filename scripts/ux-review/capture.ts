@@ -56,12 +56,29 @@ const GAME_TABS: GameTab[] = [
 ];
 
 // User-profile tabs are URL-driven (?tab=…) and the load() refetches per tab,
-// so we navigate by URL rather than clicking.
-const USER_TABS = [
+// so we navigate by URL rather than clicking. In the order ProfilePage's
+// Tabs.List renders them, minus the tabs no pass can reach: Tournaments and
+// Videos need the profile to have a tournament or a channel, and Suggested is
+// the owner's own.
+//
+// `optional` is GAME_TABS' flag for GAME_TABS' reason — a profile without
+// screenshots is a fact about that user, not a capture failure. It matters
+// more here than a skip usually would: profile-load falls a stale
+// ?tab=screenshots back to the default tab, so without the check the shot
+// would be a second copy of Overview filed under the Screenshots name.
+const USER_TABS: { label: string; param: string; optional?: boolean }[] = [
 	{ label: "Overview", param: "overview" },
 	{ label: "Games", param: "games" },
+	{ label: "Screenshots", param: "screenshots", optional: true },
 	{ label: "Stats", param: "stats" },
 ];
+
+// /admin's tabs, in the order its Tabs.List renders them. Clicked rather than
+// navigated to, because the page holds the selection in client state
+// (`activeTab`) and never puts it in the URL — the game-detail shape. None is
+// conditional: the whole page is behind the site-admin gate that the capture
+// itself is gated on.
+const ADMIN_TABS = ["Reparse", "Featured", "Ratings", "Screenshots"];
 
 // Redirect-only routes — verified (not screenshotted). `note` documents the
 // intended destination.
@@ -330,6 +347,33 @@ async function captureGameMap(
 	});
 }
 
+// The game's third view (/games/[id]/screenshots): a panel per screenshot,
+// one shot. Captured in both passes like the map view, because the picture is
+// not all that differs between them — the gallery's delete control renders for
+// the owner and its star for an admin, and the anonymous shot has neither.
+//
+// Captured on the game the run found a screenshot on rather than on the walked
+// one, which is why the route is threaded in rather than taken from ids.gameId.
+async function captureGameScreenshots(
+	page: Page,
+	baseUrl: string,
+	pass: Pass,
+	gameId: string,
+	state: string,
+): Promise<CaptureRecord> {
+	return captureSingle(page, baseUrl, {
+		id: `${pass}__game-screenshots`,
+		pass,
+		page: "game-screenshots",
+		tab: null,
+		title: "Screenshots view",
+		route: `/games/${gameId}/screenshots`,
+		state,
+		errorHint:
+			"Screenshots view failed — game may be private, missing, or redirected",
+	});
+}
+
 // User profile — URL-driven tabs (?tab=…). Yields one record per tab.
 async function captureUserProfile(
 	page: Page,
@@ -341,7 +385,7 @@ async function captureUserProfile(
 	const route = `/users/${userId}`;
 	const base = { pass, page: "user-profile", state };
 	const recs: CaptureRecord[] = [];
-	for (const { label, param } of USER_TABS) {
+	for (const { label, param, optional } of USER_TABS) {
 		const id = `${pass}__user-profile__${param}`;
 		const url = `${route}?tab=${param}`;
 		const resp = await page.goto(`${baseUrl}${url}`, { waitUntil: "load" });
@@ -350,6 +394,10 @@ async function captureUserProfile(
 			.waitFor({ state: "visible", timeout: 10_000 })
 			.then(() => true)
 			.catch(() => false);
+		if (ready && optional) {
+			const trigger = page.getByRole("tab", { name: label, exact: true });
+			if ((await trigger.count()) === 0) continue;
+		}
 		if (!resp || !resp.ok() || !ready) {
 			recs.push({
 				...base,
@@ -367,6 +415,60 @@ async function captureUserProfile(
 			id,
 			tab: label,
 			route: url,
+			title: label,
+			buf: await shoot(page),
+		});
+	}
+	return recs;
+}
+
+// /admin — click through every tab. Yields one record per tab. Same shape as
+// game detail, for the same reason: the tabs are different jobs on one page
+// rather than one view, so a single shot of whichever one happens to be active
+// leaves the other three unreviewed.
+async function captureAdmin(
+	page: Page,
+	baseUrl: string,
+	pass: Pass,
+): Promise<CaptureRecord[]> {
+	const route = "/admin";
+	const base = { pass, page: "admin", route, state: "admin" };
+	const resp = await page.goto(`${baseUrl}${route}`, { waitUntil: "load" });
+	const landedPath = new URL(page.url()).pathname;
+	if (!resp || !resp.ok() || landedPath !== route) {
+		return [
+			{
+				...base,
+				id: `${pass}__admin`,
+				tab: null,
+				title: "Admin",
+				error:
+					"Admin page unavailable — auth user is not the local admin " +
+					`(status ${resp ? resp.status() : "none"}, landed ${landedPath})`,
+			},
+		];
+	}
+
+	const recs: CaptureRecord[] = [];
+	for (const label of ADMIN_TABS) {
+		const id = `${pass}__admin__${slug(label)}`;
+		const tab = page.getByRole("tab", { name: label, exact: true });
+		if ((await tab.count()) === 0) {
+			recs.push({
+				...base,
+				id,
+				tab: label,
+				title: label,
+				error: "Tab not found",
+			});
+			continue;
+		}
+		await tab.click();
+		await settle(page);
+		recs.push({
+			...base,
+			id,
+			tab: label,
 			title: label,
 			buf: await shoot(page),
 		});
@@ -430,6 +532,17 @@ export async function captureAnon(
 		...(await captureGameDetail(page, baseUrl, "anon", ids.gameId, "visitor")),
 	);
 	recs.push(await captureGameMap(page, baseUrl, "anon", ids.gameId, "visitor"));
+	if (ids.screenshotGameId) {
+		recs.push(
+			await captureGameScreenshots(
+				page,
+				baseUrl,
+				"anon",
+				ids.screenshotGameId,
+				"visitor",
+			),
+		);
+	}
 	recs.push(
 		...(await captureUserProfile(page, baseUrl, "anon", ids.userId, "visitor")),
 	);
@@ -444,6 +557,9 @@ export interface AuthOpts {
 	// the two need not coincide — and the owner-only controls on game detail
 	// render only when they do.
 	ownsGame: boolean;
+	// The same question for the game the screenshots view is captured on, which
+	// is a second game: the gallery's delete control is the owner's.
+	ownsScreenshotGame: boolean;
 }
 
 // Run the signed-in pass at the current viewport. Returns records.
@@ -510,6 +626,17 @@ export async function captureAuth(
 			opts.ownsGame ? "owner" : "signed in",
 		),
 	);
+	if (ids.screenshotGameId) {
+		recs.push(
+			await captureGameScreenshots(
+				page,
+				baseUrl,
+				"auth",
+				ids.screenshotGameId,
+				opts.ownsScreenshotGame ? "owner" : "signed in",
+			),
+		);
+	}
 	recs.push(
 		await captureSingle(page, baseUrl, {
 			id: "auth__tournaments",
@@ -537,18 +664,7 @@ export async function captureAuth(
 		);
 	}
 	if (opts.isAdmin) {
-		recs.push(
-			await captureSingle(page, baseUrl, {
-				id: "auth__admin",
-				pass: "auth",
-				page: "admin",
-				tab: null,
-				title: "Admin",
-				route: "/admin",
-				state: "admin",
-				errorHint: "Admin page unavailable — auth user is not the local admin",
-			}),
-		);
+		recs.push(...(await captureAdmin(page, baseUrl, "auth")));
 	}
 	recs.push(await captureRedirects(page, baseUrl, "auth"));
 	return recs;

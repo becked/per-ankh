@@ -2,7 +2,7 @@
 // queue, and the five decisions.
 //
 // What is worth pinning here is almost all about the TWO HIDDEN STATES, which
-// is what migration 0051's `hidden_by` exists to tell apart: a classifier-
+// is what migration 0050's `hidden_by` exists to tell apart: a classifier-
 // queued row still has its object and can be published, while an admin-hidden
 // one does not and cannot. Everything else — who may report, what the queue
 // selects, what a takedown takes with it — follows from that distinction,

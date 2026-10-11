@@ -25,6 +25,7 @@
 	import ProfileLink from "$lib/ProfileLink.svelte";
 	import { screenshotReportReasonLabel } from "$lib/screenshots/report-reasons";
 	import { confirmDialog } from "$lib/ui/confirm";
+	import StarMark from "$lib/ui/StarMark.svelte";
 	import { toast } from "$lib/ui/toast";
 	import { formatDate, formatGameTitle } from "$lib/utils/formatting";
 
@@ -179,7 +180,12 @@
 					<span class="font-bold text-orange">Queued by the classifier</span>
 				{/if}
 				{#if shot.featured_at}
-					<span class="font-bold text-orange">★ On the home strip</span>
+					<!-- The same glyph the gallery's star control renders, filled for the
+					     same reason: filled is what says the screenshot IS on the strip. -->
+					<span class="flex items-center gap-1 font-bold text-orange">
+						<StarMark class="h-3.5 w-3.5" filled />
+						On the home strip
+					</span>
 				{/if}
 			</div>
 

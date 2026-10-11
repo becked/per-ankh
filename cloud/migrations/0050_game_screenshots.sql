@@ -22,12 +22,31 @@
 -- question ids the eval measured the bands against
 -- (scripts/eval-screenshot-classifier.ts), so a row names its own question.
 --
--- hidden_at covers two states that look the same to every reader and differ
--- in whether the object still exists: a review-band upload is stored hidden
--- with its object in R2, awaiting an admin decision, while an admin takedown
--- deletes the object and purges it from the edge (a public cached URL has no
--- per-request gate to re-evaluate, so clearing the column alone would not
--- stop the edge serving it).
+-- hidden_at and hidden_by together are the hidden state, and it is two states
+-- rather than one. They differ in whether the object still exists, which is
+-- what every reader of this table turns out to need: a queued row goes to its
+-- own uploader, a taken-down one goes to nobody, and only a queued one holds a
+-- quota slot or pins its game public.
+--
+--   hidden_at IS NOT NULL AND hidden_by IS NULL  the classifier queued it.
+--                                                The object is in R2, so the
+--                                                queue can approve it.
+--   hidden_by IS NOT NULL                        an admin took it down. The
+--                                                object is gone and purged, so
+--                                                there is nothing to restore
+--                                                and the row is a closed
+--                                                decision.
+--
+-- A review-band upload is stored hidden with its object in R2, awaiting an
+-- admin decision; a takedown deletes the object and purges it from the edge (a
+-- public cached URL has no per-request gate to re-evaluate, so clearing
+-- hidden_at alone would not stop the edge serving it). Without hidden_by the
+-- two are one state, and the queue would offer to approve a row whose bytes no
+-- longer exist — which restores a tile that renders broken — and would keep
+-- asking for a decision an admin already made.
+--
+-- hidden_by is the featured_by shape below, which is the shape resolved_by on
+-- screenshot_reports uses too: a moderation decision records who made it.
 -- ============================================================
 CREATE TABLE game_screenshots (
     screenshot_id TEXT PRIMARY KEY,                       -- nanoid(21)
@@ -53,6 +72,7 @@ CREATE TABLE game_screenshots (
     featured_at TEXT,                                     -- the home strip's star
     featured_by TEXT REFERENCES users(user_id),
     hidden_at TEXT,
+    hidden_by TEXT REFERENCES users(user_id),
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 

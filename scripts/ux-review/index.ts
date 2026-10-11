@@ -13,10 +13,11 @@
 // The walkthrough runs across three viewports (desktop / tablet / mobile) and
 // two auth states:
 //
-//   Anonymous  — the signed-out surface. Only four routes render real
+//   Anonymous  — the signed-out surface. Only five routes render real
 //                content without a session: / , /games/[id] (14 tabs),
-//                /games/[id]/map, /users/[user_id] (3 tabs). Everything else
-//                redirects to /?next=… .
+//                /games/[id]/map, /games/[id]/screenshots, /users/[user_id]
+//                (3 tabs, plus Screenshots on a profile that has one).
+//                Everything else redirects to /?next=… .
 //
 //   Signed in  — the same browser with a real session cookie minted for a
 //                local user (the local ADMIN_DISCORD_ID user by default, so
@@ -24,10 +25,10 @@
 //                ownership falls). Unlocks the authenticated surface: / ,
 //                /users/[user_id] (owner), /account, /games/[id] and
 //                /games/[id]/map (owner only when that user owns the game
-//                picked), /tournaments, /tournaments/[slug], /admin (when the
-//                auth user is the local ADMIN_DISCORD_ID), plus a
-//                redirect-verification note for /dashboard, /games,
-//                /auth/callback.
+//                picked), /games/[id]/screenshots, /tournaments,
+//                /tournaments/[slug], /admin (4 tabs, when the auth user is
+//                the local ADMIN_DISCORD_ID), plus a redirect-verification
+//                note for /dashboard, /games, /auth/callback.
 //
 // Auth mechanism: a session is just a `session` cookie carrying an opaque
 // token mapping in SESSIONS_KV to {user_id, discord_username} (see
@@ -42,7 +43,9 @@
 //   1. The local dev server is up (`./per-ankh dev` — http://localhost:1420).
 //   2. A public game whose blob is present in local R2. By default the run
 //      discovers one (wrangler --local, no prod access); override with
-//      --game-id / --user-id / --auth-user-id.
+//      --game-id / --user-id / --auth-user-id. The screenshots view needs a
+//      second such game that also holds a screenshot, which is discovered the
+//      same way and simply absent from the bundle when local D1 has none.
 
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -56,6 +59,7 @@ import { BREAKPOINTS, captureAnon, captureAuth } from "./capture";
 import {
 	deleteLocalSession,
 	discoverGame,
+	discoverScreenshotGame,
 	discoverTournamentSlug,
 	lookupAdminUserId,
 	lookupAuthUser,
@@ -168,13 +172,20 @@ export async function main(argv: string[]): Promise<void> {
 	const authUserId = authUserIdArg ?? (await lookupAdminUserId()) ?? userId;
 	const { discordUsername, isAdmin } = await lookupAuthUser(authUserId);
 	const tournamentSlug = await discoverTournamentSlug();
+	// A second game, for the screenshots view alone: the walked game is random
+	// and almost never has a screenshot, so that view would otherwise be
+	// captured empty every run.
+	info("Looking for a public game that holds a screenshot…");
+	const screenshotGame = await discoverScreenshotGame();
 	const ids: ReviewIds = {
 		gameId,
 		userId,
 		authUserId,
 		authLabel: discordUsername || null,
+		screenshotGameId: screenshotGame?.game_id ?? null,
 	};
 	const ownsGame = authUserId === gameOwnerId;
+	const ownsScreenshotGame = screenshotGame?.user_id === authUserId;
 	info(
 		`game_id=${gameId}  user_id=${userId}  auth_user_id=${authUserId}` +
 			` (${discordUsername}${isAdmin ? ", admin" : ""}` +
@@ -182,6 +193,12 @@ export async function main(argv: string[]): Promise<void> {
 			// visitor is the one thing the identities decide that isn't visible
 			// from the ids themselves.
 			`${ownsGame ? ", owns game" : ", not the game's owner"})`,
+	);
+	info(
+		screenshotGame
+			? `screenshots view on game_id=${screenshotGame.game_id}` +
+					`${ownsScreenshotGame ? " (owned)" : ""}`
+			: "No local game holds a visible screenshot — screenshots view skipped.",
 	);
 
 	info("Minting local session…");
@@ -259,6 +276,7 @@ export async function main(argv: string[]): Promise<void> {
 				isAdmin,
 				tournamentSlug,
 				ownsGame,
+				ownsScreenshotGame,
 			})) {
 				await mergeRecord(bp.id, rec);
 			}

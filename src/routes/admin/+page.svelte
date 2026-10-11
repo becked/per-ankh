@@ -334,10 +334,6 @@
 				<FeaturedVideosTable videos={data.featuredVideos} />
 			</Tabs.Content>
 
-			<Tabs.Content value="screenshots">
-				<ScreenshotModerationTable screenshots={data.screenshots} />
-			</Tabs.Content>
-
 			<Tabs.Content value="ratings">
 				<div
 					class="rounded-lg p-4"
@@ -367,6 +363,10 @@
 						</button>
 					</div>
 				</div>
+			</Tabs.Content>
+
+			<Tabs.Content value="screenshots">
+				<ScreenshotModerationTable screenshots={data.screenshots} />
 			</Tabs.Content>
 		</Tabs.Root>
 	</div>
