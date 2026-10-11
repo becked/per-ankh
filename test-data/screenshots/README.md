@@ -27,7 +27,7 @@ Include **a combat or battle screenshot** among the `oldworld-` images. It is th
 
 Beyond that, more map screenshots add nothing. The counts above are what they are because a band set from a *maximum* is sensitive to sample size: each new image can only push the max up, so what matters is covering content that differs — combat, an event popup, character art, an unusual palette — rather than adding more of what is already represented.
 
-**A crop is not an outlier.** Highlighting one city's layout or a leader's stats is why someone saves a screenshot at all, so `oldworld-` is expected to hold arbitrary shapes — portrait and near-square included. Measured over the first 12 `oldworld-` images here, 5 fall outside a 1.2–2.5 aspect band, which is what removed that band from the spec's pre-filter. The surviving floor is a long edge of ~640 px, which only `oldworld-06` (502×462) fails.
+**A crop is not an outlier.** Highlighting one city's layout or a leader's stats is why someone saves a screenshot at all, so `oldworld-` is expected to hold arbitrary shapes — portrait and near-square included. Measured over the first 12 `oldworld-` images here, 5 fall outside a 1.2–2.5 aspect band, which is what removed that band from the spec's pre-filter. The surviving floor is a long edge of 400 px, which every image here clears — the smallest, `oldworld-06` at 502×462, is what the 640 px floor it replaced refused.
 
 ## Feed Clef the variant, not the original
 

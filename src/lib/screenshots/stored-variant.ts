@@ -38,7 +38,12 @@ export const STORED_WEBP_QUALITY = 80;
 // is. The endpoint is the enforcer — a client check gates nothing — but the
 // browser applies it too, so an image certain to be refused costs neither an
 // upload nor one of the hour's classifier attempts.
-export const MIN_LONG_EDGE = 640;
+//
+// Deliberately BELOW the 640 px tile width (public-urls.ts): a tight crop —
+// one city's layout, one character panel — is a typical upload, and letting
+// the tile upscale it is preferred to refusing it. What the floor still
+// catches is an image too small to carry the tile at all.
+export const MIN_LONG_EDGE = 400;
 
 // Never upscales: the factor is 1 for an image already inside both limits.
 // The long edge comes from whichever dimension is larger, because input is

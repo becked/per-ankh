@@ -322,9 +322,10 @@ export function trippedQuestions(
 }
 
 // THE SHIPPED BANDS. Set by the step-2 eval on `clef`, over the 17 corpus
-// images that clear the pre-filter and 8 photographs, worst-of-3-passes per
-// question — and a band is only meaningful alongside the pass count that
-// produced it, because each new pass can only push an extreme further out.
+// images that cleared the then-640 px pre-filter and 8 photographs,
+// worst-of-3-passes per question — and a band is only meaningful alongside
+// the pass count that produced it, because each new pass can only push an
+// extreme further out.
 //
 //   question          legitimate min/med/max   photo min/med/max       margin
 //   is_old_world      0.647 / 0.800 / 0.837    0.023 / 0.029 / 0.037   0.074
