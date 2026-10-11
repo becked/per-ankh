@@ -17,6 +17,11 @@
 	// positioned-descendants step. The portal also brings the focus trap and
 	// focus restore that an aria-modal dialog owes the keyboard.
 	//
+	// Not $lib/ui/Popover.svelte, the other shared bits-ui shell: it anchors to
+	// its trigger and is non-blocking — no backdrop, no focus trap — which is
+	// the anchored shape this surface just left. The trigger snippet below is
+	// borrowed from it.
+	//
 	// Chrome follows the admin modals (BulkReparseModal): a `bg-surface` card
 	// on a `bg-black/70` backdrop, with the orange-ruled title the other
 	// dialogs use. Deliberately not the popovers' `bg-blue-gray`, which is the
@@ -27,6 +32,7 @@
 	// dialog (z-[90]) and the toasts (z-[100]), neither of which this opens
 	// but both of which outrank it.
 	import { Dialog } from "bits-ui";
+	import type { Snippet } from "svelte";
 	import { autohideScroll } from "$lib/actions/autohideScroll";
 	import type { UploadedScreenshot } from "$lib/api-cloud";
 	import ScreenshotUploader from "./ScreenshotUploader.svelte";
@@ -36,16 +42,31 @@
 		gameId,
 		isPublic,
 		onUploaded,
+		onOpenChange,
+		trigger,
 	}: {
 		open?: boolean;
 		gameId: string;
 		isPublic: boolean;
 		// eslint-disable-next-line no-unused-vars -- parameter in callback signature
 		onUploaded?: (screenshot: UploadedScreenshot) => void;
+		// eslint-disable-next-line no-unused-vars -- parameter in callback signature
+		onOpenChange?: (open: boolean) => void;
+		// Receives bits-ui's trigger props to spread onto the caller's own button,
+		// so the camera's markup and styling stay in GameActions beside the
+		// popover triggers it sits with, and bits-ui supplies the aria-haspopup /
+		// aria-expanded / aria-controls set and registers the button as the
+		// element focus returns to on close.
+		trigger: Snippet<[{ props: Record<string, unknown> }]>;
 	} = $props();
 </script>
 
-<Dialog.Root bind:open>
+<Dialog.Root bind:open {onOpenChange}>
+	<Dialog.Trigger>
+		{#snippet child({ props })}
+			{@render trigger({ props })}
+		{/snippet}
+	</Dialog.Trigger>
 	<Dialog.Portal>
 		<Dialog.Overlay class="fixed inset-0 z-[80] bg-black/70" />
 		<!-- Caps at 85vh and scrolls its body, so the title stays put and an
