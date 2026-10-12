@@ -81,7 +81,7 @@
 			{#snippet icon()}
 				<SpriteIcon category="icons" value="TURN" size={10} alt="Closes" />
 			{/snippet}
-			{formatRelativeToNow(challenge.closes_at)}
+			{formatRelativeToNow(challenge.closes_at, "local")}
 		</StatTile>
 	</div>
 </a>

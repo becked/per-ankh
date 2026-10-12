@@ -250,7 +250,7 @@
 					<span>·</span>
 					<span>
 						{isOpen ? "closes" : "closed"}
-						{formatRelativeToNow(challenge.closes_at)}
+						{formatRelativeToNow(challenge.closes_at, "local")}
 					</span>
 				</div>
 
@@ -339,8 +339,8 @@
 								</label>
 							{:else}
 								<p class="text-gray-400">
-									Closed {formatRelativeToNow(challenge.closes_at)} — a closed challenge
-									stays closed.
+									Closed {formatRelativeToNow(challenge.closes_at, "local")} — a closed
+									challenge stays closed.
 								</p>
 							{/if}
 						</div>
@@ -444,7 +444,7 @@
 													</a>
 												</td>
 												<td class="py-1.5 text-gray-400">
-													{formatRelativeToNow(row.submitted_at)}
+													{formatRelativeToNow(row.submitted_at, "local")}
 												</td>
 											</tr>
 										{/each}
