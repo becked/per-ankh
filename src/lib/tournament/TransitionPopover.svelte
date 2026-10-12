@@ -167,7 +167,7 @@
 			onclick={() => (open = false)}
 			aria-label="Close"
 		>
-			✕
+			×
 		</button>
 	</header>
 

@@ -119,7 +119,7 @@
 							title="Remove channel"
 							class="shrink-0 cursor-pointer rounded px-1.5 leading-none text-tan opacity-70 transition-colors hover:text-orange hover:opacity-100 disabled:opacity-40"
 						>
-							✕
+							×
 						</button>
 					</li>
 				{/each}

@@ -49,7 +49,7 @@
 				onclick={() => (open = false)}
 				aria-label="Close"
 			>
-				✕
+				×
 			</button>
 		</header>
 		<p class="text-xs text-tan">

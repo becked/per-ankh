@@ -756,7 +756,7 @@
 		if (
 			!(await confirmDialog({
 				title: "Swap players",
-				message: `Swap ${aLabel} ⇄ ${bLabel}?${detail} Seeds, divisions, and match history stay with each seat.`,
+				message: `Swap ${aLabel} and ${bLabel}?${detail} Seeds, divisions, and match history stay with each seat.`,
 				confirmLabel: "Swap",
 			}))
 		)
@@ -764,7 +764,7 @@
 		await withBusy(
 			() =>
 				cloudApi.swapSlots(data.tournament.tournament_id, slotId, otherSlotId),
-			`Swapped ${aLabel} ⇄ ${bLabel}`,
+			`Swapped ${aLabel} and ${bLabel}`,
 		);
 	}
 

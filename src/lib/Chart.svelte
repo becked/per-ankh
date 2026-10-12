@@ -16,6 +16,7 @@
 <script lang="ts">
 	import { onMount, tick, untrack } from "svelte";
 	import { init } from "$lib/echarts";
+	import { CHART_FONT_PROBE } from "$lib/config";
 	import type { ChartOption, ECElementEvent, ECharts } from "$lib/echarts";
 
 	let {
@@ -41,6 +42,27 @@
 	let chartContainer: HTMLDivElement;
 	let chart: ECharts | null = null;
 
+	// ECharts rasterizes axis and label text into the canvas as it draws and
+	// never redraws it when a webfont arrives later, so a chart that painted
+	// inside the font-swap window would keep fallback-font labels until the
+	// next resize or data change. Awaiting the font before the first draw
+	// would give that back the latency the instant-paint pass bought
+	// (CHART_THEME keeps `animation: false` so a chart paints on arrival), so
+	// instead: paint now, and flip this once the face lands to redraw in the
+	// new face (the font effect below). Stays false if the font never loads —
+	// there is nothing to redraw for.
+	//
+	// That redraw restores the glyphs, not the measurements. zrender caches
+	// text metrics in a module-level LRU keyed by the font shorthand
+	// (`ensureFontMeasureInfo`, node_modules/zrender/lib/contain/text.js:7),
+	// and the shorthand doesn't change when the face lands — so ellipsis,
+	// label rotation and `containLabel` padding keep the widths measured in
+	// the fallback, and because the cache is module-level one chart that
+	// mounted early holds them for every chart mounted after it. The preload
+	// in src/app.html is what keeps that window shut; this flip is the
+	// backstop for a cold load slow enough to miss it.
+	let fontReady = $state(false);
+
 	// How long an in-place data change takes to animate. CHART_THEME keeps
 	// `animation: false` so a chart still paints instantly on arrival — that is
 	// what the skeleton/instant-paint pass bought — but a chart already on
@@ -54,6 +76,20 @@
 
 	onMount(() => {
 		let resizeObserver: ResizeObserver;
+
+		if (document.fonts.check(CHART_FONT_PROBE)) {
+			fontReady = true;
+		} else {
+			// Rejects if the face fails to fetch or parse. Swallowed: the
+			// fallback stack has already painted a correct chart, so there is
+			// no redraw to schedule and nothing for a caller to recover from.
+			void document.fonts
+				.load(CHART_FONT_PROBE)
+				.then(() => {
+					fontReady = true;
+				})
+				.catch(() => {});
+		}
 
 		const initChart = () => {
 			if (!chartContainer) return;
@@ -131,6 +167,23 @@
 			// e.g. from the layout-tick state the handler itself bumps — so a
 			// tracked call re-runs this effect and loops (setOption → onLayout →
 			// tick++ → new handler → setOption …: effect_update_depth_exceeded).
+			untrack(() => onLayout?.());
+		}
+	});
+
+	// The face landing is a repaint, not a data change, so it takes the resize
+	// path rather than the option effect above: `resize` runs ECharts' update
+	// with `animation: {duration: 0}` even when the dimensions are unchanged
+	// (`ECharts.prototype.resize`, node_modules/echarts/lib/core/echarts.js:964),
+	// which re-rasterizes the labels without replaying the entry animation the
+	// option effect reserves for a data swap and without notMerge resetting
+	// chart state. On the first run `chart` is still null (onMount's tick
+	// hasn't resolved), so a font that was already cached no-ops here and
+	// initChart draws with it.
+	$effect(() => {
+		if (fontReady) {
+			chart?.resize();
+			// untrack for the same reason as the option effect above.
 			untrack(() => onLayout?.());
 		}
 	});
