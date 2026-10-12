@@ -15,7 +15,7 @@
 	} from "$lib/api-cloud";
 	import { isNewer } from "$lib/utils/semver";
 	import { PARSER_VERSION } from "$lib/parser/types";
-	import { formatDate, formatGameTitle } from "$lib/utils/formatting";
+	import { formatDate } from "$lib/utils/formatting";
 	import { profileHref } from "$lib/utils/profile-href";
 	import Breadcrumb, { type Crumb } from "$lib/Breadcrumb.svelte";
 	import SegmentedNav from "$lib/ui/SegmentedNav.svelte";
@@ -110,20 +110,12 @@
 		};
 	});
 
-	// Effective game title — same derivation GameDetailView used for its old
-	// H1. Forms the breadcrumb's leaf (current page) segment.
-	const gameTitle = $derived(
-		formatGameTitle({
-			display_name: game.display_name ?? null,
-			game_name: game.game_details.game_name,
-			save_owner_nation:
-				game.user_nation ??
-				game.game_details.players.find((p) => p.is_human)?.nation ??
-				null,
-			total_turns: game.game_details.total_turns,
-			match_id: game.game_details.match_id,
-		}),
-	);
+	// Effective game title, forming the breadcrumb's leaf (current page)
+	// segment. The [id] layout's own derivation, read off `page.data` the way
+	// the root layout reads that load's `meta`: the <head>/OG title and the
+	// screenshots view's lightbox heading are the same string, and one
+	// derivation is what keeps the three of them from drifting apart.
+	const gameTitle = $derived(page.data.gameName as string);
 
 	// Canonical breadcrumb trail, derived from the game's own data so it's
 	// stable across direct links, refreshes, and re-entry. A tournament game's

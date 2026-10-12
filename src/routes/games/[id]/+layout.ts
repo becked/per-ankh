@@ -11,11 +11,12 @@ import { rethrowRateLimit } from "$lib/utils/load-errors";
 import { loginBounce } from "$lib/utils/safe-next";
 import type { LayoutLoad } from "./$types";
 
-// The game's effective title — the derivation GameHeader renders as the
-// on-page heading. Hoisted out of buildMeta below because two of this
-// layout's consumers now read the same string: the <head>/OG title, and the
-// screenshots view's lightbox heading (a game's own screenshot rows carry no
-// game fields — the list is one game's).
+// The game's effective title, and the only place it is derived. Hoisted out
+// of buildMeta below because three of this layout's consumers read the same
+// string: the <head>/OG title, GameHeader's breadcrumb leaf (off `page.data`,
+// as the root layout reads this load's `meta`), and the screenshots view's
+// lightbox heading (a game's own screenshot rows carry no game fields — the
+// list is one game's).
 //
 // It handles the owner rename, the empty / auto-generated "GameN" save name
 // (falling through to "{Nation} - {Turns} turns"), and the bare-fallback cases
@@ -192,10 +193,10 @@ export const load: LayoutLoad = async ({ params, fetch, url }) => {
 		tournamentLink,
 		challengeLink,
 		screenshots,
-		// What this game is called, for the screenshots view: its gallery's
-		// lightbox is headed by the game, and the rows it renders carry no game
-		// fields of their own. Derived here, where the title already is, rather
-		// than a fourth copy of the derivation in the page.
+		// What this game is called — the screenshots view passes it to the
+		// gallery, whose lightbox is headed by the game and whose rows carry no
+		// game fields of their own, and GameHeader reads it off `page.data` for
+		// the breadcrumb on all three views.
 		gameName: gameTitle(game),
 		meta: buildMeta(game),
 	};

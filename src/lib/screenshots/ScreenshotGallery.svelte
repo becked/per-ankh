@@ -14,9 +14,11 @@
 	// judgement. `grid` is the dense tile ramp. Both ramp their columns with
 	// the width — panels one to three, tiles two to five — so what separates
 	// them is how wide a column is allowed to get, not whether there is one.
-	// The lightbox, the delete, the report and the star are the same code
-	// either way; what the two differ in is an item's chrome and where its
-	// controls sit.
+	// The lightbox, the report and the star are the same code either way; what
+	// the two differ in is an item's chrome and where its controls sit. The
+	// delete is not among them: a screenshot is removed on its own game's
+	// Screenshots view, where it sits under the game it belongs to, so only
+	// `panels` draws one.
 	//
 	// A tile can be `in_review`: the classifier queued it, and both reads send
 	// such a row to its uploader alone. It badges itself, because it holds a
@@ -41,9 +43,9 @@
 	// inside what 640 px covers at 2x instead of minting a second variant for
 	// the wider box it could otherwise fill.
 	//
-	// Three controls, one per viewer: the owner's delete where the surface
-	// offers it (`canDelete`), everyone else's report, and a site admin's star
-	// for the home strip.
+	// Three controls, one per viewer: the owner's delete on the game's own
+	// view, everyone else's report, and a site admin's star for the home
+	// strip.
 	import { goto } from "$app/navigation";
 	import { resolve } from "$app/paths";
 	import { page } from "$app/state";
@@ -60,6 +62,7 @@
 	} from "$lib/screenshots/report-reasons";
 	import { SvelteSet } from "svelte/reactivity";
 	import FullscreenDialog from "$lib/ui/FullscreenDialog.svelte";
+	import PanelInset from "$lib/ui/PanelInset.svelte";
 	import RadioGroup from "$lib/ui/RadioGroup.svelte";
 	import RadioItem from "$lib/ui/RadioItem.svelte";
 	import StarMark from "$lib/ui/StarMark.svelte";
@@ -70,7 +73,6 @@
 	let {
 		screenshots = $bindable(),
 		isOwner = false,
-		canDelete = false,
 		showGame = false,
 		layout = "grid",
 		gameName,
@@ -82,23 +84,25 @@
 		// after an upload, so the list has to live there either way.
 		screenshots: GameScreenshot[];
 		// The viewer owns these shots. Only ever true on a surface the owner is
-		// looking at. It is what suppresses the report path: nobody is offered a
-		// report on their own screenshot, which the endpoint refuses anyway
-		// (409 OWN_SCREENSHOT). Suppressed on ownership rather than on the delete
-		// below, because a surface can own these shots and still not offer the
-		// delete — the profile tab does — and offering "report" there would be a
-		// control whose only answer is that refusal.
+		// looking at, and the gate on both of the things ownership decides: the
+		// panel layout's delete, and the suppression of the report path —
+		// nobody is offered a report on their own screenshot, which the
+		// endpoint refuses anyway (409 OWN_SCREENSHOT), so offering it would be
+		// a control whose only answer is that refusal. The endpoint checks the
+		// uploader either way, which is what this gate agrees with rather than
+		// decides.
+		// WHERE the delete is offered is not a prop: a screenshot is removed on
+		// its own game's Screenshots view, which in here is the `panels`
+		// layout, so the grid draws no delete for an owner to be given.
+		// The admin star is independent of all of it — it comes from
+		// `page.data` and not from a prop, so an admin looking at their own
+		// gallery gets it too.
 		isOwner?: boolean;
-		// Offer the owner's delete. Separate from ownership because it is the
-		// surface's call, not the viewer's: a game's own view, where a shot sits
-		// under the game it belongs to, offers it; the profile tab does not.
-		// Only ever true alongside `isOwner` — the endpoint checks the uploader,
-		// so this gate is the UI agreeing with it.
-		// The admin star is independent of both — it comes from `page.data` and
-		// not from a prop, so an admin looking at their own gallery gets it too.
-		canDelete?: boolean;
 		// Name and link each tile's game. True on the profile tab, where a tile
-		// is the only thing that says which game it came from.
+		// is the only thing that says which game it came from; a game's own view
+		// is already under that game's header. A fact about what a tile has to
+		// say rather than about how much room it gets, which is why it is its
+		// own prop and not read off `layout`.
 		showGame?: boolean;
 		// How much room one screenshot gets: a card each, picture beside
 		// description, or the dense tile ramp. The grid is the default because
@@ -327,10 +331,15 @@
 	<!-- 8:5, the thumbnail's own shape, so the box the layout reserves is the
 	     box the image fills and nothing resizes as tiles arrive. The
 	     transformation already cropped to it; object-cover is here for the
-	     rounding, not to crop. -->
+	     rounding, not to crop.
+	     `alt=""`, as VideoCard's thumbnail is: whatever opens the picture
+	     already names it (`viewLabel`), and in a panel the caption is text
+	     beside it — an alt here would be the same words a second and third
+	     time. The lightbox's own image keeps its alt, being the one picture
+	     nothing around it names. -->
 	<img
 		src={shot.thumb_url}
-		alt={shot.caption ?? "Game screenshot"}
+		alt=""
 		width="640"
 		height="400"
 		loading="lazy"
@@ -357,8 +366,8 @@
 {#snippet inReviewBadge(className: string)}
 	<!-- Only an uploader is ever sent a queued row, so this is also the only
 	     thing on screen that says why nobody else can see the screenshot. In
-	     the grid it rides the picture's bottom-left corner, clear of the
-	     delete above it; in a panel it is a badge in the text column, which is
+	     the grid it rides the picture's bottom-left corner, clear of the admin
+	     star above it; in a panel it is a badge in the text column, which is
 	     where that layout keeps everything it has to say. -->
 	<span
 		class="font-bold text-orange {className}"
@@ -385,9 +394,11 @@
 {#snippet deleteControl(shot: GameScreenshot, className: string)}
 	<!-- Always visible, never hover-only: a hover reveal has no equivalent on
 	     touch, and this is the owner's only route to making a game private
-	     again. The caller places it — a corner of the picture in the grid, the
-	     panel's own control row in the stack — while the icon, the labels and
-	     the handler are the same either way. -->
+	     again. Rendered by the panel layout alone, which is a game's own
+	     Screenshots view: a screenshot is removed where it sits under the game
+	     it belongs to, not beside shots from games the viewer is not looking
+	     at. The panel's control row places it; the icon, the labels and the
+	     handler are the snippet's. -->
 	<button
 		type="button"
 		onclick={() => remove(shot)}
@@ -413,9 +424,10 @@
 {/snippet}
 
 {#snippet starControl(shot: GameScreenshot, className: string)}
-	<!-- Opposite the owner's delete wherever both are offered, so an admin
+	<!-- Beside the owner's delete in the panel's control row, so an admin
 	     looking at their own gallery has the two of them without either
-	     covering the other. Always visible rather than revealed on hover — the
+	     covering the other; alone on the picture in the grid, which draws no
+	     delete. Always visible rather than revealed on hover — the
 	     delete's reasoning, which applies harder here: a control whose point is
 	     to be where a screenshot is come across cannot be one that touch never
 	     offers. Published rows only: `star` answers 409 on a hidden one, and
@@ -498,9 +510,6 @@
 						     grow the panel. -->
 						<p class="text-sm text-tan">{shot.caption}</p>
 					{/if}
-					{#if showGame}
-						{@render gameLink(shot, "relative z-20 text-sm text-gray-400")}
-					{/if}
 					{#if uploaded}
 						<!-- Named, because a bare date beside a picture says nothing about
 						     which date it is. Longhand, as the terms panel's signature
@@ -517,7 +526,7 @@
 							"relative z-20 w-fit rounded bg-orange/15 px-2 py-0.5 text-[10px] uppercase tracking-wide",
 						)}
 					{/if}
-					{#if canDelete || (canStar && shot.status === "published")}
+					{#if isOwner || (canStar && shot.status === "published")}
 						<!-- The panel's own control row, off the picture and at the foot of
 						     the column: in a layout with a text column, a control belongs
 						     with the text rather than over the image it acts on. `mt-auto`
@@ -531,7 +540,7 @@
 									"rounded bg-surface-raised p-1.5 hover:bg-surface-raised-hover",
 								)}
 							{/if}
-							{#if canDelete}
+							{#if isOwner}
 								{@render deleteControl(
 									shot,
 									"rounded bg-surface-raised p-1.5 hover:bg-surface-raised-hover",
@@ -548,7 +557,11 @@
 		class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
 	>
 		{#each screenshots as shot (shot.screenshot_id)}
-			<figure class="min-w-0 rounded-lg bg-surface p-3">
+			<!-- `surface-raised`, the step VideoCard takes in the tab beside this
+			     one: both grids sit in the profile tab's `surface-sunken` well,
+			     where `surface` is the very next shade up the ramp and barely
+			     parts from it. -->
+			<figure class="min-w-0 rounded-lg bg-surface-raised p-3">
 				{#if showGame}
 					<!-- The tile's title, above the picture and in the card family's bold
 					     tan — where VideoCard puts a video's name in the tab beside this
@@ -563,12 +576,6 @@
 					{#if shot.status === "in_review"}
 						{@render inReviewBadge(
 							"absolute bottom-1 left-1 rounded bg-black/70 px-1.5 py-0.5 text-xs",
-						)}
-					{/if}
-					{#if canDelete}
-						{@render deleteControl(
-							shot,
-							"absolute right-1 top-1 rounded bg-black/60 p-1 hover:bg-black/80",
 						)}
 					{/if}
 					{#if canStar && shot.status === "published"}
@@ -654,12 +661,12 @@
 						<p class="text-tan">Reported. An admin will review it.</p>
 					{:else if reportingId === lightbox.screenshot_id}
 						{@const shot = lightbox}
-						<!-- The recessed step inside the panel, as a PanelInset is: on
-						     the backdrop this was a `surface` card, which is the panel's
-						     own surface now that there is a panel around it. -->
-						<div
-							class="mx-auto max-w-xs rounded-lg bg-surface-deep p-3 text-left"
-						>
+						<!-- The recessed step inside the panel: on the backdrop this was
+						     a `surface` card, which is the panel's own surface now that
+						     there is a panel around it. The question is a child rather
+						     than the inset's `label`, which is the uppercase marker a
+						     list of rows gets and not the voice of a question. -->
+						<PanelInset class="mx-auto max-w-xs text-left">
 							<p class="mb-2 font-bold text-tan">
 								What's wrong with this screenshot?
 							</p>
@@ -702,7 +709,7 @@
 									Cancel
 								</button>
 							</div>
-						</div>
+						</PanelInset>
 					{:else}
 						{@const shot = lightbox}
 						<button
