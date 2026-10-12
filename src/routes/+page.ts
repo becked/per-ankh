@@ -46,10 +46,18 @@ export interface FeaturedTournament {
 // The featured tournament, its standings and the still-unplayed half of its
 // match schedule.
 //
-// Sequential then parallel, the same shape /tournaments/[slug]'s layout load
-// uses: the slug buys the id, and the id buys the other two. Three reads, all
-// on the tournament_view budget — home is a spender of it now, which is the
-// exception cloud/src/tournament/limits.ts names.
+// One wave, the same shape /tournaments/[slug]'s layout load uses: all three
+// reads take the slug, so none of them waits on the detail response for an id.
+// Three reads, all on the tournament_view budget — home is a spender of it now,
+// which is the exception cloud/src/tournament/limits.ts names.
+//
+// The count is unchanged while the panel renders and goes 1 → 3 while it
+// cannot: the slug below is a constant, so between events — renamed, deleted,
+// not yet created — every home load now spends three slots to learn what one
+// used to. Accepted, with the number in view: the ceiling is 2400/hr per IP,
+// which is ~800 home loads an hour in that state against ~2400 before, and the
+// alternative is a serial wave on every load for the sake of the loads that
+// show nothing.
 //
 // `status: "pending"` is the whole schedule the Upcoming panel can ever draw:
 // partitionSchedule keeps pending matches and nothing else, so this is that
@@ -66,13 +74,11 @@ async function loadFeaturedTournament(
 	fetch: typeof globalThis.fetch,
 ): Promise<FeaturedTournament | null> {
 	try {
-		const tournament = await cloudApi.getTournament(FEATURED_TOURNAMENT_SLUG, {
-			fetch,
-		});
-		const [standings, matches] = await Promise.all([
-			cloudApi.getTournamentStandings(tournament.tournament_id, { fetch }),
+		const [tournament, standings, matches] = await Promise.all([
+			cloudApi.getTournament(FEATURED_TOURNAMENT_SLUG, { fetch }),
+			cloudApi.getTournamentStandings(FEATURED_TOURNAMENT_SLUG, { fetch }),
 			cloudApi.getTournamentMatches(
-				tournament.tournament_id,
+				FEATURED_TOURNAMENT_SLUG,
 				{ status: "pending" },
 				{ fetch },
 			),

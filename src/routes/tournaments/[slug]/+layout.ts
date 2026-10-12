@@ -10,21 +10,29 @@ import type { LayoutLoad } from "./$types";
 export const load: LayoutLoad = async ({ params, fetch }) => {
 	// Public — shared tournament URLs render for anonymous visitors.
 	//
+	// One wave, not two. The three sub-resource reads take the slug as readily
+	// as the id, so none of them waits for the detail response to learn one —
+	// which is all the sequence here used to be for, and the whole of this
+	// route's contribution to the waterfall a distant visitor pays (issue #292).
+	// Bracket is empty until championship phase; that's fine, the component
+	// renders a placeholder.
+	//
 	// All four reads draw on the same per-IP tournament_view budget, so an
-	// exhausted budget fails them together — the parallel block is inside the
-	// try for that reason, not just getTournament. A 404 from one of the three
-	// (the tournament vanished between calls) lands on the not-found page too,
-	// which is the honest answer for that race.
+	// exhausted budget fails them together, and a 404 from any of them lands on
+	// the not-found page — which is the honest answer both for a missing
+	// tournament and for one that vanished mid-flight.
+	//
+	// What starting them together costs is on that 404 path: a dead slug now
+	// spends four `tournament_view` slots instead of one, because all four reads
+	// are in flight before the first 404 arrives. Accepted — a *reachable* page
+	// always spent four, the ceiling is 2400/hr per IP, and the alternative is
+	// to charge every real visitor a serial wave to save a crawler three slots.
 	try {
-		const tournament = await cloudApi.getTournament(params.slug, { fetch });
-
-		// Parallel reads — standings + bracket + recent matches are independent.
-		// Bracket is empty until championship phase; that's fine, the component
-		// renders a placeholder.
-		const [standings, bracket, matches] = await Promise.all([
-			cloudApi.getTournamentStandings(tournament.tournament_id, { fetch }),
-			cloudApi.getTournamentBracket(tournament.tournament_id, { fetch }),
-			cloudApi.getTournamentMatches(tournament.tournament_id, {}, { fetch }),
+		const [tournament, standings, bracket, matches] = await Promise.all([
+			cloudApi.getTournament(params.slug, { fetch }),
+			cloudApi.getTournamentStandings(params.slug, { fetch }),
+			cloudApi.getTournamentBracket(params.slug, { fetch }),
+			cloudApi.getTournamentMatches(params.slug, {}, { fetch }),
 		]);
 
 		return {

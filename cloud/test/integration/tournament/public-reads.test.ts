@@ -12,7 +12,7 @@
 import { applyD1Migrations, env } from "cloudflare:test";
 import { nanoid } from "nanoid";
 import { beforeAll, describe, expect, it } from "vitest";
-import { expectOk } from "../../helpers/assertions";
+import { expectErrorCode, expectOk } from "../../helpers/assertions";
 import {
 	makeTournament,
 	makeUser,
@@ -726,6 +726,77 @@ describe("public read handlers", () => {
 		});
 		const body = await expectOk<{ link: unknown | null }>(res);
 		expect(body.link).toBeNull();
+	});
+});
+
+// The identifier these handlers take is the tournament id *or* its slug
+// (loadTournamentByIdOrSlug, cloud/src/tournament/data.ts). routes-match.test.ts
+// proves which route key each form reaches; these are the handler's half — the
+// WHERE it runs, and the setup gate standing behind it, which a changed WHERE
+// is what could move.
+describe("public reads addressed by either identifier form", () => {
+	it("serves the same standings by slug as by id", async () => {
+		const t = await makeTournament({
+			advanceTo: "swiss-round-1-complete",
+			name: "Either Form Cup",
+		});
+
+		const byId = await expectOk<{ tournament_id: string }>(
+			await request.get({
+				path: `/v1/tournaments/${t.tournamentId}/standings`,
+				as: t.admin,
+			}),
+		);
+		const bySlug = await expectOk<{ tournament_id: string }>(
+			await request.get({
+				path: `/v1/tournaments/${t.slug}/standings`,
+				as: t.admin,
+			}),
+		);
+
+		expect(byId.tournament_id).toBe(t.tournamentId);
+		expect(bySlug).toEqual(byId);
+	});
+
+	it("serves the detail by id as well as by slug", async () => {
+		const t = await makeTournament({ name: "Detail Either Way Cup" });
+
+		const bySlug = await expectOk<{ tournament_id: string; slug: string }>(
+			await request.get({ path: `/v1/tournaments/${t.slug}`, as: t.admin }),
+		);
+		const byId = await expectOk<{ tournament_id: string; slug: string }>(
+			await request.get({
+				path: `/v1/tournaments/${t.tournamentId}`,
+				as: t.admin,
+			}),
+		);
+
+		expect(bySlug.tournament_id).toBe(t.tournamentId);
+		expect(bySlug.slug).toBe(t.slug);
+		expect(byId).toEqual(bySlug);
+	});
+
+	it("404s a setup-gated tournament addressed by slug, but serves its admin", async () => {
+		// The one path where widening the WHERE could have changed who sees
+		// what: the gate runs on the loaded row, so a row reached by the other
+		// key has to meet the same door. Sibling id-addressed cases live in
+		// stats.test.ts and video-archive.test.ts.
+		const t = await makeTournament(); // setup, signups closed
+		const stranger = await makeUser();
+
+		await expectErrorCode(
+			await request.get({
+				path: `/v1/tournaments/${t.slug}/standings`,
+				as: stranger,
+			}),
+			{ status: 404, code: "TOURNAMENT_NOT_FOUND" },
+		);
+		await expectOk(
+			await request.get({
+				path: `/v1/tournaments/${t.slug}/standings`,
+				as: t.admin,
+			}),
+		);
 	});
 });
 

@@ -28,6 +28,21 @@ import type { PageLoad } from "./$types";
 export const load: PageLoad = async ({ fetch, url }) => {
 	// `cloudApi.getMe` returns null on 401 (it swallows UnauthorizedError), so
 	// we check the result rather than catch — the same shape /account uses.
+	//
+	// Serial, and deliberately: the bundle read below is gated on this answer,
+	// and starting it concurrently would spend a `global_stats_view` slot for a
+	// visitor who is about to be redirected to sign in. A real trade rather
+	// than a free one, which is why the wave stays (issue #292, Class C).
+	//
+	// Its own call rather than `await parent()`: the root layout makes this same
+	// request, so routing through the parent would trade a duplicate read for a
+	// wait on that whole chain — `getMe` and then the wave of three behind it,
+	// where this is one `getMe` and done. `GET /v1/auth/me` spends no read
+	// budget, but the duplicate isn't free either: handleMe (cloud/src/auth.ts)
+	// is a session lookup and a `users` SELECT, then concurrently a `db.batch`
+	// of two `tournament_slots` UPDATEs (claimTournamentSlots) and a
+	// `tournament_beta_users` SELECT. A write transaction, run twice per load of
+	// this page.
 	const user = await cloudApi.getMe({ fetch });
 	if (!user) {
 		throw redirect(303, loginBounce(url));
