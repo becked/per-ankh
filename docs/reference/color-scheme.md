@@ -56,6 +56,7 @@ ramp goes darkest → lightest, each base with its hover step.
 
 - **Background**: Blue-Gray (`var(--color-blue-gray)`)
 - **Text**: White (`var(--color-white)`)
+- **Native controls**: `color-scheme: dark` — the tokens above only reach what the app paints, so this is what keeps anything the browser draws itself (a `<progress>` track, the calendar glyph inside `<input type="date">`) from coming back light.
 
 ### Using UI Colors
 
