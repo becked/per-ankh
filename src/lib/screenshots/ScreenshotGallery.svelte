@@ -19,9 +19,10 @@
 	// controls sit.
 	//
 	// A tile can be `in_review`: the classifier queued it, and both reads send
-	// such a row to its uploader alone. It badges itself and keeps its delete,
-	// because it holds a quota slot and pins its game public until it is
-	// either published by an admin or removed here.
+	// such a row to its uploader alone. It badges itself, because it holds a
+	// quota slot and pins its game public until it is either published by an
+	// admin or deleted — which is done on its own game's view, the surface that
+	// offers the delete.
 	//
 	// Tiles are the Worker's thumbnail URL, a single Cloudflare Images
 	// transformation of the stored object; clicking one opens the stored object
@@ -40,8 +41,9 @@
 	// inside what 640 px covers at 2x instead of minting a second variant for
 	// the wider box it could otherwise fill.
 	//
-	// Three controls, one per viewer: the owner's delete, everyone else's
-	// report, and a site admin's star for the home strip.
+	// Three controls, one per viewer: the owner's delete where the surface
+	// offers it (`canDelete`), everyone else's report, and a site admin's star
+	// for the home strip.
 	import { goto } from "$app/navigation";
 	import { resolve } from "$app/paths";
 	import { page } from "$app/state";
@@ -67,6 +69,7 @@
 
 	let {
 		screenshots = $bindable(),
+		isOwner = false,
 		canDelete = false,
 		showGame = false,
 		layout = "grid",
@@ -79,12 +82,20 @@
 		// after an upload, so the list has to live there either way.
 		screenshots: GameScreenshot[];
 		// The viewer owns these shots. Only ever true on a surface the owner is
-		// looking at. It also decides which control a tile offers: an owner
-		// deletes, everyone else reports, and nobody is offered both — a
-		// report on your own screenshot is refused by the endpoint anyway
-		// (409 OWN_SCREENSHOT), since the delete is faster and permanent.
-		// The admin star is independent of it — it comes from `page.data` and
-		// not from a prop, so an admin looking at their own gallery gets both.
+		// looking at. It is what suppresses the report path: nobody is offered a
+		// report on their own screenshot, which the endpoint refuses anyway
+		// (409 OWN_SCREENSHOT). Suppressed on ownership rather than on the delete
+		// below, because a surface can own these shots and still not offer the
+		// delete — the profile tab does — and offering "report" there would be a
+		// control whose only answer is that refusal.
+		isOwner?: boolean;
+		// Offer the owner's delete. Separate from ownership because it is the
+		// surface's call, not the viewer's: a game's own view, where a shot sits
+		// under the game it belongs to, offers it; the profile tab does not.
+		// Only ever true alongside `isOwner` — the endpoint checks the uploader,
+		// so this gate is the UI agreeing with it.
+		// The admin star is independent of both — it comes from `page.data` and
+		// not from a prop, so an admin looking at their own gallery gets it too.
 		canDelete?: boolean;
 		// Name and link each tile's game. True on the profile tab, where a tile
 		// is the only thing that says which game it came from.
@@ -328,11 +339,11 @@
 {/snippet}
 
 {#snippet picture(shot: GameScreenshot, className: string)}
-	<!-- The grid's picture is its own control: a tile there is the picture and
-	     a line of text under it, so there is nothing else of it to press. A
-	     panel has a column of text beside the picture and presses as one card
-	     — the panel layout wraps the thumbnail itself and stretches one button
-	     over the whole figure instead. -->
+	<!-- The grid's picture is its own control: a tile there is the picture with
+	     its game named above and its caption under it, so there is no card body
+	     to press. A panel has a column of text beside the picture and presses as
+	     one card — the panel layout wraps the thumbnail itself and stretches one
+	     button over the whole figure instead. -->
 	<button
 		type="button"
 		onclick={() => open(shot)}
@@ -359,10 +370,13 @@
 
 {#snippet gameLink(shot: GameScreenshot, className: string)}
 	<!-- Into that game's screenshots view, not its analyst view: the link is on
-	     a screenshot, and that is the view the screenshot is on. -->
+	     a screenshot, and that is the view the screenshot is on.
+	     inline-block, so the link's box ends where the title does — a block
+	     anchor spans its line, which made the empty room to the right of a short
+	     title press too. `max-w-full` is what still lets a long one truncate. -->
 	<a
 		href={resolve("/games/[id]/screenshots", { id: shot.game_id })}
-		class="block truncate text-gray-400 hover:text-orange hover:underline {className}"
+		class="inline-block max-w-full truncate hover:text-orange hover:underline {className}"
 	>
 		{gameTitle(shot)}
 	</a>
@@ -485,7 +499,7 @@
 						<p class="text-sm text-tan">{shot.caption}</p>
 					{/if}
 					{#if showGame}
-						{@render gameLink(shot, "relative z-20 text-sm")}
+						{@render gameLink(shot, "relative z-20 text-sm text-gray-400")}
 					{/if}
 					{#if uploaded}
 						<!-- Named, because a bare date beside a picture says nothing about
@@ -534,7 +548,16 @@
 		class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
 	>
 		{#each screenshots as shot (shot.screenshot_id)}
-			<figure class="min-w-0">
+			<figure class="min-w-0 rounded-lg bg-surface p-3">
+				{#if showGame}
+					<!-- The tile's title, above the picture and in the card family's bold
+					     tan — where VideoCard puts a video's name in the tab beside this
+					     one. Under the caption in plain gray it read as a footnote, which
+					     is the wrong weight for the only thing on this surface that says
+					     which game a shot is of. Every row here carries a game, so the
+					     line is on every tile and the pictures still start level. -->
+					{@render gameLink(shot, "mb-2 text-sm font-bold text-tan")}
+				{/if}
 				<div class="relative">
 					{@render picture(shot, "w-full")}
 					{#if shot.status === "in_review"}
@@ -555,16 +578,11 @@
 						)}
 					{/if}
 				</div>
-				{#if shot.caption || showGame}
+				{#if shot.caption}
 					<figcaption class="mt-1 min-w-0 text-xs">
-						{#if shot.caption}
-							<p class="truncate text-tan" title={shot.caption}>
-								{shot.caption}
-							</p>
-						{/if}
-						{#if showGame}
-							{@render gameLink(shot, "")}
-						{/if}
+						<p class="truncate text-tan" title={shot.caption}>
+							{shot.caption}
+						</p>
 					</figcaption>
 				{/if}
 			</figure>
@@ -627,7 +645,7 @@
 			{#if lightbox.caption}
 				<p class="flex-none text-center text-sm text-tan">{lightbox.caption}</p>
 			{/if}
-			{#if !canDelete}
+			{#if !isOwner}
 				<!-- The report path. Here rather than on the tile: a reason is a
 				     claim about the image, so it is asked for where the image is
 				     actually being looked at, and the grid stays a grid. -->

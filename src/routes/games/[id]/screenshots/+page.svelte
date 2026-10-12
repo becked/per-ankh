@@ -48,6 +48,7 @@
 					     above already reads "Screenshots". -->
 					<ScreenshotGallery
 						bind:screenshots={screenshots.list}
+						isOwner={data.isOwner}
 						canDelete={data.isOwner}
 						layout="panels"
 						gameName={data.gameName}
