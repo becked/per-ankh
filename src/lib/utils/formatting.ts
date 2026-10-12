@@ -317,29 +317,48 @@ function isDifferentYear(d: Date, timeZone: string | undefined): boolean {
 }
 
 /**
- * The calendar day an instant falls on in the chosen zone, as "YYYY-MM-DD"
- * ("en-CA" yields ISO date order). The zone is the whole point: a 23:00 UTC
- * instant is already tomorrow for a viewer east of it, so anything that buckets
- * or counts days has to be told which calendar it is counting on.
+ * The calendar day an instant falls on in the chosen zone, as its numeric
+ * year/month/day. Out of formatToParts rather than off the Date, for
+ * formatLongDate's reason: `getDate()` answers in the viewer's zone whatever
+ * `timeZone` asked for, so a number read anywhere but the parts belongs to a
+ * different calendar than the one that was asked for.
+ *
+ * Numbers rather than a formatted day, because both callers want them: the key
+ * below assembles its own "YYYY-MM-DD" instead of trusting a locale to emit ISO
+ * order, and the day count subtracts them directly.
+ */
+function zonedDayParts(
+	d: Date,
+	zone: "utc" | "local",
+): { year: number; month: number; day: number } {
+	const parts = new Intl.DateTimeFormat(TIME_LOCALE, {
+		timeZone: zone === "utc" ? "UTC" : undefined,
+		year: "numeric",
+		month: "2-digit",
+		day: "2-digit",
+	}).formatToParts(d);
+	const value = (type: Intl.DateTimeFormatPartTypes): string =>
+		parts.find((part) => part.type === type)?.value ?? "";
+	return {
+		year: Number(value("year")),
+		month: Number(value("month")),
+		day: Number(value("day")),
+	};
+}
+
+/**
+ * The calendar day an instant falls on in the chosen zone, as "YYYY-MM-DD".
+ * The zone is the whole point: a 23:00 UTC instant is already tomorrow for a
+ * viewer east of it, so anything that buckets or counts days has to be told
+ * which calendar it is counting on.
  *
  * @param d - the instant
  * @param zone - "utc" for the canonical UTC calendar, "local" for the viewer's
  */
 export function zonedDayKey(d: Date, zone: "utc" | "local"): string {
-	return d.toLocaleDateString("en-CA", {
-		timeZone: zone === "utc" ? "UTC" : undefined,
-		year: "numeric",
-		month: "2-digit",
-		day: "2-digit",
-	});
-}
-
-// A day key as a whole-day index, so two of them can be subtracted. Going
-// through Date.UTC of the key's own parts keeps the arithmetic clear of the
-// zone's offsets and DST shifts — those were already spent producing the key.
-function dayIndex(key: string): number {
-	const [y, m, d] = key.split("-").map(Number);
-	return Date.UTC(y, m - 1, d) / 86_400_000;
+	const pad = (n: number): string => String(n).padStart(2, "0");
+	const { year, month, day } = zonedDayParts(d, zone);
+	return `${year}-${pad(month)}-${pad(day)}`;
 }
 
 // Whole calendar days from `from` to `to` on `zone`'s calendar — what a person
@@ -347,8 +366,16 @@ function dayIndex(key: string): number {
 // than elapsed 24-hour blocks is the distinction that matters: 23:00 tonight →
 // 22:00 tomorrow is 23 hours but one sleep, while 23:00 tonight → 01:00 the day
 // after is 26 hours and two.
+//
+// Date.UTC turns each day into a whole-day index so the two can be subtracted.
+// The zone's offsets and DST shifts were already spent reading the parts, so
+// the arithmetic itself stays clear of them.
 function calendarDayDiff(from: Date, to: Date, zone: "utc" | "local"): number {
-	return dayIndex(zonedDayKey(to, zone)) - dayIndex(zonedDayKey(from, zone));
+	const dayIndex = (d: Date): number => {
+		const { year, month, day } = zonedDayParts(d, zone);
+		return Date.UTC(year, month - 1, day) / 86_400_000;
+	};
+	return dayIndex(to) - dayIndex(from);
 }
 
 /**
