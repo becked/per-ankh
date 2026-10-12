@@ -66,11 +66,13 @@ ramp goes darkest → lightest, each base with its hover step.
 <div class="border-2 border-black bg-surface text-tan">Content here</div>
 ```
 
-For custom CSS where Tailwind isn't available, wrap the channel variable in `rgb()`:
+For custom CSS where Tailwind isn't available — an SVG stroke, a pseudo-element — wrap the channel variable in `rgb()`. The bracket connectors (`SwissFlowBracket.svelte`) are the shape:
 
 ```css
-.custom-scrollbar::-webkit-scrollbar-thumb {
-	background-color: rgb(var(--color-tan) / 0.55);
+.connector {
+	fill: none;
+	stroke: rgb(var(--color-tan-light) / 0.25);
+	stroke-width: 1.5;
 }
 ```
 
