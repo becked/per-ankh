@@ -2,10 +2,16 @@
 	// Inline action buttons rendered in the game header (GameHeader, shared
 	// by the analyst, map and screenshots views), next to the save date.
 	//
-	// The buttons are all icon-only, and all but the camera open a small
+	// All but the lock are icon-only, and all but the camera open a small
 	// popover with an explanation + confirm/cancel pair. Click-outside and
 	// Escape dismiss. Only one popover is open at a time — opening a second
 	// closes the first, and opening the camera's modal closes it too.
+	//
+	// The icon-only ones carry their name in a $lib/ui/Tooltip rather than a
+	// `title`, which a keyboard and a touch pointer never raise. The lock is
+	// the exception: its label is on the button because it is a value — which
+	// of the two states the game is in — and not the control's name, so a
+	// tooltip would only repeat what is already legible.
 	//
 	//   - Public/Private lock: owner-only.
 	//   - Camera (add a screenshot): owner-only, and the whole of the picker —
@@ -32,6 +38,7 @@
 	} from "$lib/api-cloud";
 	import type { GameScreenshots } from "$lib/game-detail/screenshots-context.svelte";
 	import ScreenshotUploadModal from "$lib/screenshots/ScreenshotUploadModal.svelte";
+	import Tooltip from "$lib/ui/Tooltip.svelte";
 	import { toast } from "$lib/ui/toast";
 	import { saveBlobAs } from "$lib/utils/download";
 	import { profileHref } from "$lib/utils/profile-href";
@@ -265,7 +272,6 @@
 				aria-pressed={isPublic}
 				aria-haspopup="dialog"
 				aria-expanded={openPopover === "lock"}
-				title={isPublic ? "Currently Public" : "Currently Private"}
 				class="action-trigger flex items-center gap-1.5 rounded border border-tan px-2 py-1 text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
 			>
 				{#if isPublic}
@@ -360,10 +366,13 @@
 				])}
 		>
 			{#snippet trigger({ props })}
-				<button
+				<!-- Two bits-ui triggers on one button: the dialog's props spread
+				     into the tooltip, which hands both sets to its own
+				     Tooltip.Trigger for mergeProps to chain. The label is the
+				     modal's own title, so pressing it confirms what was promised. -->
+				<Tooltip
+					label="Add a screenshot"
 					{...props}
-					type="button"
-					title="Add a screenshot"
 					class="rounded border border-tan p-1 text-tan transition-colors hover:border-orange hover:text-orange"
 				>
 					<svg
@@ -386,20 +395,19 @@
 							d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z"
 						/>
 					</svg>
-				</button>
+				</Tooltip>
 			{/snippet}
 		</ScreenshotUploadModal>
 	{/if}
 
 	{#if isOwner}
 		<div class="relative">
-			<button
-				type="button"
+			<Tooltip
+				label="Rename"
 				onclick={() => togglePopover("rename")}
 				disabled={renaming}
 				aria-haspopup="dialog"
 				aria-expanded={openPopover === "rename"}
-				title="Rename"
 				class="action-trigger rounded border border-tan p-1 text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
 			>
 				<!-- Inline SVG pencil; no external sprite dep. -->
@@ -414,7 +422,7 @@
 						d="M13.586 3.586a2 2 0 1 1 2.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793 4 13.172V16h2.828l7.379-7.379-2.828-2.828z"
 					/>
 				</svg>
-			</button>
+			</Tooltip>
 
 			{#if openPopover === "rename"}
 				<!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -477,13 +485,12 @@
 
 	{#if isOwner}
 		<div class="relative">
-			<button
-				type="button"
+			<Tooltip
+				label="Add to collection"
 				onclick={() => togglePopover("collection")}
 				disabled={moving}
 				aria-haspopup="dialog"
 				aria-expanded={openPopover === "collection"}
-				title="Add to collection"
 				class="action-trigger rounded border border-tan p-1 text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
 			>
 				<svg
@@ -501,7 +508,7 @@
 						d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"
 					/>
 				</svg>
-			</button>
+			</Tooltip>
 
 			{#if openPopover === "collection"}
 				<!--
@@ -614,13 +621,12 @@
 
 	{#if page.data.user}
 		<div class="relative">
-			<button
-				type="button"
+			<Tooltip
+				label="Download"
 				onclick={() => togglePopover("download")}
 				disabled={downloading}
 				aria-haspopup="dialog"
 				aria-expanded={openPopover === "download"}
-				title="Download"
 				class="action-trigger rounded border border-tan p-1 text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
 			>
 				{#if downloading}
@@ -662,7 +668,7 @@
 						/>
 					</svg>
 				{/if}
-			</button>
+			</Tooltip>
 
 			{#if openPopover === "download"}
 				<div
@@ -693,13 +699,12 @@
 
 	{#if isOwner}
 		<div class="relative">
-			<button
-				type="button"
+			<Tooltip
+				label="Delete"
 				onclick={() => togglePopover("delete")}
 				disabled={deleting}
 				aria-haspopup="dialog"
 				aria-expanded={openPopover === "delete"}
-				title="Delete"
 				class="action-trigger rounded border p-1 transition-colors disabled:opacity-50 {openPopover ===
 				'delete'
 					? 'border-red-400 text-red-400'
@@ -744,7 +749,7 @@
 						/>
 					</svg>
 				{/if}
-			</button>
+			</Tooltip>
 
 			{#if openPopover === "delete"}
 				<div
