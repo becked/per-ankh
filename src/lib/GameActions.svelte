@@ -16,8 +16,10 @@
 	//   - Public/Private lock: owner-only.
 	//   - Camera (add a screenshot): owner-only, and the whole of the picker —
 	//     the game's screenshots are their own view now, so the one thing that
-	//     writes to them belongs beside the toggle that reaches it rather than
-	//     inside the view itself, where the owner would have to be already.
+	//     writes to them belongs beside the toggle that reaches it, where it is
+	//     in reach from all three views. The screenshots view offers a second
+	//     one while it is empty, since that is the first thing an owner with no
+	//     screenshots sees; both go through GameScreenshots.prepend.
 	//     The one button here that opens a modal rather than a popover
 	//     (ScreenshotUploadModal): a preview of the image that will be
 	//     stored, and once per account the terms, don't fit a panel hung
@@ -349,9 +351,6 @@
 	{/if}
 
 	{#if isOwner}
-		<!-- `featured: false` is the one field the 201 doesn't carry: a
-		     screenshot a moment old has never been starred, and the admin
-		     star the gallery renders reads it. -->
 		<ScreenshotUploadModal
 			bind:open={screenshotOpen}
 			onOpenChange={(o) => {
@@ -359,11 +358,7 @@
 			}}
 			{gameId}
 			{isPublic}
-			onUploaded={(shot) =>
-				(screenshots.list = [
-					{ ...shot, featured: false },
-					...screenshots.list,
-				])}
+			onUploaded={(shot) => screenshots.prepend(shot)}
 		>
 			{#snippet trigger({ props })}
 				<!-- Two bits-ui triggers on one button: the dialog's props spread

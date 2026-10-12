@@ -50,10 +50,17 @@
 	// the tournament view tabs do), so the toggle's pill marks the right view in
 	// the SSR'd first paint rather than sliding into place on hydration.
 	//
-	// Screenshots is the third only once the game has one: it is a view of the
-	// uploads, so an empty segment would offer an empty page. The route itself
-	// stays reachable, and showing it is the second half of the condition —
-	// a link to it on a game whose screenshots have since been deleted would
+	// Screenshots is the third segment for the owner always, and for a visitor
+	// once the game has one: it is a view of the uploads, so to someone who
+	// cannot add any an empty segment would offer an empty page. The owner is
+	// the one person who can fill it, and gating their segment on a screenshot
+	// existing hid the feature behind itself — the only entry point was a 14 px
+	// camera in the row below, and the view that would have named it stayed
+	// hidden until you had already found that camera. Now the segment is the
+	// entry point, and the empty view it opens carries the camera in words.
+	//
+	// `isScreenshotsView` is the third case: the route stays reachable by link,
+	// so a visitor on a game whose screenshots have since been deleted would
 	// otherwise leave the toggle with no segment for the page it is on.
 	const isScreenshotsView = $derived(
 		page.route.id === "/games/[id]/screenshots",
@@ -61,7 +68,7 @@
 	const viewTabs = $derived([
 		{ href: resolve("/games/[id]", { id: gameId }), label: "Analysis" },
 		{ href: resolve("/games/[id]/map", { id: gameId }), label: "Map" },
-		...(screenshots.list.length > 0 || isScreenshotsView
+		...(isOwner || screenshots.list.length > 0 || isScreenshotsView
 			? [
 					{
 						href: resolve("/games/[id]/screenshots", { id: gameId }),
