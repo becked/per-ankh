@@ -7,12 +7,22 @@
 	// never does either.
 	//
 	// Wraps bits-ui Tooltip the way Popover.svelte beside it wraps bits-ui
-	// Popover, and for the same reason: the Provider/Root/Trigger/Portal/Content
-	// block had three hand-written copies before this one. It covers the
-	// short-label case only — the icon button — and leaves those three where
-	// they are: MapYieldStrip and TechComparison hang whole panels off a
-	// tooltip, and MapChrome's is the same shape as this but dressed in
-	// CHROME_PANEL_CLASS, which belongs to the map's own chrome.
+	// Popover, and for the same reason: the Root/Trigger/Portal/Content block
+	// had four hand-written copies before this one. It covers the short-label
+	// case only — the icon button — and leaves those four where they are:
+	// MapYieldStrip, TechComparison and TechsTab hang a whole panel or a
+	// paragraph off a tooltip, and MapChrome's is the same shape as this but
+	// dressed in CHROME_PANEL_CLASS, which belongs to the map's own chrome.
+	//
+	// No Tooltip.Provider in here: the call site wraps the whole cluster in
+	// one, as each of those four does. A provider is a group, and the group is
+	// what two of bits-ui's behaviours are scoped to — `skipDelayDuration`,
+	// which lets the next tooltip in it open without re-paying the delay, and
+	// the close of whichever one in it is already open. Neither crosses a
+	// provider boundary, so one provider per tooltip would make a row of icons
+	// pay the full delay at every icon and let a focused trigger's tooltip and
+	// a hovered trigger's tooltip stand at once. Tooltip.Root reads the
+	// provider out of context and can't run without one.
 	//
 	// The trigger is bits-ui's own <button> rather than a `trigger` snippet as
 	// Popover takes, because a tooltip's props carry an `onclick` that dismisses
@@ -41,31 +51,36 @@
 		children,
 		...rest
 	}: Omit<Tooltip.TriggerProps, "child" | "children"> & {
-		// What the control is called. A name, not an explanation — one line,
-		// and the same words the surface it opens uses for itself.
+		// What the control is called, and — since the glyph inside is
+		// aria-hidden — the button's accessible name as well. A name, not an
+		// explanation: one line, and the same words the surface it opens uses
+		// for itself.
 		label: string;
 		// The glyph.
 		children: Snippet;
 	} = $props();
 </script>
 
-<Tooltip.Provider delayDuration={200} disableHoverableContent>
-	<Tooltip.Root>
-		<Tooltip.Trigger {...rest}>
-			{@render children()}
-		</Tooltip.Trigger>
-		<Tooltip.Portal>
-			<!-- TechComparison's tooltip chrome, which is the one the app already
-			     wears off the map: a `blue-gray` panel on a raised-surface rule.
-			     Tightened to a single line's padding — this holds two words, not
-			     a table. -->
-			<Tooltip.Content
-				side="bottom"
-				sideOffset={6}
-				class="z-50 rounded-lg border-2 border-surface-raised bg-blue-gray px-2 py-1 text-xs font-semibold text-tan shadow-lg"
-			>
-				{label}
-			</Tooltip.Content>
-		</Tooltip.Portal>
-	</Tooltip.Root>
-</Tooltip.Provider>
+<Tooltip.Root>
+	<!-- The label is also the name, through aria-label. All bits-ui wires is
+	     aria-describedby, and only while the tooltip is open — a description,
+	     which is not a name, so without this the button has none at all: AT
+	     announces an unnamed button and voice control can't address it. Ahead
+	     of {...rest}, so a caller can still pass its own. -->
+	<Tooltip.Trigger aria-label={label} {...rest}>
+		{@render children()}
+	</Tooltip.Trigger>
+	<Tooltip.Portal>
+		<!-- TechComparison's tooltip chrome, which is the one the app already
+		     wears off the map: a `blue-gray` panel on a raised-surface rule.
+		     Tightened to a single line's padding — this holds two words, not
+		     a table. -->
+		<Tooltip.Content
+			side="bottom"
+			sideOffset={6}
+			class="z-50 rounded-lg border-2 border-surface-raised bg-blue-gray px-2 py-1 text-xs font-semibold text-tan shadow-lg"
+		>
+			{label}
+		</Tooltip.Content>
+	</Tooltip.Portal>
+</Tooltip.Root>

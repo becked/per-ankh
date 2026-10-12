@@ -12,6 +12,7 @@
 	import { getGameVisibility } from "$lib/game-detail/visibility-context.svelte";
 	import ScreenshotGallery from "$lib/screenshots/ScreenshotGallery.svelte";
 	import ScreenshotUploadModal from "$lib/screenshots/ScreenshotUploadModal.svelte";
+	import { SECONDARY_BTN } from "$lib/ui/classes";
 
 	let { data }: { data: PageData } = $props();
 	const game = $derived(data.game);
@@ -38,41 +39,7 @@
 					tournamentLink={data.tournamentLink}
 					challengeLink={data.challengeLink}
 				/>
-				{#if screenshots.list.length === 0}
-					<!-- For the owner this is where the feature starts: their segment
-					     in the toggle above is always offered, so an empty view is the
-					     ordinary first visit rather than a dead end, and the camera it
-					     carries says in words what the header's 14 px glyph cannot.
-					     A visitor reaches an empty one by link alone, on a game whose
-					     screenshots have all been deleted — the toggle offers them no
-					     segment for it.
-					     A `surface` box of its own, since there is no panel here for
-					     it to be inside. -->
-					<section class="rounded-lg bg-surface p-3">
-						<div class="flex flex-col items-center gap-3 py-8 text-center">
-							<p class="text-sm text-gray-400">
-								{data.isOwner ? "No screenshots yet." : "No screenshots."}
-							</p>
-							{#if data.isOwner}
-								<ScreenshotUploadModal
-									{gameId}
-									isPublic={visibility.isPublic}
-									onUploaded={(shot) => screenshots.prepend(shot)}
-								>
-									{#snippet trigger({ props })}
-										<button
-											{...props}
-											type="button"
-											class="rounded border border-tan px-3 py-1.5 text-xs font-semibold text-tan transition-colors hover:border-orange hover:text-orange"
-										>
-											Add a screenshot
-										</button>
-									{/snippet}
-								</ScreenshotUploadModal>
-							{/if}
-						</div>
-					</section>
-				{:else}
+				{#if screenshots.list.length > 0}
 					<!-- A panel per screenshot, with the picture beside what is known
 					     about it: five at most on a game, which is what gives each one
 					     the room its caption and its date need.
@@ -89,7 +56,54 @@
 						gameName={data.gameName}
 					/>
 				{/if}
+				{#if data.isOwner}
+					<!-- The modal is mounted whatever the list holds, and only the
+					     empty state inside its trigger comes and goes. It has to
+					     outlive the swap it causes: ScreenshotUploader sets its done
+					     phase and calls onUploaded in the same breath, so the list is
+					     already 1 by the time the DOM flushes — and a modal inside
+					     the empty state would be destroyed, with the screen it was
+					     about to paint, before `Added.` or the sentence a queued
+					     upload gets could be read. -->
+					<ScreenshotUploadModal
+						{gameId}
+						isPublic={visibility.isPublic}
+						onUploaded={(shot) => screenshots.prepend(shot)}
+					>
+						{#snippet trigger({ props })}
+							{#if screenshots.list.length === 0}
+								{@render emptyState(props)}
+							{/if}
+						{/snippet}
+					</ScreenshotUploadModal>
+				{:else if screenshots.list.length === 0}
+					{@render emptyState(null)}
+				{/if}
 			</div>
 		</div>
 	</main>
 </div>
+
+<!-- For the owner this is where the feature starts: their segment in the
+     toggle above is always offered, so an empty view is the ordinary first
+     visit rather than a dead end, and the camera it carries says in words what
+     the header's 14 px glyph cannot. A visitor reaches an empty one by link
+     alone, on a game whose screenshots have all been deleted — the toggle
+     offers them no segment for it, and no camera either, which is why the
+     trigger's props are what this takes.
+     A `surface` box of its own, since there is no panel here for it to be
+     inside. -->
+{#snippet emptyState(triggerProps: Record<string, unknown> | null)}
+	<section class="rounded-lg bg-surface p-3">
+		<div class="flex flex-col items-center gap-3 py-8 text-center">
+			<p class="text-sm text-gray-400">
+				{data.isOwner ? "No screenshots yet." : "No screenshots."}
+			</p>
+			{#if triggerProps}
+				<button {...triggerProps} type="button" class={SECONDARY_BTN}>
+					Add a screenshot
+				</button>
+			{/if}
+		</div>
+	</section>
+{/snippet}
