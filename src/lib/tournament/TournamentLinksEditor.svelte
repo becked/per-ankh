@@ -154,7 +154,7 @@
 						aria-label="Remove link"
 						title="Remove link"
 					>
-						✕
+						×
 					</button>
 				{/if}
 			</div>
@@ -188,7 +188,7 @@
 							aria-label="Clear playlist"
 							title="Clear playlist"
 						>
-							✕
+							×
 						</button>
 					{/if}
 				</div>
