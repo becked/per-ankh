@@ -1,13 +1,11 @@
 // Shared types for the UX-review capture bundle (`./per-ankh ux-review`).
 
-// A viewport the whole walkthrough is replayed at. `id` is the filename
-// suffix and the manifest key; `label` is what the viewer and README show.
-export interface Breakpoint {
-	id: string;
-	label: string;
-	width: number;
-	height: number;
-}
+import type { Breakpoint } from "../lib/page-capture";
+
+// Re-exported so this module stays the single import site for everything the
+// bundle is described in terms of; the capture primitives own the definition,
+// since `os-shots` lays its viewports out the same way.
+export type { Breakpoint };
 
 // The two auth passes. `anon` is the signed-out surface; `auth` runs the same
 // browser with a session cookie.

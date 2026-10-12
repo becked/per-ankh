@@ -7,12 +7,10 @@
 // mount (responsive nav, ECharts/deck.gl sizing) won't re-derive it on a
 // resize, so we re-navigate rather than resize a live page.
 
-import sharp from "sharp";
 import type { Page } from "playwright";
 
+import { settle, shoot } from "../lib/page-capture";
 import type { Breakpoint, CaptureRecord, Pass, ReviewIds } from "./types";
-
-const JPEG_QUALITY = 72;
 
 // Captured at deviceScaleFactor 1, so the JPEG is the screen's CSS-pixel
 // width — small enough to commit, sharp enough for the lightbox to read type.
@@ -128,22 +126,6 @@ function slug(s: string): string {
 		.toLowerCase()
 		.replace(/[^a-z0-9]+/g, "-")
 		.replace(/^-|-$/g, "");
-}
-
-// Settle async client rendering (ECharts, deck.gl map) after a navigation or
-// tab switch. We can't wait on full "networkidle" — external avatar images
-// (Discord CDN) keep the connection pool busy indefinitely — so cap the idle
-// wait and add a fixed render settle.
-async function settle(page: Page): Promise<void> {
-	await page.waitForLoadState("networkidle", { timeout: 4000 }).catch(() => {});
-	await page.waitForTimeout(900);
-	await page.evaluate(() => window.scrollTo(0, 0));
-}
-
-// Capture the current page full-height and return a JPEG buffer.
-async function shoot(page: Page): Promise<Buffer> {
-	const png = await page.screenshot({ type: "png", fullPage: true });
-	return sharp(png).jpeg({ quality: JPEG_QUALITY }).toBuffer();
 }
 
 // --- Per-screen capture --------------------------------------------------
