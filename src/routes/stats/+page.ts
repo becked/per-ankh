@@ -36,8 +36,13 @@ export const load: PageLoad = async ({ fetch, url }) => {
 	//
 	// Its own call rather than `await parent()`: the root layout makes this same
 	// request, so routing through the parent would trade a duplicate read for a
-	// wait on that whole chain. `GET /v1/auth/me` spends no read budget, so what
-	// the duplicate costs is a session lookup and one query.
+	// wait on that whole chain — `getMe` and then the wave of three behind it,
+	// where this is one `getMe` and done. `GET /v1/auth/me` spends no read
+	// budget, but the duplicate isn't free either: handleMe (cloud/src/auth.ts)
+	// is a session lookup and a `users` SELECT, then concurrently a `db.batch`
+	// of two `tournament_slots` UPDATEs (claimTournamentSlots) and a
+	// `tournament_beta_users` SELECT. A write transaction, run twice per load of
+	// this page.
 	const user = await cloudApi.getMe({ fetch });
 	if (!user) {
 		throw redirect(303, loginBounce(url));

@@ -250,7 +250,7 @@ type RawBindings = Omit<Env, "SHARE_DB" | "EVENTS_DB"> & {
 // (tournament/public.ts) for why that makes it free, and issue #292 for the
 // load waterfall it removes from the frontend.
 //
-// One definition rather than the union spelled out nine times: the two
+// One definition rather than the union spelled out ten times: the two
 // alphabets overlap (an id may be all lowercase, a slug may be 21 characters),
 // so a hand-copied arm that drifted would route some identifiers to a handler
 // and 404 the rest. `tournamentPath` is what the table calls instead of
@@ -259,6 +259,16 @@ type RawBindings = Omit<Env, "SHARE_DB" | "EVENTS_DB"> & {
 // Routes keyed on the id *alone* keep their own literal: the admin and
 // participant mutations, plus `GET /v1/tournaments/:id/admins` and
 // `/export`, which do not go through that shared read preamble.
+//
+// Two idioms answer "one resource, two keys" in this table, and how many routes
+// carry the identifier is what decides between them. A disambiguating segment —
+// `GET /v1/users/by-slug/:slug` beside `GET /v1/users/:user_id`, two handlers
+// over one shared projection (users.ts) — keeps the key spaces apart and needs
+// no tie-break at all, which is right where the slug form is one route. A
+// widened segment pays for the overlap twice instead, once in table order and
+// once in SQL (`ORDER BY (tournament_id = ?) DESC`, tournament/data.ts), and is
+// right here because the identifier appears on ten routes, where a `by-slug/`
+// twin of each would double them. Both are deliberate; the count is the rule.
 const TOURNAMENT_REF = "(?:[A-Za-z0-9_-]{21}|[a-z0-9][a-z0-9-]{0,63})";
 
 function tournamentPath(suffix: string): RegExp {
@@ -1141,14 +1151,22 @@ const ROUTES: RouteSpec[] = [
 		route: "DELETE /v1/tournaments/:id",
 		handler: (r, e, m) => handleDeleteTournament(m![1], r, e),
 	},
-	// Tournament detail by slug (must come AFTER all /tournaments/:id/... routes;
-	// slug regex is broader)
+	// Tournament detail. Takes the id or the slug, like every per-tournament
+	// read above it: the handler loads the whole row either way, so the second
+	// arm is a different WHERE and not an extra query (handleTournamentDetail,
+	// tournament/public.ts). Keeping it on its own literal was the tenth copy of
+	// the slug pattern, and the asymmetry — the one per-tournament read that
+	// wouldn't take an id — was the only one left.
+	//
+	// `route` keeps the `:slug` spelling: it is the key the access log and
+	// traces group on, which is also why the widened reads above kept `:id`.
+	//
+	// Still placed after every /tournaments/:id/... route. This pattern carries
+	// no suffix, so it cannot swallow one of them, but table order is the
+	// matching rule and specific-before-generic is the house rule.
 	{
 		method: "GET",
-		match: {
-			kind: "regex",
-			regex: /^\/v1\/tournaments\/([a-z0-9][a-z0-9-]{0,63})$/,
-		},
+		match: { kind: "regex", regex: tournamentPath("") },
 		route: "GET /v1/tournaments/:slug",
 		handler: (r, e, m) => handleTournamentDetail(m![1], r, e),
 	},

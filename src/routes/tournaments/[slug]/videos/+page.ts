@@ -14,10 +14,17 @@ import type { PageLoad } from "./$types";
 // cloud/src/tournament/video-archive.ts.
 export const load: PageLoad = async ({ parent, fetch }) => {
 	const { tournament } = await parent();
+	// Serial, and deliberately: the archive read is gated on the detail's
+	// `youtube_playlist_url`, so it cannot join the layout's wave the way the
+	// stats reads next door do (issue #292, Class C — the same trade
+	// src/routes/stats/+page.ts and src/routes/games/[id]/+layout.ts record).
+	//
 	// The tab linking here is hidden unless a playlist is set, so a direct visit
 	// is the only way to reach an unconfigured tournament's Videos view. The
 	// Worker would answer that honestly (`source: "none"`), but not for free —
-	// the read spends a view-budget slot — so don't ask.
+	// the read spends a view-budget slot — so don't ask. Firing it anyway, to
+	// save the wave, would spend that slot to learn what the detail already
+	// says.
 	const none: VideoArchive = { source: "none", matches: [], unattributed: [] };
 	const archive = tournament.youtube_playlist_url
 		? await cloudApi

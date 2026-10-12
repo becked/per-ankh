@@ -124,6 +124,13 @@ export const load: PageLoad = async ({ url, fetch }) => {
 		// It handles a *derived* promise, so awaiting the originals below still
 		// propagates their failures into the catch block. Same idiom as
 		// src/routes/users/[user_id]/+page.ts.
+		//
+		// What starting them together costs is on the 404 path, the same cost
+		// home and tournaments/[slug]/+layout.ts record: in observer mode a dead
+		// or setup-hidden returnSlug now spends three `tournament_view` slots
+		// instead of one, because the match and standings reads are in flight
+		// before the detail's 404 lands. Accepted on the same terms — a
+		// reachable page spent three already, and the ceiling is 2400/hr per IP.
 		const tournamentP = cloudApi.getTournament(returnSlug, { fetch });
 		const matchP = observerMode
 			? cloudApi.getTournamentMatch(returnSlug, tournamentMatchId, { fetch })

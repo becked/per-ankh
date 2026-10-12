@@ -72,7 +72,7 @@ Every response that belongs to a single caller carries an `X-Request-Id` header.
 ### Identifiers
 
 - Game, tournament, slot, match, user ids are **21-char nanoids** (`[A-Za-z0-9_-]{21}`).
-- Tournament **slugs** match `^[a-z0-9][a-z0-9-]{0,63}$`. Note `GET /v1/tournaments/:slug` is the one read keyed by slug; every other per-tournament route uses the 21-char id.
+- Tournament **slugs** match `^[a-z0-9][a-z0-9-]{0,63}$`. Every public per-tournament **read** takes either form — the id or the slug — including the detail read, whose heading keeps `:slug` as its route key. Tournament **mutations**, plus the `/export` and `/admins` reads, take the 21-char id alone.
 - Match **part** ids are `[A-Za-z0-9_-]{1,40}`.
 
 ### Profile slugs
@@ -637,7 +637,7 @@ _(Account settings live at [`POST /v1/auth/settings`](#post-v1authsettings).)_
 
 All reads in this section are **Public (owner extras)** unless noted: a session is optional and only unlocks admin/owner fields; anonymous callers see the public shape. Setup-phase tournaments return a `404`-shape to non-admins (unless signups are open). All are per-IP rate-limited via the `tournament_view` bucket (2400 reads/hr; `429 RATE_LIMIT_TOURNAMENT_VIEW`) **except the list**, which has its own — see below.
 
-The `:id` segment on these reads accepts **either** the 21-char tournament id or the URL slug — standings, bracket, stats, stats/games, stats/records, rounds, matches, match detail and video-archive alike. (The headings keep `:id` because that is the route key the access log and traces group on.) A caller holding a slug therefore asks for a tournament and its sub-resources in one round of requests instead of resolving the slug first; it costs no extra query, because each of these reads loads the tournament row regardless. Charging is unchanged: one `tournament_view` slot per read, whichever form the identifier took. The exceptions are `/export` and `/admins`, which take the id alone, and every tournament **mutation**.
+The identifier segment on these reads accepts **either** the 21-char tournament id or the URL slug — detail, standings, bracket, stats, stats/games, stats/records, rounds, matches, match detail and video-archive alike. (The headings keep whichever spelling the route key carries, `:id` or `:slug`, because that key is what the access log and traces group on.) A caller holding a slug therefore asks for a tournament and its sub-resources in one round of requests instead of resolving the slug first; it costs no extra query, because each of these reads loads the tournament row regardless. Charging is unchanged: one `tournament_view` slot per read, whichever form the identifier took. The exceptions are `/export` and `/admins`, which take the id alone, and every tournament **mutation**.
 
 ### `GET /v1/tournaments`
 List tournaments.
@@ -648,9 +648,9 @@ List tournaments.
 - **Notes:** Setup-phase rows appear only to their admins or when `signups_open`. `tournament_list_view` bucket (600/hr per IP), **not** the `tournament_view` one the rest of this section draws on: the home page fetches this list on every render, so a shared budget would let landing-page traffic close the tournament pages.
 
 ### `GET /v1/tournaments/:slug`
-Tournament detail (the only read keyed by **slug alone** — the rest take either form).
+Tournament detail.
 
-- **Path:** `slug` (slug regex). An id does not resolve here — the lookup is `WHERE slug = ?`, and an id carrying uppercase or `_` does not even match the pattern.
+- **Path:** the tournament id or its slug, like the reads below. The route key keeps the `:slug` spelling it has always had.
 - **Response 200:** `{ tournament_id, slug, name, description, status, division_a_name, division_b_name, swiss_wins_to_advance, swiss_losses_to_eliminate, swiss_max_rounds, map_pool, links, slot_counts: { swiss, championship, swiss_by_division: { A, B } }, signups_open, signup_question, youtube_playlist_url, viewer_slot: { slot_id, division, swiss_seed } | null, is_viewer_admin, is_viewer_creator, owner: { display_name, avatar_url } | null, admins: [...], starts_at, completed_at, created_at, updated_at }`.
 - **Errors:** `404 TOURNAMENT_NOT_FOUND` (missing, or setup-phase to a non-admin), `429 RATE_LIMIT_TOURNAMENT_VIEW`.
 - **Notes:** `viewer_slot`, `is_viewer_admin`, `is_viewer_creator` require a session (else null/false).

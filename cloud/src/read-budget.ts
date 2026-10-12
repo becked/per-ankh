@@ -72,6 +72,15 @@ export interface ReadBudget {
 // now settles exactly one question — which visitor is this — and nothing about
 // what a read costs.
 //
+// The count is taken before the INSERT, and the INSERT is fire-and-forget, so
+// the reads a page issues as one wave all see the same pre-burst count: the
+// ceiling is soft by the width of the widest wave rather than exact — six on
+// the tournament stats page, four on the tournament layout, three on the upload
+// page in observer mode (issue #292). Deliberately left that way. Inserting
+// before counting would charge a request that then 429s and still race inside
+// a simultaneous wave; making it exact means moving the counter into a Durable
+// Object. The slack is single digits against a 2400/hr ceiling.
+//
 // `eventType` is interpolated into the INSERT rather than bound: event_type
 // is part of the statement's structure, not a value. RateLimitedEventType is a
 // closed literal union, which closes the injection path — same reasoning as

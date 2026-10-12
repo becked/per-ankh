@@ -1705,22 +1705,24 @@ export const cloudApi = {
 		return res.json() as Promise<TournamentListResponse>;
 	},
 
+	// `idOrSlug` here and on every read that names it — detail, standings,
+	// bracket, stats, stats/games, stats/records, matches, match detail,
+	// video-archive — is the tournament id *or* its slug. The sub-resource
+	// reads resolve both forms in the Worker's shared read preamble
+	// (loadViewableTournament, cloud/src/tournament/public.ts); the detail does
+	// it in its own (handleTournamentDetail, same file). Passing the slug a
+	// route already has in `params` is what lets a load fetch the detail and
+	// its sub-resources in one wave instead of awaiting the detail for its id
+	// first. `exportTournament` below is the one that still takes the id
+	// alone: it goes through its own lookup.
 	getTournament: async (
-		slug: string,
+		idOrSlug: string,
 		opts?: CallOpts,
 	): Promise<TournamentDetail> => {
-		const res = await request(`/tournaments/${slug}`, opts);
+		const res = await request(`/tournaments/${idOrSlug}`, opts);
 		return res.json() as Promise<TournamentDetail>;
 	},
 
-	// `idOrSlug` here and on every read that names it — standings, bracket,
-	// stats, stats/games, stats/records, matches, match detail, video-archive —
-	// is the tournament id *or* its slug, resolved by the Worker's shared read
-	// preamble (loadViewableTournament, cloud/src/tournament/public.ts). Passing
-	// the slug a route already has in `params` is what lets a load fetch the
-	// detail and its sub-resources in one wave instead of awaiting the detail
-	// for its id first. `exportTournament` below is the one that still takes the
-	// id alone: it goes through its own lookup.
 	getTournamentStandings: async (
 		idOrSlug: string,
 		opts?: CallOpts,

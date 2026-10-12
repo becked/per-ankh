@@ -20,7 +20,6 @@ import {
 	loadRounds,
 	loadSlots,
 	loadTournamentByIdOrSlug,
-	loadTournamentBySlug,
 	MapConfigError,
 	MATCH_COLUMNS_M,
 	matchRowToRef,
@@ -444,8 +443,14 @@ async function loadListAggregates(
 	return { slotCounts, activeRounds, champions };
 }
 
+// The identifier is the id *or* the slug, as it is on every other
+// per-tournament read (loadTournamentByIdOrSlug, data.ts). This handler keeps
+// its own rate-limit/load/404 preamble rather than going through
+// loadViewableTournament, because it needs `is_viewer_admin` for the response
+// body and reuses that one call for the setup gate below — where the shared
+// helper computes the same answer inside setupGateHides and throws it away.
 export async function handleTournamentDetail(
-	slug: string,
+	idOrSlug: string,
 	request: Request,
 	env: TournamentPublicEnv,
 ): Promise<Response> {
@@ -453,7 +458,7 @@ export async function handleTournamentDetail(
 	const session = await sessionFromRequest(env, request);
 	const rl = await enforceTournamentViewRateLimit(env, request, cors);
 	if (rl) return rl;
-	const tournament = await loadTournamentBySlug(env, slug);
+	const tournament = await loadTournamentByIdOrSlug(env, idOrSlug);
 	if (!tournament) {
 		return errorResponse(
 			"Tournament not found",

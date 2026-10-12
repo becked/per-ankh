@@ -87,23 +87,23 @@ describe("the reads that stay id-only", () => {
 	});
 });
 
-describe("detail-by-slug still owns the bare path", () => {
-	it("routes a slug and an id to the slug handler", () => {
-		// The bare path has one route either way: the widened reads all carry a
+describe("detail still owns the bare path", () => {
+	it("routes all three identifier shapes to the detail handler", () => {
+		// The bare path has one route for every form — it takes the id or the
+		// slug like its suffixed siblings, and the widened reads all carry a
 		// suffix, so none of them can swallow it.
-		expect(matchRouteKey("GET", `/v1/tournaments/${SLUG}`)).toBe(
-			"GET /v1/tournaments/:slug",
-		);
-		expect(matchRouteKey("GET", `/v1/tournaments/${SLUG_21}`)).toBe(
-			"GET /v1/tournaments/:slug",
-		);
+		for (const ref of [ID, SLUG, SLUG_21]) {
+			expect(matchRouteKey("GET", `/v1/tournaments/${ref}`)).toBe(
+				"GET /v1/tournaments/:slug",
+			);
+		}
 	});
 
-	it("is not reached by an identifier the slug pattern rejects", () => {
-		// `GET /v1/tournaments/:slug` is the slug regex alone — an id with an
-		// uppercase letter or an underscore is not a slug, so the bare path
-		// 404s for it, exactly as before.
-		expect(matchRouteKey("GET", `/v1/tournaments/${ID}`)).toBeNull();
+	it("is not reached by an identifier neither arm admits", () => {
+		// The id arm is a shape, not an alphabet turned loose: exactly 21
+		// characters of it. An uppercase identifier of any other length is
+		// neither an id nor a slug, so the bare path 404s for it.
+		expect(matchRouteKey("GET", "/v1/tournaments/Winter-Cup")).toBeNull();
 	});
 
 	it("still matches the list and rejects an over-long identifier", () => {

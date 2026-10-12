@@ -143,9 +143,14 @@ export const load: LayoutLoad = async ({ params, fetch, url }) => {
 	//
 	// This one read is a genuine second wave and stays one: `isOwner` is
 	// derived from the game response, so nothing earlier knows whether to ask.
-	// Learning it another way is what would cost more — `await parent()` would
-	// put this load behind the root layout's chain and lose the three-call
-	// first wave above, which is why that call isn't here (issue #292, Class C).
+	// Learning it another way is what would cost more. `await parent()` for the
+	// root layout's `user` would not cost the four-call first wave above — those
+	// fetches are already in flight by the time it is reached, and both loads
+	// are universal and run concurrently, so the wait is only whatever is left
+	// of the root chain. What the wait would buy is "signed in", not "owns this
+	// game", so the read it unblocks is a `listCollections` fired for every
+	// signed-in non-owner. That read, plus the wait, is the price of moving this
+	// up a wave (issue #292, Class C).
 	let collections: CollectionInfo[] | undefined;
 	if (isOwner) {
 		try {
