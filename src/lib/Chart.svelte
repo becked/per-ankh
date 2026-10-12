@@ -16,6 +16,7 @@
 <script lang="ts">
 	import { onMount, tick, untrack } from "svelte";
 	import { init } from "$lib/echarts";
+	import { CHART_FONT_PROBE } from "$lib/config";
 	import type { ChartOption, ECElementEvent, ECharts } from "$lib/echarts";
 
 	let {
@@ -41,6 +42,17 @@
 	let chartContainer: HTMLDivElement;
 	let chart: ECharts | null = null;
 
+	// ECharts rasterizes axis and label text into the canvas as it draws and
+	// never redraws it when a webfont arrives later, so a chart that painted
+	// inside the font-swap window would keep fallback-font labels until the
+	// next resize or data change. Awaiting the font before the first draw
+	// would give that back the latency the instant-paint pass bought
+	// (CHART_THEME keeps `animation: false` so a chart paints on arrival), so
+	// instead: paint now, and flip this once the face lands to redraw through
+	// the option effect below. Stays false if the font never loads — there is
+	// nothing to redraw for.
+	let fontReady = $state(false);
+
 	// How long an in-place data change takes to animate. CHART_THEME keeps
 	// `animation: false` so a chart still paints instantly on arrival — that is
 	// what the skeleton/instant-paint pass bought — but a chart already on
@@ -54,6 +66,20 @@
 
 	onMount(() => {
 		let resizeObserver: ResizeObserver;
+
+		if (document.fonts.check(CHART_FONT_PROBE)) {
+			fontReady = true;
+		} else {
+			// Rejects if the face fails to fetch or parse. Swallowed: the
+			// fallback stack has already painted a correct chart, so there is
+			// no redraw to schedule and nothing for a caller to recover from.
+			void document.fonts
+				.load(CHART_FONT_PROBE)
+				.then(() => {
+					fontReady = true;
+				})
+				.catch(() => {});
+		}
 
 		const initChart = () => {
 			if (!chartContainer) return;
@@ -114,6 +140,11 @@
 		// so accessing option inside a conditional (if chart) would fail to track it
 		// when chart is initially null. See CLAUDE.md "Effect Dependency Tracking".
 		const currentOption = option;
+		// Same rule: read unconditionally so the flip to true re-runs this
+		// effect and redraws the labels in the webfont. On the first run
+		// `chart` is still null (onMount's tick hasn't resolved), so a font
+		// that was already cached no-ops here and initChart draws with it.
+		void fontReady;
 		if (chart && currentOption) {
 			chart.setOption(
 				{

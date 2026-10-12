@@ -3,6 +3,44 @@
 @tailwind utilities;
 
 /*
+ * Self-hosted Inter (OFL), the app's UI face. Shipped rather than left to the
+ * platform stack below, which resolved to SF Pro on macOS and Segoe UI on
+ * Windows — two faces with different advance widths, so text metrics drove
+ * layout differently per platform: `.chrome-rows`' `auto 1fr` resolved to a
+ * different first column and the nowrap/ellipsis labels truncated at
+ * different characters (issue #295 §1).
+ *
+ * This is the 71 KB `opsz` subset rather than the 47 KB weight-only one.
+ * Chrome maps font-size straight onto the opsz axis, clamped to its minimum
+ * of 14, so every size at or below 14px renders identically either way — what
+ * the axis buys is the sizes above it, where it tracks in: measured 1.6%
+ * tighter at 16px, 4.9% at 24px and 5.7% at 30px than the axis-less subset.
+ * Without it the display sizes carry body tracking. `font-optical-sizing:
+ * auto` is the browser default, so nothing declares it.
+ *
+ * `font-weight: 100 900` is also what makes `font-medium` mean something:
+ * Segoe UI ships no 500, so weight matching resolved those sites to Regular
+ * and they were indistinguishable from `font-normal` on Windows (#295 §6).
+ *
+ * unicode-range is the subset's real coverage, copied from upstream, so a
+ * glyph outside it (a non-latin player name) falls straight through to the
+ * platform stack instead of being probed for here. The platform stack is also
+ * what paints during the `swap` window.
+ * License: static/fonts/Inter-OFL.txt.
+ */
+@font-face {
+	font-family: "Inter Variable";
+	src: url("/fonts/InterVariable-latin-opsz.woff2") format("woff2");
+	font-weight: 100 900;
+	font-style: normal;
+	font-display: swap;
+	unicode-range:
+		U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+		U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212,
+		U+2215, U+FEFF, U+FFFD;
+}
+
+/*
  * Self-hosted Noto Sans Egyptian Hieroglyphs (OFL). Scoped via unicode-range
  * so the font only downloads on pages that actually render U+13000-U+143FA
  * (the HieroglyphParade band on /upload, BulkReparseModal, ReimportButton).
@@ -83,8 +121,14 @@
 html,
 body {
 	font-family:
-		-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
-		Arial, sans-serif;
+		"Inter Variable",
+		-apple-system,
+		BlinkMacSystemFont,
+		"Segoe UI",
+		Roboto,
+		"Helvetica Neue",
+		Arial,
+		sans-serif;
 	background-color: rgb(var(--color-blue-gray));
 	color: rgb(var(--color-white));
 	height: 100%;

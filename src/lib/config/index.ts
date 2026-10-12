@@ -9,6 +9,7 @@
 // Re-export chart configuration
 export {
 	CHART_COLORS,
+	CHART_FONT_PROBE,
 	CHART_THEME,
 	CHART_REFERENCE_LINE_COLOR,
 	CHART_ACCENT_COLOR,

@@ -38,6 +38,22 @@ export const CHART_COLORS = [
 ] as const;
 
 /**
+ * The UI font stack, mirroring `html, body` in src/app.css — which is the
+ * source of truth, and where the @font-face and the reasoning live. ECharts
+ * draws to a canvas rather than to the DOM, so it can't inherit the stack and
+ * needs its own copy; a change there belongs here too.
+ */
+const CHART_FONT_FAMILY =
+	'"Inter Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+
+/**
+ * Font shorthand for probing `document.fonts` in Chart.svelte, which redraws
+ * a chart that painted before the webfont arrived. Inter ships as a single
+ * variable face, so any one size settles whether the face itself has landed.
+ */
+export const CHART_FONT_PROBE = '12px "Inter Variable"';
+
+/**
  * Default ECharts theme configuration
  *
  * Provides consistent styling across all charts in the application.
@@ -47,8 +63,7 @@ export const CHART_THEME = {
 	backgroundColor: "#211A12", // Blue-gray background matches main UI
 	animation: false, // Disable initial animation for smoother page transitions
 	textStyle: {
-		fontFamily:
-			'-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+		fontFamily: CHART_FONT_FAMILY,
 		color: "#FFFFFF", // White text for dark background
 	},
 	title: {
