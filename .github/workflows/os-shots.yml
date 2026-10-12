@@ -1,0 +1,76 @@
+name: OS screenshots
+
+# Manual only, deliberately. The point of the matrix is to be looked at, and
+# nothing in a commit changes how the *deployed* app renders — so there is no
+# push, pull_request or schedule trigger here. Run it from the Actions tab or
+# `gh workflow run os-shots.yml`, then pull the artifacts together with
+# `./per-ankh os-shots compare`.
+on:
+  workflow_dispatch:
+    inputs:
+      base-url:
+        description: "Origin to capture (staging by default)"
+        required: false
+        default: "https://staging.per-ankh.app"
+
+permissions:
+  contents: read
+
+jobs:
+  shots:
+    strategy:
+      # One OS failing still leaves the others worth comparing.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    defaults:
+      run:
+        # windows-latest defaults to pwsh, which can't run the ./per-ankh
+        # shebang shim. git-bash is present on all three runners, so one
+        # shell keeps every step below identical across the matrix.
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # The CLI's other command modules import `$lib/...`, and tsx resolves
+      # that alias out of .svelte-kit/tsconfig.json — which npm ci does not
+      # write. Without this, `./per-ankh` can't even boot on a fresh checkout.
+      - run: npx svelte-kit sync
+
+      # --with-deps installs the system libraries headless Chromium needs and
+      # is Ubuntu-only; the Windows and macOS images already ship theirs.
+      - name: Install Chromium
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            npx playwright install --with-deps chromium
+          else
+            npx playwright install chromium
+          fi
+
+      # The base URL goes through the environment rather than being
+      # interpolated into the script, so the dispatch input can't run as
+      # shell. The Access token has to be here too: staging.per-ankh.app is
+      # behind Cloudflare Access, and without the service token every page
+      # would be a screenshot of its login screen. The two repo secrets hold
+      # the same token `.staging.vars` does locally (deploy plan §9).
+      - name: Capture
+        env:
+          BASE_URL: ${{ inputs.base-url }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: ./per-ankh os-shots capture --base-url "$BASE_URL" --out os-shots
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: os-shots-${{ matrix.os }}
+          path: os-shots/
+          if-no-files-found: error

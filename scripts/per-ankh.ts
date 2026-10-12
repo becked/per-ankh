@@ -11,6 +11,7 @@ import { prodMain, stagingMain } from "./prod/index";
 import { main as backupMain } from "./backup";
 import { main as restoreMain } from "./restore";
 import { main as uxReviewMain } from "./ux-review/index";
+import { main as osShotsMain } from "./os-shots/index";
 
 // scripts/per-ankh.ts → repo root is one level up.
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -188,6 +189,7 @@ function printHelp(): void {
 			"Commands:",
 			"  dev               Run Worker (:8787) + SvelteKit (:1420) locally, foreground.",
 			"  ux-review [flags] Capture the UX-review bundle into docs/ux-review/ (see `./per-ankh ux-review --help`).",
+			"  os-shots <sub>... Capture/compare the app across operating systems (see `./per-ankh os-shots --help`).",
 			"  admin <sub>...    Cloud admin & monitoring (see `./per-ankh admin --help`).",
 			"  prod <sub>...     Production deploy & preflight (see `./per-ankh prod --help`).",
 			"  staging <sub>...  Staging deploy & preflight (see `./per-ankh staging --help`).",
@@ -213,6 +215,9 @@ async function main(): Promise<void> {
 			return;
 		case "ux-review":
 			await uxReviewMain(process.argv.slice(3));
+			return;
+		case "os-shots":
+			await osShotsMain(process.argv.slice(3));
 			return;
 		case "admin":
 			await adminMain(process.argv.slice(3));
