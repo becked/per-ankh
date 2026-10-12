@@ -1,5 +1,32 @@
 # Changelog
 
+## [2026-10-12-714e7ae] - 2026-10-12
+
+### Fixes
+
+- (schedule) count relative days on the calendar, not in 24h blocks — [27d00de](https://github.com/becked/per-ankh/commit/27d00de82a1d20536a4d944dc6440375e834d8db)
+- (schedule) pin the relative-time locale like every other clock — [e92c5c7](https://github.com/becked/per-ankh/commit/e92c5c7b4fd9b30cdb210b8af799f8125cae03a8)
+- (schedule) the part editor counts on the calendar it prints — [95a24b0](https://github.com/becked/per-ankh/commit/95a24b01d252ae32ccda33c40e41807ddca77d0a)
+- (challenges) the challenge clocks name the calendar they count on — [933fd5e](https://github.com/becked/per-ankh/commit/933fd5ee73c6dd5671ce795f6f73aee64ed4cbf0)
+- (schedule) the popover counts on the calendar it leads with — [883c1b0](https://github.com/becked/per-ankh/commit/883c1b0d3a6cde919795ac85ca0731ecf183dcf6)
+- style scrollbars app-wide instead of per container — [48abe79](https://github.com/becked/per-ankh/commit/48abe79a43571a481c63fd00bd695a8f1965e9cf)
+- (ui) self-host Inter so the UI face stops being platform-supplied — [608ca6f](https://github.com/becked/per-ankh/commit/608ca6fc5e12d8d31b0a3f3ed36427fe399e4765)
+- (ui) ship Inter's italic, and redraw charts through resize — [9980e80](https://github.com/becked/per-ankh/commit/9980e8015d5bf98a3bd69541aaddbb329ff7ae62)
+- (ui) close and swap glyphs come from the shipped face — [c50619b](https://github.com/becked/per-ankh/commit/c50619b6838184848fcbefde59dfecb3f56162a2)
+- (ui) give the expanded screenshot a panel to close from — [a198602](https://github.com/becked/per-ankh/commit/a198602ab5a364ace33438b3ceab578f992ecbfd)
+- (ui) head a profile screenshot with its game, and leave the delete to the game — [af8a26f](https://github.com/becked/per-ankh/commit/af8a26fde8bd3de827ec95710df26e23f1f0bf4d)
+- (ui) one gate on the screenshot delete, and a raised profile tile — [714e7ae](https://github.com/becked/per-ankh/commit/714e7ae41c87e9dc75678f22734146a2137bd4f4)
+
+### Performance
+
+- collapse the frontend load waterfalls (#292) — [d4e54cb](https://github.com/becked/per-ankh/commit/d4e54cb63633112d449c73d3acfd1103a186fa26)
+- close the stats-page wave and widen the detail read — [0ac260d](https://github.com/becked/per-ankh/commit/0ac260d0950cb60dcfe2fe23a497662356528c21)
+
+### Other
+
+- (schedule) read the zoned day out of the parts, not a string — [7c660c0](https://github.com/becked/per-ankh/commit/7c660c0b4864c78260f152366135c63a189c24cf)
+- (color-scheme) the custom-CSS example stops styling a scrollbar — [c57466c](https://github.com/becked/per-ankh/commit/c57466c297577740cd9af79ff776d268db03b484)
+
 ## [2026-10-11-922167b] - 2026-10-11
 
 ### Fixes
