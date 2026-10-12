@@ -38,47 +38,56 @@ export const load: LayoutLoad = async ({
 }> => {
 	try {
 		const user = await cloudApi.getMe({ fetch });
+		// `getMe` genuinely gates the three reads below — all three are keyed on
+		// the viewer, and the third on `is_admin`. Nothing gates the three on
+		// each other: separate endpoints over separate tables, and none reads
+		// another's output. So they are one wave, not three.
+		//
+		// That matters because this is a serial prefix on every page whose load
+		// awaits `parent()`: each sequential call here is its own trip to the API
+		// and its own D1 round trips behind that, which a visitor far from the
+		// data pays in full (issue #292).
+		//
+		// `.catch()` per promise rather than around the group, because
+		// `Promise.all` rejects on the first rejection and would discard two
+		// good responses over one hiccup — the same correction the game route's
+		// link reads carry (src/routes/games/[id]/+layout.ts).
+		//
 		// `myTournaments` drives the header dropdown (status != complete).
 		// `adminTournaments` is a separate fetch (admin membership is its
 		// own table). Both are nice-to-haves: failures fall through to
 		// empty lists so the header still renders.
-		let myTournaments: MyTournamentEntry[] = [];
-		let adminTournaments: MyAdminTournamentEntry[] = [];
+		//
+		// my-tournaments / my-admin-tournaments are per-user membership lists,
+		// relevant to any logged-in user. Skip the round-trips for signed-out
+		// visitors.
+		const myTournamentsPromise: Promise<MyTournamentEntry[]> = user
+			? cloudApi
+					.getMyTournaments({ fetch })
+					.then((res) => res.tournaments.filter((t) => t.status !== "complete"))
+					.catch(() => [])
+			: Promise.resolve([]);
+		const adminTournamentsPromise: Promise<MyAdminTournamentEntry[]> = user
+			? cloudApi
+					.getMyAdminTournaments({ fetch })
+					.then((res) => res.tournaments.filter((t) => t.status !== "complete"))
+					.catch(() => [])
+			: Promise.resolve([]);
 		// The site-admin featured set. Fetched once here — rather than by the
 		// three page loads that render videos — because it's what the star toggle
 		// on each VideoCard reads its state from, and because the alternative
 		// (a per-viewer `featured` flag on /v1/creator-videos) would make an
 		// edge-cached public response viewer-specific.
-		let featuredVideos: FeaturedVideo[] = [];
-		// my-tournaments / my-admin-tournaments are per-user membership lists,
-		// relevant to any logged-in user. Skip the round-trips for signed-out
-		// visitors. The catch blocks still tolerate failure (e.g. network) so a
-		// hiccup doesn't break the header chrome.
-		if (user) {
-			try {
-				const res = await cloudApi.getMyTournaments({ fetch });
-				myTournaments = res.tournaments.filter((t) => t.status !== "complete");
-			} catch {
-				// fall through with empty list
-			}
-			try {
-				const res = await cloudApi.getMyAdminTournaments({ fetch });
-				adminTournaments = res.tournaments.filter(
-					(t) => t.status !== "complete",
-				);
-			} catch {
-				// fall through with empty list
-			}
-		}
+		//
 		// Site admins only — the endpoint 404s for everyone else, so asking would
-		// spend a round-trip to learn what `is_admin` already says.
-		if (user?.is_admin) {
-			try {
-				featuredVideos = await cloudApi.listFeaturedVideos({ fetch });
-			} catch {
-				// fall through with empty list
-			}
-		}
+		// spend a round-trip to learn what `is_admin` already says. Still a
+		// conditional rather than a fired-and-discarded read for that reason.
+		const featuredVideosPromise: Promise<FeaturedVideo[]> = user?.is_admin
+			? cloudApi.listFeaturedVideos({ fetch }).catch(() => [])
+			: Promise.resolve([]);
+		const [myTournaments, adminTournaments, featuredVideos] = await Promise.all(
+			[myTournamentsPromise, adminTournamentsPromise, featuredVideosPromise],
+		);
 		return {
 			user,
 			meta: DEFAULT_META,

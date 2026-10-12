@@ -217,6 +217,32 @@ export async function loadTournamentById(
 		.first<TournamentRow>();
 }
 
+// Resolve a path identifier that may be either form: the 21-char nanoid id or
+// the URL slug. What makes this free is that every public sub-resource read
+// loads the whole tournament row anyway (loadViewableTournament, public.ts) —
+// so accepting a slug is a different WHERE, not an extra query. That is what
+// lets the frontend ask for a tournament's detail and its sub-resources in one
+// wave instead of resolving the slug to an id first (issue #292, Class B).
+//
+// `ORDER BY` because the OR has two arms that could both match: an id is drawn
+// from an alphabet that includes the slug's, so a nanoid could in principle
+// *be* another tournament's slug. Vanishingly unlikely, but without this the
+// row a collision returns is whichever one the query plan reached first. The id
+// is the primary key, so it wins.
+export async function loadTournamentByIdOrSlug(
+	env: TournamentEnv,
+	idOrSlug: string,
+): Promise<TournamentRow | null> {
+	return env.SHARE_DB.prepare(
+		`SELECT * FROM tournaments
+		 WHERE tournament_id = ? OR slug = ?
+		 ORDER BY (tournament_id = ?) DESC
+		 LIMIT 1`,
+	)
+		.bind(idOrSlug, idOrSlug, idOrSlug)
+		.first<TournamentRow>();
+}
+
 export async function loadSlots(
 	env: TournamentEnv,
 	tournamentId: string,

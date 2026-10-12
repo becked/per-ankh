@@ -140,6 +140,12 @@ export const load: LayoutLoad = async ({ params, fetch, url }) => {
 	// so the 401 path is gone. Other errors propagate so real outages
 	// aren't masked. (The games list is no longer loaded here — the
 	// per-game sidebar was removed; browsing lives on /users/[id]?tab=games.)
+	//
+	// This one read is a genuine second wave and stays one: `isOwner` is
+	// derived from the game response, so nothing earlier knows whether to ask.
+	// Learning it another way is what would cost more — `await parent()` would
+	// put this load behind the root layout's chain and lose the three-call
+	// first wave above, which is why that call isn't here (issue #292, Class C).
 	let collections: CollectionInfo[] | undefined;
 	if (isOwner) {
 		try {

@@ -244,6 +244,27 @@ type RawBindings = Omit<Env, "SHARE_DB" | "EVENTS_DB"> & {
 // More-specific patterns (e.g. /v1/games/:id/download) MUST appear before
 // more-generic ones (/v1/games/:id) — first match wins.
 
+// A tournament identifier in a path segment: either the 21-char nanoid id or
+// the URL slug. Every public per-tournament read accepts both, because each one
+// loads the whole tournament row anyway — see loadViewableTournament
+// (tournament/public.ts) for why that makes it free, and issue #292 for the
+// load waterfall it removes from the frontend.
+//
+// One definition rather than the union spelled out nine times: the two
+// alphabets overlap (an id may be all lowercase, a slug may be 21 characters),
+// so a hand-copied arm that drifted would route some identifiers to a handler
+// and 404 the rest. `tournamentPath` is what the table calls instead of
+// writing a literal, and the capture group is the identifier the handler takes.
+//
+// Routes keyed on the id *alone* keep their own literal: the admin and
+// participant mutations, plus `GET /v1/tournaments/:id/admins` and
+// `/export`, which do not go through that shared read preamble.
+const TOURNAMENT_REF = "(?:[A-Za-z0-9_-]{21}|[a-z0-9][a-z0-9-]{0,63})";
+
+function tournamentPath(suffix: string): RegExp {
+	return new RegExp(`^/v1/tournaments/(${TOURNAMENT_REF})${suffix}$`);
+}
+
 type RouteHandler = (
 	request: Request,
 	env: Env,
@@ -804,7 +825,7 @@ const ROUTES: RouteSpec[] = [
 		method: "GET",
 		match: {
 			kind: "regex",
-			regex: /^\/v1\/tournaments\/([A-Za-z0-9_-]{21})\/standings$/,
+			regex: tournamentPath("/standings"),
 		},
 		route: "GET /v1/tournaments/:id/standings",
 		handler: (r, e, m) => handleTournamentStandings(m![1], r, e),
@@ -813,7 +834,7 @@ const ROUTES: RouteSpec[] = [
 		method: "GET",
 		match: {
 			kind: "regex",
-			regex: /^\/v1\/tournaments\/([A-Za-z0-9_-]{21})\/bracket$/,
+			regex: tournamentPath("/bracket"),
 		},
 		route: "GET /v1/tournaments/:id/bracket",
 		handler: (r, e, m) => handleTournamentBracket(m![1], r, e),
@@ -822,7 +843,7 @@ const ROUTES: RouteSpec[] = [
 		method: "GET",
 		match: {
 			kind: "regex",
-			regex: /^\/v1\/tournaments\/([A-Za-z0-9_-]{21})\/stats\/games$/,
+			regex: tournamentPath("/stats/games"),
 		},
 		route: "GET /v1/tournaments/:id/stats/games",
 		handler: (r, e, m) => handleTournamentGamesStats(m![1], r, e),
@@ -835,7 +856,7 @@ const ROUTES: RouteSpec[] = [
 		method: "GET",
 		match: {
 			kind: "regex",
-			regex: /^\/v1\/tournaments\/([A-Za-z0-9_-]{21})\/stats\/records$/,
+			regex: tournamentPath("/stats/records"),
 		},
 		route: "GET /v1/tournaments/:id/stats/records",
 		handler: (r, e, m) => handleTournamentGamesRecords(m![1], r, e),
@@ -844,7 +865,7 @@ const ROUTES: RouteSpec[] = [
 		method: "GET",
 		match: {
 			kind: "regex",
-			regex: /^\/v1\/tournaments\/([A-Za-z0-9_-]{21})\/stats$/,
+			regex: tournamentPath("/stats"),
 		},
 		route: "GET /v1/tournaments/:id/stats",
 		handler: (r, e, m) => handleTournamentStats(m![1], r, e),
@@ -853,7 +874,7 @@ const ROUTES: RouteSpec[] = [
 		method: "GET",
 		match: {
 			kind: "regex",
-			regex: /^\/v1\/tournaments\/([A-Za-z0-9_-]{21})\/rounds$/,
+			regex: tournamentPath("/rounds"),
 		},
 		route: "GET /v1/tournaments/:id/rounds",
 		handler: (r, e, m) => handleTournamentRounds(m![1], r, e),
@@ -862,7 +883,7 @@ const ROUTES: RouteSpec[] = [
 		method: "GET",
 		match: {
 			kind: "regex",
-			regex: /^\/v1\/tournaments\/([A-Za-z0-9_-]{21})\/video-archive$/,
+			regex: tournamentPath("/video-archive"),
 		},
 		route: "GET /v1/tournaments/:id/video-archive",
 		// Passes ctx so the video cache can refresh in the background (SWR).
@@ -872,7 +893,7 @@ const ROUTES: RouteSpec[] = [
 		method: "GET",
 		match: {
 			kind: "regex",
-			regex: /^\/v1\/tournaments\/([A-Za-z0-9_-]{21})\/matches$/,
+			regex: tournamentPath("/matches"),
 		},
 		route: "GET /v1/tournaments/:id/matches",
 		handler: (r, e, m) => handleTournamentMatches(m![1], r, e),
@@ -890,8 +911,7 @@ const ROUTES: RouteSpec[] = [
 		method: "GET",
 		match: {
 			kind: "regex",
-			regex:
-				/^\/v1\/tournaments\/([A-Za-z0-9_-]{21})\/matches\/([A-Za-z0-9_-]{21})$/,
+			regex: tournamentPath("/matches/([A-Za-z0-9_-]{21})"),
 		},
 		route: "GET /v1/tournaments/:id/matches/:match_id",
 		handler: (r, e, m) => handleTournamentMatchDetail(m![1], m![2], r, e),
@@ -1477,101 +1497,126 @@ function warnTracingFailed(err: unknown): void {
 	});
 }
 
+// The first entry in ROUTES that accepts this method + path, with the capture
+// array its handler takes. Table order is the matching rule — see the
+// more-specific-first note on the table — so this walks it in order and
+// returns on the first hit, exactly as the dispatch loop it was lifted out of
+// did. Separate from dispatch so the ordering can be asserted from a test
+// (routes-match.test.ts) rather than only from reading the table.
+function matchRoute(
+	method: string,
+	pathname: string,
+): { spec: RouteSpec; match: RegExpMatchArray | null } | null {
+	for (const r of ROUTES) {
+		if (r.method !== method) continue;
+		// `null` for path routes is the handler's match argument, not a
+		// sentinel — path routes have no capture groups to pass.
+		let m: RegExpMatchArray | null = null;
+		if (r.match.kind === "path") {
+			if (r.match.path !== pathname) continue;
+		} else {
+			m = pathname.match(r.match.regex);
+			if (!m) continue;
+		}
+		return { spec: r, match: m };
+	}
+	return null;
+}
+
+// The route key a request would dispatch to, or null for a 404. Exported for
+// the routing drift guard (cloud/src/routes-match.test.ts), which is what pins
+// the id-or-slug patterns above against the id-only ones they sit beside.
+export function matchRouteKey(method: string, pathname: string): string | null {
+	return matchRoute(method, pathname)?.spec.route ?? null;
+}
+
 function dispatch(
 	request: Request,
 	env: RawBindings,
 	ctx: ExecutionContext,
 ): Promise<Response> {
 	const url = new URL(request.url);
-	for (const r of ROUTES) {
-		if (r.method !== request.method) continue;
-		// `null` for path routes is the handler's match argument, not a
-		// sentinel — path routes have no capture groups to pass.
-		let m: RegExpMatchArray | null = null;
-		if (r.match.kind === "path") {
-			if (r.match.path !== url.pathname) continue;
-		} else {
-			m = url.pathname.match(r.match.regex);
-			if (!m) continue;
-		}
-		setRoute(r.route);
-		// The same normalized route the access line carries, attached to a
-		// span. Tracing needs its own copy because nothing the platform emits
-		// can stand in: root spans carry url.path, whose cardinality is
-		// unbounded (one cell per game id), and there is no http.route
-		// attribute. setAttribute only works on spans we create, so wrapping
-		// the handler is the only place to put it.
-		//
-		// Every D1 and R2 span the handler produces nests under this one, and
-		// cloudflare.colo is a resource attribute present on all spans — so
-		// "p95 by route × colo", the issue #150 question, is a query over
-		// this span alone rather than a join back to the access line.
-		//
-		// startActiveSpan + an explicit end(), not enterSpan. The callback
-		// returns a *pending* promise, and the two differ in exactly that case:
-		// enterSpan is free to close the span when the callback returns rather
-		// than when its promise settles, which would leave a ~0ms span with
-		// nothing nested under it — losing both halves of the goal above, and
-		// silently, since the route attribute would still be correct. This form
-		// is right under either semantics. `.finally()` is total because every
-		// entry in ROUTES returns Promise<Response>.
-		//
-		// Guarded on the method, not just the object, because two different
-		// things can be missing. `tracing` is runtime-provided and declared
-		// non-optional, but `createExecutionContext()` in
-		// @cloudflare/vitest-pool-workers hands back a context without it, and a
-		// deployed runtime behind local workerd would have the same shape.
-		// startActiveSpan is separately newer than our compatibility_date
-		// (2024-12-01, see wrangler.toml) — nothing in this workerd build gates
-		// it per-method and enterSpan works at that date, so it is expected to
-		// be there, but "expected" is not "checked against the deployed
-		// runtime". Either absence unguarded throws for *every* request and the
-		// envelope's safety net turns that into a 500 across the whole API —
-		// tracing is a measurement, so it must never be able to take the app
-		// down. Serving untraced is the right failure, and the warn is what
-		// makes it visible instead of silent.
-		const tracing: Tracing | undefined = ctx.tracing;
-		if (!tracing || typeof tracing.startActiveSpan !== "function") {
-			warnTracingUnavailable();
-			return r.handler(request, routeEnv(env, r), m, ctx);
-		}
-		// The check above proves the method is *there*, not that calling it
-		// works. Tracing is a beta API and its enablement lives outside this
-		// repo, so a throw out of a function that is plainly present is a
-		// distinct failure from an absent one — and an unguarded one costs the
-		// whole API for exactly the reason the check exists to prevent. Same
-		// guard, same fallback: serve untraced.
-		//
-		// `entered` is what makes that fallback safe to take. Re-running the
-		// handler is only correct if it never ran, and the callback is where it
-		// runs, so a throw from inside the callback rethrows instead — which is
-		// precisely the pre-tracing behaviour (up to the envelope, 500). Set
-		// after setAttribute so a throw from *that* is still recoverable, and
-		// before the handler call so no synchronous throw out of a handler can
-		// re-enter it. Handlers are all `async` and so can't throw
-		// synchronously today; a POST run twice is a much worse failure than an
-		// untraced one, and this doesn't depend on that staying true.
-		let entered = false;
-		try {
-			return tracing.startActiveSpan(r.route, (span) => {
-				span.setAttribute("route", r.route);
-				entered = true;
-				return r
-					.handler(request, routeEnv(env, r), m, ctx)
-					.finally(() => span.end());
-			});
-		} catch (err) {
-			if (entered) throw err;
-			warnTracingFailed(err);
-			return r.handler(request, routeEnv(env, r), m, ctx);
-		}
+	const hit = matchRoute(request.method, url.pathname);
+	if (!hit) {
+		// 404 — echo the request Origin so error responses still allow the
+		// caller that asked. Through jsonResponse rather than hand-built: it is
+		// the same body and headers, and it is what carries the `private,
+		// no-store` default (util.ts) onto a response no route owns.
+		const cors = cloudCorsHeaders(env, request);
+		return Promise.resolve(jsonResponse({ error: "Not found" }, 404, cors));
 	}
-	// 404 — echo the request Origin so error responses still allow the
-	// caller that asked. Through jsonResponse rather than hand-built: it is
-	// the same body and headers, and it is what carries the `private,
-	// no-store` default (util.ts) onto a response no route owns.
-	const cors = cloudCorsHeaders(env, request);
-	return Promise.resolve(jsonResponse({ error: "Not found" }, 404, cors));
+	const { spec: r, match: m } = hit;
+	setRoute(r.route);
+	// The same normalized route the access line carries, attached to a
+	// span. Tracing needs its own copy because nothing the platform emits
+	// can stand in: root spans carry url.path, whose cardinality is
+	// unbounded (one cell per game id), and there is no http.route
+	// attribute. setAttribute only works on spans we create, so wrapping
+	// the handler is the only place to put it.
+	//
+	// Every D1 and R2 span the handler produces nests under this one, and
+	// cloudflare.colo is a resource attribute present on all spans — so
+	// "p95 by route × colo", the issue #150 question, is a query over
+	// this span alone rather than a join back to the access line.
+	//
+	// startActiveSpan + an explicit end(), not enterSpan. The callback
+	// returns a *pending* promise, and the two differ in exactly that case:
+	// enterSpan is free to close the span when the callback returns rather
+	// than when its promise settles, which would leave a ~0ms span with
+	// nothing nested under it — losing both halves of the goal above, and
+	// silently, since the route attribute would still be correct. This form
+	// is right under either semantics. `.finally()` is total because every
+	// entry in ROUTES returns Promise<Response>.
+	//
+	// Guarded on the method, not just the object, because two different
+	// things can be missing. `tracing` is runtime-provided and declared
+	// non-optional, but `createExecutionContext()` in
+	// @cloudflare/vitest-pool-workers hands back a context without it, and a
+	// deployed runtime behind local workerd would have the same shape.
+	// startActiveSpan is separately newer than our compatibility_date
+	// (2024-12-01, see wrangler.toml) — nothing in this workerd build gates
+	// it per-method and enterSpan works at that date, so it is expected to
+	// be there, but "expected" is not "checked against the deployed
+	// runtime". Either absence unguarded throws for *every* request and the
+	// envelope's safety net turns that into a 500 across the whole API —
+	// tracing is a measurement, so it must never be able to take the app
+	// down. Serving untraced is the right failure, and the warn is what
+	// makes it visible instead of silent.
+	const tracing: Tracing | undefined = ctx.tracing;
+	if (!tracing || typeof tracing.startActiveSpan !== "function") {
+		warnTracingUnavailable();
+		return r.handler(request, routeEnv(env, r), m, ctx);
+	}
+	// The check above proves the method is *there*, not that calling it
+	// works. Tracing is a beta API and its enablement lives outside this
+	// repo, so a throw out of a function that is plainly present is a
+	// distinct failure from an absent one — and an unguarded one costs the
+	// whole API for exactly the reason the check exists to prevent. Same
+	// guard, same fallback: serve untraced.
+	//
+	// `entered` is what makes that fallback safe to take. Re-running the
+	// handler is only correct if it never ran, and the callback is where it
+	// runs, so a throw from inside the callback rethrows instead — which is
+	// precisely the pre-tracing behaviour (up to the envelope, 500). Set
+	// after setAttribute so a throw from *that* is still recoverable, and
+	// before the handler call so no synchronous throw out of a handler can
+	// re-enter it. Handlers are all `async` and so can't throw
+	// synchronously today; a POST run twice is a much worse failure than an
+	// untraced one, and this doesn't depend on that staying true.
+	let entered = false;
+	try {
+		return tracing.startActiveSpan(r.route, (span) => {
+			span.setAttribute("route", r.route);
+			entered = true;
+			return r
+				.handler(request, routeEnv(env, r), m, ctx)
+				.finally(() => span.end());
+		});
+	} catch (err) {
+		if (entered) throw err;
+		warnTracingFailed(err);
+		return r.handler(request, routeEnv(env, r), m, ctx);
+	}
 }
 
 export default {

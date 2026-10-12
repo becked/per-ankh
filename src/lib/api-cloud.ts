@@ -1713,52 +1713,57 @@ export const cloudApi = {
 		return res.json() as Promise<TournamentDetail>;
 	},
 
+	// `idOrSlug` here and on every read that names it — standings, bracket,
+	// stats, stats/games, stats/records, matches, match detail, video-archive —
+	// is the tournament id *or* its slug, resolved by the Worker's shared read
+	// preamble (loadViewableTournament, cloud/src/tournament/public.ts). Passing
+	// the slug a route already has in `params` is what lets a load fetch the
+	// detail and its sub-resources in one wave instead of awaiting the detail
+	// for its id first. `exportTournament` below is the one that still takes the
+	// id alone: it goes through its own lookup.
 	getTournamentStandings: async (
-		tournamentId: string,
+		idOrSlug: string,
 		opts?: CallOpts,
 	): Promise<StandingsResponse> => {
-		const res = await request(`/tournaments/${tournamentId}/standings`, opts);
+		const res = await request(`/tournaments/${idOrSlug}/standings`, opts);
 		return res.json() as Promise<StandingsResponse>;
 	},
 
 	getTournamentBracket: async (
-		tournamentId: string,
+		idOrSlug: string,
 		opts?: CallOpts,
 	): Promise<BracketResponse> => {
-		const res = await request(`/tournaments/${tournamentId}/bracket`, opts);
+		const res = await request(`/tournaments/${idOrSlug}/bracket`, opts);
 		return res.json() as Promise<BracketResponse>;
 	},
 
 	// Plane A competition stats — standings (embedded, so no separate /standings
 	// fetch) + caster leaderboard. Uncached server-side. See TournamentCompetitionStats.
 	getTournamentStats: async (
-		tournamentId: string,
+		idOrSlug: string,
 		opts?: CallOpts,
 	): Promise<TournamentCompetitionStats> => {
-		const res = await request(`/tournaments/${tournamentId}/stats`, opts);
+		const res = await request(`/tournaments/${idOrSlug}/stats`, opts);
 		return res.json() as Promise<TournamentCompetitionStats>;
 	},
 
 	// Plane B1 save-content stats over the tournament's completed-match games —
 	// the ChartBundle core (no user-only Overview fields). Cached server-side.
 	getTournamentGamesStats: async (
-		tournamentId: string,
+		idOrSlug: string,
 		opts?: CallOpts,
 	): Promise<ChartBundleCore> => {
-		const res = await request(`/tournaments/${tournamentId}/stats/games`, opts);
+		const res = await request(`/tournaments/${idOrSlug}/stats/games`, opts);
 		return res.json() as Promise<ChartBundleCore>;
 	},
 
 	// The record boards over the same games, fetched when the tournament stats
 	// page's Records tab opens.
 	getTournamentRecords: async (
-		tournamentId: string,
+		idOrSlug: string,
 		opts?: CallOpts,
 	): Promise<RecordsBundle> => {
-		const res = await request(
-			`/tournaments/${tournamentId}/stats/records`,
-			opts,
-		);
+		const res = await request(`/tournaments/${idOrSlug}/stats/records`, opts);
 		return res.json() as Promise<RecordsBundle>;
 	},
 
@@ -1774,7 +1779,7 @@ export const cloudApi = {
 	},
 
 	getTournamentMatches: async (
-		tournamentId: string,
+		idOrSlug: string,
 		params: {
 			round_id?: string;
 			phase?: string;
@@ -1793,8 +1798,8 @@ export const cloudApi = {
 			if (v) qs.set(k, v);
 		}
 		const path = qs.toString()
-			? `/tournaments/${tournamentId}/matches?${qs}`
-			: `/tournaments/${tournamentId}/matches`;
+			? `/tournaments/${idOrSlug}/matches?${qs}`
+			: `/tournaments/${idOrSlug}/matches`;
 		const res = await request(path, opts);
 		return res.json() as Promise<{
 			tournament_id: string;
@@ -1808,13 +1813,10 @@ export const cloudApi = {
 	// the tournament "Videos" tab. The Worker owns the grouping and the
 	// attribution; see cloud/src/tournament/video-archive.ts.
 	getTournamentVideoArchive: async (
-		tournamentId: string,
+		idOrSlug: string,
 		opts?: CallOpts,
 	): Promise<VideoArchive> => {
-		const res = await request(
-			`/tournaments/${tournamentId}/video-archive`,
-			opts,
-		);
+		const res = await request(`/tournaments/${idOrSlug}/video-archive`, opts);
 		return res.json() as Promise<VideoArchive>;
 	},
 
@@ -1894,12 +1896,12 @@ export const cloudApi = {
 	},
 
 	getTournamentMatch: async (
-		tournamentId: string,
+		idOrSlug: string,
 		matchId: string,
 		opts?: CallOpts,
 	): Promise<TournamentMatch & { tournament_id: string }> => {
 		const res = await request(
-			`/tournaments/${tournamentId}/matches/${matchId}`,
+			`/tournaments/${idOrSlug}/matches/${matchId}`,
 			opts,
 		);
 		return res.json() as Promise<TournamentMatch & { tournament_id: string }>;

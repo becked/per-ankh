@@ -19,7 +19,7 @@ import {
 	loadMatches,
 	loadRounds,
 	loadSlots,
-	loadTournamentById,
+	loadTournamentByIdOrSlug,
 	loadTournamentBySlug,
 	MapConfigError,
 	MATCH_COLUMNS_M,
@@ -623,7 +623,7 @@ export async function handleTournamentDetail(
 // reads. The playlist itself is the same KV-cached (SWR) read the home feed
 // makes; the attribution and grouping run per request on top of it.
 export async function handleTournamentVideoArchive(
-	tournamentId: string,
+	idOrSlug: string,
 	request: Request,
 	env: TournamentPublicEnv,
 	ctx: ExecutionContext,
@@ -633,7 +633,7 @@ export async function handleTournamentVideoArchive(
 	const tournament = await loadViewableTournament(
 		env,
 		request,
-		tournamentId,
+		idOrSlug,
 		cors,
 		session,
 	);
@@ -1081,16 +1081,23 @@ async function setupGateHides(
 // public-read gating (visibility rule, 404 shape, rate limit) lands here once
 // and covers standings, bracket, rounds, matches, match detail, and both stats
 // endpoints alike.
+//
+// The identifier is the id *or* the slug: this load is unconditional on every
+// one of those reads, so resolving both forms costs nothing and is what lets a
+// caller fetch a tournament and its sub-resources in one wave rather than
+// resolving the slug first (loadTournamentByIdOrSlug, data.ts). The budget is
+// unchanged — the gate above still charges one `tournament_view` slot per read,
+// which is the posture read-budget.ts settled on.
 async function loadViewableTournament(
 	env: TournamentPublicEnv,
 	request: Request,
-	tournamentId: string,
+	idOrSlug: string,
 	cors: Record<string, string>,
 	session: { token: string; data: SessionData } | null,
 ): Promise<TournamentRow | Response> {
 	const rl = await enforceTournamentViewRateLimit(env, request, cors);
 	if (rl) return rl;
-	const tournament = await loadTournamentById(env, tournamentId);
+	const tournament = await loadTournamentByIdOrSlug(env, idOrSlug);
 	if (!tournament || (await setupGateHides(env, session, tournament))) {
 		return errorResponse(
 			"Tournament not found",
@@ -1103,7 +1110,7 @@ async function loadViewableTournament(
 }
 
 export async function handleTournamentStandings(
-	tournamentId: string,
+	idOrSlug: string,
 	request: Request,
 	env: TournamentPublicEnv,
 ): Promise<Response> {
@@ -1112,7 +1119,7 @@ export async function handleTournamentStandings(
 	const tournament = await loadViewableTournament(
 		env,
 		request,
-		tournamentId,
+		idOrSlug,
 		cors,
 		session,
 	);
@@ -1350,7 +1357,7 @@ async function computeCompetitionStats(
 // gates as /standings; uncached in v1 (cost ≈ the already-uncached /standings
 // read, scaling with matches not games).
 export async function handleTournamentStats(
-	tournamentId: string,
+	idOrSlug: string,
 	request: Request,
 	env: TournamentPublicEnv,
 ): Promise<Response> {
@@ -1359,7 +1366,7 @@ export async function handleTournamentStats(
 	const tournament = await loadViewableTournament(
 		env,
 		request,
-		tournamentId,
+		idOrSlug,
 		cors,
 		session,
 	);
@@ -1379,7 +1386,7 @@ export async function handleTournamentStats(
 // CURRENT_PARSER_VERSION like handleUserStats. The "humans" focal widens the
 // aggregator to every human player.
 async function handleTournamentGamesPayload(
-	tournamentId: string,
+	idOrSlug: string,
 	request: Request,
 	env: TournamentPublicEnv,
 	payload: StatsPayload,
@@ -1389,7 +1396,7 @@ async function handleTournamentGamesPayload(
 	const tournament = await loadViewableTournament(
 		env,
 		request,
-		tournamentId,
+		idOrSlug,
 		cors,
 		session,
 	);
@@ -1430,26 +1437,26 @@ async function handleTournamentGamesPayload(
 // GET /v1/tournaments/:id/stats/games — the chart bundle over the tournament's
 // games.
 export function handleTournamentGamesStats(
-	tournamentId: string,
+	idOrSlug: string,
 	request: Request,
 	env: TournamentPublicEnv,
 ): Promise<Response> {
-	return handleTournamentGamesPayload(tournamentId, request, env, "bundle");
+	return handleTournamentGamesPayload(idOrSlug, request, env, "bundle");
 }
 
 // GET /v1/tournaments/:id/stats/records — the same games' record boards, off
 // the bundle so the tournament stats page only pays for them when the Records
 // tab opens.
 export function handleTournamentGamesRecords(
-	tournamentId: string,
+	idOrSlug: string,
 	request: Request,
 	env: TournamentPublicEnv,
 ): Promise<Response> {
-	return handleTournamentGamesPayload(tournamentId, request, env, "records");
+	return handleTournamentGamesPayload(idOrSlug, request, env, "records");
 }
 
 export async function handleTournamentBracket(
-	tournamentId: string,
+	idOrSlug: string,
 	request: Request,
 	env: TournamentPublicEnv,
 ): Promise<Response> {
@@ -1458,7 +1465,7 @@ export async function handleTournamentBracket(
 	const tournament = await loadViewableTournament(
 		env,
 		request,
-		tournamentId,
+		idOrSlug,
 		cors,
 		session,
 	);
@@ -1540,7 +1547,7 @@ export async function handleTournamentBracket(
 }
 
 export async function handleTournamentRounds(
-	tournamentId: string,
+	idOrSlug: string,
 	request: Request,
 	env: TournamentPublicEnv,
 ): Promise<Response> {
@@ -1549,7 +1556,7 @@ export async function handleTournamentRounds(
 	const tournament = await loadViewableTournament(
 		env,
 		request,
-		tournamentId,
+		idOrSlug,
 		cors,
 		session,
 	);
@@ -1563,7 +1570,7 @@ export async function handleTournamentRounds(
 }
 
 export async function handleTournamentMatches(
-	tournamentId: string,
+	idOrSlug: string,
 	request: Request,
 	env: TournamentPublicEnv,
 ): Promise<Response> {
@@ -1572,7 +1579,7 @@ export async function handleTournamentMatches(
 	const tournament = await loadViewableTournament(
 		env,
 		request,
-		tournamentId,
+		idOrSlug,
 		cors,
 		session,
 	);
@@ -1654,7 +1661,7 @@ export async function handleTournamentMatches(
 }
 
 export async function handleTournamentMatchDetail(
-	tournamentId: string,
+	idOrSlug: string,
 	matchId: string,
 	request: Request,
 	env: TournamentPublicEnv,
@@ -1664,7 +1671,7 @@ export async function handleTournamentMatchDetail(
 	const tournament = await loadViewableTournament(
 		env,
 		request,
-		tournamentId,
+		idOrSlug,
 		cors,
 		session,
 	);

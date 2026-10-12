@@ -112,18 +112,32 @@ export const load: PageLoad = async ({ url, fetch }) => {
 	let slotBLabel: string | null = null;
 	let tournamentError: string | null = null;
 	if (tournamentMatchId && returnSlug) {
+		// All three start together — the match and standings reads take the slug,
+		// so neither waits on the detail response for an id (issue #292). The
+		// detail is still awaited *first*, which is what keeps the degradation
+		// steps distinct: a trail that lost only the picker labels still says
+		// which tournament it belongs to, where awaiting all three as a group
+		// would drop the name over a failure in either of the other two.
+		//
+		// The no-op .catch keeps an abandoned rejection — observerMode's pair
+		// when getTournament throws — from surfacing as an unhandled rejection.
+		// It handles a *derived* promise, so awaiting the originals below still
+		// propagates their failures into the catch block. Same idiom as
+		// src/routes/users/[user_id]/+page.ts.
+		const tournamentP = cloudApi.getTournament(returnSlug, { fetch });
+		const matchP = observerMode
+			? cloudApi.getTournamentMatch(returnSlug, tournamentMatchId, { fetch })
+			: null;
+		const standingsP = observerMode
+			? cloudApi.getTournamentStandings(returnSlug, { fetch })
+			: null;
+		matchP?.catch(() => {});
+		standingsP?.catch(() => {});
 		try {
-			const tournament = await cloudApi.getTournament(returnSlug, { fetch });
+			const tournament = await tournamentP;
 			tournamentName = tournament.name;
-			if (observerMode) {
-				const [match, standings] = await Promise.all([
-					cloudApi.getTournamentMatch(
-						tournament.tournament_id,
-						tournamentMatchId,
-						{ fetch },
-					),
-					cloudApi.getTournamentStandings(tournament.tournament_id, { fetch }),
-				]);
+			if (matchP && standingsP) {
+				const [match, standings] = await Promise.all([matchP, standingsP]);
 				const labelById: Record<string, string> = {};
 				for (const div of ["A", "B"] as const) {
 					for (const s of standings.divisions[div].standings) {
