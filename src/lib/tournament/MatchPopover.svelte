@@ -1183,11 +1183,15 @@
 								<rect x="3" y="4" width="18" height="18" rx="2" />
 								<path d="M16 2v4M8 2v4M3 10h18" />
 							</svg>
+							<!-- The relative subtext counts on the UTC calendar, not the viewer's:
+							     this line leads with the UTC day and prints the local one only on a
+							     rollover, so the day it has to agree with is the half that is always
+							     on screen. -->
 							<span
 								>{formatScheduledWithLocal(part.scheduled_at, use12Hour)}<span
 									class="text-muted"
 								>
-									· {formatRelativeToNow(part.scheduled_at, "local")}</span
+									· {formatRelativeToNow(part.scheduled_at, "utc")}</span
 								></span
 							>
 						</div>
