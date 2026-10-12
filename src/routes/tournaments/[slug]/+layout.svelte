@@ -14,7 +14,6 @@
 	import { goto } from "$app/navigation";
 	import { resolve } from "$app/paths";
 	import { page } from "$app/state";
-	import { autohideScroll } from "$lib/actions/autohideScroll";
 	import Breadcrumb, { type Crumb } from "$lib/Breadcrumb.svelte";
 	import { cloudApi } from "$lib/api-cloud";
 	import { runAction } from "$lib/tournament/async-action";
@@ -125,10 +124,7 @@
 
 <div class="flex flex-1 overflow-hidden">
 	<main class="isolate flex flex-1 flex-col overflow-hidden">
-		<div
-			class="view-scroll cloud-scroll flex-1 overflow-y-auto px-4 pb-8 pt-4"
-			use:autohideScroll
-		>
+		<div class="view-scroll flex-1 overflow-y-auto px-4 pb-8 pt-4">
 			<div class="mx-auto max-w-screen-2xl">
 				<!-- Shared header row: trail (+ Overview-only status badge) on the left,
 				     the persistent view toggle between it and the action cluster, the
@@ -209,8 +205,8 @@
 	/* Always reserve the scrollbar's gutter on the shared scroll container, so
 	   switching to a view that's short enough not to overflow (no scrollbar)
 	   doesn't widen the centred content and nudge it sideways. Scoped here
-	   rather than on the global .cloud-scroll so only the tournament views get
-	   the reserved gutter. */
+	   rather than alongside the global scrollbar rules in src/app.css so only
+	   the tournament views get the reserved gutter. */
 	.view-scroll {
 		scrollbar-gutter: stable;
 	}

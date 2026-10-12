@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { page } from "$app/state";
 	import { resolve } from "$app/paths";
-	import { autohideScroll } from "$lib/actions/autohideScroll";
 	import CreatorVideos from "$lib/CreatorVideos.svelte";
 	import DiscordLoginButton from "$lib/DiscordLoginButton.svelte";
 	import DiscordMark from "$lib/ui/DiscordMark.svelte";
@@ -57,10 +56,7 @@
 </script>
 
 <main class="isolate flex flex-1 flex-col overflow-hidden">
-	<div
-		class="cloud-scroll flex-1 overflow-y-auto px-4 pb-8 pt-4"
-		use:autohideScroll
-	>
+	<div class="flex-1 overflow-y-auto px-4 pb-8 pt-4">
 		<div class="mx-auto max-w-screen-2xl">
 			<!--
 			The call to action, on one narrow full-width row: the pitch on the left,

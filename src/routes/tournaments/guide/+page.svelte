@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { page } from "$app/state";
 	import { resolve } from "$app/paths";
-	import { autohideScroll } from "$lib/actions/autohideScroll";
 	import Breadcrumb, { type Crumb } from "$lib/Breadcrumb.svelte";
 
 	// The guide is a static, shared page, so its trail can't come from the
@@ -25,7 +24,7 @@
 	]);
 </script>
 
-<main class="cloud-scroll flex-1 overflow-y-auto px-4 py-8" use:autohideScroll>
+<main class="flex-1 overflow-y-auto px-4 py-8">
 	<Breadcrumb {crumbs} class="mb-4" />
 	<div
 		class="mx-auto grid max-w-screen-2xl gap-x-[4.5rem] gap-y-6 md:grid-cols-2"

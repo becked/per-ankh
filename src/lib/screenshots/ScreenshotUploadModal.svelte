@@ -33,7 +33,6 @@
 	// but both of which outrank it.
 	import { Dialog } from "bits-ui";
 	import type { Snippet } from "svelte";
-	import { autohideScroll } from "$lib/actions/autohideScroll";
 	import type { UploadedScreenshot } from "$lib/api-cloud";
 	import ScreenshotUploader from "./ScreenshotUploader.svelte";
 
@@ -102,10 +101,7 @@
 				</Dialog.Close>
 			</header>
 
-			<div
-				class="cloud-scroll min-h-0 flex-1 overflow-y-auto"
-				use:autohideScroll
-			>
+			<div class="min-h-0 flex-1 overflow-y-auto">
 				<ScreenshotUploader {gameId} {isPublic} {onUploaded} />
 			</div>
 		</Dialog.Content>

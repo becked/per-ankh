@@ -11,7 +11,6 @@
 		UnauthorizedError,
 		type PatchChallengeBody,
 	} from "$lib/api-cloud";
-	import { autohideScroll } from "$lib/actions/autohideScroll";
 	import Breadcrumb from "$lib/Breadcrumb.svelte";
 	import { describeSetup } from "$lib/challenges/describe";
 	import RulesEditor from "$lib/challenges/RulesEditor.svelte";
@@ -169,10 +168,7 @@
 
 <div class="flex flex-1 overflow-hidden">
 	<main class="isolate flex flex-1 flex-col overflow-hidden">
-		<div
-			class="cloud-scroll flex-1 overflow-y-auto px-4 pb-8 pt-4"
-			use:autohideScroll
-		>
+		<div class="flex-1 overflow-y-auto px-4 pb-8 pt-4">
 			<div class="mx-auto max-w-screen-2xl">
 				<div class="mb-4 flex flex-wrap items-center justify-between gap-3">
 					<div class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">

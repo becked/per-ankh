@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { goto } from "$app/navigation";
 	import { navigating, page } from "$app/state";
-	import { autohideScroll } from "$lib/actions/autohideScroll";
 	import type { PlayedGamesRow } from "$lib/api-cloud";
 	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
 	import ProfileLink from "$lib/ProfileLink.svelte";
@@ -356,7 +355,7 @@
 	const ROW_BG = "bg-surface transition-colors group-hover:bg-surface-hover";
 </script>
 
-<main class="cloud-scroll flex-1 overflow-y-auto px-4 py-8" use:autohideScroll>
+<main class="flex-1 overflow-y-auto px-4 py-8">
 	<div class="mx-auto max-w-3xl">
 		<div class="mb-4 flex flex-wrap items-center justify-between gap-3">
 			<h1 class="text-2xl font-bold text-gray-200">Players</h1>

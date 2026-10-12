@@ -7,7 +7,6 @@
 	import { goto } from "$app/navigation";
 	import { resolve } from "$app/paths";
 	import { ApiError, cloudApi, type CreateChallengeMeta } from "$lib/api-cloud";
-	import { autohideScroll } from "$lib/actions/autohideScroll";
 	import { describeSetup } from "$lib/challenges/describe";
 	import RulesEditor from "$lib/challenges/RulesEditor.svelte";
 	import {
@@ -236,10 +235,7 @@
 
 <div class="flex flex-1 overflow-hidden">
 	<main class="isolate flex flex-1 flex-col overflow-hidden">
-		<div
-			class="cloud-scroll flex-1 overflow-y-auto px-4 pb-8 pt-4"
-			use:autohideScroll
-		>
+		<div class="flex-1 overflow-y-auto px-4 pb-8 pt-4">
 			<div class="mx-auto max-w-3xl">
 				<Breadcrumb
 					crumbs={[

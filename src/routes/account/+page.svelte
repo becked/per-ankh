@@ -3,7 +3,6 @@
 	import { goto, invalidateAll } from "$app/navigation";
 	import { resolve } from "$app/paths";
 	import { ApiError, cloudApi, type GameListItem } from "$lib/api-cloud";
-	import { autohideScroll } from "$lib/actions/autohideScroll";
 	import BulkReparseModal from "$lib/BulkReparseModal.svelte";
 	import FeaturedVideosTable from "$lib/FeaturedVideosTable.svelte";
 	import {
@@ -325,7 +324,7 @@
 	your own.
 {/snippet}
 
-<main class="cloud-scroll flex-1 overflow-y-auto px-4 py-8" use:autohideScroll>
+<main class="flex-1 overflow-y-auto px-4 py-8">
 	<div class="mx-auto max-w-xl">
 		<Tabs.Root bind:value={activeTab}>
 			<Tabs.List
