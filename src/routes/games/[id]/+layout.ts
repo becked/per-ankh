@@ -11,6 +11,37 @@ import { rethrowRateLimit } from "$lib/utils/load-errors";
 import { loginBounce } from "$lib/utils/safe-next";
 import type { LayoutLoad } from "./$types";
 
+// The game's effective title — the derivation GameHeader renders as the
+// on-page heading. Hoisted out of buildMeta below because two of this
+// layout's consumers now read the same string: the <head>/OG title, and the
+// screenshots view's lightbox heading (a game's own screenshot rows carry no
+// game fields — the list is one game's).
+//
+// It handles the owner rename, the empty / auto-generated "GameN" save name
+// (falling through to "{Nation} - {Turns} turns"), and the bare-fallback cases
+// uniformly — the ad-hoc `??` chain this replaced passed empty-string save
+// names straight through, yielding a blank " - Per-Ankh" title.
+function gameTitle(game: {
+	game_details: Record<string, unknown>;
+	display_name?: string | null;
+	user_nation?: string | null;
+}): string {
+	const gd = game.game_details as {
+		game_name?: string | null;
+		players?: Array<{ is_human?: boolean; nation?: string | null }>;
+		match_id?: number;
+		total_turns?: number;
+	};
+	return formatGameTitle({
+		display_name: game.display_name ?? null,
+		game_name: gd.game_name ?? null,
+		save_owner_nation:
+			game.user_nation ?? gd.players?.find((p) => p.is_human)?.nation ?? null,
+		total_turns: gd.total_turns ?? null,
+		match_id: gd.match_id ?? 0,
+	});
+}
+
 // Build the OG/Twitter description from match metadata. Same shape that
 // used to live inline in +page.svelte's <svelte:head>; moved here so
 // social-link unfurls work without the page mounting.
@@ -20,9 +51,6 @@ function buildMeta(game: {
 	user_nation?: string | null;
 }): PageMeta {
 	const gd = game.game_details as {
-		game_name?: string | null;
-		players?: Array<{ is_human?: boolean; nation?: string | null }>;
-		match_id?: number;
 		winner_civilization?: string | null;
 		winner_name?: string | null;
 		winner_victory_type?: string | null;
@@ -41,22 +69,9 @@ function buildMeta(game: {
 	if (gd.total_turns != null) parts.push(`turn ${gd.total_turns}`);
 	const description =
 		parts.length > 0 ? parts.join(", ") : "An Old World save game on Per-Ankh.";
-	// Derive the social-share title from the same helper the on-page title
-	// uses (GameHeader.svelte), so the <head>/OG title matches what the user
-	// sees. This handles the owner rename, the empty / auto-generated
-	// "GameN" save name (falling through to "{Nation} - {Turns} turns"),
-	// and the bare-fallback cases uniformly — the prior ad-hoc `??` chain
-	// passed empty-string save names straight through, yielding a blank
-	// " - Per-Ankh" title.
-	const gameName = formatGameTitle({
-		display_name: game.display_name ?? null,
-		game_name: gd.game_name ?? null,
-		save_owner_nation:
-			game.user_nation ?? gd.players?.find((p) => p.is_human)?.nation ?? null,
-		total_turns: gd.total_turns ?? null,
-		match_id: gd.match_id ?? 0,
-	});
-	return { title: `${gameName} - Per-Ankh`, description };
+	// The same title the page renders above the view, so the <head>/OG title
+	// matches what the user sees.
+	return { title: `${gameTitle(game)} - Per-Ankh`, description };
 }
 
 // Translate the API's `ApiError` into the right SvelteKit response —
@@ -177,6 +192,11 @@ export const load: LayoutLoad = async ({ params, fetch, url }) => {
 		tournamentLink,
 		challengeLink,
 		screenshots,
+		// What this game is called, for the screenshots view: its gallery's
+		// lightbox is headed by the game, and the rows it renders carry no game
+		// fields of their own. Derived here, where the title already is, rather
+		// than a fourth copy of the derivation in the page.
+		gameName: gameTitle(game),
 		meta: buildMeta(game),
 	};
 };

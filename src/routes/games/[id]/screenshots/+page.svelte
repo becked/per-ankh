@@ -50,6 +50,7 @@
 						bind:screenshots={screenshots.list}
 						canDelete={data.isOwner}
 						layout="panels"
+						gameName={data.gameName}
 					/>
 				{/if}
 			</div>

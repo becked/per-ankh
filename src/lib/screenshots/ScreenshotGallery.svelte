@@ -70,6 +70,7 @@
 		canDelete = false,
 		showGame = false,
 		layout = "grid",
+		gameName,
 	}: {
 		// Bindable because a delete removes the tile OPTIMISTICALLY: Browser TTL
 		// is 7200, so an uploader who waited for the round trip could keep
@@ -94,6 +95,12 @@
 		// hundred shots needs; a game's own view, capped at five, asks for
 		// panels.
 		layout?: "grid" | "panels";
+		// The game these shots are of, as its own view names it: the lightbox is
+		// headed by the game, and a game's list payload carries no game fields
+		// per row — the list is one game's — so that surface passes the name the
+		// page already derived. The profile tab passes nothing: its rows span
+		// games and each one names its own.
+		gameName?: string;
 	} = $props();
 
 	let lightbox = $state<GameScreenshot | null>(null);
@@ -108,6 +115,15 @@
 		// A form left open on the previous image must not greet the next one.
 		reportingId = null;
 		reportError = null;
+	}
+
+	// The label for whatever opens the full-size picture: the tile itself in
+	// the grid, the whole panel in the panel layout. One function, because the
+	// two controls are the same control in different chrome.
+	function viewLabel(shot: GameScreenshot): string {
+		return shot.caption
+			? `View screenshot: ${shot.caption}`
+			: "View screenshot";
 	}
 
 	function gameTitle(shot: GameScreenshot): string {
@@ -296,27 +312,34 @@
 	<p class="mb-3 text-sm font-bold text-danger">{error}</p>
 {/if}
 
+{#snippet thumbnail(shot: GameScreenshot)}
+	<!-- 8:5, the thumbnail's own shape, so the box the layout reserves is the
+	     box the image fills and nothing resizes as tiles arrive. The
+	     transformation already cropped to it; object-cover is here for the
+	     rounding, not to crop. -->
+	<img
+		src={shot.thumb_url}
+		alt={shot.caption ?? "Game screenshot"}
+		width="640"
+		height="400"
+		loading="lazy"
+		class="aspect-[8/5] w-full object-cover"
+	/>
+{/snippet}
+
 {#snippet picture(shot: GameScreenshot, className: string)}
+	<!-- The grid's picture is its own control: a tile there is the picture and
+	     a line of text under it, so there is nothing else of it to press. A
+	     panel has a column of text beside the picture and presses as one card
+	     — the panel layout wraps the thumbnail itself and stretches one button
+	     over the whole figure instead. -->
 	<button
 		type="button"
 		onclick={() => open(shot)}
 		class="block cursor-pointer overflow-hidden rounded bg-surface-deep transition hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange {className}"
-		aria-label={shot.caption
-			? `View screenshot: ${shot.caption}`
-			: "View screenshot"}
+		aria-label={viewLabel(shot)}
 	>
-		<!-- 8:5, the thumbnail's own shape, so the box the layout reserves is the
-		     box the image fills and nothing resizes as tiles arrive. The
-		     transformation already cropped to it; object-cover is here for the
-		     rounding, not to crop. -->
-		<img
-			src={shot.thumb_url}
-			alt={shot.caption ?? "Game screenshot"}
-			width="640"
-			height="400"
-			loading="lazy"
-			class="aspect-[8/5] w-full object-cover"
-		/>
+		{@render thumbnail(shot)}
 	</button>
 {/snippet}
 
@@ -420,14 +443,35 @@
 	>
 		{#each screenshots as shot (shot.screenshot_id)}
 			{@const uploaded = formatLongDate(shot.created_at)}
-			<figure class="flex flex-col gap-3 rounded-lg bg-surface p-3 sm:flex-row">
+			<!-- `group` is what dims the picture when the pointer is anywhere on
+			     the panel, since anywhere on the panel is what opens it. -->
+			<figure
+				class="group relative flex flex-col gap-3 rounded-lg bg-surface p-3 sm:flex-row"
+			>
+				<!-- Stretched over the whole figure: the picture, the caption and the
+				     date are all of one screenshot, so the card is one control
+				     rather than a picture you may press beside text you may not.
+				     The stretched-overlay idiom RecentSaveCard and VideoCard use,
+				     with the controls below raised above it (higher z-index) so each
+				     still wins its own clicks. A button rather than a link, because
+				     what it opens is the lightbox and not a route. -->
+				<button
+					type="button"
+					onclick={() => open(shot)}
+					class="absolute inset-0 z-10 cursor-pointer rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange"
+					aria-label={viewLabel(shot)}
+				></button>
 				<!-- 18rem, which is both a ceiling and the row's whole width: the
 				     picture is the one element here whose size is settled elsewhere
 				     (640 px covering 2x, see the note above), so it keeps that box
 				     and the text takes what is left. Below `sm` the two stack, where
 				     the cap is what keeps the picture inside a 320 px viewport
 				     without letting it grow to a 639 px one and go soft. -->
-				{@render picture(shot, "w-full max-w-[18rem] sm:flex-none")}
+				<div
+					class="w-full max-w-[18rem] overflow-hidden rounded bg-surface-deep transition group-hover:opacity-90 sm:flex-none"
+				>
+					{@render thumbnail(shot)}
+				</div>
 				<!-- figcaption is the figure's last child, where the spec puts it, so
 				     the controls sit inside it rather than in a wrapper that would
 				     take the caption out of the figure altogether. -->
@@ -441,7 +485,7 @@
 						<p class="text-sm text-tan">{shot.caption}</p>
 					{/if}
 					{#if showGame}
-						{@render gameLink(shot, "text-sm")}
+						{@render gameLink(shot, "relative z-20 text-sm")}
 					{/if}
 					{#if uploaded}
 						<!-- Named, because a bare date beside a picture says nothing about
@@ -450,8 +494,13 @@
 						<p class="text-xs text-muted">Uploaded {uploaded}</p>
 					{/if}
 					{#if shot.status === "in_review"}
+						<!-- Above the panel's overlay, because the badge carries the
+						     tooltip that says what `in_review` means — under it, the
+						     overlay would take the hover and the explanation would
+						     never appear. It costs the badge's own few pixels as a
+						     press target. -->
 						{@render inReviewBadge(
-							"w-fit rounded bg-orange/15 px-2 py-0.5 text-[10px] uppercase tracking-wide",
+							"relative z-20 w-fit rounded bg-orange/15 px-2 py-0.5 text-[10px] uppercase tracking-wide",
 						)}
 					{/if}
 					{#if canDelete || (canStar && shot.status === "published")}
@@ -459,7 +508,9 @@
 						     the column: in a layout with a text column, a control belongs
 						     with the text rather than over the image it acts on. `mt-auto`
 						     holds it at the bottom whatever the caption's length. -->
-						<div class="mt-auto flex items-center gap-2 pt-1">
+						<div
+							class="relative z-20 mt-auto flex w-fit items-center gap-2 pt-1"
+						>
 							{#if canStar && shot.status === "published"}
 								{@render starControl(
 									shot,
@@ -523,17 +574,56 @@
 
 <FullscreenDialog bind:open={lightboxOpen} onclose={() => (lightbox = null)}>
 	{#if lightbox}
-		<div class="flex min-h-0 flex-1 flex-col items-center justify-center gap-2">
+		<!-- A panel with the close button in its header, the shape a chart's
+		     fullscreen view and the map view's tab lightbox already have. Escape
+		     and a click on the backdrop close this dialog as they close those,
+		     but neither is on screen: a picture alone over the backdrop had no
+		     edge and nothing that said how to get back out of it. -->
+		<div class="flex min-h-0 flex-1 flex-col gap-3 rounded-lg bg-surface p-3">
+			<header class="flex flex-none items-center justify-between gap-3">
+				<!-- The game the picture is of. From the prop on a game's own view,
+				     where every row is that game; from the row itself on the profile
+				     tab, which spans games. -->
+				<h2 class="truncate text-base font-bold text-tan">
+					{gameName ?? gameTitle(lightbox)}
+				</h2>
+				<button
+					type="button"
+					onclick={() => (lightboxOpen = false)}
+					class="cursor-pointer rounded bg-black/20 p-1.5 transition-colors hover:bg-black/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange"
+					aria-label="Close screenshot"
+					title="Close (Esc)"
+				>
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						class="block h-4 w-4 text-white"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke="currentColor"
+						stroke-width="2"
+					>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							d="M6 18L18 6M6 6l12 12"
+						/>
+					</svg>
+				</button>
+			</header>
 			<!-- The stored object, full size — the only surface that serves it.
 			     width/height are the stored variant's own, so the browser reserves
-			     the right box while it loads. -->
-			<img
-				src={lightbox.url}
-				alt={lightbox.caption ?? "Game screenshot"}
-				width={lightbox.width}
-				height={lightbox.height}
-				class="max-h-full min-h-0 max-w-full rounded object-contain"
-			/>
+			     the right box while it loads. Centred in the room the header and
+			     the caption leave, and never upscaled past the stored variant's
+			     own size. -->
+			<div class="flex min-h-0 flex-1 items-center justify-center">
+				<img
+					src={lightbox.url}
+					alt={lightbox.caption ?? "Game screenshot"}
+					width={lightbox.width}
+					height={lightbox.height}
+					class="max-h-full max-w-full rounded object-contain"
+				/>
+			</div>
 			{#if lightbox.caption}
 				<p class="flex-none text-center text-sm text-tan">{lightbox.caption}</p>
 			{/if}
@@ -546,8 +636,11 @@
 						<p class="text-tan">Reported. An admin will review it.</p>
 					{:else if reportingId === lightbox.screenshot_id}
 						{@const shot = lightbox}
+						<!-- The recessed step inside the panel, as a PanelInset is: on
+						     the backdrop this was a `surface` card, which is the panel's
+						     own surface now that there is a panel around it. -->
 						<div
-							class="mx-auto max-w-xs rounded-lg bg-surface p-3 text-left shadow-lg"
+							class="mx-auto max-w-xs rounded-lg bg-surface-deep p-3 text-left"
 						>
 							<p class="mb-2 font-bold text-tan">
 								What's wrong with this screenshot?
