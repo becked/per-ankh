@@ -21,13 +21,13 @@
 			href="%sveltekit.assets%/apple-touch-icon.png"
 		/>
 		<!--
-			The UI face (src/app.css). Preloaded because it is discovered only
-			once the stylesheet has parsed, which is late enough that the
-			`font-display: swap` fallback gets a turn — and a swap is visible
-			here, where `auto 1fr` grids and ~80 ellipsis labels are measured
-			from text. `crossorigin` is required even same-origin: fonts are
-			fetched in CORS mode, and without it the preload is discarded and
-			refetched.
+			The UI face's upright (src/app.css, which declares the italic too and
+			says why that one isn't preloaded). Preloaded because it is discovered
+			only once the stylesheet has parsed, which is late enough that the
+			`font-display: swap` fallback gets a turn — and a swap is visible here,
+			where `auto 1fr` grids and ~80 ellipsis labels are measured from text.
+			`crossorigin` is required even same-origin: fonts are fetched in CORS
+			mode, and without it the preload is discarded and refetched.
 		-->
 		<link
 			rel="preload"
