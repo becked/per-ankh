@@ -1,5 +1,5 @@
 // Playwright capture primitives shared by the screenshot commands —
-// `./per-ankh ux-review` (local, discovery-driven) and `./per-ankh os-shots`
+// `./per-ankh ux-review` (local, discovery-driven) and `./per-ankh screenshot`
 // (one runner per OS, fixed page list). Both drive the same app through the
 // same two steps after a navigation, settle then encode, so the waits and the
 // JPEG quality live here rather than drifting apart in each command.

@@ -1,4 +1,4 @@
-// Shared types for the cross-OS screenshot bundle (`./per-ankh os-shots`).
+// Shared types for the cross-OS screenshot bundle (`./per-ankh screenshot`).
 // One manifest per runner; `compare` reads several and renders them as
 // columns of one grid.
 

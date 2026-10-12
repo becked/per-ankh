@@ -1,4 +1,4 @@
-// The side-by-side page `./per-ankh os-shots compare` writes: one row per
+// The side-by-side page `./per-ankh screenshot compare` writes: one row per
 // captured page, one column per OS, at the selected breakpoint.
 //
 // References each runner's `shots/` through its artifact directory rather

@@ -4,7 +4,7 @@ import type { Breakpoint } from "../lib/page-capture";
 
 // Re-exported so this module stays the single import site for everything the
 // bundle is described in terms of; the capture primitives own the definition,
-// since `os-shots` lays its viewports out the same way.
+// since `screenshot` lays its viewports out the same way.
 export type { Breakpoint };
 
 // The two auth passes. `anon` is the signed-out surface; `auth` runs the same

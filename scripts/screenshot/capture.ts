@@ -1,4 +1,4 @@
-// Per-runner capture for `./per-ankh os-shots capture`: one signed-out pass
+// Per-runner capture for `./per-ankh screenshot capture`: one signed-out pass
 // over a fixed page list at two viewports, writing `<out>/shots/*.jpg` and
 // `<out>/manifest.json`. The OS screenshots workflow runs this once per
 // runner and uploads the directory as that OS's artifact.

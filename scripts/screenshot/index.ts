@@ -1,7 +1,7 @@
-// `./per-ankh os-shots` — see the app as each desktop OS renders it.
+// `./per-ankh screenshot` — see the app as each desktop OS renders it.
 //
 // Split in two because the two halves run in different places. `capture`
-// runs on a CI runner (one per OS, see .github/workflows/os-shots.yml) and
+// runs on a CI runner (one per OS, see .github/workflows/screenshot.yml) and
 // knows nothing but a base URL; `compare` runs here, over the artifacts that
 // run produced, and is the half you actually look at.
 //
@@ -25,9 +25,9 @@ import { DEFAULT_BASE_URL, captureOs } from "./capture";
 import { renderComparisonHtml, sortSources, type OsSource } from "./render";
 import type { OsManifest } from "./types";
 
-const DEFAULT_OUT_DIR = "os-shots";
+const DEFAULT_OUT_DIR = "screenshot";
 
-// scripts/os-shots/index.ts → repo root is two levels up.
+// scripts/screenshot/index.ts → repo root is two levels up.
 const REPO_ROOT = path.resolve(
 	path.dirname(fileURLToPath(import.meta.url)),
 	"..",
@@ -39,22 +39,22 @@ const KNOWN_FLAGS = new Set(["base-url", "out", "os", "help"]);
 function printHelp(): void {
 	process.stdout.write(
 		[
-			"per-ankh os-shots — capture the app on each OS and compare the results",
+			"per-ankh screenshot — capture the app on each OS and compare the results",
 			"",
 			"Usage:",
-			"  ./per-ankh os-shots capture [--base-url URL] [--out DIR] [--os LABEL]",
-			"  ./per-ankh os-shots compare DIR [--out FILE]",
+			"  ./per-ankh screenshot capture [--base-url URL] [--out DIR] [--os LABEL]",
+			"  ./per-ankh screenshot compare DIR [--out FILE]",
 			"",
 			"capture  One signed-out pass over a fixed three-page list (home, the",
 			"         community tournament, a public profile) at two viewports,",
 			"         writing DIR/shots/*.jpg and DIR/manifest.json. This is what",
 			"         the OS screenshots workflow runs on each runner; trigger that",
-			"         from the Actions tab or `gh workflow run os-shots.yml`.",
+			"         from the Actions tab or `gh workflow run screenshot.yml`.",
 			"",
 			"compare  Render one side-by-side page from a finished run's artifacts:",
 			"",
-			"           gh run download <run-id> -D /tmp/os-shots",
-			"           ./per-ankh os-shots compare /tmp/os-shots",
+			"           gh run download <run-id> -D /tmp/screenshot",
+			"           ./per-ankh screenshot compare /tmp/screenshot",
 			"",
 			"         Reads every immediate subdirectory holding a manifest.json and",
 			"         writes DIR/index.html — a row per page, a column per OS.",

@@ -3,8 +3,8 @@ name: OS screenshots
 # Manual only, deliberately. The point of the matrix is to be looked at, and
 # nothing in a commit changes how the *deployed* app renders — so there is no
 # push, pull_request or schedule trigger here. Run it from the Actions tab or
-# `gh workflow run os-shots.yml`, then pull the artifacts together with
-# `./per-ankh os-shots compare`.
+# `gh workflow run screenshot.yml`, then pull the artifacts together with
+# `./per-ankh screenshot compare`.
 on:
   workflow_dispatch:
     inputs:
@@ -67,10 +67,10 @@ jobs:
           BASE_URL: ${{ inputs.base-url }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
-        run: ./per-ankh os-shots capture --base-url "$BASE_URL" --out os-shots
+        run: ./per-ankh screenshot capture --base-url "$BASE_URL" --out screenshot
 
       - uses: actions/upload-artifact@v4
         with:
-          name: os-shots-${{ matrix.os }}
-          path: os-shots/
+          name: screenshot-${{ matrix.os }}
+          path: screenshot/
           if-no-files-found: error
