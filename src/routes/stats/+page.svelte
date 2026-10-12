@@ -11,7 +11,6 @@
 	// bundle correctly omits them.
 
 	import { navigating } from "$app/state";
-	import { autohideScroll } from "$lib/actions/autohideScroll";
 	import { cloudApi } from "$lib/api-cloud";
 	import GlobalFacetRow from "$lib/stats/GlobalFacetRow.svelte";
 	import {
@@ -74,10 +73,7 @@
 
 <div class="flex flex-1 overflow-hidden">
 	<main class="isolate flex flex-1 flex-col overflow-hidden">
-		<div
-			class="cloud-scroll flex-1 overflow-y-auto px-4 pb-8 pt-4"
-			use:autohideScroll
-		>
+		<div class="flex-1 overflow-y-auto px-4 pb-8 pt-4">
 			<div class="mx-auto max-w-screen-2xl">
 				<div class="mb-4 flex flex-wrap items-center justify-between gap-3">
 					<h1 class="text-2xl font-bold text-gray-200">Global Stats</h1>

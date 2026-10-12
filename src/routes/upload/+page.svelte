@@ -4,7 +4,6 @@
 	import { resolve } from "$app/paths";
 	import { page } from "$app/state";
 	import { cloudApi } from "$lib/api-cloud";
-	import { autohideScroll } from "$lib/actions/autohideScroll";
 	import Breadcrumb, { type Crumb } from "$lib/Breadcrumb.svelte";
 	import BulkUploadModal from "$lib/BulkUploadModal.svelte";
 	import HieroglyphParade from "$lib/HieroglyphParade.svelte";
@@ -63,7 +62,7 @@
 	});
 </script>
 
-<main class="cloud-scroll flex-1 overflow-y-auto px-4 py-8" use:autohideScroll>
+<main class="flex-1 overflow-y-auto px-4 py-8">
 	<div class="mx-auto max-w-xl">
 		<HieroglyphParade active={paradeActive} />
 		<div class="mb-8 mt-4">

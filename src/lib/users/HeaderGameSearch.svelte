@@ -10,7 +10,6 @@
 	import { goto } from "$app/navigation";
 	import { resolve } from "$app/paths";
 	import SearchInput from "$lib/SearchInput.svelte";
-	import { autohideScroll } from "$lib/actions/autohideScroll";
 	import {
 		cloudApi,
 		ApiError,
@@ -220,7 +219,7 @@
 				<!-- Fixed height; scroll (mousewheel) through the rest. Both groups
 				     share the one scroller so `last:border-b-0` lands on whichever
 				     row is genuinely last. -->
-				<div class="cloud-scroll max-h-80 overflow-y-auto" use:autohideScroll>
+				<div class="max-h-80 overflow-y-auto">
 					{#if people.length > 0}
 						<div
 							class="border-b border-black bg-surface-raised px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-tan opacity-70"

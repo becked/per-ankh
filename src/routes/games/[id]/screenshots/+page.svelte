@@ -6,7 +6,6 @@
 	// read, held in the shared state the camera in that header writes to
 	// (screenshots-context).
 	import type { PageData } from "./$types";
-	import { autohideScroll } from "$lib/actions/autohideScroll";
 	import GameHeader from "$lib/game-detail/GameHeader.svelte";
 	import { getGameScreenshots } from "$lib/game-detail/screenshots-context.svelte";
 	import ScreenshotGallery from "$lib/screenshots/ScreenshotGallery.svelte";
@@ -18,10 +17,7 @@
 
 <div class="flex flex-1 overflow-hidden">
 	<main class="isolate flex flex-1 flex-col overflow-hidden">
-		<div
-			class="cloud-scroll flex-1 overflow-y-auto px-4 pb-8 pt-4"
-			use:autohideScroll
-		>
+		<div class="flex-1 overflow-y-auto px-4 pb-8 pt-4">
 			<div class="mx-auto max-w-screen-2xl">
 				<GameHeader
 					{game}

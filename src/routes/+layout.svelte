@@ -8,6 +8,7 @@
 	import Toaster from "$lib/ui/Toaster.svelte";
 	import ConfirmDialogHost from "$lib/ui/ConfirmDialogHost.svelte";
 	import { PUBLIC_ORIGIN, type PageMeta } from "$lib/page-meta";
+	import { markScrolling } from "$lib/scroll-activity";
 	import type { LayoutData } from "./$types";
 
 	let { data, children }: { data: LayoutData; children: Snippet } = $props();
@@ -61,6 +62,13 @@
 	const ogImage = $derived(meta.image ?? `${PUBLIC_ORIGIN}/og-default.png`);
 	const ogUrl = $derived(`${PUBLIC_ORIGIN}${page.url.pathname}`);
 </script>
+
+<!--
+	Scrollbar activity for the whole app: capture-phase so this one handler sees
+	scrolls from every container (scroll doesn't bubble). The styling itself is
+	global — see the ::-webkit-scrollbar rules in src/app.css.
+-->
+<svelte:document onscrollcapture={markScrolling} />
 
 <svelte:head>
 	<title>{meta.title}</title>

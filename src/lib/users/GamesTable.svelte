@@ -11,7 +11,6 @@
 	import { page } from "$app/state";
 	import { resolve } from "$app/paths";
 	import { cloudApi, ApiError, type GameListItem } from "$lib/api-cloud";
-	import { autohideScroll } from "$lib/actions/autohideScroll";
 	import SearchInput from "$lib/SearchInput.svelte";
 	import DateFilter from "./DateFilter.svelte";
 	import Select from "$lib/ui/Select.svelte";
@@ -276,10 +275,7 @@
 
 	<!-- Center: the game cards (lighter surface-raised) read as distinct
        against the shared dark background. -->
-	<div
-		class="cloud-scroll max-h-[calc(100vh-220px)] overflow-y-auto lg:col-span-8"
-		use:autohideScroll
-	>
+	<div class="max-h-[calc(100vh-220px)] overflow-y-auto lg:col-span-8">
 		{#if accumulated.length === 0}
 			<div class="p-8 text-center text-sm text-tan opacity-60">
 				No games found

@@ -97,30 +97,41 @@ body {
 }
 
 /*
- * Cloud-route scroll containers: 8px tan scrollbar that only appears while
- * actively scrolling (data-scrolling="1" set by use:autohideScroll).
+ * Styled scrollbars, app-wide: a 5px tan bar on every scroll container, faint
+ * at rest and brightened while that container is scrolling
+ * (`data-scrolling="1"`, stamped by `markScrolling` in $lib/scroll-activity).
+ *
+ * Global rather than per-container: these rules used to hang off a
+ * `.cloud-scroll` class that had to be paired by hand with a Svelte action, and
+ * the containers nobody paired up — the tournament brackets, the game-detail
+ * table wrappers — showed a native bar instead (#192).
+ *
+ * The thumb stays visible at rest rather than fading out completely: on a
+ * horizontally scrolling container it is often the only cue that the content
+ * continues off-screen, where vertical overflow is cut off at the fold and
+ * shows for itself.
  *
  * Webkit pseudos only — setting the standard scrollbar-width/scrollbar-color
  * properties would make modern Chrome switch to the spec scrollbar
- * (scrollbar-width: thin = ~12px), ignoring the 8px we set here. Firefox
+ * (scrollbar-width: thin = ~12px), ignoring the 5px we set here. Firefox
  * users get default scrollbars; not worth the @supports gymnastics.
  */
-.cloud-scroll::-webkit-scrollbar {
+::-webkit-scrollbar {
 	width: 5px;
 	height: 5px;
 }
-.cloud-scroll::-webkit-scrollbar-track {
+::-webkit-scrollbar-track {
 	background: transparent;
 }
-.cloud-scroll::-webkit-scrollbar-thumb {
-	background-color: transparent;
+::-webkit-scrollbar-thumb {
+	background-color: rgb(var(--color-tan) / 0.2);
 	border-radius: 4px;
 	transition: background-color 200ms ease;
 }
-.cloud-scroll[data-scrolling="1"]::-webkit-scrollbar-thumb {
+[data-scrolling="1"]::-webkit-scrollbar-thumb {
 	background-color: rgb(var(--color-tan) / 0.55);
 }
-.cloud-scroll[data-scrolling="1"]::-webkit-scrollbar-thumb:hover {
+::-webkit-scrollbar-thumb:hover {
 	background-color: rgb(var(--color-tan) / 0.85);
 }
 

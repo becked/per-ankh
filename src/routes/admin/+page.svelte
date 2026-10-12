@@ -2,7 +2,6 @@
 	import { Tabs } from "bits-ui";
 	import { goto, invalidateAll } from "$app/navigation";
 	import { page } from "$app/state";
-	import { autohideScroll } from "$lib/actions/autohideScroll";
 	import {
 		cloudApi,
 		type AdminGameFilterParams,
@@ -165,7 +164,7 @@
 	const isFiltered = $derived(sectionFromFilter(data.filter) !== "all");
 </script>
 
-<main class="cloud-scroll flex-1 overflow-y-auto px-4 py-8" use:autohideScroll>
+<main class="flex-1 overflow-y-auto px-4 py-8">
 	<div class="mx-auto max-w-xl">
 		<Tabs.Root bind:value={activeTab}>
 			<Tabs.List

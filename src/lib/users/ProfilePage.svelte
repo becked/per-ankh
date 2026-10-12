@@ -13,7 +13,6 @@
 	import { goto } from "$app/navigation";
 	import { resolve } from "$app/paths";
 	import { page } from "$app/state";
-	import { autohideScroll } from "$lib/actions/autohideScroll";
 	import { cloudApi } from "$lib/api-cloud";
 	import Breadcrumb, { type Crumb } from "$lib/Breadcrumb.svelte";
 	import { syncMyFeatured } from "$lib/featured-videos.svelte";
@@ -129,10 +128,7 @@
 
 <div class="flex flex-1 overflow-hidden">
 	<main class="isolate flex flex-1 flex-col overflow-hidden">
-		<div
-			class="cloud-scroll profile-scroll flex-1 overflow-y-auto px-4 pb-8 pt-4"
-			use:autohideScroll
-		>
+		<div class="profile-scroll flex-1 overflow-y-auto px-4 pb-8 pt-4">
 			<div class="mx-auto max-w-screen-2xl">
 				<!--
 					Profile card: identity (left) + all-time stat boxes (right),

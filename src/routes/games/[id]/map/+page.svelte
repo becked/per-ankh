@@ -3,7 +3,6 @@
 	import { BitsConfig } from "bits-ui";
 	import type { PageData } from "./$types";
 	import type { MapTile } from "$lib/types/MapTile";
-	import { autohideScroll } from "$lib/actions/autohideScroll";
 	import FullscreenDialog from "$lib/ui/FullscreenDialog.svelte";
 	import Popover from "$lib/ui/Popover.svelte";
 	import CityPopover from "$lib/game-detail/CityPopover.svelte";
@@ -256,10 +255,7 @@
 			</div>
 			<!-- Scrolls as the analyst view's page does, so the tabs' sticky
 			     headers and toolbars sit where they do there. -->
-			<div
-				class="cloud-scroll min-h-0 flex-1 overflow-y-auto px-4 pb-8 pt-4"
-				use:autohideScroll
-			>
+			<div class="min-h-0 flex-1 overflow-y-auto px-4 pb-8 pt-4">
 				{#if lightboxTab && lightboxDialog}
 					<!-- The tabs' selects and tooltips portal to body by default,
 					     which the modal dialog makes inert. -->
