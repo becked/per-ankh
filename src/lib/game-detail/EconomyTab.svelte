@@ -23,15 +23,17 @@
 		YieldPriceEntry,
 	} from "$lib/parser/types";
 	import { IMPROVEMENT_BUILDS } from "$lib/generated/improvement-builds";
-	import { CHART_THEME } from "$lib/config";
-	import Chart from "$lib/Chart.svelte";
-	import ChartContainer from "$lib/ChartContainer.svelte";
-	import { formatEnum, nationName } from "$lib/utils/formatting";
-	import EventRail, {
+	import {
+		CHART_THEME,
 		TOOLTIP_BORDER,
 		TOOLTIP_MUTED,
 		TOOLTIP_SURFACE,
 		TOOLTIP_TEXT,
+	} from "$lib/config";
+	import Chart from "$lib/Chart.svelte";
+	import ChartContainer from "$lib/ChartContainer.svelte";
+	import { formatEnum, nationName } from "$lib/utils/formatting";
+	import EventRail, {
 		type RailGroup,
 		type RailMarker,
 	} from "./EventRail.svelte";

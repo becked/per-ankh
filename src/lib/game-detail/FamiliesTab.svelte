@@ -16,15 +16,16 @@
 		UnitInfo,
 	} from "$lib/parser/types";
 	import { FAMILY_OPINION_BANDS } from "$lib/generated/family-opinion";
-	import { CHART_THEME, getFamilyChartColor } from "$lib/config";
-	import ChartContainer from "$lib/ChartContainer.svelte";
-	import { formatEnum } from "$lib/utils/formatting";
 	import {
+		CHART_THEME,
 		TOOLTIP_BORDER,
 		TOOLTIP_MUTED,
 		TOOLTIP_SURFACE,
 		TOOLTIP_TEXT,
-	} from "./EventRail.svelte";
+		getFamilyChartColor,
+	} from "$lib/config";
+	import ChartContainer from "$lib/ChartContainer.svelte";
+	import { formatEnum } from "$lib/utils/formatting";
 	import { playerEconomies } from "./economy";
 	import { familyOpinionSeries, opinionBandTallies } from "./families";
 	import {
