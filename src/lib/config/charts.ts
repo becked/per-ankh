@@ -163,7 +163,8 @@ export const CHART_REFERENCE_LINE_COLOR = "#6b6459";
 export const CHART_ACCENT_COLOR = "#FFA500";
 
 /**
- * Shades for the two hover surfaces a chart tab draws: the ECharts tooltip and
+ * Shades for the two hover surfaces a chart tab draws: the ECharts tooltip —
+ * styled for every chart at once by the `perankh` theme in Chart.svelte — and
  * the rich marker tips a tab builds as HTML for its EventRail. They share one
  * surface because they sit a few pixels apart — a tip hanging below the plot
  * whose tooltip is above it.

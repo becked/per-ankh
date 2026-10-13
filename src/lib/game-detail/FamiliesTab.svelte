@@ -18,9 +18,7 @@
 	import { FAMILY_OPINION_BANDS } from "$lib/generated/family-opinion";
 	import {
 		CHART_THEME,
-		TOOLTIP_BORDER,
 		TOOLTIP_MUTED,
-		TOOLTIP_SURFACE,
 		TOOLTIP_TEXT,
 		getFamilyChartColor,
 	} from "$lib/config";
@@ -169,12 +167,6 @@
 				bottom: 0,
 				textStyle: { color: "#FFFFFF", fontSize: 11 },
 			},
-			tooltip: {
-				trigger: "axis",
-				backgroundColor: TOOLTIP_SURFACE,
-				borderColor: TOOLTIP_BORDER,
-				textStyle: { color: TOOLTIP_TEXT },
-			},
 			grid: { left: 56, right: 32, top: 48, bottom: 64 },
 			xAxis: {
 				type: "value",
@@ -291,9 +283,6 @@
 			tooltip: {
 				trigger: "axis",
 				axisPointer: { type: "shadow" },
-				backgroundColor: TOOLTIP_SURFACE,
-				borderColor: TOOLTIP_BORDER,
-				textStyle: { color: TOOLTIP_TEXT },
 				formatter: (params: unknown) => {
 					const arr = params as { dataIndex: number }[];
 					const row = ordered[arr[0]?.dataIndex ?? 0];
