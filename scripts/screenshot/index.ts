@@ -37,7 +37,7 @@ import { cfAccessHeaders } from "../lib/cf-access";
 import { flagString, parseFlags } from "../lib/cli";
 import { readDotVars } from "../lib/dotvars";
 import { info, ok, warn } from "../lib/format";
-import { DEFAULT_BASE_URL, captureOs } from "./capture";
+import { DEFAULT_BASE_URL, capture } from "./capture";
 import { renderComparisonHtml, sortSources, type OsSource } from "./render";
 import type { OsManifest } from "./types";
 
@@ -77,7 +77,7 @@ function printHelp(): void {
 			"capture  One signed-out pass over a fixed three-page list (home, the",
 			"         community tournament, a public profile) at two viewports,",
 			"         writing DIR/shots/*.jpg and DIR/manifest.json. This is what",
-			"         the OS screenshots workflow runs on each runner; trigger that",
+			"         the Screenshots workflow runs on each runner; trigger that",
 			"         from the Actions tab or `gh workflow run screenshot.yml`.",
 			"",
 			"compare  Render one side-by-side page from a finished run's artifacts:",
@@ -135,7 +135,7 @@ async function cmdCapture(flags: Record<string, string | true>): Promise<void> {
 	}
 
 	info(`Capturing ${baseUrl} as "${os}" → ${outDir}/`);
-	const manifest = await captureOs({ baseUrl, outDir, os, accessHeaders });
+	const manifest = await capture({ baseUrl, outDir, os, accessHeaders });
 
 	const captured = manifest.shots.filter((s) => s.file).length;
 	const failed = manifest.shots.length - captured;

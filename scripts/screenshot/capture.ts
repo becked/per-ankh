@@ -1,7 +1,7 @@
 // Per-runner capture for `./per-ankh screenshot capture`: one signed-out pass
 // over a fixed page list at two viewports, writing `<out>/shots/*.jpg` and
-// `<out>/manifest.json`. The OS screenshots workflow runs this once per
-// runner and uploads the directory as that OS's artifact.
+// `<out>/manifest.json`. The Screenshots workflow runs this once per runner
+// and uploads the directory as that OS's artifact.
 //
 // Why a fixed page list rather than ux-review's discovery: everything that
 // picks ux-review's subjects is a `wrangler --local` D1 query plus a session
@@ -18,7 +18,7 @@ import path from "node:path";
 import { getEnv } from "../lib/environments";
 import { info } from "../lib/format";
 import { settle, shoot } from "../lib/page-capture";
-import type { Breakpoint, OsManifest, OsPage, OsShot } from "./types";
+import type { Breakpoint, OsManifest, OsShot, PageSpec } from "./types";
 
 export const DEFAULT_BASE_URL = getEnv("staging").frontendOrigin;
 
@@ -36,7 +36,7 @@ export const DEFAULT_BASE_URL = getEnv("staging").frontendOrigin;
 // row — which is the one thing the grid can't survive. The cost is that the
 // id has to exist in whatever origin is captured, and `capturePage` says so
 // on a 404.
-const PAGES: OsPage[] = [
+const PAGES: PageSpec[] = [
 	{ id: "home", title: "Home", route: "/" },
 	{
 		id: "tournament",
@@ -80,7 +80,7 @@ async function capturePage(
 	page: Page,
 	baseUrl: string,
 	bp: Breakpoint,
-	spec: OsPage,
+	spec: PageSpec,
 ): Promise<{ shot: OsShot; buf?: Buffer }> {
 	const base: OsShot = { pageId: spec.id, bpId: bp.id };
 	const resp = await page.goto(`${baseUrl}${spec.route}`, {
@@ -138,7 +138,7 @@ async function capturePage(
 }
 
 // Walk every breakpoint × page, write the shots, return the manifest.
-export async function captureOs(opts: CaptureOpts): Promise<OsManifest> {
+export async function capture(opts: CaptureOpts): Promise<OsManifest> {
 	const { baseUrl, outDir, os, accessHeaders } = opts;
 	const shotsDir = path.join(outDir, "shots");
 	// Clear `shots/` rather than the whole of `outDir`: a stale JPEG from a

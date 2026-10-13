@@ -1,4 +1,4 @@
-name: OS screenshots
+name: Screenshots
 
 # Manual only, deliberately. The point of the matrix is to be looked at, and
 # nothing in a commit changes how the *deployed* app renders — so there is no

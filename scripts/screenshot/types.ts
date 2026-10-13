@@ -7,7 +7,7 @@ import type { Breakpoint } from "../lib/page-capture";
 export type { Breakpoint };
 
 // One surface the matrix is captured at. The list is fixed in capture.ts.
-export interface OsPage {
+export interface PageSpec {
 	id: string;
 	title: string;
 	route: string;
@@ -34,7 +34,7 @@ export interface OsManifest {
 	os: string;
 	generatedAt: string;
 	baseUrl: string;
-	pages: OsPage[];
+	pages: PageSpec[];
 	breakpoints: Breakpoint[];
 	shots: OsShot[];
 }
