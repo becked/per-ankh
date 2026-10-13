@@ -1,9 +1,10 @@
 // `./per-ankh screenshot` — see the app as each desktop OS renders it.
 //
-// Split in two because the two halves run in different places. `capture`
-// runs on a CI runner (one per OS, see .github/workflows/screenshot.yml) and
-// knows nothing but a base URL; `compare` runs here, over the artifacts that
-// run produced, and is the half you actually look at.
+// Split by where each half runs. `capture` runs on a CI runner (one per OS,
+// see .github/workflows/screenshot.yml) and knows nothing but a base URL;
+// `compare` runs here, over the artifacts a finished run produced, and is the
+// half you actually look at. `run` is the operator's command and drives both
+// ends: it starts the workflow, waits, and finishes in `compare`.
 //
 // What the matrix is for. Not advance widths any more: the UI face is now
 // shipped rather than borrowed (the `Inter Variable` @font-face in
@@ -29,7 +30,6 @@
 // — the widths that scaling actually produces — is covered. §4 needs a
 // capture this one isn't.
 
-import { readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -38,8 +38,8 @@ import { flagString, parseFlags } from "../lib/cli";
 import { readDotVars } from "../lib/dotvars";
 import { info, ok, warn } from "../lib/format";
 import { DEFAULT_BASE_URL, capture } from "./capture";
-import { renderComparisonHtml, sortSources, type OsSource } from "./render";
-import type { OsManifest } from "./types";
+import { writeComparison } from "./compare";
+import { run } from "./run";
 
 const DEFAULT_OUT_DIR = "screenshot";
 
@@ -52,9 +52,10 @@ const REPO_ROOT = path.resolve(
 
 // Per subcommand, so `compare DIR --os Linux` doesn't quietly accept a
 // capture-only flag.
+const RUN_FLAGS = new Set(["base-url", "out", "help"]);
 const CAPTURE_FLAGS = new Set(["base-url", "out", "os", "help"]);
 const COMPARE_FLAGS = new Set(["out", "help"]);
-const ANY_FLAG = new Set([...CAPTURE_FLAGS, ...COMPARE_FLAGS]);
+const ANY_FLAG = new Set([...RUN_FLAGS, ...CAPTURE_FLAGS, ...COMPARE_FLAGS]);
 
 function checkFlags(
 	flags: Record<string, string | true>,
@@ -71,16 +72,24 @@ function printHelp(): void {
 			"per-ankh screenshot — capture the app on each OS and compare the results",
 			"",
 			"Usage:",
+			"  ./per-ankh screenshot run [--base-url URL] [--out DIR]",
 			"  ./per-ankh screenshot capture [--base-url URL] [--out DIR] [--os LABEL]",
 			"  ./per-ankh screenshot compare DIR [--out FILE]",
 			"",
+			"run      The whole pass, and the only one of the three to run by hand:",
+			"         starts the Screenshots workflow on origin, waits for the",
+			"         Linux/Windows/macOS runners, downloads their artifacts into",
+			"         DIR/<run-id>/ and writes the comparison page beside them.",
+			"         Needs `gh`, authenticated against the repo.",
+			"",
 			"capture  One signed-out pass over a fixed three-page list (home, the",
 			"         community tournament, a public profile) at two viewports,",
-			"         writing DIR/shots/*.jpg and DIR/manifest.json. This is what",
-			"         the Screenshots workflow runs on each runner; trigger that",
-			"         from the Actions tab or `gh workflow run screenshot.yml`.",
+			"         writing DIR/shots/*.jpg and DIR/manifest.json. This is the",
+			"         runners' half — the workflow calls it once per OS, and `run`",
+			"         is how you start that.",
 			"",
-			"compare  Render one side-by-side page from a finished run's artifacts:",
+			"compare  Render one side-by-side page from a finished run's artifacts —",
+			"         what `run` ends by doing, over a directory you already have:",
 			"",
 			"           gh run download <run-id> -D /tmp/screenshot",
 			"           ./per-ankh screenshot compare /tmp/screenshot",
@@ -96,11 +105,11 @@ function printHelp(): void {
 			"filing a screenshot of the gate.",
 			"",
 			"Flags:",
-			"  --base-url URL  capture: origin to capture",
+			"  --base-url URL  run, capture: origin to capture",
 			"                  (default: " + DEFAULT_BASE_URL + ")",
-			"  --out DIR       capture: output directory (default: " +
-				DEFAULT_OUT_DIR +
-				")",
+			"  --out DIR       run: parent directory for the downloaded run",
+			"                  capture: output directory",
+			"                  (default: " + DEFAULT_OUT_DIR + ")",
 			"  --out FILE      compare: output HTML (default: DIR/index.html)",
 			"  --os LABEL      capture: name this run's column",
 			"                  (default: $RUNNER_OS, else the host platform)",
@@ -153,46 +162,8 @@ async function cmdCompare(
 	flags: Record<string, string | true>,
 ): Promise<void> {
 	const outFile = flagString(flags, "out") ?? path.join(dir, "index.html");
-	// Every `<img src>` is `<column>/shots/…`, resolved by the browser against
-	// the HTML's own location — so a column's prefix is its artifact directory
-	// relative to wherever `--out` lands, not to `dir`. Joined with forward
-	// slashes because it ends up in a URL, not in a filesystem call.
-	const columnPath = (name: string): string =>
-		path
-			.relative(path.dirname(outFile), path.join(dir, name))
-			.split(path.sep)
-			.join("/");
-
-	const entries = await readdir(dir, { withFileTypes: true });
-	const sources: OsSource[] = [];
-	for (const e of entries) {
-		if (!e.isDirectory()) continue;
-		const manifestPath = path.join(dir, e.name, "manifest.json");
-		let raw: string;
-		try {
-			raw = await readFile(manifestPath, "utf8");
-		} catch {
-			continue;
-		}
-		sources.push({
-			dir: columnPath(e.name),
-			manifest: JSON.parse(raw) as OsManifest,
-		});
-	}
-	if (sources.length === 0) {
-		throw new Error(
-			`No manifest.json in any subdirectory of ${dir}.\n` +
-				`  \`gh run download <run-id> -D ${dir}\` writes one directory per artifact.`,
-		);
-	}
-
-	await writeFile(outFile, renderComparisonHtml(sources));
-	ok(
-		`Wrote ${outFile} — ${sources.length} columns ` +
-			`(${sortSources(sources)
-				.map((s) => s.manifest.os)
-				.join(", ")}).`,
-	);
+	const columns = await writeComparison(dir, outFile);
+	ok(`Wrote ${outFile} — ${columns.length} columns (${columns.join(", ")}).`);
 }
 
 export async function main(argv: string[]): Promise<void> {
@@ -213,6 +184,16 @@ export async function main(argv: string[]): Promise<void> {
 	}
 
 	switch (sub) {
+		case "run":
+			if (positional.length > 1) {
+				throw new Error(`Unexpected argument: ${positional[1]}`);
+			}
+			checkFlags(flags, RUN_FLAGS);
+			await run({
+				baseUrl: flagString(flags, "base-url"),
+				outDir: flagString(flags, "out") ?? DEFAULT_OUT_DIR,
+			});
+			return;
 		case "capture":
 			if (positional.length > 1) {
 				throw new Error(`Unexpected argument: ${positional[1]}`);
