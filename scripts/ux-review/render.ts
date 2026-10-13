@@ -1,14 +1,11 @@
 // Bundle emission: the human/agent README and the single-pane HTML viewer.
 // Both read the same {meta, screens} the manifest is built from.
 
-import type { ReviewMeta, Screen } from "./types";
+import { escapeHtml } from "$lib/utils/formatting";
 
-function escapeHtml(s: string): string {
-	return String(s).replace(
-		/[&<>"]/g,
-		(c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] ?? c,
-	);
-}
+import { LIGHTBOX_CSS, LIGHTBOX_HTML, LIGHTBOX_JS } from "../lib/shot-lightbox";
+
+import type { ReviewMeta, Screen } from "./types";
 
 const PASS_LABELS = {
 	anon: "Anonymous (signed out)",
@@ -159,12 +156,7 @@ export function renderIndexHtml({ meta, screens }: Bundle): string {
 		background: #2a1714; }
 	#stage pre.redir { font-size: .82rem; color: #b9ad97; padding: .75rem; margin: 0;
 		border: 1px solid #4a423a; border-radius: 6px; background: #221e1a; white-space: pre-wrap; }
-	#lightbox { position: fixed; inset: 0; background: rgba(0,0,0,.92); display: none;
-		overflow: auto; cursor: zoom-out; z-index: 10; }
-	#lightbox.open { display: block; }
-	#lightbox img { display: block; margin: 0 auto; }
-	#lightbox img.fit { max-width: 100%; max-height: 100vh; cursor: zoom-in; }
-	#lightbox img.full { max-width: none; cursor: zoom-out; }
+${LIGHTBOX_CSS}
 </style>
 </head>
 <body>
@@ -182,7 +174,7 @@ export function renderIndexHtml({ meta, screens }: Bundle): string {
 	<div id="bps"></div>
 	<div id="stage"></div>
 </main>
-<div id="lightbox"><img alt="" /></div>
+${LIGHTBOX_HTML}
 <script>
 const DATA = ${data};
 const PASS_LABEL = {
@@ -273,18 +265,8 @@ function select(id) {
 	render();
 }
 
-function openLightbox(src) {
-	const lb = document.getElementById("lightbox");
-	const img = lb.querySelector("img");
-	img.src = src; img.className = "fit";
-	lb.classList.add("open");
-}
-document.getElementById("lightbox").onclick = (e) => {
-	if (e.target.tagName === "IMG") { e.target.classList.toggle("fit"); e.target.classList.toggle("full"); }
-	else document.getElementById("lightbox").classList.remove("open");
-};
+${LIGHTBOX_JS}
 document.addEventListener("keydown", (e) => {
-	if (e.key === "Escape") document.getElementById("lightbox").classList.remove("open");
 	if (e.key === "ArrowDown" || e.key === "ArrowUp") {
 		const i = order.indexOf(curId);
 		const ni = e.key === "ArrowDown" ? Math.min(order.length - 1, i + 1) : Math.max(0, i - 1);

@@ -11,6 +11,7 @@ import { prodMain, stagingMain } from "./prod/index";
 import { main as backupMain } from "./backup";
 import { main as restoreMain } from "./restore";
 import { main as uxReviewMain } from "./ux-review/index";
+import { main as screenshotMain } from "./screenshot/index";
 
 // scripts/per-ankh.ts → repo root is one level up.
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -186,14 +187,15 @@ function printHelp(): void {
 			"  ./per-ankh <command>",
 			"",
 			"Commands:",
-			"  dev               Run Worker (:8787) + SvelteKit (:1420) locally, foreground.",
-			"  ux-review [flags] Capture the UX-review bundle into docs/ux-review/ (see `./per-ankh ux-review --help`).",
-			"  admin <sub>...    Cloud admin & monitoring (see `./per-ankh admin --help`).",
-			"  prod <sub>...     Production deploy & preflight (see `./per-ankh prod --help`).",
-			"  staging <sub>...  Staging deploy & preflight (see `./per-ankh staging --help`).",
-			"  backup [--local]  Snapshot D1 to a .sql + .sqlite file (see `./per-ankh backup --help`).",
-			"  restore --local   Load a D1 backup into local .wrangler state (see `./per-ankh restore --help`).",
-			"  --help,-h         Show this help.",
+			"  dev                 Run Worker (:8787) + SvelteKit (:1420) locally, foreground.",
+			"  ux-review [flags]   Capture the UX-review bundle into docs/ux-review/ (see `./per-ankh ux-review --help`).",
+			"  screenshot <sub>... Capture/compare the app across operating systems (see `./per-ankh screenshot --help`).",
+			"  admin <sub>...      Cloud admin & monitoring (see `./per-ankh admin --help`).",
+			"  prod <sub>...       Production deploy & preflight (see `./per-ankh prod --help`).",
+			"  staging <sub>...    Staging deploy & preflight (see `./per-ankh staging --help`).",
+			"  backup [--local]    Snapshot D1 to a .sql + .sqlite file (see `./per-ankh backup --help`).",
+			"  restore --local     Load a D1 backup into local .wrangler state (see `./per-ankh restore --help`).",
+			"  --help,-h           Show this help.",
 			"",
 			"Preconditions for `dev`:",
 			"  - npm install run in repo root and cloud/",
@@ -213,6 +215,9 @@ async function main(): Promise<void> {
 			return;
 		case "ux-review":
 			await uxReviewMain(process.argv.slice(3));
+			return;
+		case "screenshot":
+			await screenshotMain(process.argv.slice(3));
 			return;
 		case "admin":
 			await adminMain(process.argv.slice(3));

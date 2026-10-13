@@ -5,6 +5,7 @@
 
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
+import { cfAccessHeaders } from "../../lib/cf-access";
 import { readDotVars } from "../../lib/dotvars";
 import type { CloudEnv } from "../../lib/environments";
 
@@ -40,14 +41,7 @@ export interface SmokeResult {
 // probe, from the gitignored .staging.vars at the repo root. Returns null
 // when absent — the probe then degrades to asserting the Access redirect.
 function stagingAccessHeaders(): Record<string, string> | null {
-	const vars = readDotVars(resolve(REPO_ROOT, ".staging.vars"));
-	const id = vars["CF_ACCESS_CLIENT_ID"];
-	const secret = vars["CF_ACCESS_CLIENT_SECRET"];
-	if (!id || !secret) return null;
-	return {
-		"CF-Access-Client-Id": id,
-		"CF-Access-Client-Secret": secret,
-	};
+	return cfAccessHeaders(readDotVars(resolve(REPO_ROOT, ".staging.vars")));
 }
 
 export function probesFor(env: CloudEnv): SmokeProbe[] {
