@@ -607,6 +607,25 @@ Several elements track turn-by-turn history (typically one entry per turn):
 </AI>
 ```
 
+**LastSeenUnits** - remembered unit sightings. An AI-state element under `<Player><AI>` or `<Tribe><AI>` — **never** a `<Tile>` child.
+
+```xml
+<Player ID="0">
+  <AI>
+    <LastSeenUnits>
+      <Unit TileID="773">14</Unit>
+      <Unit TileID="678">57</Unit>
+    </LastSeenUnits>
+  </AI>
+</Player>
+```
+
+Each child is a reference, not a unit definition: the `TileID` attribute is where the unit was last seen, and the element text is that unit's `ID`. Nothing else is written — no `Type`, no `Player`, no turn. `PlayerAI.writeGameXML` (`PlayerAI.cs:1308`) emits the block from `mdLastSeenUnits`, which `PlayerAI.setLastSeenUnit` (`PlayerAI.cs:4083`) keys by unit id with the tile id as the value.
+
+Because no turn is recorded, this is end-of-game remembered state rather than a position history, and it is not a second source of unit positions — the current ones live in `<Tile>/<Unit>`.
+
+Measured 2026-10-13 across all 13 saves in `test-data/saves`: 38 `<LastSeenUnits>` blocks in 12 of the 13 (absent only from the turn-1 hotseat), 3–151 entries each; 33 under `<Player><AI>`, 5 under `<Tribe><AI>`, none under `<Tile>`. Every child is a `<Unit>` whose only attribute is `TileID`.
+
 #### UI and Player Interaction
 
 **PlayerOptions** - UI and gameplay preferences:
@@ -1162,9 +1181,7 @@ trio instead).
 
 ### Tile Structure
 
-Tile elements have **no attributes** and variable children based on tile
-contents — empty terrain, improvements, units, resources, ownership
-history, last-seen state, etc.
+Tile elements have **no attributes** and variable children based on tile contents — empty terrain, improvements, units, resources, ownership history, etc.
 
 ### Notable children
 
@@ -1173,9 +1190,6 @@ history, last-seen state, etc.
 - **`<Unit>`** — zero or more unit instances actually on this tile. Full
   schema in _Format Quirks → Individual units live inside `<Tile>`_ below
   and in the canonical parser at `src/lib/parser/parsers/units.ts`.
-- **`<LastSeenUnits>`** — fog-of-war snapshots of opposing units. Same
-  shape as the top-level `<Unit>` block but represents a remembered
-  state, not the current state.
 - **Improvements / specialists** — when present, attached directly to the
   Tile element (one tile holds at most one improvement and one
   specialist). Improvement metadata: `improvement`, `improvement_pillaged`,
@@ -1624,9 +1638,10 @@ save). The `<Unit>` element carries:
 ```
 
 Optional fields are version- and unit-type-conditional (`Level` / `XP` for
-combat units, `Gender` for workers, etc.). A parallel set of `<Unit>`
-elements lives inside `<LastSeenUnits>` and represents fog-of-war snapshots
-of opposing units; treat those as a separate data stream.
+combat units, `Gender` for workers, etc.). The `<Unit>` elements inside
+`<LastSeenUnits>` share only the tag name — they are tile-id/unit-id
+references in AI state, not instances of this schema. See
+[AI Data](#ai-data).
 
 Aggregate counts (`<UnitsProduced>` at the Player level,
 `<UnitProductionCounts>` at the City level) are **also** present — they're
