@@ -8,6 +8,8 @@
 
 import { escapeHtml } from "$lib/utils/formatting";
 
+import { LIGHTBOX_CSS, LIGHTBOX_HTML, LIGHTBOX_JS } from "../lib/shot-lightbox";
+
 import type { OsManifest } from "./types";
 
 // One downloaded artifact: `dir` is its path relative to the rendered file,
@@ -77,12 +79,7 @@ export function renderComparisonHtml(sources: OsSource[]): string {
 		border-radius: 6px; background: #000; cursor: zoom-in; }
 	.cell .err { color: #ffb4a8; font-size: .8rem; padding: .75rem; border: 1px solid #5a2b25;
 		border-radius: 6px; background: #2a1714; }
-	#lightbox { position: fixed; inset: 0; background: rgba(0,0,0,.92); display: none;
-		overflow: auto; cursor: zoom-out; z-index: 10; }
-	#lightbox.open { display: block; }
-	#lightbox img { display: block; margin: 0 auto; }
-	#lightbox img.fit { max-width: 100%; max-height: 100vh; cursor: zoom-in; }
-	#lightbox img.full { max-width: none; cursor: zoom-out; }
+${LIGHTBOX_CSS}
 </style>
 </head>
 <body>
@@ -101,7 +98,7 @@ export function renderComparisonHtml(sources: OsSource[]): string {
 </div>
 <div id="bps"></div>
 <div id="grid"></div>
-<div id="lightbox"><img alt="" /></div>
+${LIGHTBOX_HTML}
 <script>
 const DATA = ${data};
 let curBp = DATA.breakpoints[0].id;
@@ -170,19 +167,7 @@ function render() {
 	}
 }
 
-function openLightbox(src) {
-	const lb = document.getElementById("lightbox");
-	const img = lb.querySelector("img");
-	img.src = src; img.className = "fit";
-	lb.classList.add("open");
-}
-document.getElementById("lightbox").onclick = (e) => {
-	if (e.target.tagName === "IMG") { e.target.classList.toggle("fit"); e.target.classList.toggle("full"); }
-	else document.getElementById("lightbox").classList.remove("open");
-};
-document.addEventListener("keydown", (e) => {
-	if (e.key === "Escape") document.getElementById("lightbox").classList.remove("open");
-});
+${LIGHTBOX_JS}
 
 buildBps(); render();
 </script>
