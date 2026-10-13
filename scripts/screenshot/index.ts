@@ -5,13 +5,29 @@
 // knows nothing but a base URL; `compare` runs here, over the artifacts that
 // run produced, and is the half you actually look at.
 //
-// What the matrix is for: the body font stack in src/app.css is a system
-// stack, so the face it resolves to differs per OS — SF Pro, Segoe UI, or
-// whatever fontconfig gives `sans-serif` — and so do the text metrics that
-// decide wrapping, truncation and column widths. Scrollbars differ too: the
-// `cloud-scroll` rule is WebKit-pseudo-only by choice (src/app.css), so a
-// gutter that costs nothing on macOS costs width elsewhere. Neither is
-// visible from one developer machine.
+// What the matrix is for. Not advance widths any more: the UI face is now
+// shipped rather than borrowed (the `Inter Variable` @font-face in
+// src/app.css), which closed #295 §1 and §6, and the scrollbar rules are
+// app-wide (the bare `::-webkit-scrollbar` block there), which closed #192.
+// What is left of #295 is the part a screenshot is the only instrument for:
+// §2, the same glyphs rasterized differently — DirectWrite/ClearType draws
+// light-on-dark text thinner and tints glyph edges, which reads as a colour
+// problem though no colour changed; §3, no `color-scheme` anywhere in src/,
+// so everything the browser paints itself stays in light mode; and §5, the
+// two `ui-monospace` stacks in SwissFlowBracket that fall through to Courier
+// New on Windows — on the tournament page this list captures.
+//
+// Why a runner per OS instead of extending ux-review: ux-review runs
+// headless Chromium on Linux, where every family in the fallback stack
+// misses and fontconfig answers `sans-serif`, so its shots show a third
+// typography matching neither platform (#295, "Why nothing caught this").
+// Running the pass on the real runners is what this adds.
+//
+// Still outside what it can see, both from that same section of #295: this
+// captures at deviceScaleFactor 1, so the half-pixel artifacts of Windows'
+// 1.25/1.5 scaling don't appear, and at 1440/390, so neither 1536 nor 1280
+// — the widths that scaling actually produces — is covered. §4 needs a
+// capture this one isn't.
 
 import { readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";

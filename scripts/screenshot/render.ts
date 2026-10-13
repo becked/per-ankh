@@ -97,9 +97,9 @@ export function renderComparisonHtml(sources: OsSource[]): string {
 				`${escapeHtml(s.manifest.os)} ${escapeHtml(s.manifest.generatedAt)}`,
 		)
 		.join(" · ")}
-	<br />Click a shot for full size. The system font stack in
-	<code>src/app.css</code> resolves to a different face per OS, so compare
-	text metrics first: wrapping, truncation, column drift.
+	<br />Click a shot for full size. The UI face is shipped, so what differs
+	per OS is rasterization and the chrome the platform paints itself —
+	issue #295.
 </div>
 <div id="bps"></div>
 <div id="grid"></div>

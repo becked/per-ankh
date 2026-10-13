@@ -43,11 +43,15 @@ const PAGES: OsPage[] = [
 ];
 
 // Desktop and mobile at ux-review's own dimensions, so a shot here reads
-// against the bundle in docs/ux-review. Its middle (tablet, 768) breakpoint
-// is dropped: what differs between these runners is which face the system
-// font stack in src/app.css resolves to, and the metrics that follow bite
-// hardest at the narrow end — a third width mostly repeats whichever of the
-// two it sits between.
+// against the bundle in docs/ux-review; its middle (tablet, 768) width is
+// dropped because it mostly repeats whichever of the two it sits between.
+//
+// These are deliberately the same two widths, not the right ones for every
+// question: #295 §4 wants 1536 and 1280 — 1920 over Windows' 1.25 and 1.5
+// scaling, where a Windows user lands exactly on Tailwind's `2xl` and `xl`
+// edges — and neither this list nor ux-review's covers them. Matching the
+// bundle is what makes the two comparable; a scaling row is a second
+// capture, at a deviceScaleFactor this one doesn't vary either.
 const BREAKPOINTS: Breakpoint[] = [
 	{ id: "desktop", label: "Desktop", width: 1440, height: 900 },
 	{ id: "mobile", label: "Mobile", width: 390, height: 844 },
