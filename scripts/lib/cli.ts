@@ -49,12 +49,17 @@ export function flagInt(
 	return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
+// An empty value reads as absent, so a `?? fallback` at the call site fires
+// for `--flag ""` the way it does for an omitted flag. That shape arrives from
+// CI, not from a typo: `gh workflow run ... -f base-url=` passes the input
+// through as an empty string, and every caller here either falls back or
+// treats the flag as an optional filter — none of them wants "".
 export function flagString(
 	flags: Record<string, string | true>,
 	name: string,
 ): string | undefined {
 	const v = flags[name];
-	return typeof v === "string" ? v : undefined;
+	return typeof v === "string" && v !== "" ? v : undefined;
 }
 
 export function printJson(data: unknown): void {

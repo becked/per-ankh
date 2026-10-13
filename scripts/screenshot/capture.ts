@@ -15,11 +15,12 @@ import type { Page } from "playwright";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+import { getEnv } from "../lib/environments";
 import { info } from "../lib/format";
 import { settle, shoot } from "../lib/page-capture";
 import type { Breakpoint, OsManifest, OsPage, OsShot } from "./types";
 
-export const DEFAULT_BASE_URL = "https://staging.per-ankh.app";
+export const DEFAULT_BASE_URL = getEnv("staging").frontendOrigin;
 
 // The three surfaces this matrix exists to compare.
 //
@@ -28,6 +29,13 @@ export const DEFAULT_BASE_URL = "https://staging.per-ankh.app";
 // different person, while `/users/<user_id>` is the permalink that never
 // moves (docs/api-reference.md, "Profile slugs"). The permalink costs one
 // 307 to the slug route, which `capturePage` records instead of failing on.
+//
+// A fixed id rather than one discovered per run (`GET /v1/stats/players`
+// would answer): every leg resolves its own subjects, so a board that moved
+// between two legs would put a different person in two columns of the same
+// row — which is the one thing the grid can't survive. The cost is that the
+// id has to exist in whatever origin is captured, and `capturePage` says so
+// on a 404.
 const PAGES: OsPage[] = [
 	{ id: "home", title: "Home", route: "/" },
 	{
@@ -75,7 +83,6 @@ async function capturePage(
 	spec: OsPage,
 ): Promise<{ shot: OsShot; buf?: Buffer }> {
 	const base: OsShot = { pageId: spec.id, bpId: bp.id };
-	const expectedPath = spec.route.split("?")[0];
 	const resp = await page.goto(`${baseUrl}${spec.route}`, {
 		waitUntil: "load",
 	});
@@ -83,7 +90,12 @@ async function capturePage(
 		return {
 			shot: {
 				...base,
-				error: `status ${resp ? resp.status() : "none"}`,
+				error:
+					resp && resp.status() === 404
+						? "status 404 — this origin's data doesn't hold the subject. " +
+							"Staging's D1/R2 is a hand-made clone (`./per-ankh staging " +
+							"reclone`), so a page prod serves can be missing here."
+						: `status ${resp ? resp.status() : "none"}`,
 			},
 		};
 	}
@@ -105,7 +117,7 @@ async function capturePage(
 		};
 	}
 	const landed = landedUrl.pathname;
-	if (landed === "/" && expectedPath !== "/") {
+	if (landed === "/" && spec.route !== "/") {
 		return {
 			shot: {
 				...base,
@@ -119,7 +131,7 @@ async function capturePage(
 		shot: {
 			...base,
 			file: `shots/${spec.id}__${bp.id}.jpg`,
-			...(landed === expectedPath ? {} : { landed }),
+			...(landed === spec.route ? {} : { landed }),
 		},
 		buf: await shoot(page),
 	};
@@ -129,7 +141,12 @@ async function capturePage(
 export async function captureOs(opts: CaptureOpts): Promise<OsManifest> {
 	const { baseUrl, outDir, os, accessHeaders } = opts;
 	const shotsDir = path.join(outDir, "shots");
-	await rm(outDir, { recursive: true, force: true });
+	// Clear `shots/` rather than the whole of `outDir`: a stale JPEG from a
+	// previous run would otherwise be uploaded as this one's, and that is the
+	// only thing here worth deleting. `--out` is whatever the flag holds, so a
+	// recursive remove of it is a `rm -rf` on an unvalidated path — `--out src`
+	// would have taken `src/` with it.
+	await rm(shotsDir, { recursive: true, force: true });
 	await mkdir(shotsDir, { recursive: true });
 
 	const shots: OsShot[] = [];

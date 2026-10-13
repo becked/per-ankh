@@ -81,6 +81,13 @@ test-data/saves/*
 test-data/screenshots/*
 !test-data/screenshots/README.md
 
+# Cross-OS screenshot runs (`./per-ankh screenshot capture`, and the CI
+# artifacts `gh run download` unpacks). Download-and-discard, unlike
+# docs/ux-review/, whose bundle is deliberately committed. Leading slash
+# anchors this to the repo root — the default --out is CWD-relative — so it
+# can't also match the tracked scripts/screenshot/ module.
+/screenshot/
+
 # Game asset reference checkout (XML, source, graphics) — read by
 # scripts/bake-improvements.ts at bake time. Local-only; not committed.
 # No trailing slash, so it still matches when Reference is a symlink into

@@ -50,7 +50,20 @@ const REPO_ROOT = path.resolve(
 	"..",
 );
 
-const KNOWN_FLAGS = new Set(["base-url", "out", "os", "help"]);
+// Per subcommand, so `compare DIR --os Linux` doesn't quietly accept a
+// capture-only flag.
+const CAPTURE_FLAGS = new Set(["base-url", "out", "os", "help"]);
+const COMPARE_FLAGS = new Set(["out", "help"]);
+const ANY_FLAG = new Set([...CAPTURE_FLAGS, ...COMPARE_FLAGS]);
+
+function checkFlags(
+	flags: Record<string, string | true>,
+	allowed: Set<string>,
+): void {
+	for (const name of Object.keys(flags)) {
+		if (!allowed.has(name)) throw new Error(`Unknown flag: --${name}`);
+	}
+}
 
 function printHelp(): void {
 	process.stdout.write(
@@ -139,6 +152,17 @@ async function cmdCompare(
 	dir: string,
 	flags: Record<string, string | true>,
 ): Promise<void> {
+	const outFile = flagString(flags, "out") ?? path.join(dir, "index.html");
+	// Every `<img src>` is `<column>/shots/…`, resolved by the browser against
+	// the HTML's own location — so a column's prefix is its artifact directory
+	// relative to wherever `--out` lands, not to `dir`. Joined with forward
+	// slashes because it ends up in a URL, not in a filesystem call.
+	const columnPath = (name: string): string =>
+		path
+			.relative(path.dirname(outFile), path.join(dir, name))
+			.split(path.sep)
+			.join("/");
+
 	const entries = await readdir(dir, { withFileTypes: true });
 	const sources: OsSource[] = [];
 	for (const e of entries) {
@@ -150,7 +174,10 @@ async function cmdCompare(
 		} catch {
 			continue;
 		}
-		sources.push({ dir: e.name, manifest: JSON.parse(raw) as OsManifest });
+		sources.push({
+			dir: columnPath(e.name),
+			manifest: JSON.parse(raw) as OsManifest,
+		});
 	}
 	if (sources.length === 0) {
 		throw new Error(
@@ -159,7 +186,6 @@ async function cmdCompare(
 		);
 	}
 
-	const outFile = flagString(flags, "out") ?? path.join(dir, "index.html");
 	await writeFile(outFile, renderComparisonHtml(sources));
 	ok(
 		`Wrote ${outFile} — ${sources.length} columns ` +
@@ -172,13 +198,18 @@ async function cmdCompare(
 export async function main(argv: string[]): Promise<void> {
 	const { positional, flags } = parseFlags(argv);
 	const sub = positional[0];
-	if (flags.help === true || sub === undefined) {
+	if (flags.help === true) {
 		printHelp();
-		if (sub === undefined && flags.help !== true) process.exit(1);
 		return;
 	}
-	for (const name of Object.keys(flags)) {
-		if (!KNOWN_FLAGS.has(name)) throw new Error(`Unknown flag: --${name}`);
+	// Above the no-subcommand exit, so `./per-ankh screenshot --bogus` names
+	// the flag rather than printing help. Which flags are legal depends on the
+	// subcommand, so this pass only rejects what no subcommand takes; each
+	// case below re-checks against its own set.
+	checkFlags(flags, ANY_FLAG);
+	if (sub === undefined) {
+		printHelp();
+		process.exit(1);
 	}
 
 	switch (sub) {
@@ -186,9 +217,11 @@ export async function main(argv: string[]): Promise<void> {
 			if (positional.length > 1) {
 				throw new Error(`Unexpected argument: ${positional[1]}`);
 			}
+			checkFlags(flags, CAPTURE_FLAGS);
 			await cmdCapture(flags);
 			return;
 		case "compare": {
+			checkFlags(flags, COMPARE_FLAGS);
 			const dir = positional[1];
 			if (!dir) throw new Error("compare needs a directory of artifacts.");
 			if (positional.length > 2) {

@@ -9,12 +9,21 @@ on:
   workflow_dispatch:
     inputs:
       base-url:
+        # No default here: an empty input reads as absent in the CLI, which
+        # then falls back to ENVIRONMENTS.staging.frontendOrigin
+        # (scripts/lib/environments.ts). Spelling the hostname out a second
+        # time is what lets the two drift.
         description: "Origin to capture (staging by default)"
         required: false
-        default: "https://staging.per-ankh.app"
 
 permissions:
   contents: read
+
+# One run at a time. Queued rather than cancelled: a second dispatch is
+# usually a different base URL, not a correction of the first.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   shots:
@@ -69,7 +78,13 @@ jobs:
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: ./per-ankh screenshot capture --base-url "$BASE_URL" --out screenshot
 
+      # Runs even when Capture failed: it writes the manifest and every good
+      # JPEG before exiting non-zero, and 5 of 6 pages is still worth
+      # comparing — the same argument `fail-fast: false` makes one job up.
+      # The failed pages come through as `error` in the manifest and render as
+      # error cells in `compare`.
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: screenshot-${{ matrix.os }}
           path: screenshot/

@@ -16,7 +16,7 @@ export interface Breakpoint {
 	height: number;
 }
 
-export const JPEG_QUALITY = 72;
+const JPEG_QUALITY = 72;
 
 // Settle async client rendering (ECharts, deck.gl map) after a navigation or
 // tab switch. We can't wait on full "networkidle" — external avatar images

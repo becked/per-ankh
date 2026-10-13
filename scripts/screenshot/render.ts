@@ -6,10 +6,13 @@
 // and stays a few KB. Inline JS/CSS is fine — a static file opened from disk,
 // not served under the app's CSP.
 
+import { escapeHtml } from "$lib/utils/formatting";
+
 import type { OsManifest } from "./types";
 
-// One downloaded artifact: `dir` is its directory name relative to the
-// rendered file, which is what the shot paths are prefixed with.
+// One downloaded artifact: `dir` is its path relative to the rendered file,
+// which is what the shot paths are prefixed with — so the page still finds
+// the images when `--out` puts it outside the artifact directory.
 export interface OsSource {
 	dir: string;
 	manifest: OsManifest;
@@ -26,13 +29,6 @@ export function sortSources(sources: OsSource[]): OsSource[] {
 		return i === -1 ? OS_ORDER.length : i;
 	};
 	return [...sources].sort((a, b) => rank(a.manifest.os) - rank(b.manifest.os));
-}
-
-function escapeHtml(s: string): string {
-	return String(s).replace(
-		/[&<>"]/g,
-		(c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] ?? c,
-	);
 }
 
 export function renderComparisonHtml(sources: OsSource[]): string {
@@ -84,7 +80,9 @@ export function renderComparisonHtml(sources: OsSource[]): string {
 	#lightbox { position: fixed; inset: 0; background: rgba(0,0,0,.92); display: none;
 		overflow: auto; cursor: zoom-out; z-index: 10; }
 	#lightbox.open { display: block; }
-	#lightbox img { display: block; margin: 0 auto; max-width: none; }
+	#lightbox img { display: block; margin: 0 auto; }
+	#lightbox img.fit { max-width: 100%; max-height: 100vh; cursor: zoom-in; }
+	#lightbox img.full { max-width: none; cursor: zoom-out; }
 </style>
 </head>
 <body>
@@ -97,7 +95,7 @@ export function renderComparisonHtml(sources: OsSource[]): string {
 				`${escapeHtml(s.manifest.os)} ${escapeHtml(s.manifest.generatedAt)}`,
 		)
 		.join(" · ")}
-	<br />Click a shot for full size. The UI face is shipped, so what differs
+	<br />Click a shot to zoom, again for full size. The UI face is shipped, so what differs
 	per OS is rasterization and the chrome the platform paints itself —
 	issue #295.
 </div>
@@ -174,11 +172,14 @@ function render() {
 
 function openLightbox(src) {
 	const lb = document.getElementById("lightbox");
-	lb.querySelector("img").src = src;
+	const img = lb.querySelector("img");
+	img.src = src; img.className = "fit";
 	lb.classList.add("open");
 }
-document.getElementById("lightbox").onclick = () =>
-	document.getElementById("lightbox").classList.remove("open");
+document.getElementById("lightbox").onclick = (e) => {
+	if (e.target.tagName === "IMG") { e.target.classList.toggle("fit"); e.target.classList.toggle("full"); }
+	else document.getElementById("lightbox").classList.remove("open");
+};
 document.addEventListener("keydown", (e) => {
 	if (e.key === "Escape") document.getElementById("lightbox").classList.remove("open");
 });

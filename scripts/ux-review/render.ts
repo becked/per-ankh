@@ -1,14 +1,9 @@
 // Bundle emission: the human/agent README and the single-pane HTML viewer.
 // Both read the same {meta, screens} the manifest is built from.
 
-import type { ReviewMeta, Screen } from "./types";
+import { escapeHtml } from "$lib/utils/formatting";
 
-function escapeHtml(s: string): string {
-	return String(s).replace(
-		/[&<>"]/g,
-		(c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] ?? c,
-	);
-}
+import type { ReviewMeta, Screen } from "./types";
 
 const PASS_LABELS = {
 	anon: "Anonymous (signed out)",
