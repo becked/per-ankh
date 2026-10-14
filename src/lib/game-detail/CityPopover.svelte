@@ -385,13 +385,13 @@
 			})
 			.map(({ counts, color, ...group }, i) => ({
 				...group,
-				// A tribe has no roster row, so it falls back the way every
-				// civilization without a colour of its own does. Three of the 9
-				// tribes the corpus holds have none (REBELS, BARBARIANS, RAIDERS),
-				// and `getNationChartColor` is where that fallback lives. The index
-				// starts past the roster because a mirror's players draw from the
-				// same ramp by player ordinal — at `i` alone, the raiders camped on
-				// Tjebu take the colour of one of the two Egypts fighting over it.
+				// A tribe has no roster row, but it does have a baked colour, so
+				// it resolves through `getNationChartColor`'s civilization lookup.
+				// What still reaches the palette fallback is a group whose
+				// civilization is null — a unit whose player_xml_id isn't on the
+				// roster. The index starts past the roster because a mirror's
+				// players draw from the same ramp by player ordinal — at `i` alone,
+				// such a group takes the colour of one of the two Egypts.
 				color:
 					color ?? getNationChartColor(group.civilization, players.length + i),
 				entries: [...counts.entries()]

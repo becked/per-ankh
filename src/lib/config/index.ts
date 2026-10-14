@@ -20,15 +20,11 @@ export {
 
 // Re-export nation and tribe colors
 export {
-	NATION_COLORS,
-	TRIBE_COLORS,
-	ALL_CIVILIZATION_COLORS,
+	BASE_NATIONS,
 	getNationColor,
 	getTribeColor,
 	getCivilizationColor,
 	getNationChartColor,
-	type NationKey,
-	type TribeKey,
 } from "./nations";
 
 // Re-export family colors

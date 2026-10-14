@@ -9,7 +9,7 @@
 // controls would light a selection the payload isn't for — so the parse is
 // mirrored here, the way profileScope mirrors parseScopeParam.
 
-import { NATION_COLORS } from "$lib/config";
+import { BASE_NATIONS } from "$lib/config";
 import { nationName } from "$lib/utils/formatting";
 import type { GlobalPeriod, GlobalSlice } from "./types";
 
@@ -80,8 +80,10 @@ export function parseGlobalPeriod(raw: string | null): GlobalPeriod {
 		: DEFAULT_GLOBAL_PERIOD;
 }
 
-// The nations the facet offers: the playable roster, read off the same table
-// the nation colors come from.
+// The nations the facet offers: the playable roster, read off the baked list
+// of the nations Infos/nation.xml defines. The colour tables also cover the
+// campaign nations, which is why the roster is a separate export — a facet
+// built from the colour keys would offer 12 more options than the roster has.
 //
 // Not the nations seated in the current selection, which is what the user
 // page's nation chip reads off its bundle. A faceted bundle reports only the
@@ -94,11 +96,9 @@ export function parseGlobalPeriod(raw: string | null): GlobalPeriod {
 // A nation with no seat in the selected slice is therefore offerable, and
 // selecting it resolves to an empty corpus: the page shows its empty state
 // rather than charts. That is the cost of not paying for a second read.
-export const NATION_FACET_OPTIONS: readonly string[] = Object.keys(
-	NATION_COLORS,
-)
-	.map((key) => `NATION_${key}`)
-	.sort((a, b) => nationName(a).localeCompare(nationName(b)));
+export const NATION_FACET_OPTIONS: readonly string[] = [...BASE_NATIONS].sort(
+	(a, b) => nationName(a).localeCompare(nationName(b)),
+);
 
 // Parse ?nation= into a facet selection. Stricter than the Worker's shape
 // check, deliberately: an off-roster token passes its regex and then selects
