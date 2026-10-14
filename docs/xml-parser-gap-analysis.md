@@ -382,7 +382,7 @@ This document identifies data present in Old World save files that is not curren
 **Children:**
 
 - `XP`, `Level`, `CreateTurn`, `Facing`, `OriginalPlayer`
-- `TurnsSinceLastMove`, `Gender`, `Sleep` (flag), `CurrentFormation`
+- `TurnsSinceLastMove`, `Damage`, `Gender`, `Sleep` (flag), `CurrentFormation`
 - `Promotions`, `PromotionsAvailable`
 - `BonusEffectUnits` (effects with stacks)
 - `PlayerFamily` (family associations)
@@ -396,7 +396,6 @@ This document identifies data present in Old World save files that is not curren
 | `Cooldown`       | Cooldown flags                                |
 | `CooldownTurns`  | Cooldown turn counts                          |
 | `CriticalHit`    | Critical hit state (2025+)                    |
-| `Damage`         | Current damage                                |
 | `EventStoryTurn` | Unit-specific event timings (2025+)           |
 | `GeneralID`      | Commanding general character ID               |
 | `LevelPromotion` | Level-up promotion choice                     |
@@ -591,5 +590,5 @@ Based on exhaustive XML analysis:
    - `Leaders` - leader history
    - `Children` - character family trees (inverse of parents)
    - `ImprovementBuildTurns*` - construction progress
-   - `Damage` - unit/city damage state
+   - `Damage` - city damage level (units' is parsed)
    - `GeneralID` - unit commanding officer

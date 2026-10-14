@@ -56,9 +56,9 @@
 barbarians/tribal), `Tribe` (`NONE` or `TRIBE_*`), `Seed` (i64).
 
 **Common child elements:** `XP`, `Level`, `CreateTurn`, `Facing`,
-`OriginalPlayer`, `TurnsSinceLastMove`, `Gender` (workers),
-`Sleep` (self-closing), `CurrentFormation`, `Promotions` (acquired),
-`PromotionsAvailable`, `BonusEffectUnits` (e.g.
+`OriginalPlayer`, `TurnsSinceLastMove`, `Damage` (only when non-zero),
+`Gender` (workers), `Sleep` (self-closing), `CurrentFormation`,
+`Promotions` (acquired), `PromotionsAvailable`, `BonusEffectUnits` (e.g.
 `<EFFECTUNIT_STEADFAST>1</EFFECTUNIT_STEADFAST>`), `PlayerFamily`,
 `RaidTurn`, `QueueList`, `AI`.
 

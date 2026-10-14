@@ -14,7 +14,7 @@
 	import type { MapTile } from "$lib/types/MapTile";
 	import type { UnitInfo } from "$lib/parser/types";
 	import { ownershipChangeTurn } from "$lib/parser/types";
-	import { getChartColor, getCivilizationColor } from "$lib/config";
+	import { getCivilizationColor, getNationChartColor } from "$lib/config";
 	import { IMPROVEMENT_BUILDS } from "$lib/generated/improvement-builds";
 	import {
 		characterName,
@@ -314,16 +314,19 @@
 	type UnitGroup = {
 		key: string;
 		label: string;
-		// NATION_* or TRIBE_*, which is what both getCivilizationColor and the
-		// crest sprite take.
+		// NATION_* or TRIBE_*, which is what the crest sprite takes.
 		civilization: string | null;
+		// The heading colour. A player's is its resolved roster colour, which a
+		// tribe has none of — see `unitGroups`.
+		color: string;
 		total: number;
 		// One row per unit TYPE, counted — the same tallied shape (and the same
 		// `times()` suffix) the improvement, specialist and resource rows above
-		// use. A row per unit would be the longest thing on the card: across
-		// test-data/saves, collapsing takes the 1609 units standing on city
-		// territory down to 1065 rows, and the worst city from 19 to 11.
-		units: Array<{ key: string; count: number }>;
+		// use, down to naming the tallies `entries`. A row per unit would be the
+		// longest thing on the card: across test-data/saves, collapsing takes
+		// the 1609 units standing on city territory down to 1065 rows, and the
+		// worst city from 20 to 11.
+		entries: Array<{ key: string; count: number }>;
 	};
 
 	// Grouped by the PLAYER that owns the unit, not by its nation: a mirror
@@ -335,7 +338,11 @@
 		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- locally-scoped Map, not reactive state
 		const byOwner = new Map<
 			string,
-			Omit<UnitGroup, "units"> & { counts: Map<string, number> }
+			Omit<UnitGroup, "entries" | "color"> & {
+				// Null until the fallback resolves, which needs the sorted position.
+				color: string | null;
+				counts: Map<string, number>;
+			}
 		>();
 		for (const u of cityUnits) {
 			const player = playerAt(u.player_xml_id);
@@ -351,6 +358,11 @@
 							? `Player ${u.player_xml_id}`
 							: formatEnum(u.tribe, "TRIBE_")),
 					civilization: player?.nation ?? u.tribe,
+					// The roster's own colour, which is the nation's except in a
+					// mirror, where it is what tells the two Egypts apart — the whole
+					// reason these groups key on the player. It is also the colour
+					// the same player wears on the Military cards and every chart.
+					color: player?.color ?? null,
 					total: 0,
 					counts: new Map<string, number>(),
 				};
@@ -371,9 +383,18 @@
 				if (b.key === ownerKey) return 1;
 				return b.total - a.total || a.label.localeCompare(b.label);
 			})
-			.map(({ counts, ...group }) => ({
+			.map(({ counts, color, ...group }, i) => ({
 				...group,
-				units: [...counts.entries()]
+				// A tribe has no roster row, so it falls back the way every
+				// civilization without a colour of its own does. Three of the 9
+				// tribes the corpus holds have none (REBELS, BARBARIANS, RAIDERS),
+				// and `getNationChartColor` is where that fallback lives. The index
+				// starts past the roster because a mirror's players draw from the
+				// same ramp by player ordinal — at `i` alone, the raiders camped on
+				// Tjebu take the colour of one of the two Egypts fighting over it.
+				color:
+					color ?? getNationChartColor(group.civilization, players.length + i),
+				entries: [...counts.entries()]
 					.map(([key, count]) => ({ key, count }))
 					.sort((a, b) =>
 						formatEnum(a.key, "UNIT_").localeCompare(
@@ -382,17 +403,6 @@
 					),
 			}));
 	});
-
-	// getCivilizationColor takes NATION_* and TRIBE_* alike, and returns
-	// undefined for the three tribes with no colour of their own (REBELS,
-	// BARBARIANS, RAIDERS — 3 of the 9 the corpus holds).
-	function groupColor(group: UnitGroup, index: number): string {
-		return (
-			(group.civilization
-				? getCivilizationColor(group.civilization)
-				: undefined) ?? getChartColor(index)
-		);
-	}
 
 	function times(count: number): string {
 		return count > 1 ? ` ×${count}` : "";
@@ -648,14 +658,14 @@
 						<h4
 							class="text-[10px] font-bold uppercase tracking-wide text-muted"
 						>
-							Units in Territory
+							Units in territory
 						</h4>
 						<div class="mt-1 space-y-1.5">
-							{#each unitGroups as group, i (group.key)}
+							{#each unitGroups as group (group.key)}
 								<div>
 									<h5
 										class="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide"
-										style="color: {groupColor(group, i)};"
+										style="color: {group.color};"
 									>
 										<!-- Fixed-size slot: SpriteIcon renders nothing when
 										     the crest is missing (TRIBE_BARBARIANS and
@@ -679,7 +689,7 @@
 									<div
 										class="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[9px] text-bright"
 									>
-										{#each group.units as tally (tally.key)}
+										{#each group.entries as tally (tally.key)}
 											<span class="inline-flex items-center gap-1">
 												<span class="flex w-3 flex-none">
 													<SpriteIcon
