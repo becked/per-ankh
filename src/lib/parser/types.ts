@@ -214,6 +214,13 @@ export interface UnitInfo {
 	// the player trained. Optional: absent on blobs before PARSER_VERSION 2.20.0.
 	original_tribe?: string | null;
 	turns_since_last_move: number | null;
+	// Accumulated damage; health is its complement (`Unit.getHP`,
+	// Unit.cs:2422, is `getHPMax() - getDamage()`). The game writes <Damage>
+	// only when it is non-zero, so the parser reads an absent element as 0 and
+	// every unit on a blob from PARSER_VERSION 2.22.0+ carries a number.
+	// Optional, and `undefined` means exactly one thing: a blob parsed before
+	// the field existed, where health is UNKNOWN rather than full.
+	damage?: number;
 	gender: string | null;
 	is_sleeping: boolean;
 	current_formation: string | null;
@@ -435,4 +442,4 @@ export interface FullGameData {
  * fixes, MINOR for additive fields, MAJOR for breaking schema changes.
  * Initial value `2.0.0` mirrors `FullGameData.version: 2`.
  */
-export const PARSER_VERSION = "2.21.0";
+export const PARSER_VERSION = "2.22.0";

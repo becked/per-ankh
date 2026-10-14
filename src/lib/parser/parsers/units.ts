@@ -33,6 +33,10 @@ export interface Unit {
 	// The tribe a mercenary was hired from; null for a unit the player trained.
 	originalTribe: string | null;
 	turnsSinceLastMove: number | null;
+	// Accumulated damage. The game writes <Damage> only when it is non-zero
+	// (`Unit.writeGameXML`, Unit.cs:1002-1005), so an absent element is a unit
+	// at full health, not an unknown value.
+	damage: number;
 	gender: string | null;
 	isSleeping: boolean;
 	currentFormation: string | null;
@@ -149,6 +153,7 @@ export function parseUnits(root: Record<string, unknown>): Unit[] {
 			originalPlayerXmlId,
 			originalTribe: optStr(node.OriginalTribe),
 			turnsSinceLastMove: optInt(node.TurnsSinceLastMove),
+			damage: optInt(node.Damage) ?? 0,
 			gender: optStr(node.Gender),
 			isSleeping: "Sleep" in node,
 			currentFormation: optStr(node.CurrentFormation),
@@ -293,6 +298,7 @@ export function unitToRow(u: Unit): Record<string, unknown> {
 		original_player_xml_id: u.originalPlayerXmlId,
 		original_tribe: u.originalTribe,
 		turns_since_last_move: u.turnsSinceLastMove,
+		damage: u.damage,
 		gender: u.gender,
 		is_sleeping: u.isSleeping,
 		current_formation: u.currentFormation,

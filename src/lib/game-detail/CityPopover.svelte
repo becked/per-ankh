@@ -12,8 +12,9 @@
 	// the last split into two columns, its statistics beside its territory.
 	import type { cloudApi } from "$lib/api-cloud";
 	import type { MapTile } from "$lib/types/MapTile";
+	import type { UnitInfo } from "$lib/parser/types";
 	import { ownershipChangeTurn } from "$lib/parser/types";
-	import { getCivilizationColor } from "$lib/config";
+	import { getChartColor, getCivilizationColor } from "$lib/config";
 	import { IMPROVEMENT_BUILDS } from "$lib/generated/improvement-builds";
 	import {
 		characterName,
@@ -295,6 +296,104 @@
 
 	const roadCount = $derived(cityTiles.filter((t) => t.has_road).length);
 
+	// ─── Zone 3: units in territory ───────────────────────────────────
+	// The units standing on this city's tiles. Final-turn only, like the rest
+	// of zone 3: the blob carries no per-turn unit positions. The join is the
+	// same (x, y) → tile_xml_id key tile_ownership_history uses, and a tile can
+	// hold more than one unit (`Tile.canBothUnitsOccupy`, `Tile.cs:10438`
+	// — a caravan, an allied pair, two builders), so nothing here assumes one.
+	const cityUnits = $derived.by(() => {
+		const mapWidth = game.game_details.map_width;
+		if (mapWidth == null) return [] as UnitInfo[];
+		const ids = new Set(cityTiles.map((t) => tileXmlId(t.x, t.y, mapWidth)));
+		// `units` isn't required by the Worker's blob schema, so a blob parsed
+		// before it existed doesn't carry it — the same default GameTab applies.
+		return (game.units ?? []).filter((u) => ids.has(u.tile_xml_id));
+	});
+
+	type UnitGroup = {
+		key: string;
+		label: string;
+		// NATION_* or TRIBE_*, which is what both getCivilizationColor and the
+		// crest sprite take.
+		civilization: string | null;
+		total: number;
+		// One row per unit TYPE, counted — the same tallied shape (and the same
+		// `times()` suffix) the improvement, specialist and resource rows above
+		// use. A row per unit would be the longest thing on the card: across
+		// test-data/saves, collapsing takes the 1609 units standing on city
+		// territory down to 1065 rows, and the worst city from 19 to 11.
+		units: Array<{ key: string; count: number }>;
+	};
+
+	// Grouped by the PLAYER that owns the unit, not by its nation: a mirror
+	// match (1 of the 16 saves in test-data/saves is NATION_EGYPT ×2) would
+	// otherwise merge two opposing Egypts into one group. `DetailPlayer.label`
+	// is the nation, disambiguated by name only where it collides. A unit with
+	// no player is a tribe's, and groups under the tribe.
+	const unitGroups = $derived.by(() => {
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- locally-scoped Map, not reactive state
+		const byOwner = new Map<
+			string,
+			Omit<UnitGroup, "units"> & { counts: Map<string, number> }
+		>();
+		for (const u of cityUnits) {
+			const player = playerAt(u.player_xml_id);
+			const key =
+				u.player_xml_id != null ? `P${u.player_xml_id}` : `T${u.tribe ?? ""}`;
+			let group = byOwner.get(key);
+			if (!group) {
+				group = {
+					key,
+					label:
+						player?.label ??
+						(u.player_xml_id != null
+							? `Player ${u.player_xml_id}`
+							: formatEnum(u.tribe, "TRIBE_")),
+					civilization: player?.nation ?? u.tribe,
+					total: 0,
+					counts: new Map<string, number>(),
+				};
+				byOwner.set(key, group);
+			}
+			group.total += 1;
+			group.counts.set(u.unit_type, (group.counts.get(u.unit_type) ?? 0) + 1);
+		}
+		// The city's own owner first — the section exists to show the units that
+		// AREN'T the owner's, so a besieged city must not read as a city with a
+		// big army. Everyone else by how much of the territory they're standing
+		// on, which is the order a reader cares about.
+		const ownerKey =
+			city?.owner_player_xml_id != null ? `P${city.owner_player_xml_id}` : null;
+		return [...byOwner.values()]
+			.sort((a, b) => {
+				if (a.key === ownerKey) return -1;
+				if (b.key === ownerKey) return 1;
+				return b.total - a.total || a.label.localeCompare(b.label);
+			})
+			.map(({ counts, ...group }) => ({
+				...group,
+				units: [...counts.entries()]
+					.map(([key, count]) => ({ key, count }))
+					.sort((a, b) =>
+						formatEnum(a.key, "UNIT_").localeCompare(
+							formatEnum(b.key, "UNIT_"),
+						),
+					),
+			}));
+	});
+
+	// getCivilizationColor takes NATION_* and TRIBE_* alike, and returns
+	// undefined for the three tribes with no colour of their own (REBELS,
+	// BARBARIANS, RAIDERS — 3 of the 9 the corpus holds).
+	function groupColor(group: UnitGroup, index: number): string {
+		return (
+			(group.civilization
+				? getCivilizationColor(group.civilization)
+				: undefined) ?? getChartColor(index)
+		);
+	}
+
 	function times(count: number): string {
 		return count > 1 ? ` ×${count}` : "";
 	}
@@ -457,87 +556,150 @@
 				</dl>
 			</section>
 
-			<section>
-				<h4 class="text-[10px] font-bold uppercase tracking-wide text-muted">
-					Territory
-				</h4>
-				<dl class="chrome-rows record-rows">
-					<dt>Tiles</dt>
-					<dd>{cityTiles.length}</dd>
-					{#if wonders.length > 0}
-						<dt>Wonders</dt>
-						<dd class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-							{#each wonders as tally (tally.key)}
-								<span class="inline-flex items-center gap-1">
-									<SpriteIcon
-										category="improvements"
-										value={tally.key}
-										size={14}
-										alt={improvementDisplayName(tally.key)}
-									/>
-									{improvementDisplayName(tally.key)}
-								</span>
+			<!-- The territory column: what the city holds at game end, and who is
+			     standing on it. Both in one grid cell so the roster fills the
+			     space beside the taller statistics column instead of extending
+			     the card below it. -->
+			<div class="space-y-3">
+				<section>
+					<h4 class="text-[10px] font-bold uppercase tracking-wide text-muted">
+						Territory
+					</h4>
+					<dl class="chrome-rows record-rows">
+						<dt>Tiles</dt>
+						<dd>{cityTiles.length}</dd>
+						{#if wonders.length > 0}
+							<dt>Wonders</dt>
+							<dd class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+								{#each wonders as tally (tally.key)}
+									<span class="inline-flex items-center gap-1">
+										<SpriteIcon
+											category="improvements"
+											value={tally.key}
+											size={14}
+											alt={improvementDisplayName(tally.key)}
+										/>
+										{improvementDisplayName(tally.key)}
+									</span>
+								{/each}
+							</dd>
+						{/if}
+						{#if improvements.length > 0}
+							<dt>Improvements</dt>
+							<dd class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+								{#each improvements as tally (tally.key)}
+									<span class="inline-flex items-center gap-1">
+										<SpriteIcon
+											category="improvements"
+											value={tally.key}
+											size={14}
+											alt={improvementDisplayName(tally.key)}
+										/>
+										{improvementDisplayName(tally.key)}{times(
+											tally.count,
+										)}{#if tally.pillaged > 0}<span class="text-muted">
+												({tally.pillaged} pillaged)</span
+											>{/if}{#if tally.unfinished > 0}<span class="text-muted">
+												({tally.unfinished} unfinished)</span
+											>{/if}
+									</span>
+								{/each}
+							</dd>
+						{/if}
+						{#each specialistGroups as group (group.kind)}
+							<dt>{KIND_LABELS[group.kind]} specialists</dt>
+							<dd class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+								{#each group.entries as entry (entry.key)}
+									<span class="inline-flex items-center gap-1">
+										<SpriteIcon
+											category="specialists"
+											value={entry.key}
+											size={14}
+											alt={specialistName(entry.key)}
+										/>
+										{specialistName(entry.key)}{times(entry.count)}
+									</span>
+								{/each}
+							</dd>
+						{/each}
+						{#if resources.length > 0}
+							<dt>Resources</dt>
+							<dd class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+								{#each resources as entry (entry.key)}
+									<span class="inline-flex items-center gap-1">
+										<SpriteIcon
+											category="resources"
+											value={entry.key}
+											size={14}
+											alt={formatEnum(entry.key, "RESOURCE_")}
+										/>
+										{formatEnum(entry.key, "RESOURCE_")}{times(entry.count)}
+									</span>
+								{/each}
+							</dd>
+						{/if}
+						<dt>Roads</dt>
+						<dd>{roadCount}</dd>
+					</dl>
+				</section>
+
+				{#if unitGroups.length > 0}
+					<section>
+						<h4
+							class="text-[10px] font-bold uppercase tracking-wide text-muted"
+						>
+							Units in Territory
+						</h4>
+						<div class="mt-1 space-y-1.5">
+							{#each unitGroups as group, i (group.key)}
+								<div>
+									<h5
+										class="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide"
+										style="color: {groupColor(group, i)};"
+									>
+										<!-- Fixed-size slot: SpriteIcon renders nothing when
+										     the crest is missing (TRIBE_BARBARIANS and
+										     TRIBE_RAIDERS have none), which would unalign the
+										     heading. -->
+										<span class="flex w-3.5 flex-none">
+											{#if group.civilization}
+												<SpriteIcon
+													category="crests"
+													value={group.civilization}
+													size={14}
+													alt={group.label}
+												/>
+											{/if}
+										</span>
+										{group.label}
+									</h5>
+									<!-- The roster reads UNDER its owner's heading, so both
+									     the name and its glyph step down from the 10px
+									     heading and its 14px crest. -->
+									<div
+										class="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[9px] text-bright"
+									>
+										{#each group.units as tally (tally.key)}
+											<span class="inline-flex items-center gap-1">
+												<span class="flex w-3 flex-none">
+													<SpriteIcon
+														category="units"
+														value={tally.key}
+														size={12}
+														glyph
+														alt={formatEnum(tally.key, "UNIT_")}
+													/>
+												</span>
+												{formatEnum(tally.key, "UNIT_")}{times(tally.count)}
+											</span>
+										{/each}
+									</div>
+								</div>
 							{/each}
-						</dd>
-					{/if}
-					{#if improvements.length > 0}
-						<dt>Improvements</dt>
-						<dd class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-							{#each improvements as tally (tally.key)}
-								<span class="inline-flex items-center gap-1">
-									<SpriteIcon
-										category="improvements"
-										value={tally.key}
-										size={14}
-										alt={improvementDisplayName(tally.key)}
-									/>
-									{improvementDisplayName(tally.key)}{times(
-										tally.count,
-									)}{#if tally.pillaged > 0}<span class="text-muted">
-											({tally.pillaged} pillaged)</span
-										>{/if}{#if tally.unfinished > 0}<span class="text-muted">
-											({tally.unfinished} unfinished)</span
-										>{/if}
-								</span>
-							{/each}
-						</dd>
-					{/if}
-					{#each specialistGroups as group (group.kind)}
-						<dt>{KIND_LABELS[group.kind]} specialists</dt>
-						<dd class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-							{#each group.entries as entry (entry.key)}
-								<span class="inline-flex items-center gap-1">
-									<SpriteIcon
-										category="specialists"
-										value={entry.key}
-										size={14}
-										alt={specialistName(entry.key)}
-									/>
-									{specialistName(entry.key)}{times(entry.count)}
-								</span>
-							{/each}
-						</dd>
-					{/each}
-					{#if resources.length > 0}
-						<dt>Resources</dt>
-						<dd class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-							{#each resources as entry (entry.key)}
-								<span class="inline-flex items-center gap-1">
-									<SpriteIcon
-										category="resources"
-										value={entry.key}
-										size={14}
-										alt={formatEnum(entry.key, "RESOURCE_")}
-									/>
-									{formatEnum(entry.key, "RESOURCE_")}{times(entry.count)}
-								</span>
-							{/each}
-						</dd>
-					{/if}
-					<dt>Roads</dt>
-					<dd>{roadCount}</dd>
-				</dl>
-			</section>
+						</div>
+					</section>
+				{/if}
+			</div>
 		</div>
 	</div>
 {/if}

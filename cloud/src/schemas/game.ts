@@ -224,6 +224,14 @@ export const MAX_DISABLED_IMPROVEMENTS = 1_000;
 //         challenge run's city.specialists objective — a bump rather than a
 //         silent correction, since existing blobs keep the old values until
 //         reparsed.
+// 2.22.0 — damage on units, from the <Damage> the game writes only when it is
+//         non-zero (`Unit.writeGameXML`, Unit.cs:1002-1005), so the parser
+//         reads an absent element as 0. Health is its complement —
+//         `Unit.getHP` (Unit.cs:2422) is `getHPMax() - getDamage()`, over the
+//         `<iHPMax>` that is 20 for all 91 UNIT_ entries of unit.xml.
+//         276 of 2179 tile-nested
+//         units across test-data/saves carry the element (12.7%), values
+//         1-18. Purely additive.
 export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.0.0",
 	"2.1.0",
@@ -252,13 +260,14 @@ export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.19.0",
 	"2.20.0",
 	"2.21.0",
+	"2.22.0",
 ]);
 
 // The latest accepted version. Echoed back on stats responses and
 // embedded in stats cache keys so a parser bump (after the matching
 // extraction code lands) naturally orphans every old entry. Bump in
 // lockstep with the `KNOWN_PARSER_VERSIONS` addition above.
-export const CURRENT_PARSER_VERSION = "2.21.0";
+export const CURRENT_PARSER_VERSION = "2.22.0";
 
 // ----- Reusable atoms -----
 
