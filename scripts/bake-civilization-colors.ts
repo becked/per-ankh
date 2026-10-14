@@ -128,7 +128,9 @@ async function loadMerged(stem: string): Promise<Map<string, Merged>> {
 	};
 
 	absorb(
-		parseEntries(await readFile(resolve(xmlDir, "Infos", `${stem}.xml`), "utf-8")),
+		parseEntries(
+			await readFile(resolve(xmlDir, "Infos", `${stem}.xml`), "utf-8"),
+		),
 		true,
 	);
 	const modsRoot = resolve(xmlDir, "Mods");
@@ -166,13 +168,15 @@ function toOpaqueHex(hex: string, context: string): string {
 }
 
 async function main(): Promise<void> {
-	const [nations, tribes, teamColors, playerColors, colors] = await Promise.all([
-		loadMerged("nation"),
-		loadMerged("tribe"),
-		loadMerged("teamColor"),
-		loadMerged("playerColor"),
-		loadMerged("color"),
-	]);
+	const [nations, tribes, teamColors, playerColors, colors] = await Promise.all(
+		[
+			loadMerged("nation"),
+			loadMerged("tribe"),
+			loadMerged("teamColor"),
+			loadMerged("playerColor"),
+			loadMerged("color"),
+		],
+	);
 
 	const hexByColor = new Map(
 		[...colors.values()].map((c) => [c.zType, c.zHexValue]),
@@ -297,16 +301,24 @@ async function main(): Promise<void> {
 	lines.push("");
 	lines.push("// Tribe → the game's colour for it, the chain");
 	lines.push("// InfoHelpers.getTribeColor reads (tribe.xml TeamColor →");
-	lines.push("// teamColor.xml aePlayerColors[0] → playerColor.xml CrestColor →");
+	lines.push(
+		"// teamColor.xml aePlayerColors[0] → playerColor.xml CrestColor →",
+	);
 	lines.push("// color.xml hex). Not TeamPlayerColor, which is");
 	lines.push("// PLAYERCOLOR_BARBARIANS for every tribe.");
 	lines.push(
 		`export const TRIBE_COLORS: Readonly<Record<string, string>> = ${JSON.stringify(sortKeys(tribeColors))};`,
 	);
 	lines.push("");
-	lines.push("// The nations Infos/nation.xml defines, as opposed to the ones a");
-	lines.push("// campaign's Mods/*/Infos/nation-add.xml adds. Nothing in the XML");
-	lines.push("// flags a campaign nation, so the file an entry came from is the");
+	lines.push(
+		"// The nations Infos/nation.xml defines, as opposed to the ones a",
+	);
+	lines.push(
+		"// campaign's Mods/*/Infos/nation-add.xml adds. Nothing in the XML",
+	);
+	lines.push(
+		"// flags a campaign nation, so the file an entry came from is the",
+	);
 	lines.push("// only derivable split.");
 	lines.push(
 		`export const BASE_NATIONS: readonly string[] = ${JSON.stringify(baseNations)};`,
