@@ -63,6 +63,8 @@ npm run bake:improvement-builds # improvement-builds.ts (src/ AND cloud/src/; wo
                                # challenge scorer reads)
 npm run bake:starting-techs    # starting-techs.ts (each nation's starting techs)
 npm run bake:family-colors     # family-colors.ts (each family's in-game colour)
+npm run bake:civilization-colors # civilization-colors.ts (each nation's and tribe's in-game
+                               # colour, plus the base nation roster the /stats facet offers)
 npm run bake:yield-colors      # yield-colors.ts (each yield's chart colour)
 npm run bake:orders-sources    # orders-sources.ts (orders-per-turn + legitimacy constants)
 npm run bake:power-tiers       # power-tiers.ts (military-power comparison tiers)
@@ -86,7 +88,7 @@ npm run bake:finalize          # Emits committed manifest TS modules + reconcile
 npm run bake:all               # Every baker above except owtt + momentum, then finalize
 ```
 
-`bake:all` runs 33 of the 35 bakers above, in the order listed, then `finalize`. It deliberately omits `bake:owtt` and `bake:momentum` — rerun those by hand when their sources change. Membership doesn't follow from what a baker reads: `bake:atlas-pool` needs an owtournamentatlas checkout and is in `bake:all`, while `bake:owtt` needs one of its own and isn't — so a new baker records its choice here either way. Separately, `bake:favicon` / `bake:og` generate site icons and OG images, and the UX-review bundle under `docs/ux-review/` is captured by `./per-ankh ux-review` (a CLI command, not an npm script).
+`bake:all` runs 34 of the 36 bakers above, in the order listed, then `finalize`. It deliberately omits `bake:owtt` and `bake:momentum` — rerun those by hand when their sources change. Membership doesn't follow from what a baker reads: `bake:atlas-pool` needs an owtournamentatlas checkout and is in `bake:all`, while `bake:owtt` needs one of its own and isn't — so a new baker records its choice here either way. Separately, `bake:favicon` / `bake:og` generate site icons and OG images, and the UX-review bundle under `docs/ux-review/` is captured by `./per-ankh ux-review` (a CLI command, not an npm script).
 
 ## Adding a name-override table
 

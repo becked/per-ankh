@@ -175,58 +175,73 @@ The application maintains distinct color palettes for different purposes:
 
 ## Nation and Tribe Colors
 
-The application uses specific colors for each Old World nation and tribe. These colors are defined in `src/lib/config/nations.ts` and are used in charts and visualizations to represent different civilizations.
+Each nation and tribe renders in **the game's own color for it**. The tables live in `src/lib/generated/civilization-colors.ts`, baked from the reference XML — do not edit that file by hand; run `npm run bake:civilization-colors` to refresh it. `src/lib/config/nations.ts` holds the accessors over them.
+
+The two chains are not the same chain, because the game resolves a tribe's color differently from a nation's:
+
+- **Nations** — `nation.xml` `TeamColor` → `teamColor.xml` `TeamPlayerColor` → `playerColor.xml` `AssetColor` → `color.xml` hex. `Game.getNationColor` (`Game.cs:21765`) resolves through the live `Player`, so it has no static answer; this is the nation's own team color, which is what the map, banners and crests paint.
+- **Tribes** — `tribe.xml` `TeamColor` → `teamColor.xml` `aePlayerColors[0]` → `playerColor.xml` `CrestColor` → `color.xml` hex, the chain `InfoHelpers.getTribeColor` (`InfoHelpers.cs:3214`) reads. **Not** `TeamPlayerColor`, which is `PLAYERCOLOR_BARBARIANS` for every tribe — one shared near-black, not the per-tribe color the game shows.
+
+Both tables are keyed by full zType (`NATION_EGYPT`, `TRIBE_GAULS`) and cover the campaign civs as well as the base roster below. Campaign civs reuse base colors, so duplicate hexes across civs are expected — that is what the game does. `BASE_NATIONS`, from the same module, is the base roster alone, and is what the `/stats` nation facet offers.
 
 ### Nations
 
-| Nation        | Hex Code  | Color Description | Export                    |
-| ------------- | --------- | ----------------- | ------------------------- |
-| **Aksum**     | `#F8A3B4` | Pink/Rose         | `NATION_COLORS.AKSUM`     |
-| **Assyria**   | `#FADC3B` | Yellow            | `NATION_COLORS.ASSYRIA`   |
-| **Babylonia** | `#82C83E` | Green             | `NATION_COLORS.BABYLONIA` |
-| **Carthage**  | `#F6EFE1` | Beige/Off-white   | `NATION_COLORS.CARTHAGE`  |
-| **Egypt**     | `#BC6304` | Dark Orange/Brown | `NATION_COLORS.EGYPT`     |
-| **Greece**    | `#2360BC` | Dark Blue         | `NATION_COLORS.GREECE`    |
-| **Hittite**   | `#80E3E8` | Cyan              | `NATION_COLORS.HITTITE`   |
-| **Kush**      | `#FFFFB6` | Light Yellow      | `NATION_COLORS.KUSH`      |
-| **Maurya**    | `#A749FF` | Purple            | `NATION_COLORS.MAURYA`    |
-| **Persia**    | `#C04E4A` | Red               | `NATION_COLORS.PERSIA`    |
-| **Rome**      | `#880D56` | Purple/Burgundy   | `NATION_COLORS.ROME`      |
-| **Tamil**     | `#00B281` | Teal/Green        | `NATION_COLORS.TAMIL`     |
-| **Yuezhi**    | `#AD7E00` | Mustard/Gold      | `NATION_COLORS.YUEZHI`    |
+The 13 the base game defines. A campaign nation (`NATION_PTOLEMY`, `NATION_THEBES`, …) resolves too; see the generated file for the full list.
+
+| Nation        | Hex Code  | Color Description | Key                |
+| ------------- | --------- | ----------------- | ------------------ |
+| **Aksum**     | `#F8A3B4` | Pink/Rose         | `NATION_AKSUM`     |
+| **Assyria**   | `#fadc3b` | Yellow            | `NATION_ASSYRIA`   |
+| **Babylonia** | `#82C83E` | Green             | `NATION_BABYLONIA` |
+| **Carthage**  | `#f6efe1` | Beige/Off-white   | `NATION_CARTHAGE`  |
+| **Egypt**     | `#bc6304` | Dark Orange/Brown | `NATION_EGYPT`     |
+| **Greece**    | `#2360bc` | Dark Blue         | `NATION_GREECE`    |
+| **Hittite**   | `#80e3e8` | Cyan              | `NATION_HITTITE`   |
+| **Kush**      | `#FFFFB6` | Light Yellow      | `NATION_KUSH`      |
+| **Maurya**    | `#A749FF` | Purple            | `NATION_MAURYA`    |
+| **Persia**    | `#c04e4a` | Red               | `NATION_PERSIA`    |
+| **Rome**      | `#880d56` | Purple/Burgundy   | `NATION_ROME`      |
+| **Tamil**     | `#00B281` | Teal/Green        | `NATION_TAMIL`     |
+| **Yuezhi**    | `#AD7E00` | Mustard/Gold      | `NATION_YUEZHI`    |
 
 ### Tribes
 
-| Tribe         | Hex Code  | Color Description | Export                   |
-| ------------- | --------- | ----------------- | ------------------------ |
-| **Gauls**     | `#87DB40` | Lime Green        | `TRIBE_COLORS.GAULS`     |
-| **Vandals**   | `#9C5DFF` | Purple            | `TRIBE_COLORS.VANDALS`   |
-| **Danes**     | `#3CCDC2` | Teal              | `TRIBE_COLORS.DANES`     |
-| **Thracians** | `#D89A18` | Orange/Gold       | `TRIBE_COLORS.THRACIANS` |
-| **Scythians** | `#E6E1CA` | Beige/Light Tan   | `TRIBE_COLORS.SCYTHIANS` |
-| **Numidians** | `#FFDD67` | Light Yellow      | `TRIBE_COLORS.NUMIDIANS` |
-| **Huns**      | `#AB3157` | Dark Pink/Magenta | `TRIBE_COLORS.HUNS`      |
+The 11 the base game defines. The four hostile pseudo-tribes share one red, which the game gives them.
+
+| Tribe          | Hex Code  | Color Description | Key                |
+| -------------- | --------- | ----------------- | ------------------ |
+| **Gauls**      | `#87db40` | Lime Green        | `TRIBE_GAULS`      |
+| **Vandals**    | `#9c5dff` | Purple            | `TRIBE_VANDALS`    |
+| **Danes**      | `#3ccdc2` | Teal              | `TRIBE_DANES`      |
+| **Thracians**  | `#d89a18` | Orange/Gold       | `TRIBE_THRACIANS`  |
+| **Scythians**  | `#e6e1ca` | Beige/Light Tan   | `TRIBE_SCYTHIANS`  |
+| **Numidians**  | `#ffdd67` | Light Yellow      | `TRIBE_NUMIDIANS`  |
+| **Huns**       | `#AB3157` | Dark Pink/Magenta | `TRIBE_HUNS`       |
+| **Barbarians** | `#c84732` | Red               | `TRIBE_BARBARIANS` |
+| **Rebels**     | `#c84732` | Red               | `TRIBE_REBELS`     |
+| **Raiders**    | `#c84732` | Red               | `TRIBE_RAIDERS`    |
+| **Anarchy**    | `#c84732` | Red               | `TRIBE_ANARCHY`    |
+
+Hex case is whatever `color.xml` holds — the bake passes the value through rather than normalizing it, as `bake:family-colors` does.
 
 ### Using Nation and Tribe Colors
 
-Import from the central config module:
+Go through the accessors, re-exported from the central config module. Each takes the raw enum value the backend stores or a bare key, so a caller never has to know which form it has:
 
 ```typescript
 import {
-	NATION_COLORS,
-	TRIBE_COLORS,
 	getNationColor,
+	getTribeColor,
 	getCivilizationColor,
 	getNationChartColor,
 } from "$lib/config";
 
-// Use directly with type safety
-const egyptColor = NATION_COLORS.EGYPT; // "#BC6304"
-const gaulsColor = TRIBE_COLORS.GAULS; // "#87DB40"
+const egypt = getNationColor("NATION_EGYPT"); // "#bc6304" ("EGYPT" also works)
+const gauls = getTribeColor("TRIBE_GAULS"); // "#87db40"
 
-// Use helper functions (handles string conversion and lookup)
-const color = getNationColor("EGYPT"); // "#BC6304"
-const color2 = getCivilizationColor("GAULS"); // "#87DB40" (checks both nations and tribes)
+// getCivilizationColor checks both tables, so a caller holding one of the two
+// without knowing which passes it straight through.
+const either = getCivilizationColor("TRIBE_GAULS"); // "#87db40"
 
 // Chart series: getNationChartColor is the canonical helper — the nation's
 // color, or a palette color by index when the nation is unknown/missing.

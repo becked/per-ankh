@@ -1,100 +1,65 @@
 /**
  * Nation and Tribe Colors
  *
- * This module defines color mappings for Old World nations and tribes.
- * These colors are used in charts and visualizations to represent different civilizations.
+ * The game's own colour for each nation and tribe, baked from the reference
+ * XML by `npm run bake:civilization-colors` — nations through their team
+ * colour's `TeamPlayerColor`, tribes through the `aePlayerColors[0]` +
+ * `CrestColor` chain `InfoHelpers.getTribeColor` reads. The tables cover the
+ * base roster and the campaign civs, which reuse base colours.
  *
  * Nations represent the major playable civilizations in Old World, while tribes
  * represent minor factions that players interact with throughout the game.
  */
 
+import {
+	NATION_COLORS,
+	TRIBE_COLORS,
+} from "$lib/generated/civilization-colors";
+
 import { getChartColor } from "./charts";
 
 /**
- * Color palette for Old World nations
- *
- * Each nation has a distinct color optimized for:
- * - Visual distinction in multi-nation charts
- * - Thematic appropriateness to the civilization
- * - Sufficient contrast for readability
+ * The baked tables are keyed by full zType. Callers pass either the raw enum
+ * value the backend stores (`NATION_EGYPT`) or a bare key (`EGYPT`), so
+ * normalise to the zType for the table being read — which also routes a
+ * prefixed value to its own table and nowhere else.
  */
-export const NATION_COLORS = {
-	AKSUM: "#F8A3B4", // Pink/Rose
-	ASSYRIA: "#FADC3B", // Yellow
-	BABYLONIA: "#82C83E", // Green
-	CARTHAGE: "#F6EFE1", // Beige/Off-white
-	EGYPT: "#BC6304", // Dark Orange/Brown
-	GREECE: "#2360BC", // Dark Blue
-	HITTITE: "#80E3E8", // Cyan
-	KUSH: "#FFFFB6", // Light Yellow
-	MAURYA: "#A749FF", // Purple
-	PERSIA: "#C04E4A", // Red
-	ROME: "#880D56", // Purple/Burgundy
-	TAMIL: "#00B281", // Teal/Green
-	YUEZHI: "#AD7E00", // Mustard/Gold
-} as const;
-
-/**
- * Color palette for Old World tribes
- *
- * Tribes are minor factions with distinct colors separate from major nations.
- */
-export const TRIBE_COLORS = {
-	GAULS: "#87DB40", // Lime Green
-	VANDALS: "#9C5DFF", // Purple
-	DANES: "#3CCDC2", // Teal
-	THRACIANS: "#D89A18", // Orange/Gold
-	SCYTHIANS: "#E6E1CA", // Beige/Light Tan
-	NUMIDIANS: "#FFDD67", // Light Yellow
-	HUNS: "#AB3157", // Dark Pink/Magenta
-} as const;
-
-/**
- * Union type of all valid nation keys
- */
-export type NationKey = keyof typeof NATION_COLORS;
-
-/**
- * Union type of all valid tribe keys
- */
-export type TribeKey = keyof typeof TRIBE_COLORS;
-
-/**
- * Get color for a nation by its enum key (e.g., "EGYPT", "ROME")
- *
- * @param nation - The nation key (matching backend enum values)
- * @returns Hex color code, or undefined if nation not found
- */
-export function getNationColor(nation: string): string | undefined {
-	const key = nation.toUpperCase() as NationKey;
-	return NATION_COLORS[key];
+function zTypeFor(prefix: "NATION_" | "TRIBE_", civilization: string): string {
+	return prefix + civilization.toUpperCase().replace(/^(NATION_|TRIBE_)/, "");
 }
 
 /**
- * Get color for a tribe by its enum key (e.g., "GAULS", "DANES")
+ * Get color for a nation by its enum value (e.g., "NATION_EGYPT", "EGYPT")
  *
- * @param tribe - The tribe key (matching backend enum values)
+ * @param nation - The nation key, with or without the `NATION_` prefix
+ * @returns Hex color code, or undefined if nation not found
+ */
+export function getNationColor(nation: string): string | undefined {
+	return NATION_COLORS[zTypeFor("NATION_", nation)];
+}
+
+/**
+ * Get color for a tribe by its enum value (e.g., "TRIBE_GAULS", "GAULS")
+ *
+ * @param tribe - The tribe key, with or without the `TRIBE_` prefix
  * @returns Hex color code, or undefined if tribe not found
  */
 export function getTribeColor(tribe: string): string | undefined {
-	const key = tribe.toUpperCase() as TribeKey;
-	return TRIBE_COLORS[key];
+	return TRIBE_COLORS[zTypeFor("TRIBE_", tribe)];
 }
 
 /**
  * Get color for either a nation or tribe
  *
- * Convenience function that checks both nation and tribe colors.
- * Prioritizes nation colors if there's a key collision. Strips the
- * `NATION_`/`TRIBE_` prefix the backend stores so callers can pass the raw
- * enum value directly (the strip is a no-op for already-bare keys).
+ * Convenience function that checks both nation and tribe colors, so callers
+ * can pass the raw enum value the backend stores without knowing which of the
+ * two it names.
  *
  * @param civilization - The nation or tribe key, with or without prefix
  * @returns Hex color code, or undefined if not found
  */
 export function getCivilizationColor(civilization: string): string | undefined {
-	const key = civilization.replace(/^(NATION_|TRIBE_)/, "");
-	return getNationColor(key) ?? getTribeColor(key);
+	return getNationColor(civilization) ?? getTribeColor(civilization);
 }
 
 /**
@@ -117,11 +82,3 @@ export function getNationChartColor(
 	}
 	return getChartColor(fallbackIndex);
 }
-
-/**
- * Combined mapping of all nations and tribes for convenience
- */
-export const ALL_CIVILIZATION_COLORS = {
-	...NATION_COLORS,
-	...TRIBE_COLORS,
-} as const;
