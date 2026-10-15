@@ -13,13 +13,16 @@
 		formatEnum,
 		nationName,
 	} from "$lib/utils/formatting";
-	import { CHART_THEME, getNationChartColor } from "$lib/config";
+	import {
+		CHART_THEME,
+		TOOLTIP_MUTED,
+		TOOLTIP_TEXT,
+		getNationChartColor,
+	} from "$lib/config";
 	import { LAW_TO_CLASS } from "$lib/generated/law-classes";
 	import { TECH_BONUS_UNITS, UNIT_STATS } from "$lib/generated/unit-stats";
 	import SpriteIcon from "./SpriteIcon.svelte";
 	import EventRail, {
-		TOOLTIP_TEXT,
-		TOOLTIP_MUTED,
 		type RailGroup,
 		type RailMarker,
 	} from "./EventRail.svelte";
