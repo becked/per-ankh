@@ -15,6 +15,11 @@
 	import { hexNeighbors } from "$lib/utils/hex";
 	import MapTooltip from "$lib/MapTooltip.svelte";
 	import MapCityBanners, { type CityBanner } from "$lib/MapCityBanners.svelte";
+	import {
+		projectToCanvas,
+		type TileCoord,
+		type ViewState,
+	} from "$lib/game-detail/map-chrome";
 	import { formatEnum } from "$lib/utils/formatting";
 
 	// Hex geometry from atlas reference (pointy-top, matching sprite masks).
@@ -279,6 +284,8 @@
 		showPolitical = true,
 		showReligion = false,
 		isFinalTurn,
+		lockedTiles,
+		onToggleLock,
 		onCityHover,
 		onCityLeave,
 		onCityClick,
@@ -297,6 +304,16 @@
 		// Whether `tiles` is the final turn. CityInfo.citizens is an
 		// end-of-game count, so the banners carry it only then.
 		isFinalTurn: boolean;
+		// The tiles whose panels are locked to the map. Held by the map page,
+		// not here: this component is kept across /games/A/map →
+		// /games/B/map and takes no game identity, so a coordinate locked in
+		// one game would re-derive onto the next game's tile at the same
+		// coordinate.
+		lockedTiles: TileCoord[];
+		// A right-click landed on a tile: lock its panel, or unlock it if it
+		// already carries one. Raised too by a locked panel's own ✕.
+		// eslint-disable-next-line no-unused-vars -- parameter in callback signature
+		onToggleLock: (tile: TileCoord) => void;
 		// A banner was hovered or focused: the city, and the banner element the
 		// city popover anchors to. The map view opens the popover off this;
 		// the tile panel below stays with the tiles, which is what the hex
@@ -400,6 +417,15 @@
 	}
 	let hoverState = $state<HoverState | null>(null);
 
+	// Where a tile panel sits: the tile it names, and its anchor in
+	// canvas-local CSS pixels. The hover panel's anchor is the pointer's own
+	// position; a locked panel's is its hex, re-projected.
+	interface TilePanel {
+		tile: MapTile;
+		x: number;
+		y: number;
+	}
+
 	// What the panel renders: the hovered tile re-read from the live `tiles`
 	// array, not the object the hover handed over. A turn change rebuilds every
 	// tile object (`reconstructMapTiles` projects the final-turn snapshot into
@@ -410,9 +436,13 @@
 	// coordinate. A coordinate the new array has no entry for, which is a
 	// navigation to a game with a different map size, drops the panel, as the
 	// city popover closes at a turn its city has no banner at.
-	const hoverPanel = $derived.by(() => {
+	const hoverPanel = $derived.by<TilePanel | null>(() => {
 		const hover = hoverState;
 		if (!hover) return null;
+		// One panel per tile: a locked panel already stands over this hex, and
+		// the hover copy would render the same content on top of it.
+		if (lockedTiles.some((l) => l.x === hover.tile.x && l.y === hover.tile.y))
+			return null;
 		const tile = tiles.find(
 			(t) => t.x === hover.tile.x && t.y === hover.tile.y,
 		);
@@ -431,8 +461,8 @@
 
 	// Camera-control state. Tracked here so the overlay zoom buttons can read
 	// the current zoom and pan target and feed adjusted values back into the
-	// Deck via setProps.
-	type ViewState = { target: [number, number, number]; zoom: number };
+	// Deck via setProps — and so the DOM overlays can project world points
+	// through it.
 	const MIN_ZOOM = -6;
 	const MAX_ZOOM = 4;
 	const ZOOM_STEP = 0.75;
@@ -450,6 +480,73 @@
 			target: [t[0] ?? 0, t[1] ?? 0, t[2] ?? 0],
 			zoom,
 		};
+	}
+
+	// ─── Locked tile panels ───────────────────────────────────────────
+	// A locked panel holds its anchor in WORLD units and re-projects off
+	// `currentViewState`, so it keeps its hex through a pan and a zoom.
+	// Deriving off that one value covers every camera path: deck's controller
+	// raises `onViewStateChange`, and the overlay zoom buttons go around the
+	// controller but assign the same value themselves (`applyViewState`).
+	//
+	// Each panel re-reads its tile from the live `tiles` array by coordinate,
+	// as `hoverPanel` does, so the turn slider moves a locked panel's CONTENT
+	// while its anchor stays put — a panel locked at turn 40 names turn 80's
+	// tile once the slider is there. A coordinate the array has no entry for
+	// drops that panel.
+	//
+	// So does an anchor the camera has carried off the canvas: `MapTooltip`
+	// clamps to the canvas box, which keeps a panel beside its hex near an
+	// edge but would park it at `left: 4px` once the hex is off-canvas,
+	// naming a tile that isn't on screen.
+	const lockedPanels = $derived.by<TilePanel[]>(() => {
+		const viewState = currentViewState;
+		if (!viewState) return [];
+		const out: TilePanel[] = [];
+		for (const coord of lockedTiles) {
+			const tile = tiles.find((t) => t.x === coord.x && t.y === coord.y);
+			if (!tile) continue;
+			const [x, y] = projectToCanvas(
+				hexToPixel(tile.x, tile.y),
+				viewState,
+				deckWidth,
+				deckHeight,
+			);
+			if (x < 0 || x > deckWidth || y < 0 || y > deckHeight) continue;
+			out.push({ tile, x, y });
+		}
+		return out;
+	});
+
+	// Right-click toggles the lock on the tile under the cursor.
+	//
+	// It also suppresses the browser's own menu, which answers a right-click
+	// over a canvas with "Save image as…" / "Copy image". The handler sits on
+	// the container rather than the canvas because the DOM overlays — the city
+	// banners, and the locked panels themselves — are the canvas's SIBLINGS: a
+	// right-click on one would miss a canvas handler and get the browser's
+	// page menu. So the container suppresses the menu everywhere over the map,
+	// and only an event that landed on the canvas itself goes on to pick a
+	// tile.
+	async function handleContextMenu(e: MouseEvent) {
+		e.preventDefault();
+		// `isInitialized` is deck's own "safe to call public methods" flag: the
+		// Deck creates its device asynchronously, and picking before that
+		// trips an assertion inside it.
+		if (e.target !== deckCanvas || !deck?.isInitialized) return;
+		// Canvas-local CSS pixels, deck's own picking coordinates. The canvas
+		// keeps the size it was constructed with however the container is
+		// resized (see deckWidth), so the offset is read off the canvas.
+		const rect = deckCanvas.getBoundingClientRect();
+		const picked = await deck.pickObjectAsync({
+			x: e.clientX - rect.left,
+			y: e.clientY - rect.top,
+			radius: 0,
+		});
+		// The pickable PolygonLayer is fed the MapTile array directly, as
+		// `onHover` reads it.
+		const tile = picked?.object as MapTile | undefined;
+		if (tile) onToggleLock(tile);
 	}
 
 	// Resolve owner_nation → crest sprite key with a 3-tier fallback:
@@ -1915,16 +2012,27 @@
 	</div>
 {/snippet}
 
-<div class="sprite-map-container">
-	<!-- Right-click does nothing on the map, so the browser answers it with
-	     its own canvas menu — "Save image as…", "Copy image" — over the map.
-	     The suppression came free with right-click tile pinning and went out
-	     with it (#256), which this is the remaining half of. -->
-	<canvas
-		bind:this={deckCanvas}
-		class="sprite-map-canvas"
-		oncontextmenu={(e) => e.preventDefault()}
-	></canvas>
+{#snippet tilePanel(panel: TilePanel & { onUnlock?: () => void })}
+	<MapTooltip
+		tile={panel.tile}
+		cityFamily={panel.tile.owner_city
+			? (cityFamilyCrestByName.get(panel.tile.owner_city) ?? null)
+			: null}
+		nationCrestKey={resolveNationCrestKey(panel.tile.owner_nation)}
+		screenX={panel.x}
+		screenY={panel.y}
+		canvasWidth={deckWidth}
+		canvasHeight={deckHeight}
+		onUnlock={panel.onUnlock}
+	/>
+{/snippet}
+
+<!-- The container carries the right-click, for the reason handleContextMenu
+     gives; the gesture is pointer-only (#270), and no role describes a box
+     holding the canvas and its overlays. -->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div class="sprite-map-container" oncontextmenu={handleContextMenu}>
+	<canvas bind:this={deckCanvas} class="sprite-map-canvas"></canvas>
 
 	{@render zoomControls()}
 
@@ -1940,18 +2048,15 @@
 		/>
 	{/if}
 
+	{#each lockedPanels as panel (`${panel.tile.x},${panel.tile.y}`)}
+		{@render tilePanel({
+			...panel,
+			onUnlock: () => onToggleLock(panel.tile),
+		})}
+	{/each}
+
 	{#if hoverPanel}
-		<MapTooltip
-			tile={hoverPanel.tile}
-			cityFamily={hoverPanel.tile.owner_city
-				? (cityFamilyCrestByName.get(hoverPanel.tile.owner_city) ?? null)
-				: null}
-			nationCrestKey={resolveNationCrestKey(hoverPanel.tile.owner_nation)}
-			screenX={hoverPanel.x}
-			screenY={hoverPanel.y}
-			canvasWidth={deckWidth}
-			canvasHeight={deckHeight}
-		/>
+		{@render tilePanel(hoverPanel)}
 	{/if}
 </div>
 

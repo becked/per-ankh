@@ -3,6 +3,7 @@
 // turn rather than taken from the end of the game.
 
 import type { CharacterInfo, FamilyInfo } from "$lib/parser/types";
+import type { MapTile } from "$lib/types/MapTile";
 import type { TechDiscoveryHistory } from "$lib/types/TechDiscoveryHistory";
 import type { YieldDataPoint } from "$lib/types/YieldDataPoint";
 import type { YieldHistory } from "$lib/types/YieldHistory";
@@ -22,6 +23,43 @@ import type { GameTabId } from "./game-tabs.svelte";
 // bits-ui tooltip's content.
 export const CHROME_PANEL_CLASS =
 	"rounded border border-tan/50 bg-gradient-to-b from-surface/95 to-surface-deep/95 text-tan shadow-[inset_0_0_0_1px_rgb(var(--color-black)/0.6),0_4px_12px_rgb(var(--color-black)/0.5)]";
+
+/** A tile named by its place on the grid — what a locked tile panel holds. */
+export type TileCoord = Pick<MapTile, "x" | "y">;
+
+/**
+ * The deck's camera, as the map's DOM overlays read it: its pan target and
+ * zoom, with the target normalized to a 3-tuple (deck's own
+ * OrthographicViewState allows a 2-tuple, or none at all).
+ */
+export interface ViewState {
+	target: [number, number, number];
+	zoom: number;
+}
+
+/**
+ * World → canvas-local CSS pixels, the orthographic view's own affine:
+ * (world − target) × 2^zoom, centred on the canvas. OrthographicView's
+ * default flipY means growing world Y runs down the screen, which is the
+ * convention `SpriteMap`'s `hexToPixel` already negates into.
+ *
+ * Shared rather than per-overlay: the city banners and the locked tile panels
+ * both place something over a world point, and two copies of the affine drift
+ * apart.
+ */
+export function projectToCanvas(
+	world: [number, number],
+	viewState: ViewState,
+	canvasWidth: number,
+	canvasHeight: number,
+): [number, number] {
+	const [targetX, targetY] = viewState.target;
+	const scale = Math.pow(2, viewState.zoom);
+	return [
+		(world[0] - targetX) * scale + canvasWidth / 2,
+		(world[1] - targetY) * scale + canvasHeight / 2,
+	];
+}
 
 export interface TopBarYield {
 	yieldType: string;

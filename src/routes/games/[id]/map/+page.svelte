@@ -21,7 +21,10 @@
 		saveOwnerPlayer,
 		type DetailPlayer,
 	} from "$lib/game-detail/helpers";
-	import { CHROME_PANEL_CLASS } from "$lib/game-detail/map-chrome";
+	import {
+		CHROME_PANEL_CLASS,
+		type TileCoord,
+	} from "$lib/game-detail/map-chrome";
 	import { reconstructMapTiles } from "$lib/game-detail/reconstruct-map-tiles";
 	import SpriteMap from "$lib/SpriteMap.svelte";
 
@@ -58,6 +61,25 @@
 	let showPolitical = $state(true);
 	let showReligion = $state(false);
 
+	// ─── Locked tile panels ───────────────────────────────────────────
+	// Right-clicking a tile leaves a copy of its hover panel glued to its hex,
+	// so two tiles can be compared side by side and a tile's detail stays
+	// readable while the pointer is somewhere else. SpriteMap raises the
+	// toggle and renders the panels; the coordinates live here, beside the
+	// city popover's state, because the route keeps one SpriteMap across
+	// /games/A/map → /games/B/map and SpriteMap takes no game identity: a
+	// coordinate locked in one game would re-derive onto the next game's tile
+	// at the same coordinate. So the list clears with the rest of the
+	// per-game state below.
+	let lockedTiles = $state<TileCoord[]>([]);
+
+	function toggleTileLock(tile: TileCoord) {
+		const held = lockedTiles.some((l) => l.x === tile.x && l.y === tile.y);
+		lockedTiles = held
+			? lockedTiles.filter((l) => l.x !== tile.x || l.y !== tile.y)
+			: [...lockedTiles, { x: tile.x, y: tile.y }];
+	}
+
 	// Re-sync when the route navigates to a different game. Only the match id
 	// is tracked; the body reads via untrack(), so a revalidation for the same
 	// game (e.g. invalidateAll() from a rename) keeps the selected turn and
@@ -68,6 +90,7 @@
 			selectedMapTurn = game.game_details.total_turns;
 			mapTiles = game.map_tiles;
 			playerId = defaultPlayerId(game, players);
+			lockedTiles = [];
 		});
 	});
 
@@ -253,6 +276,8 @@
 				{showPolitical}
 				{showReligion}
 				isFinalTurn={selectedMapTurn >= game.game_details.total_turns}
+				{lockedTiles}
+				onToggleLock={toggleTileLock}
 				onCityHover={hoverCityBanner}
 				onCityLeave={leaveCityBanner}
 				onCityClick={openCityPopover}

@@ -25,7 +25,11 @@
 	// per-file sprites rather than atlas cells, and it's what opens the city
 	// popover — so it needs focus and keyboard.
 	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
-	import { CHROME_PANEL_CLASS } from "$lib/game-detail/map-chrome";
+	import {
+		CHROME_PANEL_CLASS,
+		projectToCanvas,
+		type ViewState,
+	} from "$lib/game-detail/map-chrome";
 
 	// How far above the tile centre the banner's foot sits, in WORLD units, so
 	// it holds the same place at every zoom. This is the tile's own hex top
@@ -61,7 +65,7 @@
 		// The deck's current camera. The parent only renders this component
 		// once it has one, so no banner is ever placed without it (and SSR
 		// emits none).
-		viewState: { target: [number, number, number]; zoom: number };
+		viewState: ViewState;
 		canvasWidth: number;
 		canvasHeight: number;
 		// The pointer or the keyboard arrived on a banner: the city, and the
@@ -79,25 +83,15 @@
 		onBannerClick: (cityName: string, element: HTMLElement) => void;
 	} = $props();
 
-	const scale = $derived(Math.pow(2, viewState.zoom));
 	const full = $derived(viewState.zoom >= FULL_BANNER_MIN_ZOOM);
 
-	/**
-	 * World → canvas-local CSS pixels, the orthographic view's own affine:
-	 * (world − target) × 2^zoom, centred on the canvas. OrthographicView's
-	 * default flipY means growing world Y runs down the screen, which is the
-	 * convention hexToPixel already negates into.
-	 */
-	function project(worldX: number, worldY: number): [number, number] {
-		const [tx, ty] = viewState.target;
-		return [
-			(worldX - tx) * scale + canvasWidth / 2,
-			(worldY - ty) * scale + canvasHeight / 2,
-		];
-	}
-
 	function footOf(banner: CityBanner): [number, number] {
-		return project(banner.worldX, banner.worldY - BANNER_WORLD_OFFSET_Y);
+		return projectToCanvas(
+			[banner.worldX, banner.worldY - BANNER_WORLD_OFFSET_Y],
+			viewState,
+			canvasWidth,
+			canvasHeight,
+		);
 	}
 </script>
 
