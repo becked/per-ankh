@@ -81,8 +81,48 @@
 	// the camera moves. It stays live while the turn slider scrubs, and closes
 	// once the selected turn is one the city has no banner at — before it was
 	// founded, or while it sits unowned mid-capture.
+	//
+	// Pointing at a banner is enough to open it. bits-ui has this built in
+	// (`openOnHover` on `Popover.Trigger`, with a safe-polygon bridge), but it
+	// hangs off the trigger's own node, and this card has no trigger: the
+	// banner is drawn inside SpriteMap while the card needs the whole game, so
+	// it's anchored from out here. Hence the two halves of hover intent by
+	// hand, at the delays already in use — the open delay is the chrome's own
+	// tooltips (`delayDuration={200}`, MapChrome and MapYieldStrip), the close
+	// delay is bits-ui's `closeDelay` default for the trigger above.
+	//
+	// A click PINS what hover opened: a touch raises no hover at all, so tap
+	// is the only way in on a phone, and a card that evaporated the moment the
+	// pointer wandered off would be worse than the click-only card this
+	// replaces.
+	const HOVER_OPEN_MS = 200;
+	const HOVER_CLOSE_MS = 300;
+
 	let popoverCity = $state<string | null>(null);
 	let popoverAnchor = $state<HTMLElement | null>(null);
+	let popoverPinned = $state(false);
+	let openTimer: ReturnType<typeof setTimeout> | null = null;
+	let closeTimer: ReturnType<typeof setTimeout> | null = null;
+
+	function cancelOpen() {
+		if (openTimer === null) return;
+		clearTimeout(openTimer);
+		openTimer = null;
+	}
+
+	function cancelClose() {
+		if (closeTimer === null) return;
+		clearTimeout(closeTimer);
+		closeTimer = null;
+	}
+
+	function closePopover() {
+		cancelOpen();
+		cancelClose();
+		popoverCity = null;
+		popoverAnchor = null;
+		popoverPinned = false;
+	}
 
 	const bannerCities = $derived.by(() => {
 		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- locally-scoped Set, not reactive state
@@ -94,15 +134,50 @@
 	});
 
 	$effect(() => {
-		if (popoverCity !== null && !bannerCities.has(popoverCity)) {
-			popoverCity = null;
-			popoverAnchor = null;
-		}
+		if (popoverCity !== null && !bannerCities.has(popoverCity)) closePopover();
 	});
 
+	// Timers outlive the component otherwise: scrubbing to a turn that drops
+	// the banner, or navigating away, can land between the hover and the open.
+	$effect(() => () => {
+		cancelOpen();
+		cancelClose();
+	});
+
+	// Hover, or keyboard focus, on a banner. Both arrive here so the card
+	// opens the same way either way.
+	function hoverCityBanner(cityName: string, element: HTMLElement) {
+		cancelClose();
+		if (popoverCity === cityName) return;
+		cancelOpen();
+		openTimer = setTimeout(() => {
+			openTimer = null;
+			popoverCity = cityName;
+			popoverAnchor = element;
+			popoverPinned = false;
+		}, HOVER_OPEN_MS);
+	}
+
+	// The pointer left the banner, or the card. Either way the card has to
+	// outlast the crossing between them — they are a `sideOffset` apart, and
+	// the card is where a long city's record is read and scrolled.
+	function leaveCityBanner() {
+		cancelOpen();
+		if (popoverCity === null || popoverPinned) return;
+		cancelClose();
+		closeTimer = setTimeout(() => {
+			closeTimer = null;
+			popoverCity = null;
+			popoverAnchor = null;
+		}, HOVER_CLOSE_MS);
+	}
+
 	function openCityPopover(cityName: string, element: HTMLElement) {
+		cancelOpen();
+		cancelClose();
 		popoverCity = cityName;
 		popoverAnchor = element;
+		popoverPinned = true;
 	}
 
 	// ─── Lightboxes ───────────────────────────────────────────────────
@@ -178,6 +253,8 @@
 				{showPolitical}
 				{showReligion}
 				isFinalTurn={selectedMapTurn >= game.game_details.total_turns}
+				onCityHover={hoverCityBanner}
+				onCityLeave={leaveCityBanner}
 				onCityClick={openCityPopover}
 			/>
 			<MapChrome
@@ -196,10 +273,7 @@
 	<Popover
 		open={popoverCity !== null}
 		onOpenChange={(o) => {
-			if (!o) {
-				popoverCity = null;
-				popoverAnchor = null;
-			}
+			if (!o) closePopover();
 		}}
 		customAnchor={popoverAnchor}
 		updatePositionStrategy="always"
@@ -208,6 +282,9 @@
 		contentClass="w-[min(94vw,44rem)]"
 		frameClass="{CHROME_PANEL_CLASS} p-3"
 		ariaLabel="City detail"
+		autoFocus={false}
+		onpointerenter={cancelClose}
+		onpointerleave={leaveCityBanner}
 	>
 		{#if popoverCity}
 			<CityPopover

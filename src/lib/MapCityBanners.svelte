@@ -1,13 +1,9 @@
 <script module lang="ts">
-	import type { MapTile } from "$lib/types/MapTile";
-
 	/** One city's banner: where it sits on the map and what it says. */
 	export interface CityBanner {
 		cityName: string;
 		/** Display name, already run through formatEnum. */
 		label: string;
-		/** The city-centre tile, handed back on hover so the tile panel shows. */
-		tile: MapTile;
 		/** Projected centre of the city-centre tile, in world units. */
 		worldX: number;
 		worldY: number;
@@ -26,8 +22,8 @@
 	// button per city, sitting above the city sprite and following the camera.
 	//
 	// Not deck.gl layers: a banner wears the chrome's frame, its crests are
-	// per-file sprites rather than atlas cells, and it's the click target for
-	// the city popover — so it needs focus and keyboard.
+	// per-file sprites rather than atlas cells, and it's what opens the city
+	// popover — so it needs focus and keyboard.
 	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
 	import { CHROME_PANEL_CLASS } from "$lib/game-detail/map-chrome";
 
@@ -58,6 +54,7 @@
 		canvasWidth,
 		canvasHeight,
 		onBannerHover,
+		onBannerLeave,
 		onBannerClick,
 	}: {
 		banners: CityBanner[];
@@ -67,10 +64,17 @@
 		viewState: { target: [number, number, number]; zoom: number };
 		canvasWidth: number;
 		canvasHeight: number;
-		// Hover hands the centre tile and the banner's foot (canvas-local CSS
-		// pixels) back, so the parent can keep its tile panel up.
+		// The pointer or the keyboard arrived on a banner: the city, and the
+		// element the popover anchors to. Hover and focus report the same
+		// thing, so the popover opens the same way for both.
 		// eslint-disable-next-line no-unused-vars -- parameter in callback signature
-		onBannerHover: (tile: MapTile, screenX: number, screenY: number) => void;
+		onBannerHover: (cityName: string, element: HTMLElement) => void;
+		// …and left it again. The parent waits out its own grace period before
+		// closing, so the pointer can cross the gap into the popover.
+		onBannerLeave: () => void;
+		// A banner was clicked or tapped. Separate from the hover above
+		// because it PINS the popover: a touch raises no hover at all, and a
+		// deliberate click shouldn't evaporate when the pointer wanders off.
 		// eslint-disable-next-line no-unused-vars -- parameter in callback signature
 		onBannerClick: (cityName: string, element: HTMLElement) => void;
 	} = $props();
@@ -99,22 +103,23 @@
 
 {#each banners as banner (banner.cityName)}
 	{@const [left, top] = footOf(banner)}
-	{@const anchor = project(banner.worldX, banner.worldY)}
 	<button
 		type="button"
 		class="city-banner {full ? CHROME_PANEL_CLASS : 'is-label'}"
 		style="left: {left}px; top: {top}px;"
 		onmouseenter={(e) => {
 			// A held button means the map is being dragged under the cursor, so a
-			// banner sliding past it isn't a hover. Without this, the panel the
-			// pan just dropped comes straight back, pinned to whichever city the
-			// cursor swept over. deck.gl suppresses its own hover picking on the
-			// same grounds, though on a narrower test — `Deck._onPointerMove`
-			// bails on the left or right button, the two that pan its camera,
-			// where this also stands down for a held middle button.
-			if (e.buttons === 0) onBannerHover(banner.tile, anchor[0], anchor[1]);
+			// banner sliding past it isn't a hover. Without this, a drag across
+			// the map opens the popover of whichever city the cursor swept over.
+			// deck.gl suppresses its own hover picking on the same grounds,
+			// though on a narrower test — `Deck._onPointerMove` bails on the
+			// left or right button, the two that pan its camera, where this
+			// also stands down for a held middle button.
+			if (e.buttons === 0) onBannerHover(banner.cityName, e.currentTarget);
 		}}
-		onfocus={() => onBannerHover(banner.tile, anchor[0], anchor[1])}
+		onmouseleave={onBannerLeave}
+		onfocus={(e) => onBannerHover(banner.cityName, e.currentTarget)}
+		onblur={onBannerLeave}
 		onclick={(e) => onBannerClick(banner.cityName, e.currentTarget)}
 	>
 		{#if full && banner.nationCrestKey}

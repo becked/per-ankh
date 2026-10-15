@@ -279,6 +279,8 @@
 		showPolitical = true,
 		showReligion = false,
 		isFinalTurn,
+		onCityHover,
+		onCityLeave,
 		onCityClick,
 	}: {
 		tiles: MapTile[];
@@ -295,8 +297,15 @@
 		// Whether `tiles` is the final turn. CityInfo.citizens is an
 		// end-of-game count, so the banners carry it only then.
 		isFinalTurn: boolean;
-		// A banner was clicked: the city, and the banner element the city
-		// popover anchors to.
+		// A banner was hovered or focused: the city, and the banner element the
+		// city popover anchors to. The map view opens the popover off this;
+		// the tile panel below stays with the tiles, which is what the hex
+		// UNDER a banner still raises.
+		// eslint-disable-next-line no-unused-vars -- parameter in callback signature
+		onCityHover: (cityName: string, element: HTMLElement) => void;
+		// The pointer or focus left the banner.
+		onCityLeave: () => void;
+		// A banner was clicked or tapped — the same popover, pinned open.
 		// eslint-disable-next-line no-unused-vars -- parameter in callback signature
 		onCityClick: (cityName: string, element: HTMLElement) => void;
 	} = $props();
@@ -510,7 +519,6 @@
 			out.push({
 				cityName: t.owner_city,
 				label: formatEnum(t.owner_city, "CITYNAME_"),
-				tile: t,
 				worldX,
 				worldY,
 				// Resolved as MapTooltip resolves it, so a tile's hover colour
@@ -1908,7 +1916,15 @@
 {/snippet}
 
 <div class="sprite-map-container">
-	<canvas bind:this={deckCanvas} class="sprite-map-canvas"></canvas>
+	<!-- Right-click does nothing on the map, so the browser answers it with
+	     its own canvas menu — "Save image as…", "Copy image" — over the map.
+	     The suppression came free with right-click tile pinning and went out
+	     with it (#256), which this is the remaining half of. -->
+	<canvas
+		bind:this={deckCanvas}
+		class="sprite-map-canvas"
+		oncontextmenu={(e) => e.preventDefault()}
+	></canvas>
 
 	{@render zoomControls()}
 
@@ -1918,7 +1934,8 @@
 			viewState={currentViewState}
 			canvasWidth={deckWidth}
 			canvasHeight={deckHeight}
-			onBannerHover={(tile, x, y) => (hoverState = { tile, x, y })}
+			onBannerHover={onCityHover}
+			onBannerLeave={onCityLeave}
 			onBannerClick={onCityClick}
 		/>
 	{/if}
