@@ -2,16 +2,24 @@
 	// Inline action buttons rendered in the game header (GameHeader, shared
 	// by the analyst, map and screenshots views), next to the save date.
 	//
-	// The buttons are all icon-only, and all but the camera open a small
+	// All but the lock are icon-only, and all but the camera open a small
 	// popover with an explanation + confirm/cancel pair. Click-outside and
 	// Escape dismiss. Only one popover is open at a time — opening a second
 	// closes the first, and opening the camera's modal closes it too.
 	//
+	// The icon-only ones carry their name in a $lib/ui/Tooltip rather than a
+	// `title`, which a keyboard and a touch pointer never raise. The lock is
+	// the exception: its label is on the button because it is a value — which
+	// of the two states the game is in — and not the control's name, so a
+	// tooltip would only repeat what is already legible.
+	//
 	//   - Public/Private lock: owner-only.
 	//   - Camera (add a screenshot): owner-only, and the whole of the picker —
 	//     the game's screenshots are their own view now, so the one thing that
-	//     writes to them belongs beside the toggle that reaches it rather than
-	//     inside the view itself, where the owner would have to be already.
+	//     writes to them belongs beside the toggle that reaches it, where it is
+	//     in reach from all three views. The screenshots view offers a second
+	//     one while it is empty, since that is the first thing an owner with no
+	//     screenshots sees; both go through GameScreenshots.prepend.
 	//     The one button here that opens a modal rather than a popover
 	//     (ScreenshotUploadModal): a preview of the image that will be
 	//     stored, and once per account the terms, don't fit a panel hung
@@ -21,6 +29,7 @@
 	//     surfacing a button that immediately bounces to / is noise.
 	//   - Delete: owner-only.
 
+	import { Tooltip as BitsTooltip } from "bits-ui";
 	import { goto, invalidateAll } from "$app/navigation";
 	import { resolve } from "$app/paths";
 	import { page } from "$app/state";
@@ -32,6 +41,7 @@
 	} from "$lib/api-cloud";
 	import type { GameScreenshots } from "$lib/game-detail/screenshots-context.svelte";
 	import ScreenshotUploadModal from "$lib/screenshots/ScreenshotUploadModal.svelte";
+	import Tooltip from "$lib/ui/Tooltip.svelte";
 	import { toast } from "$lib/ui/toast";
 	import { saveBlobAs } from "$lib/utils/download";
 	import { profileHref } from "$lib/utils/profile-href";
@@ -255,116 +265,235 @@
 
 <svelte:window onclick={handleClickOutside} onkeydown={handleKeydown} />
 
-<div class="flex items-center gap-2">
-	{#if isOwner}
-		<div class="relative">
-			<button
-				type="button"
-				onclick={() => togglePopover("lock")}
-				disabled={toggling}
-				aria-pressed={isPublic}
-				aria-haspopup="dialog"
-				aria-expanded={openPopover === "lock"}
-				title={isPublic ? "Currently Public" : "Currently Private"}
-				class="action-trigger flex items-center gap-1.5 rounded border border-tan px-2 py-1 text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
-			>
-				{#if isPublic}
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						class="h-3.5 w-3.5"
-						fill="none"
-						viewBox="0 0 24 24"
-						stroke="currentColor"
-						stroke-width="2"
-						aria-hidden="true"
-					>
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							d="M13.5 10.5V6.75a4.5 4.5 0 119 0v3.75M3.75 21.75h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H3.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"
-						/>
-					</svg>
-					<span class="text-xs">Public</span>
-				{:else}
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						class="h-3.5 w-3.5"
-						fill="none"
-						viewBox="0 0 24 24"
-						stroke="currentColor"
-						stroke-width="2"
-						aria-hidden="true"
-					>
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"
-						/>
-					</svg>
-					<span class="text-xs">Private</span>
-				{/if}
-			</button>
-
-			{#if openPopover === "lock"}
-				<div
-					class="action-popover absolute right-0 top-full z-50 mt-2 w-64 rounded border-2 border-black bg-blue-gray p-3 shadow-lg"
-					role="dialog"
+<!-- One provider for the whole row, as MapChrome wraps its tab cluster in
+     one: the group is what carries a tooltip from icon to icon without
+     re-paying the delay, and what keeps a second one from standing while
+     the first is up. $lib/ui/Tooltip leaves it to the call site for that
+     reason. -->
+<BitsTooltip.Provider delayDuration={200} disableHoverableContent>
+	<div class="flex items-center gap-2">
+		{#if isOwner}
+			<div class="relative">
+				<button
+					type="button"
+					onclick={() => togglePopover("lock")}
+					disabled={toggling}
+					aria-pressed={isPublic}
+					aria-haspopup="dialog"
+					aria-expanded={openPopover === "lock"}
+					class="action-trigger flex items-center gap-1.5 rounded border border-tan px-2 py-1 text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
 				>
 					{#if isPublic}
-						<p class="mb-3 text-xs text-tan">
-							Make this game private? The shared link will stop working until
-							you make it public again.
-						</p>
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							class="h-3.5 w-3.5"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+							stroke-width="2"
+							aria-hidden="true"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								d="M13.5 10.5V6.75a4.5 4.5 0 119 0v3.75M3.75 21.75h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H3.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"
+							/>
+						</svg>
+						<span class="text-xs">Public</span>
 					{:else}
-						<p class="mb-3 text-xs text-tan">
-							Make this game public? Anyone with the link will be able to view
-							it.
-						</p>
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							class="h-3.5 w-3.5"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+							stroke-width="2"
+							aria-hidden="true"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"
+							/>
+						</svg>
+						<span class="text-xs">Private</span>
 					{/if}
-					<div class="flex justify-end gap-2">
-						<button
-							type="button"
-							onclick={closePopover}
-							class="rounded border border-tan px-2 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange"
-						>
-							Cancel
-						</button>
-						<button
-							type="button"
-							onclick={confirmToggleVisibility}
-							class="rounded border border-orange px-2 py-1 text-xs text-orange transition-colors hover:bg-orange/10"
-						>
-							{isPublic ? "Make private" : "Make public"}
-						</button>
-					</div>
-				</div>
-			{/if}
-		</div>
-	{/if}
+				</button>
 
-	{#if isOwner}
-		<!-- `featured: false` is the one field the 201 doesn't carry: a
-		     screenshot a moment old has never been starred, and the admin
-		     star the gallery renders reads it. -->
-		<ScreenshotUploadModal
-			bind:open={screenshotOpen}
-			onOpenChange={(o) => {
-				if (o) closePopover();
-			}}
-			{gameId}
-			{isPublic}
-			onUploaded={(shot) =>
-				(screenshots.list = [
-					{ ...shot, featured: false },
-					...screenshots.list,
-				])}
-		>
-			{#snippet trigger({ props })}
-				<button
-					{...props}
-					type="button"
-					title="Add a screenshot"
-					class="rounded border border-tan p-1 text-tan transition-colors hover:border-orange hover:text-orange"
+				{#if openPopover === "lock"}
+					<div
+						class="action-popover absolute right-0 top-full z-50 mt-2 w-64 rounded border-2 border-black bg-blue-gray p-3 shadow-lg"
+						role="dialog"
+					>
+						{#if isPublic}
+							<p class="mb-3 text-xs text-tan">
+								Make this game private? The shared link will stop working until
+								you make it public again.
+							</p>
+						{:else}
+							<p class="mb-3 text-xs text-tan">
+								Make this game public? Anyone with the link will be able to view
+								it.
+							</p>
+						{/if}
+						<div class="flex justify-end gap-2">
+							<button
+								type="button"
+								onclick={closePopover}
+								class="rounded border border-tan px-2 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange"
+							>
+								Cancel
+							</button>
+							<button
+								type="button"
+								onclick={confirmToggleVisibility}
+								class="rounded border border-orange px-2 py-1 text-xs text-orange transition-colors hover:bg-orange/10"
+							>
+								{isPublic ? "Make private" : "Make public"}
+							</button>
+						</div>
+					</div>
+				{/if}
+			</div>
+		{/if}
+
+		{#if isOwner}
+			<ScreenshotUploadModal
+				bind:open={screenshotOpen}
+				onOpenChange={(o) => {
+					if (o) closePopover();
+				}}
+				{gameId}
+				{isPublic}
+				onUploaded={(shot) => screenshots.prepend(shot)}
+			>
+				{#snippet trigger({ props })}
+					<!-- Two bits-ui triggers on one button: the dialog's props spread
+					     into the tooltip, which hands both sets to its own
+					     Tooltip.Trigger for mergeProps to chain. The label is the
+					     modal's own title, so pressing it confirms what was promised. -->
+					<Tooltip
+						label="Add a screenshot"
+						{...props}
+						class="rounded border border-tan p-1 text-tan transition-colors hover:border-orange hover:text-orange"
+					>
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							class="h-3.5 w-3.5"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+							stroke-width="2"
+							aria-hidden="true"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"
+							/>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z"
+							/>
+						</svg>
+					</Tooltip>
+				{/snippet}
+			</ScreenshotUploadModal>
+		{/if}
+
+		{#if isOwner}
+			<div class="relative">
+				<Tooltip
+					label="Rename"
+					onclick={() => togglePopover("rename")}
+					disabled={renaming}
+					aria-haspopup="dialog"
+					aria-expanded={openPopover === "rename"}
+					class="action-trigger rounded border border-tan p-1 text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
+				>
+					<!-- Inline SVG pencil; no external sprite dep. -->
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						viewBox="0 0 20 20"
+						fill="currentColor"
+						class="h-3.5 w-3.5"
+						aria-hidden="true"
+					>
+						<path
+							d="M13.586 3.586a2 2 0 1 1 2.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793 4 13.172V16h2.828l7.379-7.379-2.828-2.828z"
+						/>
+					</svg>
+				</Tooltip>
+
+				{#if openPopover === "rename"}
+					<!-- svelte-ignore a11y_click_events_have_key_events -->
+					<div
+						class="action-popover absolute right-0 top-full z-50 mt-2 w-64 rounded border-2 border-black bg-blue-gray p-3 shadow-lg"
+						role="dialog"
+						tabindex="-1"
+						onclick={(e) => e.stopPropagation()}
+					>
+						<p class="mb-2 text-xs font-semibold text-tan">Rename save</p>
+						<!-- svelte-ignore a11y_autofocus -->
+						<input
+							type="text"
+							bind:value={renameValue}
+							maxlength={120}
+							placeholder={gameName ?? "Save title"}
+							autofocus
+							disabled={renaming}
+							class="w-full rounded border border-input bg-surface-raised px-2 py-1 text-sm text-tan placeholder:text-placeholder focus:border-input-focus focus:outline-none"
+							onkeydown={(e) => {
+								if (e.key === "Enter") submitRename();
+								if (e.key === "Escape") closePopover();
+							}}
+						/>
+						{#if renameError}
+							<p class="mt-1 text-[10px] text-orange">{renameError}</p>
+						{/if}
+						<div class="mt-2 flex justify-end gap-2">
+							{#if displayName != null && displayName.trim() !== ""}
+								<button
+									type="button"
+									onclick={() => confirmRename(null)}
+									disabled={renaming}
+									title="Clear the rename and fall back to the save's original title"
+									class="mr-auto rounded border border-tan px-2 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
+								>
+									Reset
+								</button>
+							{/if}
+							<button
+								type="button"
+								onclick={closePopover}
+								class="rounded border border-tan px-2 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange"
+							>
+								Cancel
+							</button>
+							<button
+								type="button"
+								onclick={submitRename}
+								disabled={renaming}
+								class="rounded border border-orange px-2 py-1 text-xs text-orange transition-colors hover:bg-orange/10 disabled:opacity-50"
+							>
+								Save
+							</button>
+						</div>
+					</div>
+				{/if}
+			</div>
+		{/if}
+
+		{#if isOwner}
+			<div class="relative">
+				<Tooltip
+					label="Move to collection"
+					onclick={() => togglePopover("collection")}
+					disabled={moving}
+					aria-haspopup="dialog"
+					aria-expanded={openPopover === "collection"}
+					class="action-trigger rounded border border-tan p-1 text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
 				>
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
@@ -378,399 +507,280 @@
 						<path
 							stroke-linecap="round"
 							stroke-linejoin="round"
-							d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"
-						/>
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z"
+							d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"
 						/>
 					</svg>
-				</button>
-			{/snippet}
-		</ScreenshotUploadModal>
-	{/if}
+				</Tooltip>
 
-	{#if isOwner}
-		<div class="relative">
-			<button
-				type="button"
-				onclick={() => togglePopover("rename")}
-				disabled={renaming}
-				aria-haspopup="dialog"
-				aria-expanded={openPopover === "rename"}
-				title="Rename"
-				class="action-trigger rounded border border-tan p-1 text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
-			>
-				<!-- Inline SVG pencil; no external sprite dep. -->
-				<svg
-					xmlns="http://www.w3.org/2000/svg"
-					viewBox="0 0 20 20"
-					fill="currentColor"
-					class="h-3.5 w-3.5"
-					aria-hidden="true"
-				>
-					<path
-						d="M13.586 3.586a2 2 0 1 1 2.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793 4 13.172V16h2.828l7.379-7.379-2.828-2.828z"
-					/>
-				</svg>
-			</button>
+				{#if openPopover === "collection"}
+					<!--
+						stopPropagation here because clicks on inline-toggle controls
+						inside this popover (e.g. "+ New collection…", Cancel) swap
+						the clicked element out of the DOM via {#if}; by the time the
+						click bubbles to the window-level handleClickOutside,
+						target.closest() can no longer find the popover and it gets
+						closed unintentionally.
+					-->
+					<!-- svelte-ignore a11y_click_events_have_key_events -->
+					<div
+						class="action-popover absolute right-0 top-full z-50 mt-2 w-56 rounded border-2 border-black bg-blue-gray p-2 shadow-lg"
+						role="dialog"
+						tabindex="-1"
+						onclick={(e) => e.stopPropagation()}
+					>
+						<p class="mb-2 px-1 text-xs font-semibold text-tan">
+							Move to collection
+						</p>
+						<div class="max-h-56 overflow-y-auto">
+							{#each collections as c (c.collection_id)}
+								{@const isCurrent = c.collection_id === currentCollectionId}
+								<button
+									type="button"
+									onclick={() => moveToCollection(c.collection_id)}
+									disabled={moving}
+									class="flex w-full items-center justify-between rounded px-2 py-1 text-left text-xs text-tan transition-colors hover:bg-surface-raised disabled:opacity-50 {isCurrent
+										? 'bg-surface-raised'
+										: ''}"
+								>
+									<span class="truncate">{c.name}</span>
+									{#if isCurrent}
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											class="h-3.5 w-3.5 shrink-0 text-orange"
+											viewBox="0 0 20 20"
+											fill="currentColor"
+											aria-hidden="true"
+										>
+											<path
+												fill-rule="evenodd"
+												d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+												clip-rule="evenodd"
+											/>
+										</svg>
+									{/if}
+								</button>
+							{/each}
+						</div>
 
-			{#if openPopover === "rename"}
-				<!-- svelte-ignore a11y_click_events_have_key_events -->
-				<div
-					class="action-popover absolute right-0 top-full z-50 mt-2 w-64 rounded border-2 border-black bg-blue-gray p-3 shadow-lg"
-					role="dialog"
-					tabindex="-1"
-					onclick={(e) => e.stopPropagation()}
-				>
-					<p class="mb-2 text-xs font-semibold text-tan">Rename save</p>
-					<!-- svelte-ignore a11y_autofocus -->
-					<input
-						type="text"
-						bind:value={renameValue}
-						maxlength={120}
-						placeholder={gameName ?? "Save title"}
-						autofocus
-						disabled={renaming}
-						class="w-full rounded border border-input bg-surface-raised px-2 py-1 text-sm text-tan placeholder:text-placeholder focus:border-input-focus focus:outline-none"
-						onkeydown={(e) => {
-							if (e.key === "Enter") submitRename();
-							if (e.key === "Escape") closePopover();
-						}}
-					/>
-					{#if renameError}
-						<p class="mt-1 text-[10px] text-orange">{renameError}</p>
-					{/if}
-					<div class="mt-2 flex justify-end gap-2">
-						{#if displayName != null && displayName.trim() !== ""}
-							<button
-								type="button"
-								onclick={() => confirmRename(null)}
-								disabled={renaming}
-								title="Clear the rename and fall back to the save's original title"
-								class="mr-auto rounded border border-tan px-2 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
-							>
-								Reset
-							</button>
-						{/if}
-						<button
-							type="button"
-							onclick={closePopover}
-							class="rounded border border-tan px-2 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange"
-						>
-							Cancel
-						</button>
-						<button
-							type="button"
-							onclick={submitRename}
-							disabled={renaming}
-							class="rounded border border-orange px-2 py-1 text-xs text-orange transition-colors hover:bg-orange/10 disabled:opacity-50"
-						>
-							Save
-						</button>
-					</div>
-				</div>
-			{/if}
-		</div>
-	{/if}
-
-	{#if isOwner}
-		<div class="relative">
-			<button
-				type="button"
-				onclick={() => togglePopover("collection")}
-				disabled={moving}
-				aria-haspopup="dialog"
-				aria-expanded={openPopover === "collection"}
-				title="Add to collection"
-				class="action-trigger rounded border border-tan p-1 text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
-			>
-				<svg
-					xmlns="http://www.w3.org/2000/svg"
-					class="h-3.5 w-3.5"
-					fill="none"
-					viewBox="0 0 24 24"
-					stroke="currentColor"
-					stroke-width="2"
-					aria-hidden="true"
-				>
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"
-					/>
-				</svg>
-			</button>
-
-			{#if openPopover === "collection"}
-				<!--
-					stopPropagation here because clicks on inline-toggle controls
-					inside this popover (e.g. "+ New collection…", Cancel) swap
-					the clicked element out of the DOM via {#if}; by the time the
-					click bubbles to the window-level handleClickOutside,
-					target.closest() can no longer find the popover and it gets
-					closed unintentionally.
-				-->
-				<!-- svelte-ignore a11y_click_events_have_key_events -->
-				<div
-					class="action-popover absolute right-0 top-full z-50 mt-2 w-56 rounded border-2 border-black bg-blue-gray p-2 shadow-lg"
-					role="dialog"
-					tabindex="-1"
-					onclick={(e) => e.stopPropagation()}
-				>
-					<p class="mb-2 px-1 text-xs font-semibold text-tan">
-						Move to collection
-					</p>
-					<div class="max-h-56 overflow-y-auto">
-						{#each collections as c (c.collection_id)}
-							{@const isCurrent = c.collection_id === currentCollectionId}
-							<button
-								type="button"
-								onclick={() => moveToCollection(c.collection_id)}
-								disabled={moving}
-								class="flex w-full items-center justify-between rounded px-2 py-1 text-left text-xs text-tan transition-colors hover:bg-surface-raised disabled:opacity-50 {isCurrent
-									? 'bg-surface-raised'
-									: ''}"
-							>
-								<span class="truncate">{c.name}</span>
-								{#if isCurrent}
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										class="h-3.5 w-3.5 shrink-0 text-orange"
-										viewBox="0 0 20 20"
-										fill="currentColor"
-										aria-hidden="true"
-									>
-										<path
-											fill-rule="evenodd"
-											d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-											clip-rule="evenodd"
-										/>
-									</svg>
+						<div class="mt-1 border-t border-black pt-1">
+							{#if showNewCollectionInput}
+								<!-- svelte-ignore a11y_autofocus -->
+								<input
+									type="text"
+									bind:value={newCollectionName}
+									placeholder="Collection name"
+									autofocus
+									class="w-full rounded border border-input bg-surface-raised px-2 py-1 text-xs text-tan placeholder:text-placeholder focus:border-input-focus focus:outline-none"
+									onkeydown={(e) => {
+										if (e.key === "Enter") createAndMoveToCollection();
+										if (e.key === "Escape") {
+											showNewCollectionInput = false;
+											newCollectionName = "";
+											createError = null;
+										}
+									}}
+								/>
+								{#if createError}
+									<p class="mt-1 px-1 text-[10px] text-orange">{createError}</p>
 								{/if}
-							</button>
-						{/each}
-					</div>
-
-					<div class="mt-1 border-t border-black pt-1">
-						{#if showNewCollectionInput}
-							<!-- svelte-ignore a11y_autofocus -->
-							<input
-								type="text"
-								bind:value={newCollectionName}
-								placeholder="Collection name"
-								autofocus
-								class="w-full rounded border border-input bg-surface-raised px-2 py-1 text-xs text-tan placeholder:text-placeholder focus:border-input-focus focus:outline-none"
-								onkeydown={(e) => {
-									if (e.key === "Enter") createAndMoveToCollection();
-									if (e.key === "Escape") {
-										showNewCollectionInput = false;
-										newCollectionName = "";
-										createError = null;
-									}
-								}}
-							/>
-							{#if createError}
-								<p class="mt-1 px-1 text-[10px] text-orange">{createError}</p>
-							{/if}
-							<div class="mt-1 flex justify-end gap-2">
+								<div class="mt-1 flex justify-end gap-2">
+									<button
+										type="button"
+										onclick={() => {
+											showNewCollectionInput = false;
+											newCollectionName = "";
+											createError = null;
+										}}
+										class="rounded border border-tan px-2 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange"
+									>
+										Cancel
+									</button>
+									<button
+										type="button"
+										onclick={createAndMoveToCollection}
+										disabled={!newCollectionName.trim() || moving}
+										class="rounded border border-orange px-2 py-1 text-xs text-orange transition-colors hover:bg-orange/10 disabled:opacity-50"
+									>
+										Create
+									</button>
+								</div>
+							{:else}
 								<button
 									type="button"
 									onclick={() => {
-										showNewCollectionInput = false;
-										newCollectionName = "";
-										createError = null;
+										showNewCollectionInput = true;
 									}}
-									class="rounded border border-tan px-2 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange"
+									class="w-full rounded px-2 py-1 text-left text-xs text-tan transition-colors hover:bg-surface-raised"
 								>
-									Cancel
+									+ New collection…
 								</button>
-								<button
-									type="button"
-									onclick={createAndMoveToCollection}
-									disabled={!newCollectionName.trim() || moving}
-									class="rounded border border-orange px-2 py-1 text-xs text-orange transition-colors hover:bg-orange/10 disabled:opacity-50"
-								>
-									Create
-								</button>
-							</div>
-						{:else}
+							{/if}
+						</div>
+					</div>
+				{/if}
+			</div>
+		{/if}
+
+		{#if page.data.user}
+			<div class="relative">
+				<Tooltip
+					label="Download"
+					onclick={() => togglePopover("download")}
+					disabled={downloading}
+					aria-haspopup="dialog"
+					aria-expanded={openPopover === "download"}
+					class="action-trigger rounded border border-tan p-1 text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
+				>
+					{#if downloading}
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							class="h-3.5 w-3.5 animate-spin"
+							fill="none"
+							viewBox="0 0 24 24"
+							aria-hidden="true"
+						>
+							<circle
+								class="opacity-25"
+								cx="12"
+								cy="12"
+								r="10"
+								stroke="currentColor"
+								stroke-width="4"
+							></circle>
+							<path
+								class="opacity-75"
+								fill="currentColor"
+								d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+							></path>
+						</svg>
+					{:else}
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							class="h-3.5 w-3.5"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+							stroke-width="2"
+							aria-hidden="true"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"
+							/>
+						</svg>
+					{/if}
+				</Tooltip>
+
+				{#if openPopover === "download"}
+					<div
+						class="action-popover absolute right-0 top-full z-50 mt-2 w-56 rounded border-2 border-black bg-blue-gray p-3 shadow-lg"
+						role="dialog"
+					>
+						<p class="mb-3 text-xs text-tan">
+							Download the original save file?
+						</p>
+						<div class="flex justify-end gap-2">
 							<button
 								type="button"
-								onclick={() => {
-									showNewCollectionInput = true;
-								}}
-								class="w-full rounded px-2 py-1 text-left text-xs text-tan transition-colors hover:bg-surface-raised"
+								onclick={closePopover}
+								class="rounded border border-tan px-2 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange"
 							>
-								+ New collection…
+								Cancel
 							</button>
-						{/if}
+							<button
+								type="button"
+								onclick={confirmDownload}
+								class="rounded border border-orange px-2 py-1 text-xs text-orange transition-colors hover:bg-orange/10"
+							>
+								Download
+							</button>
+						</div>
 					</div>
-				</div>
-			{/if}
-		</div>
-	{/if}
-
-	{#if page.data.user}
-		<div class="relative">
-			<button
-				type="button"
-				onclick={() => togglePopover("download")}
-				disabled={downloading}
-				aria-haspopup="dialog"
-				aria-expanded={openPopover === "download"}
-				title="Download"
-				class="action-trigger rounded border border-tan p-1 text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
-			>
-				{#if downloading}
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						class="h-3.5 w-3.5 animate-spin"
-						fill="none"
-						viewBox="0 0 24 24"
-						aria-hidden="true"
-					>
-						<circle
-							class="opacity-25"
-							cx="12"
-							cy="12"
-							r="10"
-							stroke="currentColor"
-							stroke-width="4"
-						></circle>
-						<path
-							class="opacity-75"
-							fill="currentColor"
-							d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-						></path>
-					</svg>
-				{:else}
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						class="h-3.5 w-3.5"
-						fill="none"
-						viewBox="0 0 24 24"
-						stroke="currentColor"
-						stroke-width="2"
-						aria-hidden="true"
-					>
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"
-						/>
-					</svg>
 				{/if}
-			</button>
+			</div>
+		{/if}
 
-			{#if openPopover === "download"}
-				<div
-					class="action-popover absolute right-0 top-full z-50 mt-2 w-56 rounded border-2 border-black bg-blue-gray p-3 shadow-lg"
-					role="dialog"
+		{#if isOwner}
+			<div class="relative">
+				<Tooltip
+					label="Delete"
+					onclick={() => togglePopover("delete")}
+					disabled={deleting}
+					aria-haspopup="dialog"
+					aria-expanded={openPopover === "delete"}
+					class="action-trigger rounded border p-1 transition-colors disabled:opacity-50 {openPopover ===
+					'delete'
+						? 'border-red-400 text-red-400'
+						: 'border-tan text-tan hover:border-red-400 hover:text-red-400'}"
 				>
-					<p class="mb-3 text-xs text-tan">Download the original save file?</p>
-					<div class="flex justify-end gap-2">
-						<button
-							type="button"
-							onclick={closePopover}
-							class="rounded border border-tan px-2 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange"
+					{#if deleting}
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							class="h-3.5 w-3.5 animate-spin"
+							fill="none"
+							viewBox="0 0 24 24"
+							aria-hidden="true"
 						>
-							Cancel
-						</button>
-						<button
-							type="button"
-							onclick={confirmDownload}
-							class="rounded border border-orange px-2 py-1 text-xs text-orange transition-colors hover:bg-orange/10"
-						>
-							Download
-						</button>
-					</div>
-				</div>
-			{/if}
-		</div>
-	{/if}
-
-	{#if isOwner}
-		<div class="relative">
-			<button
-				type="button"
-				onclick={() => togglePopover("delete")}
-				disabled={deleting}
-				aria-haspopup="dialog"
-				aria-expanded={openPopover === "delete"}
-				title="Delete"
-				class="action-trigger rounded border p-1 transition-colors disabled:opacity-50 {openPopover ===
-				'delete'
-					? 'border-red-400 text-red-400'
-					: 'border-tan text-tan hover:border-red-400 hover:text-red-400'}"
-			>
-				{#if deleting}
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						class="h-3.5 w-3.5 animate-spin"
-						fill="none"
-						viewBox="0 0 24 24"
-						aria-hidden="true"
-					>
-						<circle
-							class="opacity-25"
-							cx="12"
-							cy="12"
-							r="10"
+							<circle
+								class="opacity-25"
+								cx="12"
+								cy="12"
+								r="10"
+								stroke="currentColor"
+								stroke-width="4"
+							></circle>
+							<path
+								class="opacity-75"
+								fill="currentColor"
+								d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+							></path>
+						</svg>
+					{:else}
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							class="h-3.5 w-3.5"
+							fill="none"
+							viewBox="0 0 24 24"
 							stroke="currentColor"
-							stroke-width="4"
-						></circle>
-						<path
-							class="opacity-75"
-							fill="currentColor"
-							d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-						></path>
-					</svg>
-				{:else}
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						class="h-3.5 w-3.5"
-						fill="none"
-						viewBox="0 0 24 24"
-						stroke="currentColor"
-						stroke-width="2"
-						aria-hidden="true"
-					>
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.16-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.04-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"
-						/>
-					</svg>
-				{/if}
-			</button>
+							stroke-width="2"
+							aria-hidden="true"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.16-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.04-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"
+							/>
+						</svg>
+					{/if}
+				</Tooltip>
 
-			{#if openPopover === "delete"}
-				<div
-					class="action-popover absolute right-0 top-full z-50 mt-2 w-56 rounded border-2 border-black bg-blue-gray p-3 shadow-lg"
-					role="dialog"
-				>
-					<p class="mb-3 text-xs text-tan">Delete this game permanently?</p>
-					<div class="flex justify-end gap-2">
-						<button
-							type="button"
-							onclick={closePopover}
-							class="rounded border border-tan px-2 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange"
-						>
-							Cancel
-						</button>
-						<button
-							type="button"
-							onclick={confirmDelete}
-							disabled={deleting}
-							class="rounded border border-red-400 px-2 py-1 text-xs text-red-400 transition-colors hover:bg-red-400/10 disabled:opacity-50"
-						>
-							Delete
-						</button>
+				{#if openPopover === "delete"}
+					<div
+						class="action-popover absolute right-0 top-full z-50 mt-2 w-56 rounded border-2 border-black bg-blue-gray p-3 shadow-lg"
+						role="dialog"
+					>
+						<p class="mb-3 text-xs text-tan">Delete this game permanently?</p>
+						<div class="flex justify-end gap-2">
+							<button
+								type="button"
+								onclick={closePopover}
+								class="rounded border border-tan px-2 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange"
+							>
+								Cancel
+							</button>
+							<button
+								type="button"
+								onclick={confirmDelete}
+								disabled={deleting}
+								class="rounded border border-red-400 px-2 py-1 text-xs text-red-400 transition-colors hover:bg-red-400/10 disabled:opacity-50"
+							>
+								Delete
+							</button>
+						</div>
 					</div>
-				</div>
-			{/if}
-		</div>
-	{/if}
-</div>
+				{/if}
+			</div>
+		{/if}
+	</div>
+</BitsTooltip.Provider>
