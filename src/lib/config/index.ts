@@ -20,7 +20,6 @@ export {
 
 // Re-export nation and tribe colors
 export {
-	BASE_NATIONS,
 	getNationColor,
 	getTribeColor,
 	getCivilizationColor,

@@ -9,7 +9,7 @@
 // controls would light a selection the payload isn't for — so the parse is
 // mirrored here, the way profileScope mirrors parseScopeParam.
 
-import { BASE_NATIONS } from "$lib/config";
+import { BASE_NATIONS } from "$lib/generated/civilization-colors";
 import { nationName } from "$lib/utils/formatting";
 import type { GlobalPeriod, GlobalSlice } from "./types";
 

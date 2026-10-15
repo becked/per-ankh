@@ -23,12 +23,26 @@
 //     NOT <TeamPlayerColor>, which is PLAYERCOLOR_BARBARIANS for every single
 //     tribe — one shared near-black, not the per-tribe colour the game shows.
 //
-//   Nations — Game.getNationColor (Game.cs:21765) resolves through the live
-//     Player (getPlayerNameColor), so it has no static answer. The static
-//     analogue is the nation's own team colour:
+//   Nations — ClientRenderer.drawTileOnTurn (ClientRenderer.cs:1137) paints a
+//     player's territory with playerColor(player.getPrimaryPlayerColor(..))
+//     .meAssetColor (:1160), and getPrimaryPlayerColor is getTeamPlayerColor
+//     (Player.cs:7347 → :7315), the nation's own team colour. So the static
+//     chain is:
 //       nation <TeamColor> → teamColor <TeamPlayerColor>
 //         → playerColor <AssetColor> → color <zHexValue>
-//     which reproduces the hand-maintained table this baker replaces.
+//     which reproduces the hand-maintained table this baker replaces, hex for
+//     hex on all 13 base nations.
+//
+//     Game.getNationColor (Game.cs:21765) is a different ROLE, not a different
+//     chain: it walks the same TeamPlayerColor leg through the live Player
+//     (getPlayerNameColor, Player.cs:4969) and then reads meTextColor where the
+//     renderer reads meAssetColor. The two roles disagree for 7 of the 13 base
+//     nations — Egypt #bc6304 vs #f88f1f, and Rome, Greece, Babylonia, Kush,
+//     Aksum, Maurya — so the pick is load-bearing. AssetColor is the one to
+//     bake: it paints the civ's territory and its units' primary colour
+//     (Unit.getAssetColors, Unit.cs:3761), which is what a reader recognises a
+//     civ by on the map, where TextColor writes the player's NAME and its
+//     minimap city dot (Game.cs:21744).
 //
 // BASE vs CAMPAIGN: nothing in nation.xml flags a campaign nation — the Mods
 // entries carry exactly the base entries' fields — so the only derivable split
@@ -68,11 +82,6 @@ const OUTPUT_TS = resolve(
 	REPO_ROOT,
 	"src/lib/generated/civilization-colors.ts",
 );
-
-// The base rosters, as a floor on what must resolve — a parse drift that
-// silently halves a table is the failure this catches.
-const BASE_NATION_COUNT = 13;
-const BASE_TRIBE_COUNT = 11;
 
 interface Entry {
 	zType?: string;
@@ -212,7 +221,6 @@ async function main(): Promise<void> {
 		label: string,
 		civs: Map<string, Merged>,
 		resolveOne: (zType: string, civ: Merged) => string | undefined,
-		floor: number,
 	): Record<string, string> {
 		const out: Record<string, string> = {};
 		for (const [zType, civ] of civs) {
@@ -230,44 +238,44 @@ async function main(): Promise<void> {
 			}
 			out[zType] = hex;
 		}
+		// The structural floor is that Infos/<stem>.xml yielded a base roster at
+		// all. A base civ that doesn't resolve already threw above, so what is
+		// left to catch here is a total parse miss — a renamed root element,
+		// where parseEntries returns [] and the table comes out empty rather
+		// than wrong. Deliberately not a roster size: Old World shipping a 14th
+		// nation is new content, not drift, and BASE_NATIONS is a facet list
+		// (src/lib/stats/global-facets.ts) where one more nation is one more
+		// option.
 		const baseResolved = [...civs].filter(
 			([zType, civ]) => civ.inBase && out[zType] != null,
 		).length;
-		if (baseResolved !== floor) {
+		if (baseResolved === 0) {
 			throw new Error(
-				`bake-civilization-colors: ${baseResolved} base ${label}s resolved, expected ${floor}`,
+				`bake-civilization-colors: no base ${label} resolved — did Infos/ parse?`,
 			);
 		}
 		return out;
 	}
 
-	const nationColors = table(
-		"nation",
-		nations,
-		(zType, n) =>
-			resolve_(
-				zType,
-				n.TeamColor,
-				(t) => t.TeamPlayerColor,
-				(p) => p.AssetColor,
-			),
-		BASE_NATION_COUNT,
+	const nationColors = table("nation", nations, (zType, n) =>
+		resolve_(
+			zType,
+			n.TeamColor,
+			(t) => t.TeamPlayerColor,
+			(p) => p.AssetColor,
+		),
 	);
-	const tribeColors = table(
-		"tribe",
-		tribes,
-		(zType, t) =>
-			resolve_(
-				zType,
-				t.TeamColor,
-				(team) => {
-					const v = team.aePlayerColors?.zValue;
-					const palette = v == null ? [] : Array.isArray(v) ? v : [v];
-					return palette[0];
-				},
-				(p) => p.CrestColor,
-			),
-		BASE_TRIBE_COUNT,
+	const tribeColors = table("tribe", tribes, (zType, t) =>
+		resolve_(
+			zType,
+			t.TeamColor,
+			(team) => {
+				const v = team.aePlayerColors?.zValue;
+				const palette = v == null ? [] : Array.isArray(v) ? v : [v];
+				return palette[0];
+			},
+			(p) => p.CrestColor,
+		),
 	);
 	const baseNations = [...nations]
 		.filter(([zType, n]) => n.inBase && nationColors[zType] != null)

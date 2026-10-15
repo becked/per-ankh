@@ -14,7 +14,7 @@
 	import type { MapTile } from "$lib/types/MapTile";
 	import type { UnitInfo } from "$lib/parser/types";
 	import { ownershipChangeTurn } from "$lib/parser/types";
-	import { getCivilizationColor, getNationChartColor } from "$lib/config";
+	import { getCivilizationColor, getSeriesColor } from "$lib/config";
 	import { IMPROVEMENT_BUILDS } from "$lib/generated/improvement-builds";
 	import {
 		characterName,
@@ -385,15 +385,22 @@
 			})
 			.map(({ counts, color, ...group }, i) => ({
 				...group,
-				// A tribe has no roster row, but it does have a baked colour, so
-				// it resolves through `getNationChartColor`'s civilization lookup.
-				// What still reaches the palette fallback is a group whose
-				// civilization is null — a unit whose player_xml_id isn't on the
-				// roster. The index starts past the roster because a mirror's
-				// players draw from the same ramp by player ordinal — at `i` alone,
-				// such a group takes the colour of one of the two Egypts.
+				// A tribe has no roster row but does have a baked colour, so the
+				// civilization lookup answers for it. What reaches the ramp is a
+				// group neither table answers for — a unit whose player_xml_id
+				// isn't on the roster, or a tribe outside the baked tables. It
+				// draws from `getSeriesColor`, not the `getChartColor` ramp the
+				// roster itself uses: that one is six colours wrapped by index,
+				// and `resolvePlayers` hands a mirror's players those same six by
+				// ordinal, so no index into it is free of a player's colour. The
+				// eight series colours share no hex with it, or with the baked
+				// nation and tribe tables.
 				color:
-					color ?? getNationChartColor(group.civilization, players.length + i),
+					color ??
+					(group.civilization != null
+						? getCivilizationColor(group.civilization)
+						: undefined) ??
+					getSeriesColor(i),
 				entries: [...counts.entries()]
 					.map(([key, count]) => ({ key, count }))
 					.sort((a, b) =>

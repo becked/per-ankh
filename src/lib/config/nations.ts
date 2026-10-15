@@ -12,19 +12,11 @@
  */
 
 import {
-	BASE_NATIONS,
 	NATION_COLORS,
 	TRIBE_COLORS,
 } from "$lib/generated/civilization-colors";
 
 import { getChartColor } from "./charts";
-
-/**
- * The nations the base game defines, as opposed to the ones a campaign adds.
- * Re-exported so the /stats nation facet can offer the base roster without
- * reaching past this module for it.
- */
-export { BASE_NATIONS };
 
 /**
  * The baked tables are keyed by full zType. Callers pass either the raw enum
