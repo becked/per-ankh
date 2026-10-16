@@ -59,7 +59,7 @@
 		canvasHeight,
 		onBannerHover,
 		onBannerLeave,
-		onBannerClick,
+		onBannerToggleLock,
 	}: {
 		banners: CityBanner[];
 		// The deck's current camera. The parent only renders this component
@@ -76,11 +76,17 @@
 		// …and left it again. The parent waits out its own grace period before
 		// closing, so the pointer can cross the gap into the popover.
 		onBannerLeave: () => void;
-		// A banner was clicked or tapped. Separate from the hover above
-		// because it PINS the popover: a touch raises no hover at all, and a
-		// deliberate click shouldn't evaporate when the pointer wanders off.
+		// A banner was right-clicked: lock the city card to it, or unlock it
+		// if it already holds one. The same gesture a tile takes to lock its
+		// own panel, and the only thing that now makes the card outlive the
+		// pointer — so, like the tile's, it is pointer-only (#270).
+		//
+		// The browser's own menu is suppressed upstream, by the container's
+		// handler this event passes on its way out (SpriteMap's
+		// handleContextMenu), which is also what keeps the right-click from
+		// locking the hex under the banner as well.
 		// eslint-disable-next-line no-unused-vars -- parameter in callback signature
-		onBannerClick: (cityName: string, element: HTMLElement) => void;
+		onBannerToggleLock: (cityName: string, element: HTMLElement) => void;
 	} = $props();
 
 	const full = $derived(viewState.zoom >= FULL_BANNER_MIN_ZOOM);
@@ -114,7 +120,7 @@
 		onmouseleave={onBannerLeave}
 		onfocus={(e) => onBannerHover(banner.cityName, e.currentTarget)}
 		onblur={onBannerLeave}
-		onclick={(e) => onBannerClick(banner.cityName, e.currentTarget)}
+		oncontextmenu={(e) => onBannerToggleLock(banner.cityName, e.currentTarget)}
 	>
 		{#if full && banner.nationCrestKey}
 			<SpriteIcon category="crests" value={banner.nationCrestKey} size={10} />

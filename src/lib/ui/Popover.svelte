@@ -17,6 +17,8 @@
 
 	type Side = "top" | "right" | "bottom" | "left";
 	type Align = "start" | "center" | "end";
+	type InteractOutsideBehavior =
+		"close" | "defer-otherwise-close" | "defer-otherwise-ignore" | "ignore";
 
 	let {
 		open = $bindable(false),
@@ -25,6 +27,7 @@
 		sideOffset = 8,
 		customAnchor = null,
 		updatePositionStrategy = "optimized",
+		interactOutsideBehavior = "close",
 		contentClass = "w-[min(92vw,28rem)]",
 		frameClass = "border-4 border-surface-raised bg-blue-gray p-5 shadow-lg",
 		ariaLabel,
@@ -32,6 +35,7 @@
 		onOpenChange,
 		onpointerenter,
 		onpointerleave,
+		oncontextmenu,
 		trigger,
 		children,
 	}: {
@@ -45,6 +49,13 @@
 		// animation frame, which the map's popovers need — their anchor moves
 		// with a pan or a zoom, neither of which fires either event.
 		updatePositionStrategy?: "optimized" | "always";
+		// What an outside interaction does to the panel. bits-ui's default
+		// closes it, which is right for a panel the page is meant to dismiss.
+		// "ignore" holds it open, for one that outlives what goes on behind
+		// it — the map's LOCKED city card, where a pan begins with a
+		// pointerdown on the canvas and the default took the card down at the
+		// start of every drag. Escape closes it either way.
+		interactOutsideBehavior?: InteractOutsideBehavior;
 		// Width / size override for the floating panel. The surface, rounding,
 		// scroll, and shadow are fixed; width varies per use.
 		contentClass?: string;
@@ -71,6 +82,12 @@
 		onpointerenter?: (event: PointerEvent) => void;
 		// eslint-disable-next-line no-unused-vars -- parameter in callback signature
 		onpointerleave?: (event: PointerEvent) => void;
+		// A right-click on the panel, for a caller that floats one over a
+		// surface with a contextmenu handler of its own: the panel is
+		// rendered on `document.body`, so that handler doesn't cover it and
+		// the browser's menu opens over the surface.
+		// eslint-disable-next-line no-unused-vars -- parameter in callback signature
+		oncontextmenu?: (event: MouseEvent) => void;
 		// Receives bits-ui's trigger props to spread onto the caller's own button
 		// element, so existing trigger markup/styling is preserved verbatim.
 		trigger?: Snippet<[{ props: Record<string, unknown> }]>;
@@ -140,10 +157,12 @@
 			{sideOffset}
 			{customAnchor}
 			{updatePositionStrategy}
+			{interactOutsideBehavior}
 			onOpenAutoFocus={handleOpenAutoFocus}
 			onCloseAutoFocus={handleCloseAutoFocus}
 			{onpointerenter}
 			{onpointerleave}
+			{oncontextmenu}
 			aria-label={ariaLabel}
 			class="z-50 max-h-[85vh] overflow-y-auto rounded-lg text-tan {frameClass} {contentClass}"
 		>

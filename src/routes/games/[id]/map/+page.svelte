@@ -114,16 +114,26 @@
 	// tooltips (`delayDuration={200}`, MapChrome and MapYieldStrip), the close
 	// delay is bits-ui's `closeDelay` default for the trigger above.
 	//
-	// A click PINS what hover opened: a touch raises no hover at all, so tap
-	// is the only way in on a phone, and a card that evaporated the moment the
-	// pointer wandered off would be worse than the click-only card this
-	// replaces.
+	// A right-click LOCKS what hover opened — the gesture that locks a tile's
+	// panel to its hex, so the map has one vocabulary rather than a card that
+	// pinned on a click beside tiles that lock on a right-click. Unlocking
+	// hands the card back to the pointer instead of closing it, as unlocking a
+	// tile hands its hex back to the hover panel. Locking is pointer-only on
+	// both: the map view is desktop-only (#270).
+	//
+	// A locked card also stops answering outside clicks
+	// (`interactOutsideBehavior`). A pan begins with a pointerdown on the
+	// canvas, which bits-ui counts as an interaction outside the card, so the
+	// default behaviour took the card down at the start of every drag — where
+	// a locked tile panel, a plain div with nothing listening for a click,
+	// rides the camera out. The ✕ and the banner's right-click remain, and so
+	// does Escape.
 	const HOVER_OPEN_MS = 200;
 	const HOVER_CLOSE_MS = 300;
 
 	let popoverCity = $state<string | null>(null);
 	let popoverAnchor = $state<HTMLElement | null>(null);
-	let popoverPinned = $state(false);
+	let popoverLocked = $state(false);
 	let openTimer: ReturnType<typeof setTimeout> | null = null;
 	let closeTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -144,7 +154,7 @@
 		cancelClose();
 		popoverCity = null;
 		popoverAnchor = null;
-		popoverPinned = false;
+		popoverLocked = false;
 	}
 
 	const bannerCities = $derived.by(() => {
@@ -177,7 +187,7 @@
 			openTimer = null;
 			popoverCity = cityName;
 			popoverAnchor = element;
-			popoverPinned = false;
+			popoverLocked = false;
 		}, HOVER_OPEN_MS);
 	}
 
@@ -186,7 +196,7 @@
 	// the card is where a long city's record is read and scrolled.
 	function leaveCityBanner() {
 		cancelOpen();
-		if (popoverCity === null || popoverPinned) return;
+		if (popoverCity === null || popoverLocked) return;
 		cancelClose();
 		closeTimer = setTimeout(() => {
 			closeTimer = null;
@@ -195,12 +205,31 @@
 		}, HOVER_CLOSE_MS);
 	}
 
-	function openCityPopover(cityName: string, element: HTMLElement) {
+	// bits-ui renders the card on `document.body` — floating panels are
+	// portaled so an ancestor's `overflow: hidden` can't clip them, and the
+	// map box has one. That puts the card outside `.sprite-map-container`,
+	// whose handler suppresses the browser's context menu over the map and
+	// its overlays, so a right-click on the card opened the page menu on top
+	// of the map. Locking is the banner's gesture and not the card's, so the
+	// card has nothing to do with the event beyond swallowing it.
+	function suppressCardContextMenu(e: MouseEvent) {
+		e.preventDefault();
+	}
+
+	// A banner was right-clicked. Toggles, as it does on a tile: a second
+	// right-click on the locked card's own banner unlocks it in place — the
+	// pointer is still on the banner, so the card stays up as the transient
+	// one it would have been and goes when the pointer does.
+	function toggleCityLock(cityName: string, element: HTMLElement) {
 		cancelOpen();
 		cancelClose();
+		if (popoverLocked && popoverCity === cityName) {
+			popoverLocked = false;
+			return;
+		}
 		popoverCity = cityName;
 		popoverAnchor = element;
-		popoverPinned = true;
+		popoverLocked = true;
 	}
 
 	// ─── Lightboxes ───────────────────────────────────────────────────
@@ -280,7 +309,7 @@
 				onToggleLock={toggleTileLock}
 				onCityHover={hoverCityBanner}
 				onCityLeave={leaveCityBanner}
-				onCityClick={openCityPopover}
+				onCityToggleLock={toggleCityLock}
 			/>
 			<MapChrome
 				{game}
@@ -302,6 +331,7 @@
 		}}
 		customAnchor={popoverAnchor}
 		updatePositionStrategy="always"
+		interactOutsideBehavior={popoverLocked ? "ignore" : "close"}
 		side="top"
 		align="center"
 		contentClass="w-[min(94vw,44rem)]"
@@ -310,6 +340,7 @@
 		autoFocus={false}
 		onpointerenter={cancelClose}
 		onpointerleave={leaveCityBanner}
+		oncontextmenu={suppressCardContextMenu}
 	>
 		{#if popoverCity}
 			<CityPopover
@@ -317,6 +348,7 @@
 				{players}
 				cityName={popoverCity}
 				turn={selectedMapTurn}
+				onUnlock={popoverLocked ? closePopover : undefined}
 			/>
 		{/if}
 	</Popover>

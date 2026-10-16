@@ -288,7 +288,7 @@
 		onToggleLock,
 		onCityHover,
 		onCityLeave,
-		onCityClick,
+		onCityToggleLock,
 	}: {
 		tiles: MapTile[];
 		// Used to resolve owner_city → family for the tooltip's family crest.
@@ -322,9 +322,10 @@
 		onCityHover: (cityName: string, element: HTMLElement) => void;
 		// The pointer or focus left the banner.
 		onCityLeave: () => void;
-		// A banner was clicked or tapped — the same popover, pinned open.
+		// A banner was right-clicked — lock that city's card to it, or unlock
+		// it again.
 		// eslint-disable-next-line no-unused-vars -- parameter in callback signature
-		onCityClick: (cityName: string, element: HTMLElement) => void;
+		onCityToggleLock: (cityName: string, element: HTMLElement) => void;
 	} = $props();
 
 	// city_name → the player owning the city's centre tile at the represented
@@ -527,7 +528,8 @@
 	// right-click on one would miss a canvas handler and get the browser's
 	// page menu. So the container suppresses the menu everywhere over the map,
 	// and only an event that landed on the canvas itself goes on to pick a
-	// tile.
+	// tile. A banner answers its own right-click (MapCityBanners), locking
+	// the city's card rather than the hex it stands on.
 	async function handleContextMenu(e: MouseEvent) {
 		e.preventDefault();
 		// `isInitialized` is deck's own "safe to call public methods" flag: the
@@ -2044,7 +2046,7 @@
 			canvasHeight={deckHeight}
 			onBannerHover={onCityHover}
 			onBannerLeave={onCityLeave}
-			onBannerClick={onCityClick}
+			onBannerToggleLock={onCityToggleLock}
 		/>
 	{/if}
 
