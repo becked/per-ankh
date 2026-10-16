@@ -478,7 +478,6 @@
 
 		<!-- Zone 2: the only things reconstructible at the selected turn. -->
 		<section class="zone-rule">
-			<h3 class="section-heading">At turn {turn}</h3>
 			<dl class="chrome-rows">
 				<dt>Owner</dt>
 				<dd>
@@ -752,7 +751,7 @@
 
 <style>
 	/* The rule that closes the per-turn zone off from the two columns below
-	   it, drawn like the one under a section heading. */
+	   it. */
 	.zone-rule {
 		border-bottom: 1px solid rgb(var(--color-border-tooltip));
 		padding-bottom: 0.75rem;
@@ -775,17 +774,6 @@
 	.chrome-rows.record-rows dd {
 		font-size: 11px;
 		line-height: 1.3;
-		color: rgb(var(--color-bright));
-	}
-
-	.section-heading {
-		margin-bottom: 0.25rem;
-		border-bottom: 1px solid rgb(var(--color-border-tooltip));
-		padding-bottom: 0.125rem;
-		font-size: 10px;
-		font-weight: 700;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
 		color: rgb(var(--color-bright));
 	}
 </style>
