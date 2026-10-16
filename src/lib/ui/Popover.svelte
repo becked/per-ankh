@@ -17,6 +17,8 @@
 
 	type Side = "top" | "right" | "bottom" | "left";
 	type Align = "start" | "center" | "end";
+	type InteractOutsideBehavior =
+		"close" | "defer-otherwise-close" | "defer-otherwise-ignore" | "ignore";
 
 	let {
 		open = $bindable(false),
@@ -25,10 +27,15 @@
 		sideOffset = 8,
 		customAnchor = null,
 		updatePositionStrategy = "optimized",
+		interactOutsideBehavior = "close",
 		contentClass = "w-[min(92vw,28rem)]",
 		frameClass = "border-4 border-surface-raised bg-blue-gray p-5 shadow-lg",
 		ariaLabel,
+		autoFocus = true,
 		onOpenChange,
+		onpointerenter,
+		onpointerleave,
+		oncontextmenu,
 		trigger,
 		children,
 	}: {
@@ -42,6 +49,13 @@
 		// animation frame, which the map's popovers need — their anchor moves
 		// with a pan or a zoom, neither of which fires either event.
 		updatePositionStrategy?: "optimized" | "always";
+		// What an outside interaction does to the panel. bits-ui's default
+		// closes it, which is right for a panel the page is meant to dismiss.
+		// "ignore" holds it open, for one that outlives what goes on behind
+		// it — the map's LOCKED city card, where a pan begins with a
+		// pointerdown on the canvas and the default took the card down at the
+		// start of every drag. Escape closes it either way.
+		interactOutsideBehavior?: InteractOutsideBehavior;
 		// Width / size override for the floating panel. The surface, rounding,
 		// scroll, and shadow are fixed; width varies per use.
 		contentClass?: string;
@@ -51,8 +65,29 @@
 		// match popover, whose own header bar already frames the content).
 		frameClass?: string;
 		ariaLabel?: string;
+		// Whether opening moves focus into the panel. True is right for a
+		// panel a click or a keypress asked for. A panel the POINTER opens
+		// passes false: taking focus there would pull it off whatever the
+		// keyboard was on, and where the anchor's own focus is what opens the
+		// panel, the two chase each other — focus in, anchor blurs, panel
+		// closes, focus returns, panel opens. With it false nothing moves, so
+		// there is nothing to restore on close either.
+		autoFocus?: boolean;
 		// eslint-disable-next-line no-unused-vars -- parameter in callback signature
 		onOpenChange?: (open: boolean) => void;
+		// Pointer crossings on the panel itself, for a caller that opens on
+		// hover: the panel is the far side of the gap the pointer travels, so
+		// it has to be able to hold its own open.
+		// eslint-disable-next-line no-unused-vars -- parameter in callback signature
+		onpointerenter?: (event: PointerEvent) => void;
+		// eslint-disable-next-line no-unused-vars -- parameter in callback signature
+		onpointerleave?: (event: PointerEvent) => void;
+		// A right-click on the panel, for a caller that floats one over a
+		// surface with a contextmenu handler of its own: the panel is
+		// rendered on `document.body`, so that handler doesn't cover it and
+		// the browser's menu opens over the surface.
+		// eslint-disable-next-line no-unused-vars -- parameter in callback signature
+		oncontextmenu?: (event: MouseEvent) => void;
 		// Receives bits-ui's trigger props to spread onto the caller's own button
 		// element, so existing trigger markup/styling is preserved verbatim.
 		trigger?: Snippet<[{ props: Record<string, unknown> }]>;
@@ -86,6 +121,25 @@
 		preFocused = null; // don't pin a detached node
 		if (el && document.contains(el)) el.focus({ preventScroll: true });
 	}
+
+	function handleOpenAutoFocus(event: Event): void {
+		if (!autoFocus) {
+			event.preventDefault();
+			return;
+		}
+		rememberPreFocus();
+	}
+
+	// Nothing was moved when `autoFocus` is false, so the close just stands
+	// down rather than hauling focus back to an anchor the caller may have
+	// tabbed away from.
+	function handleCloseAutoFocus(event: Event): void {
+		if (!autoFocus) {
+			event.preventDefault();
+			return;
+		}
+		restorePreFocus(event);
+	}
 </script>
 
 <Popover.Root bind:open {onOpenChange}>
@@ -103,8 +157,12 @@
 			{sideOffset}
 			{customAnchor}
 			{updatePositionStrategy}
-			onOpenAutoFocus={rememberPreFocus}
-			onCloseAutoFocus={restorePreFocus}
+			{interactOutsideBehavior}
+			onOpenAutoFocus={handleOpenAutoFocus}
+			onCloseAutoFocus={handleCloseAutoFocus}
+			{onpointerenter}
+			{onpointerleave}
+			{oncontextmenu}
 			aria-label={ariaLabel}
 			class="z-50 max-h-[85vh] overflow-y-auto rounded-lg text-tan {frameClass} {contentClass}"
 		>

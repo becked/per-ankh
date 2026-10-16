@@ -48,11 +48,19 @@
 		players,
 		cityName,
 		turn,
+		onUnlock,
 	}: {
 		game: Awaited<ReturnType<typeof cloudApi.getGame>>;
 		players: DetailPlayer[];
 		cityName: string;
 		turn: number;
+		// Unlock this card — which closes it, since the pointer is on the card
+		// when the ✕ is clicked and not on the banner that would hold it open.
+		// Its presence is what makes the card a LOCKED one, as it is on a
+		// locked tile panel (MapTooltip), so "locked with no way out" isn't
+		// representable. The transient card passes nothing and carries the
+		// hint for making a locked one instead.
+		onUnlock?: () => void;
 	} = $props();
 
 	const finalTurn = $derived(game.game_details.total_turns);
@@ -445,11 +453,31 @@
 				</h2>
 				<p class="text-[11px] text-muted">{foundedLine}</p>
 			</div>
+			<!-- The lock pair a locked tile panel carries, both in the corner
+			     that panel keeps its ✕ in — not at the foot, where it keeps its
+			     hint: this card runs to `max-h-[85vh]` and scrolls, so a foot
+			     row is off the bottom of a long city's record. The hint is that
+			     panel's own words: one gesture over the map, said the same way
+			     wherever it is read. The banner under the card is what answers
+			     it — the card is portaled out of the map and swallows its own
+			     right-clicks (the map page's suppressCardContextMenu). -->
+			<div class="ml-auto flex-none pl-2">
+				{#if onUnlock}
+					<button
+						type="button"
+						class="cursor-pointer px-0.5 text-[11px] leading-none text-muted transition-colors hover:text-tan focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange"
+						onclick={onUnlock}
+						aria-label="Unlock {formatEnum(city.city_name, 'CITYNAME_')}"
+						title="Unlock">✕</button
+					>
+				{:else}
+					<p class="text-[10px] italic text-muted">Right-click to lock</p>
+				{/if}
+			</div>
 		</header>
 
 		<!-- Zone 2: the only things reconstructible at the selected turn. -->
 		<section class="zone-rule">
-			<h3 class="section-heading">At turn {turn}</h3>
 			<dl class="chrome-rows">
 				<dt>Owner</dt>
 				<dd>
@@ -723,7 +751,7 @@
 
 <style>
 	/* The rule that closes the per-turn zone off from the two columns below
-	   it, drawn like the one under a section heading. */
+	   it. */
 	.zone-rule {
 		border-bottom: 1px solid rgb(var(--color-border-tooltip));
 		padding-bottom: 0.75rem;
@@ -746,17 +774,6 @@
 	.chrome-rows.record-rows dd {
 		font-size: 11px;
 		line-height: 1.3;
-		color: rgb(var(--color-bright));
-	}
-
-	.section-heading {
-		margin-bottom: 0.25rem;
-		border-bottom: 1px solid rgb(var(--color-border-tooltip));
-		padding-bottom: 0.125rem;
-		font-size: 10px;
-		font-weight: 700;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
 		color: rgb(var(--color-bright));
 	}
 </style>

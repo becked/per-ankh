@@ -1,13 +1,11 @@
 <script module lang="ts">
-	import type { MapTile } from "$lib/types/MapTile";
+	import { projectToCanvas, type ViewState } from "$lib/game-detail/map-chrome";
 
 	/** One city's banner: where it sits on the map and what it says. */
 	export interface CityBanner {
 		cityName: string;
 		/** Display name, already run through formatEnum. */
 		label: string;
-		/** The city-centre tile, handed back on hover so the tile panel shows. */
-		tile: MapTile;
 		/** Projected centre of the city-centre tile, in world units. */
 		worldX: number;
 		worldY: number;
@@ -19,17 +17,6 @@
 		/** Citizens, or null away from the final turn — the count is end-of-game. */
 		citizens: number | null;
 	}
-</script>
-
-<script lang="ts">
-	// City banners: a DOM overlay inside SpriteMap, one absolutely-positioned
-	// button per city, sitting above the city sprite and following the camera.
-	//
-	// Not deck.gl layers: a banner wears the chrome's frame, its crests are
-	// per-file sprites rather than atlas cells, and it's the click target for
-	// the city popover — so it needs focus and keyboard.
-	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
-	import { CHROME_PANEL_CLASS } from "$lib/game-detail/map-chrome";
 
 	// How far above the tile centre the banner's foot sits, in WORLD units, so
 	// it holds the same place at every zoom. This is the tile's own hex top
@@ -40,6 +27,37 @@
 	// ambiguous; the caret under the frame points out the rest. The sprite's
 	// top edge is ~84 units up, so the frame overlaps its topmost 3 units.
 	const BANNER_WORLD_OFFSET_Y = 81;
+
+	/**
+	 * Where a banner's foot lands, in canvas-local CSS pixels: the point its
+	 * frame hangs from, and so the anchor the map page floats the city card
+	 * off. Exported because SpriteMap culls that card against the same point —
+	 * a second copy of the offset would drift from this one.
+	 */
+	export function bannerFoot(
+		banner: CityBanner,
+		viewState: ViewState,
+		canvasWidth: number,
+		canvasHeight: number,
+	): [number, number] {
+		return projectToCanvas(
+			[banner.worldX, banner.worldY - BANNER_WORLD_OFFSET_Y],
+			viewState,
+			canvasWidth,
+			canvasHeight,
+		);
+	}
+</script>
+
+<script lang="ts">
+	// City banners: a DOM overlay inside SpriteMap, one absolutely-positioned
+	// button per city, sitting above the city sprite and following the camera.
+	//
+	// Not deck.gl layers: a banner wears the chrome's frame, its crests are
+	// per-file sprites rather than atlas cells, and it's what opens the city
+	// popover — so it needs focus and keyboard.
+	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
+	import { CHROME_PANEL_CLASS } from "$lib/game-detail/map-chrome";
 
 	// Above this zoom a city gets the full framed banner; below it, the
 	// name-only label the game falls back to when zoomed out. Measured over the
@@ -58,64 +76,64 @@
 		canvasWidth,
 		canvasHeight,
 		onBannerHover,
-		onBannerClick,
+		onBannerLeave,
+		onBannerToggleLock,
 	}: {
 		banners: CityBanner[];
 		// The deck's current camera. The parent only renders this component
 		// once it has one, so no banner is ever placed without it (and SSR
 		// emits none).
-		viewState: { target: [number, number, number]; zoom: number };
+		viewState: ViewState;
 		canvasWidth: number;
 		canvasHeight: number;
-		// Hover hands the centre tile and the banner's foot (canvas-local CSS
-		// pixels) back, so the parent can keep its tile panel up.
+		// The pointer or the keyboard arrived on a banner: the city, and the
+		// element the popover anchors to. Hover and focus report the same
+		// thing, so the popover opens the same way for both.
 		// eslint-disable-next-line no-unused-vars -- parameter in callback signature
-		onBannerHover: (tile: MapTile, screenX: number, screenY: number) => void;
+		onBannerHover: (cityName: string, element: HTMLElement) => void;
+		// …and left it again. The parent waits out its own grace period before
+		// closing, so the pointer can cross the gap into the popover.
+		onBannerLeave: () => void;
+		// A banner was right-clicked: lock the city card to it, or unlock it
+		// if it already holds one. The same gesture a tile takes to lock its
+		// own panel, and the only thing that now makes the card outlive the
+		// pointer — so, like the tile's, it is pointer-only (#270).
+		//
+		// The browser's own menu is suppressed upstream, by the container's
+		// handler this event passes on its way out (SpriteMap's
+		// handleContextMenu), which is also what keeps the right-click from
+		// locking the hex under the banner as well.
 		// eslint-disable-next-line no-unused-vars -- parameter in callback signature
-		onBannerClick: (cityName: string, element: HTMLElement) => void;
+		onBannerToggleLock: (cityName: string, element: HTMLElement) => void;
 	} = $props();
 
-	const scale = $derived(Math.pow(2, viewState.zoom));
 	const full = $derived(viewState.zoom >= FULL_BANNER_MIN_ZOOM);
 
-	/**
-	 * World → canvas-local CSS pixels, the orthographic view's own affine:
-	 * (world − target) × 2^zoom, centred on the canvas. OrthographicView's
-	 * default flipY means growing world Y runs down the screen, which is the
-	 * convention hexToPixel already negates into.
-	 */
-	function project(worldX: number, worldY: number): [number, number] {
-		const [tx, ty] = viewState.target;
-		return [
-			(worldX - tx) * scale + canvasWidth / 2,
-			(worldY - ty) * scale + canvasHeight / 2,
-		];
-	}
-
 	function footOf(banner: CityBanner): [number, number] {
-		return project(banner.worldX, banner.worldY - BANNER_WORLD_OFFSET_Y);
+		return bannerFoot(banner, viewState, canvasWidth, canvasHeight);
 	}
 </script>
 
 {#each banners as banner (banner.cityName)}
 	{@const [left, top] = footOf(banner)}
-	{@const anchor = project(banner.worldX, banner.worldY)}
 	<button
 		type="button"
 		class="city-banner {full ? CHROME_PANEL_CLASS : 'is-label'}"
 		style="left: {left}px; top: {top}px;"
 		onmouseenter={(e) => {
 			// A held button means the map is being dragged under the cursor, so a
-			// banner sliding past it isn't a hover. Without this, the panel the
-			// pan just dropped comes straight back, pinned to whichever city the
-			// cursor swept over. deck.gl suppresses its own hover picking on the
-			// same grounds, though on a narrower test — `Deck._onPointerMove`
-			// bails on the left or right button, the two that pan its camera,
-			// where this also stands down for a held middle button.
-			if (e.buttons === 0) onBannerHover(banner.tile, anchor[0], anchor[1]);
+			// banner sliding past it isn't a hover. Without this, a drag across
+			// the map opens the popover of whichever city the cursor swept over.
+			// deck.gl suppresses its own hover picking on the same grounds,
+			// though on a narrower test — `Deck._onPointerMove` bails on the
+			// left or right button, the two that pan its camera, where this
+			// also stands down for a held middle button.
+			if (e.buttons === 0) onBannerHover(banner.cityName, e.currentTarget);
 		}}
-		onfocus={() => onBannerHover(banner.tile, anchor[0], anchor[1])}
-		onclick={(e) => onBannerClick(banner.cityName, e.currentTarget)}
+		onmouseleave={onBannerLeave}
+		onfocus={(e) => onBannerHover(banner.cityName, e.currentTarget)}
+		onblur={onBannerLeave}
+		oncontextmenu={(e) => onBannerToggleLock(banner.cityName, e.currentTarget)}
 	>
 		{#if full && banner.nationCrestKey}
 			<SpriteIcon category="crests" value={banner.nationCrestKey} size={10} />

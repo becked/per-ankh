@@ -15,6 +15,7 @@
 		screenY,
 		canvasWidth,
 		canvasHeight,
+		onUnlock,
 	}: {
 		tile: MapTile;
 		// Resolved family enum like "FAMILY_PTOLEMY", or null if unknown / not city.
@@ -29,7 +30,15 @@
 		// edge-flips inside.
 		canvasWidth: number;
 		canvasHeight: number;
+		// Unlock this tile. Its presence is what makes the panel a LOCKED one:
+		// glued to its hex rather than following the pointer, a hit target
+		// rather than pointer-transparent, and carrying the ✕ that undoes the
+		// lock where the transient panel carries the hint for making one. The
+		// hover panel passes nothing.
+		onUnlock?: () => void;
 	} = $props();
+
+	const locked = $derived(onUnlock != null);
 
 	const nationColor = $derived.by(() => {
 		if (!tile.owner_nation) return "rgb(var(--color-tan))";
@@ -73,8 +82,9 @@
 
 	// Conservative size estimate for edge-flip clamping. Exact CSS size depends on
 	// content; over-estimating just biases toward flipping at the canvas edges.
+	// The height carries the hint row below the rows as well as the header.
 	const ESTIMATED_W = 200;
-	const ESTIMATED_H = 110;
+	const ESTIMATED_H = 130;
 	const OFFSET = 12;
 
 	const positionStyle = $derived.by(() => {
@@ -92,11 +102,15 @@
 	});
 </script>
 
-<!-- In the chrome's frame, so the hover panel reads as part of it. -->
+<!-- In the chrome's frame, so the hover panel reads as part of it. A locked
+     panel isn't a tooltip — it outlives the pointer and holds a control — so
+     it is a labelled group instead. -->
 <div
 	class="map-tooltip {CHROME_PANEL_CLASS}"
+	class:locked
 	style={positionStyle}
-	role="tooltip"
+	role={locked ? "group" : "tooltip"}
+	aria-label={locked ? `Locked tile ${tile.x}, ${tile.y}` : undefined}
 >
 	{#if headerLabel}
 		<div class="header">
@@ -131,6 +145,22 @@
 			<dd>{specialistLabel}</dd>
 		{/if}
 	</dl>
+
+	<!-- Nothing on the map affords a right-click, so the transient panel says
+	     what one does (#256). The locked copy says the reverse, with the ✕ in
+	     its corner — last in the markup so it reads after the tile it closes,
+	     and lifted out of the flow by `.unlock-btn`. -->
+	{#if onUnlock}
+		<button
+			type="button"
+			class="unlock-btn"
+			onclick={onUnlock}
+			aria-label="Unlock tile {tile.x}, {tile.y}"
+			title="Unlock">✕</button
+		>
+	{:else}
+		<p class="lock-hint">Right-click to lock</p>
+	{/if}
 </div>
 
 <style>
@@ -143,6 +173,22 @@
 		z-index: 100;
 		min-width: 160px;
 		max-width: 240px;
+	}
+
+	/* A locked panel is a hit target — it carries the ✕ — and sits between the
+	   city banners (z 5) and the chrome (z 10). `.sprite-map-container` is
+	   `position: relative` with no `z-index`, so it opens no stacking context
+	   and all three compete in one: at the hover panel's 100 a locked panel
+	   would park over the chrome's leader panel and swallow its clicks, where
+	   here it yields wherever the two overlap and takes clicks everywhere the
+	   chrome's `pointer-events-none` root doesn't. */
+	.map-tooltip.locked {
+		pointer-events: auto;
+		z-index: 6;
+		/* The gutter the corner ✕ sits in, reserved on the panel rather than
+		   on the header: the row under it is the city name on a city tile and
+		   the coordinates on every other, so no one child can hold it. */
+		padding-right: 22px;
 	}
 	.header {
 		display: flex;
@@ -171,5 +217,32 @@
 		margin-right: 4px;
 		opacity: 0.85;
 		font-size: 10px;
+	}
+	.lock-hint {
+		margin: 6px 0 0;
+		padding-top: 4px;
+		border-top: 1px solid rgb(var(--color-border-tooltip));
+		color: rgb(var(--color-muted));
+		font-size: 10px;
+		font-style: italic;
+		text-align: right;
+	}
+	.unlock-btn {
+		position: absolute;
+		top: 4px;
+		right: 6px;
+		color: rgb(var(--color-muted));
+		cursor: pointer;
+		font-size: 11px;
+		line-height: 1;
+		padding: 0 2px;
+		transition: color 0.15s;
+	}
+	.unlock-btn:hover {
+		color: rgb(var(--color-tan));
+	}
+	.unlock-btn:focus-visible {
+		outline: 2px solid rgb(var(--color-orange));
+		outline-offset: 1px;
 	}
 </style>

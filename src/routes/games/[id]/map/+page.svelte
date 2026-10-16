@@ -21,7 +21,10 @@
 		saveOwnerPlayer,
 		type DetailPlayer,
 	} from "$lib/game-detail/helpers";
-	import { CHROME_PANEL_CLASS } from "$lib/game-detail/map-chrome";
+	import {
+		CHROME_PANEL_CLASS,
+		type TileCoord,
+	} from "$lib/game-detail/map-chrome";
 	import { reconstructMapTiles } from "$lib/game-detail/reconstruct-map-tiles";
 	import SpriteMap from "$lib/SpriteMap.svelte";
 
@@ -58,6 +61,25 @@
 	let showPolitical = $state(true);
 	let showReligion = $state(false);
 
+	// ─── Locked tile panels ───────────────────────────────────────────
+	// Right-clicking a tile leaves a copy of its hover panel glued to its hex,
+	// so two tiles can be compared side by side and a tile's detail stays
+	// readable while the pointer is somewhere else. SpriteMap raises the
+	// toggle and renders the panels; the coordinates live here, beside the
+	// city popover's state, because the route keeps one SpriteMap across
+	// /games/A/map → /games/B/map and SpriteMap takes no game identity: a
+	// coordinate locked in one game would re-derive onto the next game's tile
+	// at the same coordinate. So the list clears with the rest of the
+	// per-game state below.
+	let lockedTiles = $state<TileCoord[]>([]);
+
+	function toggleTileLock(tile: TileCoord) {
+		const held = lockedTiles.some((l) => l.x === tile.x && l.y === tile.y);
+		lockedTiles = held
+			? lockedTiles.filter((l) => l.x !== tile.x || l.y !== tile.y)
+			: [...lockedTiles, { x: tile.x, y: tile.y }];
+	}
+
 	// Re-sync when the route navigates to a different game. Only the match id
 	// is tracked; the body reads via untrack(), so a revalidation for the same
 	// game (e.g. invalidateAll() from a rename) keeps the selected turn and
@@ -68,6 +90,7 @@
 			selectedMapTurn = game.game_details.total_turns;
 			mapTiles = game.map_tiles;
 			playerId = defaultPlayerId(game, players);
+			lockedTiles = [];
 		});
 	});
 
@@ -81,8 +104,78 @@
 	// the camera moves. It stays live while the turn slider scrubs, and closes
 	// once the selected turn is one the city has no banner at — before it was
 	// founded, or while it sits unowned mid-capture.
+	//
+	// Pointing at a banner is enough to open it. bits-ui has this built in
+	// (`openOnHover` on `Popover.Trigger`, with a safe-polygon bridge), but it
+	// hangs off the trigger's own node, and this card has no trigger: the
+	// banner is drawn inside SpriteMap while the card needs the whole game, so
+	// it's anchored from out here. Hence the two halves of hover intent by
+	// hand, at the delays already in use — the open delay is the chrome's own
+	// tooltips (`delayDuration={200}`, MapChrome and MapYieldStrip), the close
+	// delay is bits-ui's `closeDelay` default for the trigger above.
+	//
+	// A right-click LOCKS what hover opened — the gesture that locks a tile's
+	// panel to its hex, so the map has one vocabulary rather than a card that
+	// pinned on a click beside tiles that lock on a right-click. Unlocking
+	// hands the card back to the pointer instead of closing it, as unlocking a
+	// tile hands its hex back to the hover panel. Locking is pointer-only on
+	// both: the map view is desktop-only (#270).
+	//
+	// A locked card also stops answering outside clicks
+	// (`interactOutsideBehavior`). A pan begins with a pointerdown on the
+	// canvas, which bits-ui counts as an interaction outside the card, so the
+	// default behaviour took the card down at the start of every drag — where
+	// a locked tile panel, a plain div with nothing listening for a click,
+	// rides the camera out. The ✕ and the banner's right-click remain, and so
+	// does Escape.
+	//
+	// Two things follow from the lock outliving the pointer. Hovering another
+	// banner leaves a locked card where it is rather than carrying it over
+	// and dropping the lock, as hovering another hex leaves a locked tile
+	// panel alone. And the card goes off screen with its city: it is anchored
+	// to the banner, which the camera can carry out of the map box, so
+	// SpriteMap reports that crossing and the card comes down until the
+	// banner is back — the cull a locked tile panel does for itself.
+	const HOVER_OPEN_MS = 200;
+	const HOVER_CLOSE_MS = 300;
+
 	let popoverCity = $state<string | null>(null);
 	let popoverAnchor = $state<HTMLElement | null>(null);
+	let popoverLocked = $state(false);
+	let popoverOffCanvas = $state(false);
+	let openTimer: ReturnType<typeof setTimeout> | null = null;
+	let closeTimer: ReturnType<typeof setTimeout> | null = null;
+
+	function cancelOpen() {
+		if (openTimer === null) return;
+		clearTimeout(openTimer);
+		openTimer = null;
+	}
+
+	function cancelClose() {
+		if (closeTimer === null) return;
+		clearTimeout(closeTimer);
+		closeTimer = null;
+	}
+
+	function closePopover() {
+		cancelOpen();
+		cancelClose();
+		popoverCity = null;
+		popoverAnchor = null;
+		popoverLocked = false;
+		popoverOffCanvas = false;
+	}
+
+	// The card opens on a city, anchored to its banner: by hover below, or
+	// locked outright by a right-click. Either way the cull starts clear —
+	// the banner it opens on is the one the pointer is on.
+	function openCard(cityName: string, element: HTMLElement, locked: boolean) {
+		popoverCity = cityName;
+		popoverAnchor = element;
+		popoverLocked = locked;
+		popoverOffCanvas = false;
+	}
 
 	const bannerCities = $derived.by(() => {
 		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- locally-scoped Set, not reactive state
@@ -94,15 +187,72 @@
 	});
 
 	$effect(() => {
-		if (popoverCity !== null && !bannerCities.has(popoverCity)) {
-			popoverCity = null;
-			popoverAnchor = null;
-		}
+		if (popoverCity !== null && !bannerCities.has(popoverCity)) closePopover();
 	});
 
-	function openCityPopover(cityName: string, element: HTMLElement) {
-		popoverCity = cityName;
-		popoverAnchor = element;
+	// Timers outlive the component otherwise: scrubbing to a turn that drops
+	// the banner, or navigating away, can land between the hover and the open.
+	$effect(() => () => {
+		cancelOpen();
+		cancelClose();
+	});
+
+	// Hover, or keyboard focus, on a banner. Both arrive here so the card
+	// opens the same way either way — and neither disturbs a locked card,
+	// which only the ✕ or a second right-click takes back.
+	function hoverCityBanner(cityName: string, element: HTMLElement) {
+		if (popoverLocked) return;
+		cancelClose();
+		if (popoverCity === cityName) return;
+		cancelOpen();
+		openTimer = setTimeout(() => {
+			openTimer = null;
+			openCard(cityName, element, false);
+		}, HOVER_OPEN_MS);
+	}
+
+	// The pointer left the banner, or the card. Either way the card has to
+	// outlast the crossing between them — they are a `sideOffset` apart, and
+	// the card is where a long city's record is read and scrolled.
+	function leaveCityBanner() {
+		cancelOpen();
+		if (popoverCity === null || popoverLocked) return;
+		cancelClose();
+		closeTimer = setTimeout(() => {
+			closeTimer = null;
+			popoverCity = null;
+			popoverAnchor = null;
+		}, HOVER_CLOSE_MS);
+	}
+
+	// bits-ui renders the card on `document.body` — floating panels are
+	// portaled so an ancestor's `overflow: hidden` can't clip them, and the
+	// map box has one. That puts the card outside `.sprite-map-container`,
+	// whose handler suppresses the browser's context menu over the map and
+	// its overlays, so a right-click on the card opened the page menu on top
+	// of the map. Locking is the banner's gesture and not the card's, so the
+	// card has nothing to do with the event beyond swallowing it.
+	function suppressCardContextMenu(e: MouseEvent) {
+		e.preventDefault();
+	}
+
+	// A banner was right-clicked. Toggles, as it does on a tile: a second
+	// right-click on the locked card's own banner unlocks it in place — the
+	// pointer is still on the banner, so the card stays up as the transient
+	// one it would have been and goes when the pointer does.
+	function toggleCityLock(cityName: string, element: HTMLElement) {
+		cancelOpen();
+		cancelClose();
+		if (popoverLocked && popoverCity === cityName) {
+			popoverLocked = false;
+			return;
+		}
+		openCard(cityName, element, true);
+	}
+
+	// SpriteMap's answer on whether the card's banner is still on the canvas.
+	function setCardOffCanvas(offCanvas: boolean) {
+		popoverOffCanvas = offCanvas;
 	}
 
 	// ─── Lightboxes ───────────────────────────────────────────────────
@@ -178,7 +328,13 @@
 				{showPolitical}
 				{showReligion}
 				isFinalTurn={selectedMapTurn >= game.game_details.total_turns}
-				onCityClick={openCityPopover}
+				{lockedTiles}
+				onToggleLock={toggleTileLock}
+				onCityHover={hoverCityBanner}
+				onCityLeave={leaveCityBanner}
+				onCityToggleLock={toggleCityLock}
+				cardCity={popoverCity}
+				onCardOffCanvas={setCardOffCanvas}
 			/>
 			<MapChrome
 				{game}
@@ -194,20 +350,22 @@
 	{/if}
 
 	<Popover
-		open={popoverCity !== null}
+		open={popoverCity !== null && !popoverOffCanvas}
 		onOpenChange={(o) => {
-			if (!o) {
-				popoverCity = null;
-				popoverAnchor = null;
-			}
+			if (!o) closePopover();
 		}}
 		customAnchor={popoverAnchor}
 		updatePositionStrategy="always"
+		interactOutsideBehavior={popoverLocked ? "ignore" : "close"}
 		side="top"
 		align="center"
 		contentClass="w-[min(94vw,44rem)]"
 		frameClass="{CHROME_PANEL_CLASS} p-3"
 		ariaLabel="City detail"
+		autoFocus={false}
+		onpointerenter={cancelClose}
+		onpointerleave={leaveCityBanner}
+		oncontextmenu={suppressCardContextMenu}
 	>
 		{#if popoverCity}
 			<CityPopover
@@ -215,6 +373,7 @@
 				{players}
 				cityName={popoverCity}
 				turn={selectedMapTurn}
+				onUnlock={popoverLocked ? closePopover : undefined}
 			/>
 		{/if}
 	</Popover>
