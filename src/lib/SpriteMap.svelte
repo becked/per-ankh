@@ -14,7 +14,10 @@
 	import { familyCrestKey, familyForOwner } from "$lib/game-detail/helpers";
 	import { hexNeighbors } from "$lib/utils/hex";
 	import MapTooltip from "$lib/MapTooltip.svelte";
-	import MapCityBanners, { type CityBanner } from "$lib/MapCityBanners.svelte";
+	import MapCityBanners, {
+		bannerFoot,
+		type CityBanner,
+	} from "$lib/MapCityBanners.svelte";
 	import {
 		projectToCanvas,
 		type TileCoord,
@@ -289,6 +292,8 @@
 		onCityHover,
 		onCityLeave,
 		onCityToggleLock,
+		cardCity,
+		onCardOffCanvas,
 	}: {
 		tiles: MapTile[];
 		// Used to resolve owner_city → family for the tooltip's family crest.
@@ -326,6 +331,13 @@
 		// it again.
 		// eslint-disable-next-line no-unused-vars -- parameter in callback signature
 		onCityToggleLock: (cityName: string, element: HTMLElement) => void;
+		// The city the page's card stands open on, or null. It lives there with
+		// the rest of the card's state and comes back in so the cull below can
+		// say when the camera has carried that city's banner off the canvas.
+		cardCity: string | null;
+		// That verdict, raised on every crossing.
+		// eslint-disable-next-line no-unused-vars -- parameter in callback signature
+		onCardOffCanvas: (offCanvas: boolean) => void;
 	} = $props();
 
 	// city_name → the player owning the city's centre tile at the represented
@@ -634,6 +646,36 @@
 			});
 		}
 		return out;
+	});
+
+	// ─── The city card's anchor ───────────────────────────────────────
+	// The map page floats the city card off a BANNER, so the card rides the
+	// camera as the banner does — and as a locked tile panel does, the camera
+	// can carry it off the canvas. The panels above cull themselves; bits-ui
+	// doesn't, so the card stayed parked against the box's edge naming a city
+	// `.sprite-map-container`'s `overflow: hidden` had clipped away
+	// (`hideWhenDetached` is false and `sticky` "partial" by default). The
+	// camera and the canvas box are here, so the crossing is answered here;
+	// the page owns the card and takes it down, and puts it back on the way
+	// in, the way a locked panel reappears.
+	//
+	// Against the banner's FOOT rather than the hex centre, because that is
+	// where the card hangs from: the frame stands BANNER_WORLD_OFFSET_Y above
+	// the hex, which is 1,296 CSS pixels of it at the top zoom.
+	const cardOffCanvas = $derived.by(() => {
+		const city = cardCity;
+		const viewState = currentViewState;
+		if (city === null || !viewState) return false;
+		const banner = cityBanners.find((b) => b.cityName === city);
+		// A city with no banner at the represented turn is the page's own
+		// close, not a cull.
+		if (!banner) return false;
+		const [x, y] = bannerFoot(banner, viewState, deckWidth, deckHeight);
+		return x < 0 || x > deckWidth || y < 0 || y > deckHeight;
+	});
+
+	$effect(() => {
+		onCardOffCanvas(cardOffCanvas);
 	});
 
 	/**

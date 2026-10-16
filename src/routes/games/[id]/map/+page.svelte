@@ -128,12 +128,21 @@
 	// a locked tile panel, a plain div with nothing listening for a click,
 	// rides the camera out. The ✕ and the banner's right-click remain, and so
 	// does Escape.
+	//
+	// Two things follow from the lock outliving the pointer. Hovering another
+	// banner leaves a locked card where it is rather than carrying it over
+	// and dropping the lock, as hovering another hex leaves a locked tile
+	// panel alone. And the card goes off screen with its city: it is anchored
+	// to the banner, which the camera can carry out of the map box, so
+	// SpriteMap reports that crossing and the card comes down until the
+	// banner is back — the cull a locked tile panel does for itself.
 	const HOVER_OPEN_MS = 200;
 	const HOVER_CLOSE_MS = 300;
 
 	let popoverCity = $state<string | null>(null);
 	let popoverAnchor = $state<HTMLElement | null>(null);
 	let popoverLocked = $state(false);
+	let popoverOffCanvas = $state(false);
 	let openTimer: ReturnType<typeof setTimeout> | null = null;
 	let closeTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -155,6 +164,17 @@
 		popoverCity = null;
 		popoverAnchor = null;
 		popoverLocked = false;
+		popoverOffCanvas = false;
+	}
+
+	// The card opens on a city, anchored to its banner: by hover below, or
+	// locked outright by a right-click. Either way the cull starts clear —
+	// the banner it opens on is the one the pointer is on.
+	function openCard(cityName: string, element: HTMLElement, locked: boolean) {
+		popoverCity = cityName;
+		popoverAnchor = element;
+		popoverLocked = locked;
+		popoverOffCanvas = false;
 	}
 
 	const bannerCities = $derived.by(() => {
@@ -178,16 +198,16 @@
 	});
 
 	// Hover, or keyboard focus, on a banner. Both arrive here so the card
-	// opens the same way either way.
+	// opens the same way either way — and neither disturbs a locked card,
+	// which only the ✕ or a second right-click takes back.
 	function hoverCityBanner(cityName: string, element: HTMLElement) {
+		if (popoverLocked) return;
 		cancelClose();
 		if (popoverCity === cityName) return;
 		cancelOpen();
 		openTimer = setTimeout(() => {
 			openTimer = null;
-			popoverCity = cityName;
-			popoverAnchor = element;
-			popoverLocked = false;
+			openCard(cityName, element, false);
 		}, HOVER_OPEN_MS);
 	}
 
@@ -227,9 +247,12 @@
 			popoverLocked = false;
 			return;
 		}
-		popoverCity = cityName;
-		popoverAnchor = element;
-		popoverLocked = true;
+		openCard(cityName, element, true);
+	}
+
+	// SpriteMap's answer on whether the card's banner is still on the canvas.
+	function setCardOffCanvas(offCanvas: boolean) {
+		popoverOffCanvas = offCanvas;
 	}
 
 	// ─── Lightboxes ───────────────────────────────────────────────────
@@ -310,6 +333,8 @@
 				onCityHover={hoverCityBanner}
 				onCityLeave={leaveCityBanner}
 				onCityToggleLock={toggleCityLock}
+				cardCity={popoverCity}
+				onCardOffCanvas={setCardOffCanvas}
 			/>
 			<MapChrome
 				{game}
@@ -325,7 +350,7 @@
 	{/if}
 
 	<Popover
-		open={popoverCity !== null}
+		open={popoverCity !== null && !popoverOffCanvas}
 		onOpenChange={(o) => {
 			if (!o) closePopover();
 		}}

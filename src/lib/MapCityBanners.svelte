@@ -1,4 +1,6 @@
 <script module lang="ts">
+	import { projectToCanvas, type ViewState } from "$lib/game-detail/map-chrome";
+
 	/** One city's banner: where it sits on the map and what it says. */
 	export interface CityBanner {
 		cityName: string;
@@ -15,21 +17,6 @@
 		/** Citizens, or null away from the final turn — the count is end-of-game. */
 		citizens: number | null;
 	}
-</script>
-
-<script lang="ts">
-	// City banners: a DOM overlay inside SpriteMap, one absolutely-positioned
-	// button per city, sitting above the city sprite and following the camera.
-	//
-	// Not deck.gl layers: a banner wears the chrome's frame, its crests are
-	// per-file sprites rather than atlas cells, and it's what opens the city
-	// popover — so it needs focus and keyboard.
-	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
-	import {
-		CHROME_PANEL_CLASS,
-		projectToCanvas,
-		type ViewState,
-	} from "$lib/game-detail/map-chrome";
 
 	// How far above the tile centre the banner's foot sits, in WORLD units, so
 	// it holds the same place at every zoom. This is the tile's own hex top
@@ -40,6 +27,37 @@
 	// ambiguous; the caret under the frame points out the rest. The sprite's
 	// top edge is ~84 units up, so the frame overlaps its topmost 3 units.
 	const BANNER_WORLD_OFFSET_Y = 81;
+
+	/**
+	 * Where a banner's foot lands, in canvas-local CSS pixels: the point its
+	 * frame hangs from, and so the anchor the map page floats the city card
+	 * off. Exported because SpriteMap culls that card against the same point —
+	 * a second copy of the offset would drift from this one.
+	 */
+	export function bannerFoot(
+		banner: CityBanner,
+		viewState: ViewState,
+		canvasWidth: number,
+		canvasHeight: number,
+	): [number, number] {
+		return projectToCanvas(
+			[banner.worldX, banner.worldY - BANNER_WORLD_OFFSET_Y],
+			viewState,
+			canvasWidth,
+			canvasHeight,
+		);
+	}
+</script>
+
+<script lang="ts">
+	// City banners: a DOM overlay inside SpriteMap, one absolutely-positioned
+	// button per city, sitting above the city sprite and following the camera.
+	//
+	// Not deck.gl layers: a banner wears the chrome's frame, its crests are
+	// per-file sprites rather than atlas cells, and it's what opens the city
+	// popover — so it needs focus and keyboard.
+	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
+	import { CHROME_PANEL_CLASS } from "$lib/game-detail/map-chrome";
 
 	// Above this zoom a city gets the full framed banner; below it, the
 	// name-only label the game falls back to when zoomed out. Measured over the
@@ -92,12 +110,7 @@
 	const full = $derived(viewState.zoom >= FULL_BANNER_MIN_ZOOM);
 
 	function footOf(banner: CityBanner): [number, number] {
-		return projectToCanvas(
-			[banner.worldX, banner.worldY - BANNER_WORLD_OFFSET_Y],
-			viewState,
-			canvasWidth,
-			canvasHeight,
-		);
+		return bannerFoot(banner, viewState, canvasWidth, canvasHeight);
 	}
 </script>
 
