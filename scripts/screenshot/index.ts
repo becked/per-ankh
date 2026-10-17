@@ -14,8 +14,10 @@
 // §2, the same glyphs rasterized differently — DirectWrite/ClearType draws
 // light-on-dark text thinner and tints glyph edges, which reads as a colour
 // problem though no colour changed; §3, no `color-scheme` anywhere in src/,
-// so everything the browser paints itself stays in light mode; and §5, the
-// two `ui-monospace` stacks in SwissFlowBracket that fall through to Courier
+// so everything the browser paints itself stays in light mode — which is
+// what the game page is in this list for, being where the app's scroll
+// containers are concentrated (see PAGES in capture.ts); and §5, the two
+// `ui-monospace` stacks in SwissFlowBracket that fall through to Courier
 // New on Windows — on the tournament page this list captures.
 //
 // Why a runner per OS instead of extending ux-review: ux-review runs
@@ -82,11 +84,11 @@ function printHelp(): void {
 			"         DIR/<run-id>/ and writes the comparison page beside them.",
 			"         Needs `gh`, authenticated against the repo.",
 			"",
-			"capture  One signed-out pass over a fixed three-page list (home, the",
-			"         community tournament, a public profile) at two viewports,",
-			"         writing DIR/shots/*.jpg and DIR/manifest.json. This is the",
-			"         runners' half — the workflow calls it once per OS, and `run`",
-			"         is how you start that.",
+			"capture  One signed-out pass over a fixed four-page list (home, the",
+			"         community tournament, a public profile, a public game) at",
+			"         two viewports, writing DIR/shots/*.jpg and DIR/manifest.json.",
+			"         This is the runners' half — the workflow calls it once per OS,",
+			"         and `run` is how you start that.",
 			"",
 			"compare  Render one side-by-side page from a finished run's artifacts —",
 			"         what `run` ends by doing, over a directory you already have:",
