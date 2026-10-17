@@ -1616,7 +1616,7 @@ Known archetype values: `FAMILYCLASS_CHAMPIONS`, `_HUNTERS`, `_PATRONS`,
 
 ### Individual units live inside `<Tile>`, not at Root
 
-Verified across saves from 2022 through 2026 (223–419 unit instances per
+Verified across saves from 2022 through 2026 (17–419 unit instances per
 save). The `<Unit>` element carries:
 
 ```xml
@@ -1715,7 +1715,7 @@ Useful as a budget when sizing memory and choosing batch granularity:
 
 - 5 players, ~449 characters, ~5,476 tiles, ~43 cities per save.
 - ~2,700 tiles need city ownership resolution.
-- 223–419 unit instances inside `<Tile>` (varies by year / war state).
+- 17–419 unit instances inside `<Tile>` (varies by year / war state).
 - File size 5–50 MB. DOM parse is fine up to ~20 MB.
 - XML parsing is ~6% of upload time; the rest is data shaping + I/O.
 
