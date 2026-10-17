@@ -1168,9 +1168,11 @@ and a handful not yet covered in the children listing.
 | `last_owner_xml_id`      | `LastPlayer`                                                    |                                              |
 
 Several plausible-looking fields **do not exist** in the XML and must
-not be parsed: `GrowthProgress`, `GeneralID`, top-level `Agent` (use
-the `<AgentTurn>` / `<AgentCharacterID>` / `<AgentTileID>` sibling
-trio instead).
+not be parsed: `GrowthProgress`, top-level `Agent` (use the
+`<AgentTurn>` / `<AgentCharacterID>` / `<AgentTileID>` sibling trio
+instead).
+
+A city has no general — its leadership field is `GovernorID`, in the table above. `<GeneralID>` does exist, but as a `<Unit>` child naming the character leading that unit; see [the unit schema](#individual-units-live-inside-tile-not-at-root).
 
 ---
 
@@ -1625,6 +1627,7 @@ save). The `<Unit>` element carries:
     <CreateTurn>50</CreateTurn>
     <Facing>SW</Facing>
     <OriginalPlayer>0</OriginalPlayer>
+    <GeneralID>42</GeneralID>  <!-- only when a general leads the unit -->
     <PlayerFamily><P.0>FAMILY_FABIUS</P.0></PlayerFamily>
     <Promotions>            <!-- acquired -->
       <PROMOTION_STRIKE1 />
@@ -1725,8 +1728,7 @@ bump usually reflects a save-format surprise discovered the hard way:
 - **v2.4** — `enabled_dlc` was renamed `enabled_mods` once the
   `Version` attribute was discovered to contain mods only, and a separate
   `enabled_dlc` column was added for `<GameContent>` parsing.
-- **v2.7** — Three columns (`growth_progress`, `general_id`, `agent_id`)
-  were removed after they were confirmed not to exist in the XML at all.
+- **v2.7** — Three columns (`growth_progress`, `general_id`, `agent_id`) were removed from the City schema. Dropping them there was right, but the stated reason — that none of the three exists in the XML — holds only for `growth_progress` and a top-level `agent_id`: `<GeneralID>` does exist, as a `<Unit>` child, and a city simply has no general (`GovernorID` is its leadership field).
 - **v2.8** — Eight new city columns added once
   `governor_turn`/`hurry_training_count`/`buy_tile_count` were located in
   the actual save XML.
@@ -1738,6 +1740,7 @@ bump usually reflects a save-format surprise discovered the hard way:
   assumption).
 - **v2.13** — `event_logs.data1/data2/data3` changed from INTEGER to
   VARCHAR after string values turned up in real saves.
+- **Parser 2.23.0** — `<GeneralID>` is a `<Unit>` child, not the nonexistent city field v2.7 took it for. `Unit.writeGameXML` (`Unit.cs:996`) writes it only when `hasGeneral()` holds — `getGeneralID() != -1` (`Unit.cs:2278`) — so the sentinel never reaches the file and an absent element is a unit nobody leads. The unit is the only side of the link the save records: `Character.writeGameXML` writes no unit id, and a character's own `miUnitID` is reconstructed at load by `Unit.setGeneralID`.
 
 Future format discoveries should be appended here, even though the DuckDB
 schema itself is gone.

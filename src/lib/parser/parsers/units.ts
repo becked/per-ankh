@@ -32,6 +32,11 @@ export interface Unit {
 	originalPlayerXmlId: number | null;
 	// The tribe a mercenary was hired from; null for a unit the player trained.
 	originalTribe: string | null;
+	// The <Character> id of the general leading this unit. The game writes
+	// <GeneralID> only when there is one (`Unit.writeGameXML`, Unit.cs:996,
+	// gated on `hasGeneral` — `getGeneralID() != -1`, Unit.cs:2278), so the
+	// sentinel never reaches us and an absent element is a unit nobody leads.
+	generalXmlId: number | null;
 	turnsSinceLastMove: number | null;
 	// Accumulated damage. The game writes <Damage> only when it is non-zero
 	// (`Unit.writeGameXML`, Unit.cs:1002-1005), so an absent element is a unit
@@ -140,6 +145,11 @@ export function parseUnits(root: Record<string, unknown>): Unit[] {
 				? null
 				: originalPlayerRaw;
 
+		// GeneralID, sentinel-filtered like the two ids above.
+		const generalRaw = optInt(node.GeneralID);
+		const generalXmlId =
+			generalRaw === null || generalRaw < 0 ? null : generalRaw;
+
 		units.push({
 			xmlId,
 			tileXmlId,
@@ -152,6 +162,7 @@ export function parseUnits(root: Record<string, unknown>): Unit[] {
 			facing: optStr(node.Facing),
 			originalPlayerXmlId,
 			originalTribe: optStr(node.OriginalTribe),
+			generalXmlId,
 			turnsSinceLastMove: optInt(node.TurnsSinceLastMove),
 			damage: optInt(node.Damage) ?? 0,
 			gender: optStr(node.Gender),
@@ -297,6 +308,7 @@ export function unitToRow(u: Unit): Record<string, unknown> {
 		facing: u.facing,
 		original_player_xml_id: u.originalPlayerXmlId,
 		original_tribe: u.originalTribe,
+		general_xml_id: u.generalXmlId,
 		turns_since_last_move: u.turnsSinceLastMove,
 		damage: u.damage,
 		gender: u.gender,
