@@ -213,6 +213,14 @@ export interface UnitInfo {
 	// The tribe a mercenary was hired from (<OriginalTribe>); null for a unit
 	// the player trained. Optional: absent on blobs before PARSER_VERSION 2.20.0.
 	original_tribe?: string | null;
+	// The <Character> id of the general leading this unit. The game writes
+	// <GeneralID> only for a unit that has one (`Unit.writeGameXML`,
+	// Unit.cs:996, gated on `hasGeneral` — `getGeneralID() != -1`,
+	// Unit.cs:2278), so three states stay apart: a number is the leading
+	// character, `null` is a unit nobody leads, and `undefined` is a blob
+	// parsed before PARSER_VERSION 2.23.0, where who leads it is UNKNOWN
+	// rather than nobody.
+	general_xml_id?: number | null;
 	turns_since_last_move: number | null;
 	// Accumulated damage; health is its complement (`Unit.getHP`,
 	// Unit.cs:2422, is `getHPMax() - getDamage()`). The game writes <Damage>
@@ -442,4 +450,4 @@ export interface FullGameData {
  * fixes, MINOR for additive fields, MAJOR for breaking schema changes.
  * Initial value `2.0.0` mirrors `FullGameData.version: 2`.
  */
-export const PARSER_VERSION = "2.22.0";
+export const PARSER_VERSION = "2.23.0";

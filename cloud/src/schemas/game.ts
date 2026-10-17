@@ -232,6 +232,18 @@ export const MAX_DISABLED_IMPROVEMENTS = 1_000;
 //         276 of 2179 tile-nested
 //         units across test-data/saves carry the element (12.7%), values
 //         1-18. Purely additive.
+// 2.23.0 — general_xml_id on units, the <Character> id of the general leading
+//         the unit. `Unit.writeGameXML` (Unit.cs:996) writes <GeneralID> only
+//         when `hasGeneral()` holds — `getGeneralID() != -1` (Unit.cs:2278) —
+//         so the sentinel is never written and an absent element means a unit
+//         nobody leads. The unit is the only side of the link the save
+//         records: `Character.writeGameXML` writes no unit id, and a
+//         character's own miUnitID is reconstructed at load by
+//         `Unit.setGeneralID`. 203 of 2179 tile-nested units across
+//         test-data/saves carry it (9.3%), in 15 of the 16 saves, ids 10-679;
+//         all 203 are military by `classifyUnit`, every id resolves to a
+//         <Character> owned by the unit's own player with no <DeathTurn>, and
+//         no character leads two units. Purely additive.
 export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.0.0",
 	"2.1.0",
@@ -261,13 +273,14 @@ export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.20.0",
 	"2.21.0",
 	"2.22.0",
+	"2.23.0",
 ]);
 
 // The latest accepted version. Echoed back on stats responses and
 // embedded in stats cache keys so a parser bump (after the matching
 // extraction code lands) naturally orphans every old entry. Bump in
 // lockstep with the `KNOWN_PARSER_VERSIONS` addition above.
-export const CURRENT_PARSER_VERSION = "2.22.0";
+export const CURRENT_PARSER_VERSION = "2.23.0";
 
 // ----- Reusable atoms -----
 
