@@ -79,7 +79,7 @@ jobs:
         run: ./per-ankh screenshot capture --base-url "$BASE_URL" --out screenshot
 
       # Runs even when Capture failed: it writes the manifest and every good
-      # JPEG before exiting non-zero, and 5 of 6 pages is still worth
+      # JPEG before exiting non-zero, and 7 of 8 pages is still worth
       # comparing — the same argument `fail-fast: false` makes one job up.
       # The failed pages come through as `error` in the manifest and render as
       # error cells in `compare`.
