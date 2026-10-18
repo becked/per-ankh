@@ -244,6 +244,24 @@ export const MAX_DISABLED_IMPROVEMENTS = 1_000;
 //         all 203 are military by `classifyUnit`, every id resolves to a
 //         <Character> owned by the unit's own player with no <DeathTurn>, and
 //         no character leads two units. Purely additive.
+// 2.24.0 — the inputs to a character's opinion of their own leader, which
+//         the save stores no value for at all: `Character.writeGameXML`
+//         (Character.cs:832) never writes `maiOpinionRate`, and the game
+//         rebuilds every character's rate after the read (`Game.postStart`,
+//         Game.cs:12107 -> `updateCharacterOpinionAll`, `:12152`). They are:
+//         game_details.players[].chosen_heir_xml_id and .succession_gender
+//         (<ChosenHeirID>/<SuccessionGender>, 48 elements each in 16 of 16
+//         test-data/saves), the new top-level player_councils array
+//         (<CouncilCharacter>, 48 filled seats in 16 of 16 — already parsed by
+//         `parsePlayerCouncil`, previously unwired), father_xml_id /
+//         mother_xml_id on characters, and head_character_xml_id on
+//         game_religions. The parent pair is the SOCIAL parents the game's own
+//         `Character.getAncestorLevel` (Character.cs:1567) walks; 17 of 3,458
+//         corpus characters carry a social parent the birth columns don't, so
+//         the birth ids are the wrong pair for `isChildOf`. The religion head
+//         (<ReligionHeadID>, also already parsed and unwired) doubles both
+//         religion terms, and 12 of the corpus's 203 unit generals head a
+//         religion. Purely additive; absent means UNKNOWN on each, not absent.
 export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.0.0",
 	"2.1.0",
@@ -274,13 +292,14 @@ export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.21.0",
 	"2.22.0",
 	"2.23.0",
+	"2.24.0",
 ]);
 
 // The latest accepted version. Echoed back on stats responses and
 // embedded in stats cache keys so a parser bump (after the matching
 // extraction code lands) naturally orphans every old entry. Bump in
 // lockstep with the `KNOWN_PARSER_VERSIONS` addition above.
-export const CURRENT_PARSER_VERSION = "2.23.0";
+export const CURRENT_PARSER_VERSION = "2.24.0";
 
 // ----- Reusable atoms -----
 
@@ -311,6 +330,12 @@ const PlayerInfoSchema = v.object({
 	// characters[].xml_id to price their court science. `v.optional` for the
 	// same deploy-gap reason as the fields above.
 	leader_character_xml_id: v.optional(v.nullable(v.number())),
+	// Added in PARSER_VERSION 2.24.0 — the nominated heir and the succession
+	// gender rule that decides whether they are eligible, the two inputs to
+	// the Heir term of a character's opinion of their leader. `v.optional` for
+	// the same deploy-gap reason as the fields above.
+	chosen_heir_xml_id: v.optional(v.nullable(v.number())),
+	succession_gender: v.optional(v.nullable(v.string())),
 });
 
 const GameDetailsSchema = v.object({

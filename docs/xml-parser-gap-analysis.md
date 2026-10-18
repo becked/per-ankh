@@ -217,7 +217,7 @@ This document identifies data present in Old World save files that is not curren
 
 **Children:**
 
-- `DeathTurn`, `DeathReason`, `BirthFatherID`, `BirthMotherID`, `BirthCityID`
+- `DeathTurn`, `DeathReason`, `BirthFatherID`, `BirthMotherID`, `FatherID`, `MotherID`, `BirthCityID`
 - `Family`, `Nation`, `Religion`, `Tribe`
 - `Cognomen`, `Portrait`
 - `XP`, `Level`
@@ -247,9 +247,7 @@ This document identifies data present in Old World save files that is not curren
 | `EventStoryOption` | Event story option selections (2022 only)                     |
 | `EventStoryTexts`  | Story event text associations                                 |
 | `EventStoryTurn`   | Character-specific event timings                              |
-| `FatherID`         | Current legal father (may differ from birth father)           |
 | `Infertile`        | Infertility flag                                              |
-| `MotherID`         | Current legal mother                                          |
 | `NameType`         | Name localization type                                        |
 | `NationTurn`       | Turn joined nation                                            |
 | `Nickname`         | Character nickname (2022 only)                                |

@@ -58,6 +58,10 @@ npm run bake:family-pools      # cloud/src/generated/family-pools.ts — each na
 npm run bake:owtt              # owtt.ts (needs a local owtt checkout, OWTT_DIR)
 npm run bake:momentum          # momentum.ts (src/ AND cloud/src/; fits on a local blob corpus)
 npm run bake:family-opinion    # family-opinion.ts (opinion bands + their city-upkeep effect)
+npm run bake:character-opinion # character-opinion.ts (the coefficients a character's opinion
+                               # of their own leader is summed from, and the bands that sum
+                               # falls in — one of which modifies the strength of any unit
+                               # that character leads)
 npm run bake:improvement-builds # improvement-builds.ts (src/ AND cloud/src/; worker-turn build
                                # cost per improvement, plus the in-place upgrade chains the
                                # challenge scorer reads)
@@ -88,7 +92,7 @@ npm run bake:finalize          # Emits committed manifest TS modules + reconcile
 npm run bake:all               # Every baker above except owtt + momentum, then finalize
 ```
 
-`bake:all` runs 34 of the 36 bakers above, in the order listed, then `finalize`. It deliberately omits `bake:owtt` and `bake:momentum` — rerun those by hand when their sources change. Membership doesn't follow from what a baker reads: `bake:atlas-pool` needs an owtournamentatlas checkout and is in `bake:all`, while `bake:owtt` needs one of its own and isn't — so a new baker records its choice here either way. Separately, `bake:favicon` / `bake:og` generate site icons and OG images, and the UX-review bundle under `docs/ux-review/` is captured by `./per-ankh ux-review` (a CLI command, not an npm script).
+`bake:all` runs 35 of the 37 bakers above, in the order listed, then `finalize`. It deliberately omits `bake:owtt` and `bake:momentum` — rerun those by hand when their sources change. Membership doesn't follow from what a baker reads: `bake:atlas-pool` needs an owtournamentatlas checkout and is in `bake:all`, while `bake:owtt` needs one of its own and isn't — so a new baker records its choice here either way. Separately, `bake:favicon` / `bake:og` generate site icons and OG images, and the UX-review bundle under `docs/ux-review/` is captured by `./per-ankh ux-review` (a CLI command, not an npm script).
 
 ## Adding a name-override table
 

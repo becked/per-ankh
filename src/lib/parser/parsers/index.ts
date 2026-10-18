@@ -32,9 +32,11 @@ import { parseFamilies, familyToRow } from "./families.js";
 import { parseMatchMetadata, parseTeamAssignments } from "./match-metadata.js";
 import {
 	parseLaws,
+	parsePlayerCouncil,
 	parsePlayerGoals,
 	parsePlayerResources,
 	parseProjectsProduced,
+	playerCouncilToRow,
 	playerGoalToRow,
 	playerResourceToRow,
 	projectProducedToRow,
@@ -100,6 +102,7 @@ import {
 	type FamilyOpinionEntry,
 	type FullGameData,
 	type MemoryInfo,
+	type PlayerCouncilInfo,
 	type PlayerGoalInfo,
 	type PlayerNationEntry,
 	type PlayerRosterEntry,
@@ -135,6 +138,7 @@ export function extractAllGameData(
 	const families = parseFamilies(root);
 	const familyOpinionHistory = parseFamilyOpinionHistory(root);
 	const laws = parseLaws(root);
+	const playerCouncils = parsePlayerCouncil(root);
 	const playerGoals = parsePlayerGoals(root);
 	const playerResources = parsePlayerResources(root);
 	const projectsProduced = parseProjectsProduced(root);
@@ -275,6 +279,9 @@ export function extractAllGameData(
 	const playerGoalsWire: PlayerGoalInfo[] = playerGoals.map(
 		(g) => playerGoalToRow(g) as unknown as PlayerGoalInfo,
 	);
+	const playerCouncilsWire: PlayerCouncilInfo[] = playerCouncils.map(
+		(c) => playerCouncilToRow(c) as unknown as PlayerCouncilInfo,
+	);
 	const memoryDataWire: MemoryInfo[] = memoryData.map(
 		(m) => memoryDataToRow(m) as unknown as MemoryInfo,
 	);
@@ -337,6 +344,7 @@ export function extractAllGameData(
 		player_resources: playerResourcesWire,
 		projects_produced: projectsProducedWire,
 		player_goals: playerGoalsWire,
+		player_councils: playerCouncilsWire,
 		story_events: storyEvents,
 		memory_data: memoryDataWire,
 		yield_price_history: yieldPriceWire,
