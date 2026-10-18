@@ -15,4 +15,14 @@ founder_player_xml_id?: number | null,
  * ReligionTheology list). Optional: absent on blobs before PARSER_VERSION
  * 2.15.0.
  */
-theologies?: Array<string>, };
+theologies?: Array<string>,
+/**
+ * The character who heads this religion at the final turn, from the <Game>
+ * node's <ReligionHeadID>. Joins to `characters[].xml_id`. The game's own
+ * `Character.isReligionHead` (Character.cs:2236) is exactly "some religion's
+ * head id is mine", and being a head doubles both religion terms of a
+ * character's opinion of their leader (`PlayerOpinion.cs:411`, `:459`).
+ * Optional: absent on blobs parsed before PARSER_VERSION 2.24.0, where the
+ * head is UNKNOWN; null for a religion nobody heads.
+ */
+head_character_xml_id?: number | null, };

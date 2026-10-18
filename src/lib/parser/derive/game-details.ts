@@ -30,6 +30,8 @@ export function deriveGameDetails(
 			state_religion: p.stateReligion,
 			difficulty: p.difficulty,
 			leader_character_xml_id: p.leaderCharacterXmlId,
+			chosen_heir_xml_id: p.chosenHeirXmlId,
+			succession_gender: p.successionGender,
 		}))
 		.sort((a, b) => strCmp(a.player_name, b.player_name));
 

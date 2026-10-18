@@ -24,6 +24,13 @@ export interface Character {
 	deathReason: string | null;
 	birthFatherXmlId: number | null;
 	birthMotherXmlId: number | null;
+	// The SOCIAL parents — `miFatherID`/`miMotherID`, which an adoption or a
+	// legitimisation moves away from the birth pair. They are what the game's
+	// own family-tree walk reads: `Character.getAncestorLevel`
+	// (Character.cs:1567) follows `father()`/`mother()`, so `isChildOf`
+	// (`:1613`) — and every opinion term built on it — answers from these.
+	fatherXmlId: number | null;
+	motherXmlId: number | null;
 	birthCityXmlId: number | null;
 	cognomen: string | null;
 	suffix: number;
@@ -92,6 +99,8 @@ export function parseCharacters(root: Record<string, unknown>): Character[] {
 			deathReason: optStr(node.DeathReason),
 			birthFatherXmlId: optInt(node.BirthFatherID),
 			birthMotherXmlId: optInt(node.BirthMotherID),
+			fatherXmlId: optInt(node.FatherID),
+			motherXmlId: optInt(node.MotherID),
 			birthCityXmlId: optInt(node.BirthCityID),
 			cognomen: optStr(node.Cognomen),
 			// Regnal numeral (the "II" in "Meera II"). Old World serializes
@@ -140,6 +149,8 @@ export function characterToRow(c: Character): Record<string, unknown> {
 		death_reason: c.deathReason,
 		birth_father_xml_id: c.birthFatherXmlId,
 		birth_mother_xml_id: c.birthMotherXmlId,
+		father_xml_id: c.fatherXmlId,
+		mother_xml_id: c.motherXmlId,
 		birth_city_xml_id: c.birthCityXmlId,
 		cognomen: c.cognomen,
 		suffix: c.suffix,

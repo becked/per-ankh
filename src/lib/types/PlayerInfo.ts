@@ -21,4 +21,17 @@ export type PlayerInfo = {
 	// frontend can still read older blobs. Null for a player who never had
 	// a leader.
 	leader_character_xml_id?: number | null;
+	// The heir this player NOMINATED, from <ChosenHeirID> — not the heir
+	// succession law would pick. `Player.findHeir` (Player.cs:12287) puts an
+	// eligible chosen heir first in the succession list, so this answers
+	// `heir()` for a player who made a choice and nothing for one who didn't;
+	// `<Succession>` itself is rebuilt on load and never written. Added in
+	// PARSER_VERSION 2.24.0; `undefined` means the blob predates the field,
+	// `null` means no heir was chosen.
+	chosen_heir_xml_id?: number | null;
+	// SUCCESSIONGENDER_* zType — which genders this player's succession admits,
+	// the gate `Character.isSuccessionEligible` (Character.cs:3047) applies to
+	// a chosen heir. Added in PARSER_VERSION 2.24.0; `undefined` on older
+	// blobs.
+	succession_gender?: string | null;
 };

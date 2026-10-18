@@ -1201,6 +1201,24 @@ export function comparisonRowKeys(
 
 // ─── Pure Functions ──────────────────────────────────────────────────
 
+/**
+ * The band a value falls in, for any of the game's opinion tables — family
+ * opinion of a player, a character's of their leader. Bands are ascending,
+ * and `getOpinionFromRate` (InfoHelpers.cs:2302) takes the one with the
+ * smallest threshold still at or above the value, so the first band the
+ * value doesn't exceed wins and a value above every threshold gets the
+ * open-ended last one.
+ */
+export function opinionBand<T extends { readonly threshold: number | null }>(
+	value: number,
+	bands: readonly T[],
+): T {
+	for (const band of bands) {
+		if (band.threshold == null || value <= band.threshold) return band;
+	}
+	return bands[bands.length - 1];
+}
+
 export function toggleSort(table: TableState, columnKey: string): void {
 	if (table.sortColumn === columnKey) {
 		table.sortDirection = table.sortDirection === "asc" ? "desc" : "asc";

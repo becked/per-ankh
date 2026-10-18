@@ -275,6 +275,20 @@ export function parsePlayerCouncil(
 	return out;
 }
 
+/**
+ * Wire shape of one council seat. `appointedTurn` is deliberately NOT emitted:
+ * it is hardcoded null above because the save doesn't record it at this
+ * location, and a null column on the blob would promise a turn that is never
+ * there.
+ */
+export function playerCouncilToRow(c: PlayerCouncil): Record<string, unknown> {
+	return {
+		player_xml_id: c.playerXmlId,
+		position: c.position,
+		character_xml_id: c.characterXmlId,
+	};
+}
+
 // ---------- Laws ----------
 
 export function parseLaws(root: Record<string, unknown>): Law[] {

@@ -10,12 +10,9 @@
 // Kept out of the components so the shapes stay testable, and separate from
 // economy.ts because the two tabs are separate.
 
-import {
-	FAMILY_OPINION_BANDS,
-	type FamilyOpinionBand,
-} from "$lib/generated/family-opinion";
+import { FAMILY_OPINION_BANDS } from "$lib/generated/family-opinion";
 import type { FamilyOpinionEntry } from "$lib/parser/types";
-import type { DetailPlayer } from "./helpers";
+import { opinionBand, type DetailPlayer } from "./helpers";
 
 /** One family's standing with its player, turn by turn. */
 export interface FamilyOpinionSeries {
@@ -67,18 +64,6 @@ export function familyOpinionSeries(
 	);
 }
 
-/**
- * The band an opinion falls in. Bands are ascending, and the game takes the
- * first one the opinion doesn't exceed; the open-ended top band catches the
- * rest.
- */
-export function familyOpinionBand(opinion: number): FamilyOpinionBand {
-	for (const band of FAMILY_OPINION_BANDS) {
-		if (band.threshold == null || opinion <= band.threshold) return band;
-	}
-	return FAMILY_OPINION_BANDS[FAMILY_OPINION_BANDS.length - 1];
-}
-
 /** How a nation's — or one of its families' — turns fell across the bands. */
 export interface OpinionBandTally {
 	player: DetailPlayer;
@@ -110,7 +95,7 @@ function tally(
 	const counts = new Map<string, number>();
 	let modifierSum = 0;
 	for (const [, opinion] of points) {
-		const band = familyOpinionBand(opinion);
+		const band = opinionBand(opinion, FAMILY_OPINION_BANDS);
 		counts.set(band.type, (counts.get(band.type) ?? 0) + 1);
 		modifierSum += band.maintenanceModifier;
 	}

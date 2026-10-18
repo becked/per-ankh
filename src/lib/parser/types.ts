@@ -126,6 +126,17 @@ export interface CharacterInfo {
 	death_reason: string | null;
 	birth_father_xml_id: number | null;
 	birth_mother_xml_id: number | null;
+	// The SOCIAL parents, from `<FatherID>`/`<MotherID>` — which an adoption or
+	// a legitimisation moves away from the birth pair (17 of the 3,458
+	// characters in test-data/saves carry a social parent the birth columns
+	// don't). They are the pair the game's own family-tree walk reads:
+	// `Character.getAncestorLevel` (Character.cs:1567) follows
+	// `father()`/`mother()`, so `isChildOf` (`:1613`) and everything built on
+	// it answer from these, not from the birth ids. Optional: `undefined` means
+	// a blob parsed before PARSER_VERSION 2.24.0, where the social parent is
+	// UNKNOWN rather than absent; `null` is the game's own "no parent".
+	father_xml_id?: number | null;
+	mother_xml_id?: number | null;
 	birth_city_xml_id: number | null;
 	cognomen: string | null;
 	suffix: number;
@@ -284,6 +295,19 @@ export interface PlayerGoalInfo {
 	goal_state: string | null;
 }
 
+/**
+ * One filled council seat at the final turn, from the Player node's
+ * `<CouncilCharacter>` map. PARSER_VERSION 2.24.0+; absent on older blobs,
+ * where who sits on a council is UNKNOWN rather than nobody. A seat nobody
+ * holds is simply not written, so every row here is a filled seat.
+ */
+export interface PlayerCouncilInfo {
+	player_xml_id: number;
+	/** COUNCIL_* zType — the seat. */
+	position: string;
+	character_xml_id: number;
+}
+
 export interface MemoryInfo {
 	player_xml_id: number;
 	memory_type: string;
@@ -439,6 +463,7 @@ export interface FullGameData {
 	player_resources: PlayerResourceInfo[];
 	projects_produced: ProjectProducedInfo[];
 	player_goals: PlayerGoalInfo[];
+	player_councils: PlayerCouncilInfo[];
 	story_events: StoryEvent[];
 	memory_data: MemoryInfo[];
 	yield_price_history: YieldPriceEntry[];
@@ -450,4 +475,4 @@ export interface FullGameData {
  * fixes, MINOR for additive fields, MAJOR for breaking schema changes.
  * Initial value `2.0.0` mirrors `FullGameData.version: 2`.
  */
-export const PARSER_VERSION = "2.23.0";
+export const PARSER_VERSION = "2.24.0";

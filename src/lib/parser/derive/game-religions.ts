@@ -20,6 +20,7 @@ export function deriveGameReligions(
 				? (playerMap.get(r.founderPlayerXmlId)?.nation ?? null)
 				: null,
 		founder_player_xml_id: r.founderPlayerXmlId,
+		head_character_xml_id: r.headCharacterXmlId,
 		theologies: r.theologies,
 	}));
 
