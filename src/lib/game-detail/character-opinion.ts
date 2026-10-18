@@ -6,7 +6,7 @@
 // test-data/saves — because the game rebuilds every character's rate on load:
 // `Game.createFromXML` reads the document inside a `GameInitializingScope`
 // (which is why `Character.updateOpinion`, Character.cs:5465, early-returns
-// during the read), then calls `postStart()` (Game.cs:1938), whose
+// during the read), then calls `postStart()` (Game.cs:12107), whose
 // `updateCharacterOpinionAll()` (`:12152`) fans out over every character ×
 // every player. So the rate is a pure function of loaded save state, and this
 // module is that function.
@@ -59,9 +59,9 @@ import {
 	SUCCESSION_GENDERS,
 	SUCCESSION_RETURN_TRAITS,
 	TRAIT_OPINION,
-	type OpinionCharacterBand,
 } from "$lib/generated/character-opinion";
 import type { CharacterInfo, FullGameData } from "$lib/parser/types";
+import { opinionBand } from "./helpers";
 
 /** The blob fields the sum reads. */
 export type OpinionGame = Pick<
@@ -105,19 +105,6 @@ export interface CharacterOpinion {
 	 * re-deriving five succession walks for a term worth 20 (see `heirTerm`).
 	 */
 	uncertain: boolean;
-}
-
-/**
- * The band a rate falls in. Bands are ascending, and `getOpinionFromRate`
- * (InfoHelpers.cs:2302) takes the one with the smallest threshold still at or
- * above the rate — so the first band the rate doesn't exceed wins, and a rate
- * above every threshold gets the open-ended last one.
- */
-function opinionBand(rate: number): OpinionCharacterBand {
-	for (const band of OPINION_CHARACTER_BANDS) {
-		if (band.threshold == null || rate <= band.threshold) return band;
-	}
-	return OPINION_CHARACTER_BANDS[OPINION_CHARACTER_BANDS.length - 1];
 }
 
 /**
@@ -325,8 +312,8 @@ export function generalOpinionOfLeader(
 	// ── Council (`:298`) ────────────────────────────────────────────────────
 	const councils = game.player_councils ?? null;
 	if (councils == null) {
-		// Every one of council.xml's three seats is worth the same, so the most
-		// an unknown seat can be worth is any of them.
+		// All four seats across council.xml and council-btt.xml are worth the
+		// same, so the most an unknown seat can be worth is any of them.
 		slackHigh += Math.max(0, ...Object.values(COUNCIL_OPINION));
 	} else {
 		for (const seat of councils) {
@@ -376,13 +363,13 @@ export function generalOpinionOfLeader(
 
 	// ── Ethnicity (`:385`) ──────────────────────────────────────────────────
 	// ETHNICITY: not computed, and it would need three things the blob doesn't
-	// carry. `calculateCharacterOpinionEthnicityPlayer` (`:329`) skips a
+	// carry. `calculateCharacterOpinionEthnicityPlayer` (`:319`) skips a
 	// player on the same TEAM — team assignment reaches no wire type — reads
 	// `getTeamDiplomacy` between those teams, and gates on
 	// `pCharacter.getAge() >= TUTORS_AGE`, where `getAge` goes through
 	// `Game.turnsToYears` (Game.cs:5159) and so through the turn scale, which
 	// is a root attribute of the save that nothing parses. Its tribe half
-	// (`:357`) additionally needs `isTribeDead`. What bounds the gap: the term
+	// (`:358`) additionally needs `isTribeDead`. What bounds the gap: the term
 	// is zero unless the character's own nation or tribe differs from their
 	// player's, and no unit general in the corpus is in that position — 0 of
 	// 193, against 22 foreign-nation and 32 tribal characters among the 3,358
@@ -400,14 +387,15 @@ function settle(
 	slackLow: number,
 	slackHigh: number,
 ): CharacterOpinion {
-	const band = opinionBand(rate);
+	const band = opinionBand(rate, OPINION_CHARACTER_BANDS);
 	return {
 		rate,
 		band: band.type,
 		strengthModifier: band.strengthModifier,
 		uncertain:
-			opinionBand(rate + slackLow).type !== band.type ||
-			opinionBand(rate + slackHigh).type !== band.type,
+			opinionBand(rate + slackLow, OPINION_CHARACTER_BANDS).type !==
+				band.type ||
+			opinionBand(rate + slackHigh, OPINION_CHARACTER_BANDS).type !== band.type,
 	};
 }
 

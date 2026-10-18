@@ -17,7 +17,10 @@
 //     <aiLawOpinion>, <aiJobOpinion>, plus the three succession flags
 //     `isSuccessionEligible` (Character.cs:3047) tests.
 //   relationship.xml     — <iOpinion> per relationship.
-//   council.xml          — <iOpinion> per council seat.
+//   council*.xml         — <iOpinion> per council seat, merged across the
+//     file family the way bake-tech-names.ts merges text-*.xml:
+//     council-btt.xml (Behind the Throne) adds COUNCIL_GRAND_VIZIER, a
+//     fourth seat that job.xml's own <Council> already names.
 //   job.xml              — <iOpinion> per job.
 //   memory-*.xml         — six tables feeding one MemoryType enum, each entry
 //     carrying its own <iValue>/<iTurns> or deferring to a <MemoryLevel>.
@@ -47,7 +50,7 @@
 // Run: npm run bake:character-opinion
 
 import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -133,6 +136,12 @@ async function loadEntries(path: string): Promise<Entry[]> {
 	const all = Array.isArray(entry) ? entry : [entry];
 	// Every info table opens with a schema entry whose zType is empty.
 	return all.filter((e) => e.zType != null && e.zType !== "");
+}
+
+/** One info table spread over a base file and its DLC siblings. */
+async function loadFamily(paths: string[]): Promise<Entry[]> {
+	const loaded = await Promise.all(paths.map(loadEntries));
+	return loaded.flat();
 }
 
 function pairs(block?: PairBlock): Pair[] {
@@ -579,6 +588,15 @@ async function main(): Promise<void> {
 	const infosDir = resolve(resolveReferenceXml(), "Infos");
 	const at = (name: string) => resolve(infosDir, name);
 
+	// Council seats are the one source here with a DLC sibling, and the seat
+	// it adds carries an <iOpinion> as real as the base three — so glob the
+	// family rather than naming council.xml, which would score a Grand
+	// Vizier 0.
+	const councilFiles = (await readdir(infosDir))
+		.filter((f) => /^council(-[a-z]+)?\.xml$/.test(f))
+		.sort()
+		.map((f) => resolve(infosDir, f));
+
 	const [
 		bandEntries,
 		traitEntries,
@@ -595,7 +613,7 @@ async function main(): Promise<void> {
 		loadEntries(at("opinionCharacter.xml")),
 		loadEntries(at("trait.xml")),
 		loadEntries(at("relationship.xml")),
-		loadEntries(at("council.xml")),
+		loadFamily(councilFiles),
 		loadEntries(at("job.xml")),
 		loadEntries(at("memoryLevel.xml")),
 		loadEntries(at("religion.xml")),

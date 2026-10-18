@@ -426,6 +426,7 @@ export const RELATIONSHIP_OPINION: Readonly<Record<string, number>> = {
 export const COUNCIL_OPINION: Readonly<Record<string, number>> = {
 	COUNCIL_AMBASSADOR: 40,
 	COUNCIL_CHANCELLOR: 40,
+	COUNCIL_GRAND_VIZIER: 40,
 	COUNCIL_SPYMASTER: 40,
 };
 

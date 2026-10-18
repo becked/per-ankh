@@ -252,7 +252,7 @@ export const MAX_DISABLED_IMPROVEMENTS = 1_000;
 //         game_details.players[].chosen_heir_xml_id and .succession_gender
 //         (<ChosenHeirID>/<SuccessionGender>, 48 elements each in 16 of 16
 //         test-data/saves), the new top-level player_councils array
-//         (<CouncilCharacter>, 48 filled seats in 16 of 16 — already parsed by
+//         (<CouncilCharacter>, 86 filled seats in 13 of 16 — already parsed by
 //         `parsePlayerCouncil`, previously unwired), father_xml_id /
 //         mother_xml_id on characters, and head_character_xml_id on
 //         game_religions. The parent pair is the SOCIAL parents the game's own
