@@ -47,6 +47,7 @@
 		onOpenTab,
 		showPolitical = $bindable(true),
 		showReligion = $bindable(false),
+		showUnits = $bindable(false),
 	}: {
 		game: Awaited<ReturnType<typeof cloudApi.getGame>>;
 		players: DetailPlayer[];
@@ -59,6 +60,7 @@
 		onOpenTab: (tab: GameTabId) => void;
 		showPolitical?: boolean;
 		showReligion?: boolean;
+		showUnits?: boolean;
 	} = $props();
 
 	const finalTurn = $derived(game.game_details.total_turns);
@@ -419,6 +421,7 @@
 				{onTurnChange}
 				bind:showPolitical
 				bind:showReligion
+				bind:showUnits
 			/>
 		</div>
 	</div>

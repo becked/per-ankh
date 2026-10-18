@@ -1,7 +1,8 @@
 <script lang="ts">
-	// The map view's turn and layer controls, in the chrome: the Political and
-	// Religion layer toggles, and the turn slider with play and fast-forward.
-	// The map page owns the turn and the layers; SpriteMap only draws them.
+	// The map view's turn and layer controls, in the chrome: the Political,
+	// Religion and Units layer toggles, and the turn slider with play and
+	// fast-forward. The map page owns the turn and the layers; SpriteMap only
+	// draws them.
 	import Checkbox from "$lib/ui/Checkbox.svelte";
 
 	let {
@@ -10,6 +11,7 @@
 		onTurnChange,
 		showPolitical = $bindable(true),
 		showReligion = $bindable(false),
+		showUnits = $bindable(false),
 	}: {
 		totalTurns: number;
 		selectedTurn: number;
@@ -17,7 +19,18 @@
 		onTurnChange: (turn: number) => Promise<void> | void;
 		showPolitical?: boolean;
 		showReligion?: boolean;
+		showUnits?: boolean;
 	} = $props();
+
+	// Units draw at the final turn only — `UnitInfo` is a snapshot of
+	// `<Tile>/<Unit>` and the save carries no position history — so the
+	// checkbox is disabled away from it. Derived from the two turns this
+	// component already takes rather than from a second input: `MapChrome`
+	// feeds `totalTurns` the same `game_details.total_turns` the page feeds
+	// `SpriteMap` as `isFinalTurn`, so there is one source of truth for the
+	// gate. The CHECKED state survives a scrub either way — the glyphs leave
+	// below the final turn and return at it.
+	const unitsAvailable = $derived(selectedTurn >= totalTurns);
 
 	// Debounce slider input so a drag rebuilds the turn's tiles and the map's
 	// layers once it settles, not on every intermediate value.
@@ -89,6 +102,19 @@
 		</Checkbox>
 		<Checkbox bind:checked={showReligion} labelClass="gap-1.5">
 			<span class="select-none text-tan">Religion</span>
+		</Checkbox>
+		<Checkbox
+			bind:checked={showUnits}
+			disabled={!unitsAvailable}
+			labelClass="gap-1.5"
+		>
+			<span
+				class="select-none text-tan"
+				title={unitsAvailable
+					? undefined
+					: `Units are recorded only at turn ${totalTurns}, the end of the game.`}
+				>Units</span
+			>
 		</Checkbox>
 	</div>
 

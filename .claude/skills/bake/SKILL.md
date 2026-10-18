@@ -73,6 +73,10 @@ npm run bake:yield-colors      # yield-colors.ts (each yield's chart colour)
 npm run bake:orders-sources    # orders-sources.ts (orders-per-turn + legitimacy constants)
 npm run bake:power-tiers       # power-tiers.ts (military-power comparison tiers)
 npm run bake:cognomens         # cognomens.ts (cognomen → legitimacy + display string)
+npm run bake:promotion-names   # promotion-names.ts (PROMOTION_NAMES override table — a
+                               # name-override baker, but self-contained rather than
+                               # sidecar+finalize, so a checkout that hasn't run it keeps
+                               # the committed table instead of getting an empty one)
 npm run bake:wonders           # wonders.ts (src/ AND cloud/src/)
 npm run bake:dynasty-traits    # dynasty-traits.ts (src/ AND cloud/src/; the traits the game
                                # ties to a historical ruler) + leader-traits.ts (frontend only)
@@ -92,11 +96,13 @@ npm run bake:finalize          # Emits committed manifest TS modules + reconcile
 npm run bake:all               # Every baker above except owtt + momentum, then finalize
 ```
 
-`bake:all` runs 35 of the 37 bakers above, in the order listed, then `finalize`. It deliberately omits `bake:owtt` and `bake:momentum` — rerun those by hand when their sources change. Membership doesn't follow from what a baker reads: `bake:atlas-pool` needs an owtournamentatlas checkout and is in `bake:all`, while `bake:owtt` needs one of its own and isn't — so a new baker records its choice here either way. Separately, `bake:favicon` / `bake:og` generate site icons and OG images, and the UX-review bundle under `docs/ux-review/` is captured by `./per-ankh ux-review` (a CLI command, not an npm script).
+`bake:all` runs 36 of the 38 bakers above, in the order listed, then `finalize`. It deliberately omits `bake:owtt` and `bake:momentum` — rerun those by hand when their sources change. Membership doesn't follow from what a baker reads: `bake:atlas-pool` needs an owtournamentatlas checkout and is in `bake:all`, while `bake:owtt` needs one of its own and isn't — so a new baker records its choice here either way. Separately, `bake:favicon` / `bake:og` generate site icons and OG images, and the UX-review bundle under `docs/ux-review/` is captured by `./per-ankh ux-review` (a CLI command, not an npm script).
 
 ## Adding a name-override table
 
-The seven `*-names` bakers are the same script with the nouns swapped, and `bake-game-option-names.ts` is the copy to crib from when the text carries `link(...)` markup, `bake-name-text.ts` when it doesn't. The shape: read the info XML's `<zType>` + name key, resolve that key against every merged `text-*.xml` `<en-US>`, run it through `stripMarkup` (which already resolves OW's `link(...)` markup and plural forms), and **emit only entries whose resolved name differs from `formatEnum`** so the table holds real overrides and everything else falls through at runtime. Wiring a new one means four edits to `scripts/build-manifests.ts` (sidecar path const, `read*Sidecar`, `emit*Ts`, and the read/format/write/log quartet in `main`) plus a `package.json` entry in both `bake:*` and `bake:all`.
+The eight `*-names` bakers are the same script with the nouns swapped, and `bake-game-option-names.ts` is the copy to crib from when the text carries `link(...)` markup, `bake-name-text.ts` when it doesn't. The shape: read the info XML's `<zType>` + name key, resolve that key against every merged `text-*.xml` `<en-US>`, run it through `stripMarkup` (which already resolves OW's `link(...)` markup and plural forms), and **emit only entries whose resolved name differs from `formatEnum`** so the table holds real overrides and everything else falls through at runtime.
+
+Two ways to land the output, and the choice is the one decision worth making. The sidecar route — seven of the eight — means four edits to `scripts/build-manifests.ts` (sidecar path const, `read*Sidecar`, `emit*Ts`, and the read/format/write/log quartet in `main`) plus a `package.json` entry in both `bake:*` and `bake:all`. The self-contained route — `bake-promotion-names.ts`, cribbing its emit from `bake-character-opinion.ts` — writes `src/lib/generated/` directly and needs no `build-manifests.ts` edit at all, which also means `bake:finalize` can't empty the table in a checkout where that baker hasn't run. Prefer it for a new table; the seven predate it.
 
 Two wrinkles the newer bakers handle. OW packs a string's grammatical variants into one `~`-separated field — `TEXT_NATION_HITTITE` is `Hatti~Hittite~a Hittite~Hittites` (noun ~ adjective ~ member ~ plural) — so take field 0 for the display form. And some infos reach their text through a second hop: `nation.xml` names a `<GenderedName>` that `genderedText*.xml` maps per grammatical gender to the `TEXT_*` key (take the masculine row) — `bake-nation-names.ts` is the one that does this.
 

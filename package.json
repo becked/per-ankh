@@ -29,6 +29,7 @@
 		"bake:nation-names": "tsx scripts/bake-nation-names.ts",
 		"bake:project-icons": "tsx scripts/bake-project-icons.ts",
 		"bake:project-names": "tsx scripts/bake-project-names.ts",
+		"bake:promotion-names": "tsx scripts/bake-promotion-names.ts",
 		"bake:victory-ordering": "tsx scripts/bake-victory-ordering.ts",
 		"bake:map-options": "tsx scripts/bake-map-options.ts",
 		"bake:law-classes": "tsx scripts/bake-law-classes.ts",
@@ -54,7 +55,7 @@
 		"bake:finalize": "tsx scripts/build-manifests.ts",
 		"bake:favicon": "node scripts/bake-favicon.mjs .",
 		"bake:og": "node scripts/make-og-default.mjs .",
-		"bake:all": "npm run bake:terrain-3d && npm run bake:improvements && npm run bake:resources && npm run bake:sprites && npm run bake:tech-names && npm run bake:improvement-names && npm run bake:improvement-builds && npm run bake:family-opinion && npm run bake:character-opinion && npm run bake:difficulty-names && npm run bake:game-option-names && npm run bake:goal-names && npm run bake:name-text && npm run bake:nation-names && npm run bake:project-icons && npm run bake:project-names && npm run bake:victory-ordering && npm run bake:map-options && npm run bake:law-classes && npm run bake:family-pools && npm run bake:atlas-pool && npm run bake:specialists && npm run bake:science-yields && npm run bake:unit-stats && npm run bake:starting-techs && npm run bake:family-colors && npm run bake:civilization-colors && npm run bake:yield-colors && npm run bake:orders-sources && npm run bake:power-tiers && npm run bake:cognomens && npm run bake:wonders && npm run bake:dynasty-traits && npm run bake:theology-tiers && npm run bake:challenge-mirror && npm run bake:finalize"
+		"bake:all": "npm run bake:terrain-3d && npm run bake:improvements && npm run bake:resources && npm run bake:sprites && npm run bake:tech-names && npm run bake:improvement-names && npm run bake:improvement-builds && npm run bake:family-opinion && npm run bake:character-opinion && npm run bake:difficulty-names && npm run bake:game-option-names && npm run bake:goal-names && npm run bake:name-text && npm run bake:nation-names && npm run bake:project-icons && npm run bake:project-names && npm run bake:promotion-names && npm run bake:victory-ordering && npm run bake:map-options && npm run bake:law-classes && npm run bake:family-pools && npm run bake:atlas-pool && npm run bake:specialists && npm run bake:science-yields && npm run bake:unit-stats && npm run bake:starting-techs && npm run bake:family-colors && npm run bake:civilization-colors && npm run bake:yield-colors && npm run bake:orders-sources && npm run bake:power-tiers && npm run bake:cognomens && npm run bake:wonders && npm run bake:dynasty-traits && npm run bake:theology-tiers && npm run bake:challenge-mirror && npm run bake:finalize"
 	},
 	"license": "MIT",
 	"dependencies": {

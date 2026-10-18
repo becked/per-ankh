@@ -11,10 +11,11 @@
 	// header, what's true at the selected turn, and the end-of-game record —
 	// the last split into two columns, its statistics beside its territory.
 	import type { cloudApi } from "$lib/api-cloud";
+	import { unitName } from "$lib/challenges/describe";
 	import type { MapTile } from "$lib/types/MapTile";
 	import type { UnitInfo } from "$lib/parser/types";
 	import { ownershipChangeTurn } from "$lib/parser/types";
-	import { getCivilizationColor, getSeriesColor } from "$lib/config";
+	import { getCivilizationColor } from "$lib/config";
 	import { IMPROVEMENT_BUILDS } from "$lib/generated/improvement-builds";
 	import {
 		characterName,
@@ -39,6 +40,7 @@
 		projectDisplayName,
 		resolveCityRows,
 		rulerName,
+		unitOwner,
 		type CityColumn,
 		type DetailPlayer,
 	} from "./helpers";
@@ -346,31 +348,24 @@
 		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- locally-scoped Map, not reactive state
 		const byOwner = new Map<
 			string,
-			Omit<UnitGroup, "entries" | "color"> & {
-				// Null until the fallback resolves, which needs the sorted position.
-				color: string | null;
+			{
+				key: string;
+				// One of the group's units, which is all `unitOwner` reads — the
+				// label and colour are resolved after the sort, because the
+				// fallback colour takes the sorted position.
+				unit: UnitInfo;
+				total: number;
 				counts: Map<string, number>;
 			}
 		>();
 		for (const u of cityUnits) {
-			const player = playerAt(u.player_xml_id);
 			const key =
 				u.player_xml_id != null ? `P${u.player_xml_id}` : `T${u.tribe ?? ""}`;
 			let group = byOwner.get(key);
 			if (!group) {
 				group = {
 					key,
-					label:
-						player?.label ??
-						(u.player_xml_id != null
-							? `Player ${u.player_xml_id}`
-							: formatEnum(u.tribe, "TRIBE_")),
-					civilization: player?.nation ?? u.tribe,
-					// The roster's own colour, which is the nation's except in a
-					// mirror, where it is what tells the two Egypts apart — the whole
-					// reason these groups key on the player. It is also the colour
-					// the same player wears on the Military cards and every chart.
-					color: player?.color ?? null,
+					unit: u,
 					total: 0,
 					counts: new Map<string, number>(),
 				};
@@ -389,34 +384,30 @@
 			.sort((a, b) => {
 				if (a.key === ownerKey) return -1;
 				if (b.key === ownerKey) return 1;
-				return b.total - a.total || a.label.localeCompare(b.label);
+				return (
+					b.total - a.total ||
+					unitOwner(a.unit, players).label.localeCompare(
+						unitOwner(b.unit, players).label,
+					)
+				);
 			})
-			.map(({ counts, color, ...group }, i) => ({
-				...group,
-				// A tribe has no roster row but does have a baked colour, so the
-				// civilization lookup answers for it. What reaches the ramp is a
-				// group neither table answers for — a unit whose player_xml_id
-				// isn't on the roster, or a tribe outside the baked tables. It
-				// draws from `getSeriesColor`, not the `getChartColor` ramp the
-				// roster itself uses: that one is six colours wrapped by index,
-				// and `resolvePlayers` hands a mirror's players those same six by
-				// ordinal, so no index into it is free of a player's colour. The
-				// eight series colours share no hex with it, or with the baked
-				// nation and tribe tables.
-				color:
-					color ??
-					(group.civilization != null
-						? getCivilizationColor(group.civilization)
-						: undefined) ??
-					getSeriesColor(i),
-				entries: [...counts.entries()]
-					.map(([key, count]) => ({ key, count }))
-					.sort((a, b) =>
-						formatEnum(a.key, "UNIT_").localeCompare(
-							formatEnum(b.key, "UNIT_"),
-						),
-					),
-			}));
+			.map(({ counts, unit, key, total }, i) => {
+				// The shared owner rule, with this group's sorted position as the
+				// fallback index so two owners neither the roster nor the baked
+				// tables answer for still read apart. The map's unit markers and
+				// the unit card run the same resolver.
+				const owner = unitOwner(unit, players, i);
+				return {
+					key,
+					total,
+					label: owner.label,
+					civilization: owner.civilization,
+					color: owner.color,
+					entries: [...counts.entries()]
+						.map(([k, count]) => ({ key: k, count }))
+						.sort((a, b) => unitName(a.key).localeCompare(unitName(b.key))),
+				} satisfies UnitGroup;
+			});
 	});
 
 	function times(count: number): string {
@@ -732,10 +723,10 @@
 														value={tally.key}
 														size={12}
 														glyph
-														alt={formatEnum(tally.key, "UNIT_")}
+														alt={unitName(tally.key)}
 													/>
 												</span>
-												{formatEnum(tally.key, "UNIT_")}{times(tally.count)}
+												{unitName(tally.key)}{times(tally.count)}
 											</span>
 										{/each}
 									</div>
@@ -757,23 +748,7 @@
 		padding-bottom: 0.75rem;
 	}
 
-	/* The two end-of-game columns: the value lit against the muted label
-	   rather than both sitting in the panel's tan, and the rows closed up so
-	   the card stays short enough not to reposition under the pointer.
-	   Specific enough to beat `.chrome-rows` in app.css. */
-	.chrome-rows.record-rows {
-		/* Enough to keep the 14px sprites on consecutive rows apart; the rows
-		   are still tighter than `.chrome-rows`' 16px line box and 2px gap. */
-		row-gap: 3px;
-	}
-
-	.chrome-rows.record-rows dt {
-		font-size: 9px;
-	}
-
-	.chrome-rows.record-rows dd {
-		font-size: 11px;
-		line-height: 1.3;
-		color: rgb(var(--color-bright));
-	}
+	/* `.chrome-rows.record-rows` — the two end-of-game columns' row style —
+	   lives in app.css beside `.chrome-rows` itself, shared with the unit
+	   card. */
 </style>

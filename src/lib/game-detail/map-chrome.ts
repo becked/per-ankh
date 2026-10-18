@@ -28,6 +28,35 @@ export const CHROME_PANEL_CLASS =
 export type TileCoord = Pick<MapTile, "x" | "y">;
 
 /**
+ * One military unit's marker on the map: where it stands, whose colour its
+ * plate wears, and the flag glyph drawn over it.
+ *
+ * Resolved by the map page rather than by `SpriteMap`, which takes no game:
+ * the (x, y) join runs through `tile_xml_id`, which needs `map_width`, and the
+ * owner colour comes off the resolved roster. `SpriteMap` turns the grid
+ * position into world units and draws the pair, as it does for a city banner.
+ */
+export interface UnitMarker {
+	/** The unit's `<Unit>` id — the pick identity, and what the card opens on. */
+	xmlId: number;
+	/** The tile it stands on, in grid coordinates. */
+	x: number;
+	y: number;
+	/**
+	 * The owner's colour: the roster's own for a player (so a mirror's two
+	 * Egypts stay apart), the baked tribe colour for a tribe.
+	 */
+	color: string;
+	/**
+	 * The white flag glyph (`units/<TYPE>__ICON`), or null where we ship none —
+	 * 4 of the corpus's 1,411 military units, in 3 types with no `unit.xml`
+	 * entry. The plate then draws alone; the marker never falls back to the
+	 * painted portrait, a categorically different image in a glyph slot.
+	 */
+	glyphUrl: string | null;
+}
+
+/**
  * The deck's camera, as the map's DOM overlays read it: its pan target and
  * zoom, with the target normalized to a 3-tuple (deck's own
  * OrthographicViewState allows a 2-tuple, or none at all).
