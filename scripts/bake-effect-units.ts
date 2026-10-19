@@ -1118,7 +1118,10 @@ async function main(): Promise<void> {
 	// `buildZOCLinkVariable` / `buildUrbanLinkVariable` (HelpText.Game.cs:2687,
 	// :2511) are concept links the clauses pass as arguments rather than
 	// template content, so they join the ones scanned out of the templates.
-	const concepts = new Set(["CONCEPT_ZOC", "CONCEPT_URBAN"]);
+	// `CONCEPT_RANGE` is there for a second reason: `buildRangeLinkVariable`
+	// (HelpText.Game.cs:1756) spells range as a HUD glyph rather than a word,
+	// and the glyph is not in SPRITE_MANIFEST — so the name carries the row.
+	const concepts = new Set(["CONCEPT_ZOC", "CONCEPT_URBAN", "CONCEPT_RANGE"]);
 	for (const template of Object.values(helpText)) {
 		for (const match of template.matchAll(/link\((CONCEPT_[A-Z0-9_]+)/g)) {
 			concepts.add(match[1]);

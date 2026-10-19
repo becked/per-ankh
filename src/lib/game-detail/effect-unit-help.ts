@@ -36,9 +36,13 @@
 //                    HelpText.Game.cs:1756) print a signed value beside an
 //                    inline `HUDIconTypes` glyph — ATTACK, DEFENSE,
 //                    ATTACKDEFENSE, RANGE — and `SPRITE_MANIFEST` carries none
-//                    of the four, so the value prints alone. The yield glyph in
-//                    the kill-yield clause IS in the manifest, which is why that
-//                    one clause yields a sprite segment.
+//                    of the four. For the first three the value prints alone,
+//                    because the clause around it already names what it
+//                    modifies. RANGE has no such clause — the glyph IS the
+//                    word — so there the concept's name takes the glyph's
+//                    place. The yield glyph in the kill-yield clause IS in the
+//                    manifest, which is why that one clause yields a sprite
+//                    segment.
 
 import type { SpriteCategory } from "./helpers";
 import {
@@ -343,10 +347,20 @@ export function effectUnitHelpLines(effect: GeneralEffectUnit): HelpLine[] {
 		);
 	}
 	if (effect.rangeExtra != null) {
-		// `buildRangeLinkVariable` (HelpText.Game.cs:1756) is a bare link
-		// variable with no surrounding sentence, and its signed value is NOT a
-		// percent — the one place a plain count prints on its own.
-		add(segmentsOf(signed(effect.rangeExtra)));
+		// `buildRangeLinkVariable` (HelpText.Game.cs:1756) concatenates the
+		// signed value — NOT a percent, unlike the modifier clauses — with the
+		// RANGE HUD glyph through `TEXT_HELPTEXT_CONCAT_SPACE_TWO`. That glyph
+		// is where the game says the word "range", and `SPRITE_MANIFEST`
+		// carries none of the HUD icons, so the concept's own name stands in
+		// for it: the same degradation `link(CONCEPT_X)` takes, and without it
+		// the row is a bare "+1" that names nothing.
+		add(
+			render(
+				"TEXT_HELPTEXT_CONCAT_SPACE_TWO",
+				signed(effect.rangeExtra),
+				conceptLink("CONCEPT_RANGE"),
+			),
+		);
 	}
 	if (effect.actionsExtra != null) {
 		add(

@@ -1373,6 +1373,7 @@ export const EFFECT_UNIT_CONCEPT_NAMES: Readonly<Record<string, string>> = {
 	CONCEPT_HEAL: "Heal",
 	CONCEPT_HIDDEN: "Hidden",
 	CONCEPT_NEUTRAL: "Neutral",
+	CONCEPT_RANGE: "Range",
 	CONCEPT_ROUT: "Rout",
 	CONCEPT_STUN: "Stun",
 	CONCEPT_URBAN: "Urban",
