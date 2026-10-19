@@ -14,7 +14,11 @@
 	import { UNIT_STATS } from "$lib/generated/unit-stats";
 	import { archetypeSpriteKey, formatEnum } from "$lib/utils/formatting";
 	import SpriteIcon from "./SpriteIcon.svelte";
-	import { generalOpinionOfLeader } from "./character-opinion";
+	import {
+		characterTraitNames,
+		generalOpinionOfLeader,
+	} from "./character-opinion";
+	import { effectUnitHelpGroups } from "./effect-unit-help";
 	import {
 		promotionName,
 		rulerName,
@@ -22,7 +26,13 @@
 		type DetailPlayer,
 	} from "./helpers";
 	import { competitiveMode } from "./rating-curve";
-	import { generalRatingModifiers, UNIT_HP_MAX } from "./unit-general";
+	import {
+		generalEffectTotals,
+		generalEffectUnits,
+		generalLineRows,
+		generalRatingModifiers,
+		UNIT_HP_MAX,
+	} from "./unit-general";
 
 	let {
 		game,
@@ -136,24 +146,6 @@
 			: null,
 	);
 
-	type ModifierRow = { label: string; value: number; suffix: string };
-
-	// Only the non-zero ones: a general with no Charisma does nothing to the
-	// unit's defense, and a zero row would read as a claim rather than a
-	// silence. Attack leads because it is the one that can be negative.
-	const modifierRows = $derived.by<ModifierRow[]>(() => {
-		const m = modifiers;
-		if (!m) return [];
-		return (
-			[
-				{ label: "Attack", value: m.attack, suffix: "%" },
-				{ label: "Defense", value: m.defense, suffix: "%" },
-				{ label: "Critical chance", value: m.criticalChance, suffix: "%" },
-				{ label: "XP per turn", value: m.unitXp, suffix: "" },
-			] as ModifierRow[]
-		).filter((row) => row.value !== 0);
-	});
-
 	// What the general thinks of their own leader, which is worth −20% to +10%
 	// of the unit's strength (`Unit.baseStrengthModifier`, Unit.cs:6334, adds
 	// `characterOpinionOfUs(pGeneral).miStrengthModifier`). The save stores no
@@ -177,6 +169,64 @@
 	// the number is not.
 	const OPINION_UNCERTAIN_NOTE =
 		"The rate is exact, but a term the save doesn't answer — the heir, the council, a social parent or a religion's head — could be enough to move it into the neighbouring band, which is what sets the strength percent.";
+
+	// ─── The general's traits, and what they confer ────────────────────
+	// A fourth kind of unknown. Current saves write `<TraitTurn>`, which
+	// `parseCharacterTraits` (`src/lib/parser/parsers/character-data.ts`) reads;
+	// an older save writes `<Trait>`, which it does not, so the blob carries no
+	// traits at ALL for every character in such a save. The test is therefore
+	// per-blob rather than per-character: a game with no trait row anywhere
+	// cannot say, while a game that has them and no row for this general is
+	// saying the general has none. That is 39 of the corpus's 203 generals, all
+	// in one 2022 save — and the same element is why `archetypeFromTraits`
+	// (`src/lib/parser/parsers/characters.ts`) leaves their archetype glyph
+	// blank already.
+	const TRAITS_UNKNOWN_NOTE =
+		"This save is older than the element the parser reads a character's traits from, so what the general's traits confer is not in the stored data.";
+	const traitsKnown = $derived(game.character_traits.length > 0);
+
+	const generalTraits = $derived(
+		general && traitsKnown ? characterTraitNames(game, general.xml_id) : [],
+	);
+
+	// `isLeader()` gates each trait's `LeaderEffectUnit` and the global
+	// `LEADER_GENERAL_EFFECTUNIT`. The blob names the reigning leader per
+	// player, which is the same resolution the opinion row runs.
+	const generalIsLeader = $derived.by(() => {
+		if (!general || unit?.player_xml_id == null) return false;
+		const player = game.game_details.players.find(
+			(p) => p.player_id === unit.player_xml_id,
+		);
+		return player?.leader_character_xml_id === general.xml_id;
+	});
+
+	const conferrals = $derived(
+		unit && generalTraits.length > 0
+			? generalEffectUnits(generalTraits, generalIsLeader, unit.unit_type)
+			: [],
+	);
+
+	// The whole closure folds into the totals; only the trait-direct entries
+	// print text. `unit.level` is absent on a blob that doesn't carry it, which
+	// is worth the same as level 0 to the one column that reads it.
+	const effectTotals = $derived(
+		generalEffectTotals(conferrals, unit?.level ?? 0),
+	);
+
+	// The line's own rows, with the opinion's strength percent folded into
+	// attack and defense the way `buildMakeGeneralLine` prints them — which is
+	// why the opinion row below names the band and no longer repeats the
+	// percent.
+	const modifierRows = $derived(
+		modifiers
+			? generalLineRows(modifiers, effectTotals, opinion?.strengthModifier ?? 0)
+			: [],
+	);
+
+	// One pill per trait that actually says something, in the general's own
+	// trait order — the grouping, and which conferrals drop out of it, live in
+	// `effect-unit-help`.
+	const traitGroups = $derived(effectUnitHelpGroups(conferrals));
 
 	const signed = (value: number): string => `${value > 0 ? "+" : ""}${value}`;
 </script>
@@ -329,6 +379,11 @@
 					</dl>
 				{/if}
 				{#if opinion}
+					<!-- The band only. Its strength percent is inside the Attack and
+					     Defense rows above, because `buildMakeGeneralLine` seeds
+					     `iStrengthValue` with it and prints attack as
+					     `iAttackValue + iStrengthValue` — so repeating it here
+					     would read as a second, addable term. -->
 					<dl class="chrome-rows record-rows mt-1">
 						<dt>Opinion of leader</dt>
 						<dd>
@@ -338,15 +393,53 @@
 								{formatEnum(
 									opinion.band,
 									"OPINIONCHARACTER_",
-								)}{opinion.uncertain
-									? " (uncertain)"
-									: ""}{#if opinion.strengthModifier !== 0}
-									<span class="text-muted">
-										· {signed(opinion.strengthModifier)}% strength</span
-									>{/if}
+								)}{opinion.uncertain ? " (uncertain)" : ""}
 							</span>
 						</dd>
 					</dl>
+				{/if}
+				<!-- What the general's traits confer, grouped under the trait that
+				     confers it and said in the game's own words. -->
+				{#if !traitsKnown}
+					<p class="mt-2 text-[11px] text-muted" title={TRAITS_UNKNOWN_NOTE}>
+						Traits unknown
+					</p>
+				{:else if traitGroups.length > 0}
+					<ul class="mt-2 space-y-1.5">
+						{#each traitGroups as group (group.trait)}
+							<li class="flex items-baseline gap-1.5">
+								<span
+									class="flex-none rounded px-1.5 py-0.5 text-[10px] text-tan"
+									style="background-color: rgb(var(--color-surface-raised));"
+								>
+									{group.name}
+								</span>
+								<span class="min-w-0">
+									{#each group.lines as line, index (index)}
+										<span class="block text-[11px] text-bright">
+											{#each line as segment, segmentIndex (segmentIndex)}
+												{#if segment.kind === "text"}{segment.text}{:else}<!--
+													Fixed-size slot: SpriteIcon renders nothing when
+													`getSpritePath` returns null, and the words either
+													side of the glyph would close up. The yield glyphs
+													these lines use do ship; the slot is what makes a
+													missing one harmless.
+												--><span
+														class="inline-flex w-3.5 flex-none align-text-bottom"
+														><SpriteIcon
+															category={segment.category}
+															value={segment.value}
+															size={14}
+															alt={segment.alt}
+														/></span
+													>{/if}
+											{/each}
+										</span>
+									{/each}
+								</span>
+							</li>
+						{/each}
+					</ul>
 				{/if}
 			{/if}
 		</section>

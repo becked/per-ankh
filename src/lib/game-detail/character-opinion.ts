@@ -165,8 +165,9 @@ export function generalOpinionOfLeader(
 		return settle(0, 0, 0);
 	}
 
-	const traits = traitsOf(game, characterXmlId);
-	const leaderTraits = leader != null ? traitsOf(game, leader.xml_id) : [];
+	const traits = characterTraitNames(game, characterXmlId);
+	const leaderTraits =
+		leader != null ? characterTraitNames(game, leader.xml_id) : [];
 	const isReligionHead = game.game_religions.some(
 		(r) => r.head_character_xml_id === characterXmlId,
 	);
@@ -404,7 +405,21 @@ function doubledForHead(change: number, isReligionHead: boolean): number {
 	return isReligionHead ? change * 2 : change;
 }
 
-function traitsOf(game: OpinionGame, characterXmlId: number): string[] {
+/**
+ * The traits the blob carries for one character. Exported because the general
+ * card needs the same list to walk `Character.getGeneralEffectUnits`, and one
+ * reading of `character_traits` is better than two.
+ *
+ * An empty list is not the same claim as "this character has no traits": a
+ * save written before the game emitted `<TraitTurn>` carries `<Trait>`, which
+ * `parseCharacterTraits` (`src/lib/parser/parsers/character-data.ts`) does not
+ * read, so EVERY character in such a save comes back empty. Callers that need
+ * to tell the two apart ask whether the blob holds any trait row at all.
+ */
+export function characterTraitNames(
+	game: Pick<OpinionGame, "character_traits">,
+	characterXmlId: number,
+): string[] {
 	return game.character_traits
 		.filter((t) => t.character_xml_id === characterXmlId)
 		.map((t) => t.trait_name);
@@ -496,7 +511,7 @@ function isSuccessionEligible(
 	if (nominee.xml_id === player.leader_character_xml_id) return false;
 	// `isOrWasLeader()` is `getLeaderTurn() != int.MinValue`, i.e. a recorded
 	// accession turn; such a character needs a trait to re-enter the line.
-	const traits = traitsOf(game, nominee.xml_id);
+	const traits = characterTraitNames(game, nominee.xml_id);
 	if (
 		nominee.became_leader_turn != null &&
 		!traits.some((t) => SUCCESSION_RETURN_TRAITS.includes(t))
