@@ -83,6 +83,7 @@ import {
 	formatArchetype,
 	formatEnum,
 	nationName,
+	traitName,
 } from "$lib/utils/formatting";
 import { hexNeighbors } from "$lib/utils/hex";
 import {
@@ -1034,7 +1035,7 @@ export function scienceBreakdown(
 	}
 	for (const trait of cityContext.leaderTraits) {
 		collect(playerRules, LEADER_TRAIT_IMPROVEMENT_MODIFIER[trait], [
-			{ text: `under a ${formatEnum(trait, "TRAIT_")} ruler` },
+			{ text: `under a ${traitName(trait)} ruler` },
 		]);
 	}
 	const cityRules = new Map<string, CityRule[]>();
@@ -1065,7 +1066,7 @@ export function scienceBreakdown(
 		if (city.governor_xml_id != null) {
 			for (const trait of cityContext.governorTraits(city.governor_xml_id)) {
 				collect(rules, GOVERNOR_TRAIT_IMPROVEMENT_MODIFIER[trait], [
-					{ text: `under a ${formatEnum(trait, "TRAIT_")} governor` },
+					{ text: `under a ${traitName(trait)} governor` },
 				]);
 			}
 		}

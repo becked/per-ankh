@@ -13,6 +13,7 @@ import {
 	cognomenName,
 	formatEnum,
 	nationName,
+	traitName,
 } from "$lib/utils/formatting";
 import {
 	ANY_RELIGION,
@@ -30,11 +31,6 @@ import {
 export function unitName(unit: string): string {
 	const base = formatEnum(unit, "UNIT_");
 	return /_2$/.test(unit) ? `Elite ${base}` : base;
-}
-
-/** A trait's display name; the game shows an archetype by its bare name. */
-export function traitName(trait: string): string {
-	return formatEnum(trait.replace(/_ARCHETYPE$/, ""), "TRAIT_");
 }
 
 function plural(n: number, noun: string, pluralNoun = `${noun}s`): string {

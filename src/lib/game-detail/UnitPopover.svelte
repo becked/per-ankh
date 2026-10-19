@@ -12,7 +12,11 @@
 	import type { cloudApi } from "$lib/api-cloud";
 	import { unitName } from "$lib/challenges/describe";
 	import { UNIT_STATS } from "$lib/generated/unit-stats";
-	import { archetypeSpriteKey, formatEnum } from "$lib/utils/formatting";
+	import {
+		archetypeSpriteKey,
+		formatArchetype,
+		formatEnum,
+	} from "$lib/utils/formatting";
 	import SpriteIcon from "./SpriteIcon.svelte";
 	import {
 		characterTraitNames,
@@ -364,7 +368,7 @@
 								category="traits"
 								value={archetypeSpriteKey(general.archetype)}
 								size={14}
-								alt={formatEnum(general.archetype, "TRAIT_")}
+								alt={formatArchetype(general.archetype)}
 							/>
 						{/if}
 					</span>

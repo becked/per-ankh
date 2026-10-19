@@ -59,6 +59,7 @@ import {
 	type GeneralEffectUnit,
 } from "$lib/generated/effect-units";
 import type { CharacterInfo } from "$lib/parser/types";
+import { traitName } from "$lib/utils/formatting";
 import { boostRating, modifyRating } from "./rating-curve";
 
 /**
@@ -188,7 +189,7 @@ export function generalEffectUnits(
 		if (!isEffectUnitValid(effect, unitType)) return;
 		out.push({
 			trait,
-			traitName: trait == null ? null : (GENERAL_TRAITS[trait]?.name ?? null),
+			traitName: trait == null ? null : traitName(trait),
 			effectUnit,
 			effect,
 		});

@@ -1,6 +1,7 @@
 import { COGNOMENS } from "$lib/generated/cognomens";
 import { NAME_TEXT } from "$lib/generated/name-text";
 import { NATION_NAMES } from "$lib/generated/nation-names";
+import { TRAIT_NAMES } from "$lib/generated/trait-names";
 
 /**
  * Formats enum-style values from the backend by removing prefixes and applying title casing.
@@ -83,6 +84,30 @@ export function cognomenName(cognomen: string): string {
  */
 export function characterName(token: string | null | undefined): string {
 	return (token ? NAME_TEXT[token] : undefined) ?? formatEnum(token, "NAME_");
+}
+
+/**
+ * The name Old World gives a trait, from its `TRAIT_*` token — the label to use
+ * everywhere a trait is named.
+ *
+ * `formatEnum` title-cases the id, which misses 105 of trait.xml's 306: it
+ * capitalizes particles and cannot recover an apostrophe ("Sword Of The Gods"
+ * for "Sword of the Gods", "Fools Ring" for "Fool's Ring"), it drops an
+ * article ("Rising Star" for "A Rising Star"), and for the dynasty traits the
+ * id is a developer filing name rather than a name at all —
+ * `TRAIT_HANNIBAL_LEADER` is "Grace of Ba'al" and `TRAIT_CLERGY_JEWISH` is
+ * "Kohen". The baked table carries those and `formatEnum` covers the rest,
+ * including a trait from game content newer than the baked reference snapshot.
+ *
+ * The archetypes are in the table too ("Hero", not "Hero Archetype"), and
+ * `formatArchetype` reads the same table, so the two cannot disagree — reach
+ * for that one where a character's `archetype` field is the input, since its
+ * fallback also covers an archetype newer than the baked snapshot.
+ */
+export function traitName(trait: string | null | undefined): string {
+	return (
+		(trait ? TRAIT_NAMES[trait] : undefined) ?? formatEnum(trait, "TRAIT_")
+	);
 }
 
 /**
@@ -831,9 +856,21 @@ export function isArchetypeTrait(traitName: string): boolean {
 	return ARCHETYPE_SUFFIX.test(traitName);
 }
 
-/** Display name for an archetype: TRAIT_SCHEMER_ARCHETYPE → "Schemer". */
+/**
+ * Display name for an archetype: TRAIT_SCHEMER_ARCHETYPE → "Schemer".
+ *
+ * The baked name first, so an archetype reads as the game names it and this
+ * cannot disagree with `traitName` (it did for `TRAIT_PRESET_ARCHETYPE`, which
+ * the game calls "Preset Leader" and the suffix rule alone calls "Preset").
+ * The suffix rule stays as the fallback rather than deferring to `traitName`'s:
+ * it is what keeps an archetype from a patch newer than the baked snapshot
+ * reading "Foo Archetype".
+ */
 export function formatArchetype(archetype: string): string {
-	return formatEnum(archetype.replace(ARCHETYPE_SUFFIX, ""), "TRAIT_");
+	return (
+		TRAIT_NAMES[archetype] ??
+		formatEnum(archetype.replace(ARCHETYPE_SUFFIX, ""), "TRAIT_")
+	);
 }
 
 /**

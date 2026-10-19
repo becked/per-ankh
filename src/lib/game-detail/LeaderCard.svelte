@@ -14,6 +14,7 @@
 		formatArchetype,
 		formatEnum,
 		isArchetypeTrait,
+		traitName,
 	} from "$lib/utils/formatting";
 	import { getCivilizationColor } from "$lib/config";
 	import { GOAL_NAMES } from "$lib/generated/goal-names";
@@ -66,8 +67,7 @@
 	const ageAtEnd = (c: CharacterInfo): number =>
 		Math.max(0, (c.death_turn ?? totalTurns) - c.birth_turn);
 
-	const traitLabel = (t: CharacterTraitInfo): string =>
-		formatEnum(t.trait_name, "TRAIT_");
+	const traitLabel = (t: CharacterTraitInfo): string => traitName(t.trait_name);
 
 	// Goal enums are internal ids whose token order is meaningless
 	// (GOAL_FIVE_CAPTURE_CITIES → "Five Capture Cities"). Prefer the baked

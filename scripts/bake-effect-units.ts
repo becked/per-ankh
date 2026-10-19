@@ -1133,19 +1133,19 @@ async function main(): Promise<void> {
 		conceptTable[concept] = name;
 	}
 
-	// Trait display names, for the pill each group of rows sits under. 12 of
-	// the general-relevant traits differ from `formatEnum(zType, "TRAIT_")`,
-	// six of them because the id is a developer name (TRAIT_LEONIDAS_LEADER is
-	// "Indomitable"), so the table is not a formatting nicety.
+	// Which effect units each trait reaches. No display name here: the pill
+	// each group of rows sits under reads `traitName()`, over the whole of
+	// trait.xml rather than this closure's 39 — see bake-trait-names.ts.
+	// `traitName` above stays, because the link resolver still needs it to
+	// name the effect units the game calls `link(TRAIT_HERO_ARCHETYPE) General`.
 	const traits: Record<
 		string,
-		{ name: string; general?: readonly string[]; leader?: readonly string[] }
+		{ general?: readonly string[]; leader?: readonly string[] }
 	> = {};
 	for (const traitType of [
 		...new Set([...traitGeneral.keys(), ...traitLeader.keys()]),
 	].sort()) {
 		traits[traitType] = {
-			name: traitName(traitType),
 			general: traitGeneral.get(traitType),
 			leader: traitLeader.get(traitType),
 		};
@@ -1194,7 +1194,7 @@ async function render(data: {
 	emitted: Record<string, EmittedEffectUnit>;
 	traits: Record<
 		string,
-		{ name: string; general?: readonly string[]; leader?: readonly string[] }
+		{ general?: readonly string[]; leader?: readonly string[] }
 	>;
 	leaderGeneral: string | null;
 	helpText: Record<string, string>;
@@ -1307,8 +1307,6 @@ async function render(data: {
 		"",
 		"/** A trait that confers effect units on a unit its holder leads. */",
 		"export interface GeneralTrait {",
-		"\t/** The game's own trait name. */",
-		"\treadonly name: string;",
 		"\t/**",
 		"\t * `<GeneralEffectUnit>`, then that entry's `aeEffectUnitUnlock` and",
 		"\t * `AdjacentEffectUnit` — the one hop `getGeneralEffectUnits`",

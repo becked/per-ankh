@@ -12,8 +12,8 @@ import { UNIT_STATS } from "$lib/generated/unit-stats";
 import { CULTURE_LEVELS, WONDER_CULTURE_PREREQ } from "$lib/generated/wonders";
 import { SHARE_YIELD_TYPES } from "$lib/parser/derive";
 import type { SelectGroup, SelectOption } from "$lib/ui/types";
-import { cognomenName, formatEnum } from "$lib/utils/formatting";
-import { traitName, unitName } from "./describe";
+import { cognomenName, formatEnum, traitName } from "$lib/utils/formatting";
+import { unitName } from "./describe";
 import { ANY_RELIGION, ANY_WONDER, SCALAR_METRICS } from "./types";
 
 const byLabel = (a: SelectOption, b: SelectOption) =>

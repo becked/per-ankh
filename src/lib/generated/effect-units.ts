@@ -103,8 +103,6 @@ export interface GeneralEffectUnit {
 
 /** A trait that confers effect units on a unit its holder leads. */
 export interface GeneralTrait {
-	/** The game's own trait name. */
-	readonly name: string;
 	/**
 	 * `<GeneralEffectUnit>`, then that entry's `aeEffectUnitUnlock` and
 	 * `AdjacentEffectUnit` — the one hop `getGeneralEffectUnits`
@@ -1170,165 +1168,126 @@ export const GENERAL_EFFECT_UNITS: Readonly<Record<string, GeneralEffectUnit>> =
 
 export const GENERAL_TRAITS: Readonly<Record<string, GeneralTrait>> = {
 	TRAIT_AMBUSHER: {
-		name: "Ambusher",
 		general: ["EFFECTUNIT_TRAIT_AMBUSHER"],
 	},
 	TRAIT_ASTRONOMER: {
-		name: "Astronomer",
 		general: ["EFFECTUNIT_TRAIT_ASTRONOMER"],
 	},
 	TRAIT_BESIEGER: {
-		name: "Besieger",
 		general: ["EFFECTUNIT_BESIEGER"],
 	},
 	TRAIT_BLOODTHIRSTY: {
-		name: "Bloodthirsty",
 		general: ["EFFECTUNIT_BLOODTHIRSTY"],
 	},
 	TRAIT_BRAVE: {
-		name: "Brave",
 		general: ["EFFECTUNIT_BRAVE"],
 	},
 	TRAIT_BULWARK_ARMOR: {
-		name: "Bulwark Cuirass",
 		general: ["EFFECTUNIT_TRAIT_BULWARK_ARMOR", "EFFECTUNIT_SENTINEL"],
 	},
 	TRAIT_COMMANDER_ARCHETYPE: {
-		name: "Commander",
 		general: ["EFFECTUNIT_COMMANDER"],
 		leader: ["EFFECTUNIT_COMMANDER_LEADER"],
 	},
 	TRAIT_CONNECTION_TACTICAL_ADVANTAGE: {
-		name: "Connection Tactical Advantage",
 		general: [
 			"EFFECTUNIT_CONNECTION_TACTICAL_ADVANTAGE",
 			"EFFECTUNIT_CONNECTION_TACTICAL_ADVANTAGE_AURA",
 		],
 	},
 	TRAIT_CRIPPLED: {
-		name: "Crippled",
 		general: ["EFFECTUNIT_CRIPPLED"],
 	},
 	TRAIT_CYAXARES_LEADER: {
-		name: "Median Expansionist",
 		general: ["EFFECTUNIT_TRAIT_CYAXARES_GENERAL"],
 	},
 	TRAIT_ENGINEER: {
-		name: "Engineer",
 		general: ["EFFECTUNIT_ENGINEER"],
 	},
 	TRAIT_FEINT_ATTACKER: {
-		name: "Feint Attacker",
 		general: ["EFFECTUNIT_DISARM"],
 	},
 	TRAIT_FERVENT: {
-		name: "Fervent",
 		general: ["EFFECTUNIT_TRAIT_FERVENT"],
 	},
 	TRAIT_FIERCE: {
-		name: "Fierce",
 		general: ["EFFECTUNIT_FIERCE"],
 	},
 	TRAIT_FOOLS_RING: {
-		name: "Fool's Ring",
 		general: ["EFFECTUNIT_FOOLS_RING"],
 	},
 	TRAIT_HANNIBAL_LEADER: {
-		name: "Grace of Ba'al",
 		leader: ["EFFECTUNIT_HANNIBAL_LEADER"],
 	},
 	TRAIT_HECKLER: {
-		name: "Heckler",
 		general: ["EFFECTUNIT_HECKLER"],
 	},
 	TRAIT_HERBALIST: {
-		name: "Herbalist",
 		general: ["EFFECTUNIT_HERBALIST"],
 	},
 	TRAIT_HERO_ARCHETYPE: {
-		name: "Hero",
 		general: ["EFFECTUNIT_HERO"],
 		leader: ["EFFECTUNIT_HERO_LEADER"],
 	},
 	TRAIT_HIGHLANDER: {
-		name: "Highlander",
 		general: ["EFFECTUNIT_HIGHLANDER"],
 	},
 	TRAIT_HORSEBANE: {
-		name: "Horsebane",
 		general: ["EFFECTUNIT_HORSEBANE"],
 	},
 	TRAIT_LEONIDAS_LEADER: {
-		name: "Indomitable",
 		leader: ["EFFECTUNIT_LEONIDAS_LEADER"],
 	},
 	TRAIT_MAHOUT: {
-		name: "Mahout",
 		general: ["EFFECTUNIT_TRAIT_MAHOUT"],
 	},
 	TRAIT_PERICLES_LEADER: {
-		name: "First Citizen",
 		leader: ["EFFECTUNIT_PERICLES_LEADER"],
 	},
 	TRAIT_PROPHET: {
-		name: "Prophet",
 		general: ["EFFECTUNIT_PROPHET"],
 	},
 	TRAIT_RANGER: {
-		name: "Ranger",
 		general: ["EFFECTUNIT_RANGER"],
 	},
 	TRAIT_RECURVE_BOW: {
-		name: "Recurve Bow",
 		general: ["EFFECTUNIT_MARKSMAN"],
 	},
 	TRAIT_RELENTLESS: {
-		name: "Relentless",
 		general: ["EFFECTUNIT_ROUT"],
 	},
 	TRAIT_RISING_STAR: {
-		name: "A Rising Star",
 		general: ["EFFECTUNIT_RISING_STAR"],
 	},
 	TRAIT_SHIELDBEARER: {
-		name: "Shieldbearer",
 		general: ["EFFECTUNIT_SHIELDBEARER"],
 	},
 	TRAIT_SOLDIER: {
-		name: "Soldier",
 		general: ["EFFECTUNIT_SOLDIER"],
 	},
 	TRAIT_STEADFAST: {
-		name: "Steadfast",
 		general: ["EFFECTUNIT_STEADFAST"],
 	},
 	TRAIT_SWIFT: {
-		name: "Swift",
 		general: ["EFFECTUNIT_SWIFT"],
 	},
 	TRAIT_SWORD_OF_THE_GODS: {
-		name: "Sword of the Gods",
 		general: ["EFFECTUNIT_SWORD_OF_THE_GODS"],
 	},
 	TRAIT_TACTICIAN_ARCHETYPE: {
-		name: "Tactician",
 		general: ["EFFECTUNIT_TACTICIAN"],
 		leader: ["EFFECTUNIT_TACTICIAN_LEADER"],
 	},
 	TRAIT_TOUGH: {
-		name: "Tough",
 		general: ["EFFECTUNIT_TOUGH"],
 	},
 	TRAIT_TRACKER: {
-		name: "Tracker",
 		general: ["EFFECTUNIT_TRACKER"],
 	},
 	TRAIT_UNYIELDING_BANNER: {
-		name: "Unyielding Banner",
 		general: ["EFFECTUNIT_GENERAL_HOPPING"],
 	},
 	TRAIT_ZEALOT_ARCHETYPE: {
-		name: "Zealot",
 		general: ["EFFECTUNIT_ZEALOT"],
 		leader: ["EFFECTUNIT_ZEALOT_LEADER"],
 	},
