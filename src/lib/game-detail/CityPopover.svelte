@@ -11,7 +11,6 @@
 	// header, what's true at the selected turn, and the end-of-game record —
 	// the last split into two columns, its statistics beside its territory.
 	import type { cloudApi } from "$lib/api-cloud";
-	import { unitName } from "$lib/challenges/describe";
 	import type { MapTile } from "$lib/types/MapTile";
 	import type { UnitInfo } from "$lib/parser/types";
 	import { ownershipChangeTurn } from "$lib/parser/types";
@@ -22,6 +21,7 @@
 		formatEnum,
 		nationName,
 		turnCount,
+		unitName,
 	} from "$lib/utils/formatting";
 	import SpriteIcon from "./SpriteIcon.svelte";
 	import { tileXmlId } from "./reconstruct-map-tiles";

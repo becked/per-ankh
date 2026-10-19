@@ -10,12 +10,12 @@
 	// there is no per-turn zone to split off — the whole card is one vintage,
 	// which is why it has no turn input.
 	import type { cloudApi } from "$lib/api-cloud";
-	import { unitName } from "$lib/challenges/describe";
 	import { UNIT_STATS } from "$lib/generated/unit-stats";
 	import {
 		archetypeSpriteKey,
 		formatArchetype,
 		formatEnum,
+		unitName,
 	} from "$lib/utils/formatting";
 	import SpriteIcon from "./SpriteIcon.svelte";
 	import {

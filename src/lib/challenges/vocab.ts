@@ -12,8 +12,13 @@ import { UNIT_STATS } from "$lib/generated/unit-stats";
 import { CULTURE_LEVELS, WONDER_CULTURE_PREREQ } from "$lib/generated/wonders";
 import { SHARE_YIELD_TYPES } from "$lib/parser/derive";
 import type { SelectGroup, SelectOption } from "$lib/ui/types";
-import { cognomenName, formatEnum, traitName } from "$lib/utils/formatting";
-import { unitName } from "./describe";
+import {
+	cognomenName,
+	formatArchetype,
+	formatEnum,
+	traitName,
+	unitName,
+} from "$lib/utils/formatting";
 import { ANY_RELIGION, ANY_WONDER, SCALAR_METRICS } from "./types";
 
 const byLabel = (a: SelectOption, b: SelectOption) =>
@@ -92,11 +97,17 @@ export const RELIGION_OPTIONS: SelectOption[] = [
 // The legitimacy table lists every cognomen but COGNOMEN_NEW — the
 // placeholder a fresh ruler carries before earning one, which is no target.
 // What a custom leader picks on turn 1 — the `leader` criterion's
-// `required_traits` roster.
+// `required_traits` roster. The archetype group labels through
+// `formatArchetype`, which is the helper for a value that IS an archetype: its
+// fallback strips the `_ARCHETYPE` suffix, so one newer than the baked name
+// table reads "Hero" rather than "Hero Archetype". The other two groups hold
+// ordinary traits, and `describeCriterion` reads all three back off one mixed
+// list, so it stays on `traitName`; both consult the same table first, so they
+// cannot disagree on a trait that table holds — all 10 archetypes today.
 export const LEADER_TRAIT_OPTIONS: SelectGroup[] = [
 	{
 		heading: "Archetype",
-		options: options(LEADER_TRAITS.archetype, traitName),
+		options: options(LEADER_TRAITS.archetype, formatArchetype),
 	},
 	{
 		heading: "Strengths",

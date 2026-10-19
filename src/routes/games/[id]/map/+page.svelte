@@ -103,10 +103,17 @@
 			mapTiles = game.map_tiles;
 			playerId = defaultPlayerId(game, players);
 			lockedTiles = [];
-			// Same reason the locked coordinates clear: a unit's `xml_id` is a
-			// per-save id, so a card left standing would re-derive onto whatever
-			// unit holds that id in the next game — and small integers collide
-			// freely across saves.
+			// Same reason the locked coordinates clear: both cards are keyed on
+			// something the next game re-uses, so one left standing would
+			// re-derive onto whatever the key names there. A unit's `xml_id` is
+			// a per-save id and small integers collide freely across saves; a
+			// city's name is drawn from its nation's own pool (`nation.xml`'s
+			// `aeCityNames` → `cityName.xml`), so two games of the same nation
+			// name cities from the same list — 71 of the 225 distinct banner
+			// cities in `test-data/saves/` stand in more than one of the 16
+			// saves. Neither card's own effect below catches that: each tests
+			// membership, which a colliding key passes.
+			cityCard.close();
 			unitCard.close();
 		});
 	});
@@ -187,10 +194,9 @@
 	// Each closes when the thing it names leaves the map. The city card does so
 	// once the selected turn is one its city has no banner at — before it was
 	// founded, or while it sits unowned mid-capture. The unit card does so when
-	// its marker goes, which is the Units layer being switched off, the slider
-	// leaving the final turn, or a navigation to another game: a unit's
-	// `xml_id` is a per-save id, so a card left standing would re-derive onto
-	// whatever unit holds that id next.
+	// its marker goes, which is the Units layer being switched off or the
+	// slider leaving the final turn. Both also close on a navigation to another
+	// game, in the re-sync effect above, which is where the reason lives.
 	const cityCard = new HoverLockCard<string>();
 	const unitCard = new HoverLockCard<number>();
 

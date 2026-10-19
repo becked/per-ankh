@@ -45,21 +45,21 @@ export function competitiveMode(
 }
 
 /** `Utils.triangle` (Utils.cs:119) — the sign-preserving triangular number. */
-export function triangle(n: number): number {
+function triangle(n: number): number {
 	const abs = Math.abs(n);
 	// abs*(abs+1) is always even, so the game's integer divide is exact here.
 	return Math.sign(n) * ((abs * (abs + 1)) / 2);
 }
 
 /** `Utils.triangleOffset` (Utils.cs:132). */
-export function triangleOffset(n: number, offset: number): number {
+function triangleOffset(n: number, offset: number): number {
 	const value = Math.abs(n) + offset;
 	if (value <= 0) return n;
 	return Math.sign(n) * (triangle(value) - offset);
 }
 
 /** `Utils.triangleBoost` (Utils.cs:124) — the plain rating curve. */
-export function triangleBoost(n: number): number {
+function triangleBoost(n: number): number {
 	if (n === 0) return 0;
 	return Math.sign(n) * triangle(Math.abs(n) + 1);
 }

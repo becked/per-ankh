@@ -313,7 +313,7 @@ function commaList(names: readonly string[]): HelpArg {
  * through `AdjacentEffectUnit`, whose contribution is its parent's
  * `[Adjacent Units]` row.
  */
-export function effectUnitHelpLines(effect: GeneralEffectUnit): HelpLine[] {
+function effectUnitHelpLines(effect: GeneralEffectUnit): HelpLine[] {
 	const lines: HelpLine[] = [];
 	const add = (line: HelpLine): void => {
 		if (line.length > 0) lines.push(line);
