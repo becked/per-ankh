@@ -1,8 +1,7 @@
 <script lang="ts">
-	// The map view's turn and layer controls, in the chrome: the Political,
-	// Religion and Units layer toggles, and the turn slider with play and
-	// fast-forward. The map page owns the turn and the layers; SpriteMap only
-	// draws them.
+	// The map view's turn and layer controls, in the chrome: the Political and
+	// Units layer toggles, and the turn slider with play and fast-forward. The
+	// map page owns the turn and the layers; SpriteMap only draws them.
 	import Checkbox from "$lib/ui/Checkbox.svelte";
 
 	let {
@@ -10,15 +9,13 @@
 		selectedTurn,
 		onTurnChange,
 		showPolitical = $bindable(true),
-		showReligion = $bindable(false),
-		showUnits = $bindable(false),
+		showUnits = $bindable(true),
 	}: {
 		totalTurns: number;
 		selectedTurn: number;
 		// eslint-disable-next-line no-unused-vars -- Callback type signature
 		onTurnChange: (turn: number) => Promise<void> | void;
 		showPolitical?: boolean;
-		showReligion?: boolean;
 		showUnits?: boolean;
 	} = $props();
 
@@ -99,9 +96,6 @@
 	<div class="flex items-center gap-3">
 		<Checkbox bind:checked={showPolitical} labelClass="gap-1.5">
 			<span class="select-none text-tan">Political</span>
-		</Checkbox>
-		<Checkbox bind:checked={showReligion} labelClass="gap-1.5">
-			<span class="select-none text-tan">Religion</span>
 		</Checkbox>
 		<Checkbox
 			bind:checked={showUnits}

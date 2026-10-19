@@ -36,8 +36,7 @@
 	// scripts/bake-improvements.ts (urban), and scripts/bake-resources.ts:
 	// hex-clip + cover-fit happen at build time. The runtime feeds each baked
 	// atlas straight to deck.gl IconLayer, which samples it as-is. The
-	// dimensions also drive overlay polygons (religion fill) and edge segments
-	// (political borders).
+	// dimensions also drive the political borders' edge segments.
 	//
 	// Aspect tracks the game's on-screen hex: pointy-top R = 5 world units
 	// (8.66 × 10) viewed at the camera's fixed 45° pitch → 8.66 × 7.07
@@ -304,8 +303,7 @@
 		playerNations = [],
 		units = [],
 		showPolitical = true,
-		showReligion = false,
-		showUnits = false,
+		showUnits = true,
 		isFinalTurn,
 		lockedTiles,
 		onToggleLock,
@@ -336,7 +334,6 @@
 		units?: UnitMarker[];
 		// Layer visibility. The toggles live in the map view's chrome.
 		showPolitical?: boolean;
-		showReligion?: boolean;
 		showUnits?: boolean;
 		// Whether `tiles` is the final turn. CityInfo.citizens is an
 		// end-of-game count, so the banners carry it only then — and it is what
@@ -984,11 +981,6 @@
 		contestedBorders: NationBorder[];
 	}
 
-	interface ReligionFill {
-		polygon: [number, number][];
-		color: [number, number, number, number];
-	}
-
 	// Nation borders are inset slightly into the territory so adjacent nations'
 	// borders are clearly distinct, but kept close to the actual edge to match the
 	// in-game look. Per-vertex inset uses the centroid of same-nation tiles meeting
@@ -1428,73 +1420,6 @@
 		return { borders, subBorders, contestedBorders };
 	}
 
-	function computeReligionFills(mapTiles: MapTile[]): ReligionFill[] {
-		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- Map used locally in function, not as reactive state
-		const tileMap = new Map<string, MapTile>();
-		for (const t of mapTiles) tileMap.set(`${t.x},${t.y}`, t);
-
-		const fills: ReligionFill[] = [];
-		for (const tile of mapTiles) {
-			const founder = tile.religions[0]?.founder_nation;
-			if (!founder) continue;
-			const colorHex = getCivilizationColor(founder);
-			if (!colorHex) continue;
-			const rgb = hexToRgb(colorHex);
-			const [cx, cy] = hexToPixel(tile.x, tile.y);
-			const verts = hexPolygon(cx, cy);
-
-			// Match the political layer's per-vertex centroid inset so the fill
-			// stops at the nation border instead of bleeding past it. At each
-			// vertex i of the hex, the 3 meeting tiles are T plus the two
-			// corner-adjacent neighbors (across edge i-1 and edge i). Centroid of
-			// same-nation tiles at the vertex; interior nation vertices have all
-			// 3 same-nation, centroid lands on the vertex, no inset → fill still
-			// extends to the hex edge along city sub-borders.
-			let polygon: [number, number][];
-			if (!tile.owner_nation) {
-				polygon = hexPolygon(cx, cy);
-			} else {
-				const neighbors = hexNeighbors(tile.x, tile.y);
-				polygon = [];
-				for (let i = 0; i < 6; i++) {
-					const [n1x, n1y] = neighbors[(i + 5) % 6];
-					const [n2x, n2y] = neighbors[i];
-					const adj1 = tileMap.get(`${n1x},${n1y}`);
-					const adj2 = tileMap.get(`${n2x},${n2y}`);
-
-					let sumX = cx;
-					let sumY = cy;
-					let count = 1;
-					if (adj1?.owner_nation === tile.owner_nation) {
-						const [tx, ty] = hexToPixel(adj1.x, adj1.y);
-						sumX += tx;
-						sumY += ty;
-						count++;
-					}
-					if (adj2?.owner_nation === tile.owner_nation) {
-						const [tx, ty] = hexToPixel(adj2.x, adj2.y);
-						sumX += tx;
-						sumY += ty;
-						count++;
-					}
-					const cenX = sumX / count;
-					const cenY = sumY / count;
-					const v = verts[i];
-					polygon.push([
-						v[0] + (cenX - v[0]) * NATION_BORDER_INSET,
-						v[1] + (cenY - v[1]) * NATION_BORDER_INSET,
-					]);
-				}
-			}
-
-			fills.push({
-				polygon,
-				color: [rgb[0], rgb[1], rgb[2], 80],
-			});
-		}
-		return fills;
-	}
-
 	interface RiverSegment {
 		path: [number, number][];
 	}
@@ -1657,13 +1582,6 @@
 		if (import.meta.env.DEV) console.time("computePoliticalData");
 		const result = computePoliticalData(tiles);
 		if (import.meta.env.DEV) console.timeEnd("computePoliticalData");
-		return result;
-	});
-	const religionFills = $derived.by<ReligionFill[]>(() => {
-		if (tiles.length === 0) return [];
-		if (import.meta.env.DEV) console.time("computeReligionFills");
-		const result = computeReligionFills(tiles);
-		if (import.meta.env.DEV) console.timeEnd("computeReligionFills");
 		return result;
 	});
 	const rivers = $derived.by<RiverSegment[]>(() => {
@@ -1909,10 +1827,8 @@
 		// omitted rather than blanking the whole map.
 		if (!t3d || !ibm) return null;
 		const political = politicalData;
-		const fills = religionFills;
 		const riv = rivers;
 		const pol = showPolitical;
-		const rel = showReligion;
 		const unitsOn = unitsVisible;
 
 		// Per-family composite IconLayers — one per family that has any tile
@@ -2097,7 +2013,7 @@
 			}),
 			...compositeLayers,
 			// Rivers sit on tile edges, above terrain/improvements but below the
-			// political/religion overlays. Rounded joints/caps let the per-edge
+			// political overlay. Rounded joints/caps let the per-edge
 			// segments read as continuous waterways where they share vertices.
 			new PathLayer<RiverSegment>({
 				id: "rivers",
@@ -2110,16 +2026,6 @@
 				jointRounded: true,
 				capRounded: true,
 				pickable: false,
-			}),
-			new PolygonLayer<ReligionFill>({
-				id: "religion-layer",
-				data: fills,
-				getPolygon: (d: ReligionFill) => d.polygon,
-				getFillColor: (d: ReligionFill) => d.color,
-				stroked: false,
-				filled: true,
-				pickable: false,
-				visible: rel,
 			}),
 			new PathLayer<NationBorder>({
 				id: "political-sub-borders",
@@ -2242,10 +2148,8 @@
 		void familyManifests;
 		void tiles;
 		void politicalData;
-		void religionFills;
 		void rivers;
 		void showPolitical;
-		void showReligion;
 		void showUnits;
 		void isFinalTurn;
 		void placedUnits;

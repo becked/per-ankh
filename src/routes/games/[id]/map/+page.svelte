@@ -68,10 +68,9 @@
 	// svelte-ignore state_referenced_locally
 	let playerId = $state<number | null>(defaultPlayerId(data.game, players));
 	let showPolitical = $state(true);
-	let showReligion = $state(false);
-	// Off by default, as Religion is: borders are part of reading a map, a
-	// final-turn army is a question you go looking for.
-	let showUnits = $state(false);
+	// On by default: the map opens at the final turn, the only turn units are
+	// recorded at, so the ending armies are part of the first read.
+	let showUnits = $state(true);
 
 	// ─── Locked tile panels ───────────────────────────────────────────
 	// Right-clicking a tile leaves a copy of its hover panel glued to its hex,
@@ -314,7 +313,6 @@
 				playerNations={game.player_nations}
 				units={unitMarkers}
 				{showPolitical}
-				{showReligion}
 				{showUnits}
 				{isFinalTurn}
 				{lockedTiles}
@@ -338,7 +336,6 @@
 				onTurnChange={handleMapTurnChange}
 				onOpenTab={openLightbox}
 				bind:showPolitical
-				bind:showReligion
 				bind:showUnits
 			/>
 		</div>
