@@ -33,7 +33,6 @@ export type { CityStatistics } from "../types/CityStatistics.js";
 export type { ImprovementInfo } from "../types/ImprovementInfo.js";
 export type { ImprovementData } from "../types/ImprovementData.js";
 export type { MapTile } from "../types/MapTile.js";
-export type { ReligionInfo } from "../types/ReligionInfo.js";
 export type { GameReligion } from "../types/GameReligion.js";
 export type { PlayerWonder } from "../types/PlayerWonder.js";
 export type { StoryEvent } from "../types/StoryEvent.js";

@@ -210,14 +210,7 @@ export function extractAllGameData(
 		players,
 		freeSpecialists,
 	);
-	const mapTiles = deriveMapTiles(
-		tiles,
-		cities,
-		cityReligions,
-		religions,
-		players,
-		freeSpecialists,
-	);
+	const mapTiles = deriveMapTiles(tiles, cities, players, freeSpecialists);
 	const gameReligions = deriveGameReligions(religions, players);
 	const playerWonders = derivePlayerWonders(
 		eventLogs,
