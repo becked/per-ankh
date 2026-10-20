@@ -98,6 +98,13 @@ openssl rand -base64 32
 npx wrangler secret put SSR_TRUSTED_KEY                 # frontend Worker (repo root)
 ```
 
+**`ADMIN_CLI_TOKEN`** is optional, and only `./per-ankh admin reparse-all` wants it. That sweep reparses the corpus headless — it parses each save locally and posts the result to `POST /v1/admin/games/:user_id/reparse-upload` — and it has no session to present, so that one endpoint also accepts this as a bearer token (`siteAdminFromCliToken`, `cloud/src/admin.ts`). It opens nothing else: every other `/v1/admin/*` route stays session-only and answers `404` to the token. No preflight requires it, because unset is a working state — the endpoint is then reachable only by a logged-in admin, which is how it worked before the sweep existed, and the symptom of a missing secret is the CLI refusing with a message rather than anything silent. It needs `ADMIN_DISCORD_ID` set in the same environment, and that Discord account to have signed in at least once: the admin's `user_id` is resolved from it for the `admin_reimport` audit row, and the request is refused if there is no such user.
+
+```bash
+openssl rand -base64 32
+(cd cloud && npx wrangler secret put ADMIN_CLI_TOKEN)
+```
+
 Not in the preflight's **required** list, because unset is a working state —
 both sides check it, so forwarding stays off until both have it and the two
 Workers can be deployed in either order.
@@ -809,6 +816,7 @@ All commands from `cloud/` unless noted. Each authenticates via `wrangler login`
    npx wrangler secret put DISCORD_CLIENT_SECRET --env staging
    npx wrangler secret put CLOUDFLARE_PURGE_TOKEN --env staging  # the same zone token as prod
    npx wrangler secret put ADMIN_DISCORD_ID --env staging   # optional: staging site-admin
+   npx wrangler secret put ADMIN_CLI_TOKEN --env staging    # optional: reparse-all sweep (needs ADMIN_DISCORD_ID too)
    npx wrangler secret put SSR_TRUSTED_KEY --env staging    # same value on both staging Workers
    ```
 

@@ -449,6 +449,20 @@ DISCORD_CLIENT_ID = "1500901451034263604"
 # their VOD dates:
 #   npx wrangler secret put YOUTUBE_API_KEY
 #   npx wrangler secret put YOUTUBE_API_KEY --env staging
+# ADMIN_CLI_TOKEN (also a secret, set out-of-band) is the bearer token
+# `./per-ankh admin reparse-all` presents, and the one credential on this
+# Worker that is not a session. The reparse sweep parses saves locally and
+# posts each one to POST /v1/admin/games/:user_id/reparse-upload, which is
+# where the token is checked (siteAdminFromCliToken, src/admin.ts); every other
+# /v1/admin/* route stays session-only, so the token opens one write and no
+# reads. Optional, and no preflight requires it: unset means that endpoint is
+# reachable only by a logged-in admin, which is the state before the sweep
+# existed, so the symptom of a missing secret is the CLI's own 404 rather than
+# anything silent. It also needs ADMIN_DISCORD_ID set in the same environment
+# — the admin's user_id is resolved from it for the audit row — and that
+# account must have signed in at least once. Per-environment:
+#   npx wrangler secret put ADMIN_CLI_TOKEN
+#   npx wrangler secret put ADMIN_CLI_TOKEN --env staging
 # Session cookie name. A var (not a code const) so staging can use a distinct
 # name: both environments set Domain=per-ankh.app on the session cookie (the
 # only shared ancestor of their sibling subdomains), so a staging cookie named

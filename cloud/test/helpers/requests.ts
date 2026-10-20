@@ -23,6 +23,11 @@ export interface RequestOpts {
 	readonly body?: unknown;
 	readonly as?: AuthedUser;
 	readonly origin?: string;
+	// `Authorization: Bearer <bearer>` — the headless admin credential
+	// (ADMIN_CLI_TOKEN, cloud/src/admin.ts). Here as well as on MultipartOpts
+	// because what the token must NOT do is reach the admin GETs, and proving
+	// that means sending it at one.
+	readonly bearer?: string;
 }
 
 type Method = "GET" | "POST" | "PATCH" | "DELETE";
@@ -35,6 +40,9 @@ async function send(method: Method, opts: RequestOpts): Promise<Response> {
 	};
 	if (opts.as) {
 		headers["Cookie"] = `session=${opts.as.sessionToken}`;
+	}
+	if (opts.bearer !== undefined) {
+		headers["Authorization"] = `Bearer ${opts.bearer}`;
 	}
 
 	// Mirror the cloud frontend: POST/PATCH always send Content-Type JSON
@@ -65,17 +73,30 @@ export interface MultipartOpts {
 	readonly form: FormData;
 	readonly as?: AuthedUser;
 	readonly origin?: string;
+	// Sends `Authorization: Bearer <bearer>` instead of a session cookie — the
+	// headless admin path (ADMIN_CLI_TOKEN, cloud/src/admin.ts), which the
+	// reparse sweep in scripts/admin/commands/reparse.ts uses. Exclusive with
+	// `as` in practice: a test asserting the token path must not also carry a
+	// session, or it proves nothing.
+	readonly bearer?: string;
+	// Omits the Origin header, the way a non-browser client does. Default is a
+	// browser-shaped request, which is what every other caller here is.
+	readonly noOrigin?: boolean;
 }
 
 // Posts a multipart/form-data body. The runtime generates the
 // Content-Type header (with the boundary) from the FormData body —
 // don't override it.
 export async function postMultipart(opts: MultipartOpts): Promise<Response> {
-	const headers: Record<string, string> = {
-		Origin: opts.origin ?? DEFAULT_ORIGIN,
-	};
+	const headers: Record<string, string> = {};
+	if (!opts.noOrigin) {
+		headers["Origin"] = opts.origin ?? DEFAULT_ORIGIN;
+	}
 	if (opts.as) {
 		headers["Cookie"] = `session=${opts.as.sessionToken}`;
+	}
+	if (opts.bearer !== undefined) {
+		headers["Authorization"] = `Bearer ${opts.bearer}`;
 	}
 	return SELF.fetch(`http://test${opts.path}`, {
 		method: "POST",
