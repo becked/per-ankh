@@ -1,7 +1,12 @@
 <script lang="ts">
 	import { onMount } from "svelte";
 	import { Deck, OrthographicView } from "@deck.gl/core";
-	import { IconLayer, PathLayer, PolygonLayer } from "@deck.gl/layers";
+	import {
+		IconLayer,
+		PathLayer,
+		PolygonLayer,
+		ScatterplotLayer,
+	} from "@deck.gl/layers";
 	import type { MapTile } from "$lib/types/MapTile";
 	import type { CityInfo } from "$lib/types/CityInfo";
 	import type { PlayerNationEntry } from "$lib/parser/types";
@@ -13,6 +18,7 @@
 	import { SPRITE_MANIFEST } from "$lib/generated/sprite-manifest";
 	import { familyCrestKey, familyForOwner } from "$lib/game-detail/helpers";
 	import { hexNeighbors } from "$lib/utils/hex";
+	import { circularPng } from "$lib/utils/circular-image";
 	import MapTooltip from "$lib/MapTooltip.svelte";
 	import MapCityBanners, {
 		bannerFoot,
@@ -21,6 +27,7 @@
 	import {
 		projectToCanvas,
 		type TileCoord,
+		type UnitMarker,
 		type ViewState,
 	} from "$lib/game-detail/map-chrome";
 	import { formatEnum } from "$lib/utils/formatting";
@@ -30,8 +37,7 @@
 	// scripts/bake-improvements.ts (urban), and scripts/bake-resources.ts:
 	// hex-clip + cover-fit happen at build time. The runtime feeds each baked
 	// atlas straight to deck.gl IconLayer, which samples it as-is. The
-	// dimensions also drive overlay polygons (religion fill) and edge segments
-	// (political borders).
+	// dimensions also drive the political borders' edge segments.
 	//
 	// Aspect tracks the game's on-screen hex: pointy-top R = 5 world units
 	// (8.66 × 10) viewed at the camera's fixed 45° pitch → 8.66 × 7.07
@@ -43,6 +49,29 @@
 	// exactly: H_SPACING = 2 * apothem = R_X * sqrt(3); V_SPACING = 1.5 * R_Y.
 	const HEX_RADIUS_X = HEX_H_SPACING / Math.sqrt(3);
 	const HEX_RADIUS_Y = HEX_V_SPACING / 1.5;
+
+	// A unit marker's plate, in WORLD units, so it holds the same share of its
+	// hex at every zoom. The painted art draws at one fixed width rather than
+	// at its own pixel size, and a world unit is an atlas pixel here — the
+	// terrain cell is `cellWidth` units wide — so a 48-unit radius seats that
+	// disc with a ring of the owner's colour around it: 96 across against a
+	// 199-unit hex. Two units on one hex sit a plate's width apart, which still
+	// leaves both inside the hex — the pair reaches 98 units from the hex
+	// centre against its 99.5 apothem (3 of the corpus's 1,408 occupied
+	// military tiles hold two).
+	const UNIT_PLATE_RADIUS = 48;
+	const UNIT_PLATE_LINE_WIDTH = 3;
+	const UNIT_STACK_SPACING = 100;
+
+	// The art disc over it. One drawn width for every type, so the portrait
+	// set's three outliers (226–253 px against a 128 median) stop mattering,
+	// and a 128-pixel raster, which is what 99 of the 102 already ship at. The
+	// square crop sits high in a portrait taller than it is wide: these are
+	// painted vignettes, and the bottom of the frame is ground rather than
+	// subject.
+	const UNIT_ART_DIAMETER = 80;
+	const UNIT_ART_RASTER_PX = 128;
+	const UNIT_ART_CROP_Y = 0.1;
 
 	// Atlas paths come from the bake-pipeline manifest. URLs are content-
 	// hashed (e.g. /atlases/terrain-3d.a1b2c3d4.webp), so they're safe to
@@ -284,8 +313,9 @@
 		tiles,
 		cities = [],
 		playerNations = [],
+		units = [],
 		showPolitical = true,
-		showReligion = false,
+		showUnits = true,
 		isFinalTurn,
 		lockedTiles,
 		onToggleLock,
@@ -294,6 +324,11 @@
 		onCityToggleLock,
 		cardCity,
 		onCardOffCanvas,
+		onUnitHover,
+		onUnitLeave,
+		onUnitToggleLock,
+		cardUnit,
+		onUnitCardOffCanvas,
 	}: {
 		tiles: MapTile[];
 		// Used to resolve owner_city → family for the tooltip's family crest.
@@ -303,11 +338,18 @@
 		// (CityInfo.first_owner_player_xml_id) for architecture rendering. Empty
 		// is fine — rendering then falls back to the tile's current owner_nation.
 		playerNations?: PlayerNationEntry[];
+		// The military units standing on the map at the FINAL turn, already
+		// filtered and placed by the map page (see UnitMarker). `UnitInfo` is a
+		// snapshot of `<Tile>/<Unit>` and the save carries no position history,
+		// so there is no per-turn arm to draw — the layer is gated on
+		// `isFinalTurn` below. Empty is fine: the layer draws nothing.
+		units?: UnitMarker[];
 		// Layer visibility. The toggles live in the map view's chrome.
 		showPolitical?: boolean;
-		showReligion?: boolean;
+		showUnits?: boolean;
 		// Whether `tiles` is the final turn. CityInfo.citizens is an
-		// end-of-game count, so the banners carry it only then.
+		// end-of-game count, so the banners carry it only then — and it is what
+		// gates the units layer, which has no other turn to stand at.
 		isFinalTurn: boolean;
 		// The tiles whose panels are locked to the map. Held by the map page,
 		// not here: this component is kept across /games/A/map →
@@ -338,6 +380,18 @@
 		// That verdict, raised on every crossing.
 		// eslint-disable-next-line no-unused-vars -- parameter in callback signature
 		onCardOffCanvas: (offCanvas: boolean) => void;
+		// The unit half of the same four. A marker is drawn IN the canvas rather
+		// than beside it, so there is no element of its own to hang the card
+		// from: the anchor is the zero-size div below, which follows whichever
+		// marker the card belongs to.
+		// eslint-disable-next-line no-unused-vars -- parameter in callback signature
+		onUnitHover: (unitXmlId: number, element: HTMLElement) => void;
+		onUnitLeave: () => void;
+		// eslint-disable-next-line no-unused-vars -- parameter in callback signature
+		onUnitToggleLock: (unitXmlId: number, element: HTMLElement) => void;
+		cardUnit: number | null;
+		// eslint-disable-next-line no-unused-vars -- parameter in callback signature
+		onUnitCardOffCanvas: (offCanvas: boolean) => void;
 	} = $props();
 
 	// city_name → the player owning the city's centre tile at the represented
@@ -423,11 +477,15 @@
 	// ─── Tooltip state ────────────────────────────────────────────────
 	// Hover position is in canvas-local CSS pixels (deck.gl onHover already
 	// converts).
-	interface HoverState {
-		tile: MapTile;
-		x: number;
-		y: number;
-	}
+	//
+	// One value with two arms rather than two values, because the pointer is
+	// only ever on one thing. A city banner gets that for free by being a DOM
+	// sibling: the pointer leaving the canvas for it clears the hover. A unit
+	// marker is drawn IN the canvas, so without the union the hex's tile panel
+	// and the unit's card would stand at once over the same pixel.
+	type HoverState =
+		| { kind: "tile"; tile: MapTile; x: number; y: number }
+		| { kind: "unit"; marker: UnitMarker; x: number; y: number };
 	let hoverState = $state<HoverState | null>(null);
 
 	// Where a tile panel sits: the tile it names, and its anchor in
@@ -451,7 +509,9 @@
 	// city popover closes at a turn its city has no banner at.
 	const hoverPanel = $derived.by<TilePanel | null>(() => {
 		const hover = hoverState;
-		if (!hover) return null;
+		// A marker takes the pointer off the hex it stands on, as a banner does:
+		// the unit's card answers instead.
+		if (!hover || hover.kind !== "tile") return null;
 		// One panel per tile: a locked panel already stands over this hex, and
 		// the hover copy would render the same content on top of it.
 		if (lockedTiles.some((l) => l.x === hover.tile.x && l.y === hover.tile.y))
@@ -461,6 +521,19 @@
 		);
 		return tile ? { tile, x: hover.x, y: hover.y } : null;
 	});
+
+	// Whether the units layer is on screen. The layers take it as their own
+	// `visible`, and everything OUTSIDE the canvas — the cursor, the hover arm,
+	// the card's anchor — takes it too, so a marker that isn't drawn can't
+	// still be hovered after a toggle or a scrub off the final turn.
+	const unitsVisible = $derived(showUnits && isFinalTurn);
+
+	// The marker the pointer is on, or null. Read by the cursor below and by
+	// the card's anchor; `getCursor` is re-evaluated every frame, so a plain
+	// read of this is enough to turn the hand into a pointer.
+	const hoveredUnit = $derived(
+		unitsVisible && hoverState?.kind === "unit" ? hoverState.marker : null,
+	);
 
 	// The box both overlays work in, in canvas-local CSS pixels: the hover
 	// panel clamps to its edges, and the city banners project into it. It is
@@ -531,7 +604,8 @@
 		return out;
 	});
 
-	// Right-click toggles the lock on the tile under the cursor.
+	// Right-click toggles the lock on whatever is under the cursor: a unit's
+	// card when the pick landed on its marker, the hex's own panel otherwise.
 	//
 	// It also suppresses the browser's own menu, which answers a right-click
 	// over a canvas with "Save image as…" / "Copy image". The handler sits on
@@ -539,9 +613,9 @@
 	// banners, and the locked panels themselves — are the canvas's SIBLINGS: a
 	// right-click on one would miss a canvas handler and get the browser's
 	// page menu. So the container suppresses the menu everywhere over the map,
-	// and only an event that landed on the canvas itself goes on to pick a
-	// tile. A banner answers its own right-click (MapCityBanners), locking
-	// the city's card rather than the hex it stands on.
+	// and only an event that landed on the canvas itself goes on to pick. A
+	// banner answers its own right-click (MapCityBanners), locking the city's
+	// card rather than the hex it stands on.
 	async function handleContextMenu(e: MouseEvent) {
 		e.preventDefault();
 		// `isInitialized` is deck's own "safe to call public methods" flag: the
@@ -557,9 +631,18 @@
 			y: e.clientY - rect.top,
 			radius: 0,
 		});
+		if (!picked) return;
+		// The plate layer sits after `tile-picking`, so it wins the pick over
+		// the hex it stands on — which is what makes a marker behave like a
+		// banner rather than like part of its tile.
+		if (picked.layer?.id === UNIT_PLATE_LAYER_ID) {
+			const placed = picked.object as PlacedUnit;
+			if (unitAnchorEl) onUnitToggleLock(placed.marker.xmlId, unitAnchorEl);
+			return;
+		}
 		// The pickable PolygonLayer is fed the MapTile array directly, as
 		// `onHover` reads it.
-		const tile = picked?.object as MapTile | undefined;
+		const tile = picked.object as MapTile | undefined;
 		if (tile) onToggleLock(tile);
 	}
 
@@ -646,6 +729,182 @@
 			});
 		}
 		return out;
+	});
+
+	// ─── Unit markers ─────────────────────────────────────────────────
+	// The two layers' ids, named once. The plate's is what both `onHover` and
+	// the right-click discriminate on to tell a marker from the hex under it,
+	// so a literal in either place would drift from the layer it names; the
+	// art's sits beside it so the pair reads as one marker.
+	const UNIT_PLATE_LAYER_ID = "unit-plates";
+	const UNIT_ART_LAYER_ID = "unit-art";
+
+	/** A marker placed in world units, with its share of a shared hex. */
+	interface PlacedUnit {
+		marker: UnitMarker;
+		worldX: number;
+		worldY: number;
+	}
+
+	// Two units on one hex draw side by side, each its own hover target —
+	// measured at 3 of the corpus's 1,408 occupied military tiles, each a naval
+	// and a land unit of the same player on a city centre. Nothing caps the
+	// count: `Tile.canBothUnitsOccupy` (`Tile.cs:10438`) admits more, so the
+	// row is centred on the hex at whatever width it comes out.
+	//
+	// Ordered by `xmlId` within a tile so a rebuild can't swap two markers
+	// under the pointer.
+	const placedUnits = $derived.by<PlacedUnit[]>(() => {
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- locally-scoped Map, not reactive state
+		const byTile = new Map<string, UnitMarker[]>();
+		for (const marker of units) {
+			const key = `${marker.x},${marker.y}`;
+			const held = byTile.get(key);
+			if (held) held.push(marker);
+			else byTile.set(key, [marker]);
+		}
+		const out: PlacedUnit[] = [];
+		for (const stack of byTile.values()) {
+			const ordered = [...stack].sort((a, b) => a.xmlId - b.xmlId);
+			const [cx, cy] = hexToPixel(ordered[0].x, ordered[0].y);
+			for (const [i, marker] of ordered.entries()) {
+				out.push({
+					marker,
+					worldX: cx + (i - (ordered.length - 1) / 2) * UNIT_STACK_SPACING,
+					worldY: cy,
+				});
+			}
+		}
+		return out;
+	});
+
+	// Each distinct portrait, cut to a disc once and kept as the PNG the icon
+	// layer hands deck.gl. `IconLayer` draws a rectangular image and has no
+	// round crop of its own, so the circle has to be in the pixels — the same
+	// reason `loadCircularAvatars` rasterizes Discord avatars for ECharts. A
+	// portrait that hasn't been cut yet is simply absent from the layer's data,
+	// so the plate draws alone for a frame, exactly as it does for a unit we
+	// ship no art for.
+	let artDiscs = $state<Record<string, Blob>>({});
+	// Which portraits have been asked for, as a plain Set so the effect below
+	// doesn't read the state it writes — the same arrangement `ensureFamilyAtlas`
+	// uses for the urban atlases. A url stays in it after a failed load too:
+	// one attempt per portrait per session, and the plate draws alone for the
+	// rest, rather than re-requesting a 404 on every rebuild.
+	// eslint-disable-next-line svelte/prefer-svelte-reactivity -- module-scope guard, not reactive state
+	const artRequested = new Set<string>();
+
+	$effect(() => {
+		// Nothing is fetched until the layer is actually on: a portrait with no
+		// disc is absent from the layer's data, so `getIcon` never runs on it
+		// and deck.gl's own auto-packing doesn't fetch it either. A map nobody
+		// switched the layer on over costs no unit art.
+		if (!unitsVisible) return;
+		for (const { marker } of placedUnits) {
+			const url = marker.portraitUrl;
+			if (url == null || artRequested.has(url)) continue;
+			artRequested.add(url);
+			void circularPng(url, UNIT_ART_RASTER_PX, UNIT_ART_CROP_Y).then(
+				(disc) => {
+					artDiscs = { ...artDiscs, [url]: disc };
+				},
+				// A portrait that won't load leaves its plate drawing alone.
+				() => {},
+			);
+		}
+	});
+
+	// `IconLayer` loads every icon by fetching its url, and the url we give it
+	// names a portrait whose disc is already in hand. Answer that fetch from
+	// the cut PNG: deck.gl re-reading `/sprites/units/*.png` would get the
+	// uncut rectangle, and handing it a `data:` url instead is refused — an
+	// icon is fetched rather than assigned to an `<img>`, so it answers to
+	// `connect-src`, which doesn't carry `data:` the way `img-src` does (the
+	// policy in svelte.config.js).
+	const fetchArtDisc = (url: string): Promise<Response> =>
+		Promise.resolve(new Response(artDiscs[url]));
+
+	// The markers whose disc is ready to draw. Separate from `placedUnits` so
+	// the plate layer — which is the pick target, and so what the card hangs
+	// off — never waits on an image.
+	const artUnits = $derived(
+		placedUnits.filter(
+			(p) =>
+				p.marker.portraitUrl != null && artDiscs[p.marker.portraitUrl] != null,
+		),
+	);
+
+	// ─── The unit card's anchor ───────────────────────────────────────
+	// A marker is drawn in the canvas, so unlike a banner it has no element of
+	// its own. One zero-size div stands in: it follows whichever marker the
+	// card belongs to, which is the LOCKED one while a card is locked (so
+	// hovering another marker can't drag a locked card off its unit) and the
+	// hovered one otherwise — during the open delay, before the page has a
+	// card to name.
+	const anchorUnit = $derived.by<PlacedUnit | null>(() => {
+		const wanted = cardUnit ?? hoveredUnit?.xmlId ?? null;
+		if (wanted == null) return null;
+		return placedUnits.find((p) => p.marker.xmlId === wanted) ?? null;
+	});
+
+	// Its place on the canvas, at the plate's TOP — where the card hangs from,
+	// the way the city card hangs off a banner's foot. Null once the camera has
+	// carried it out of the box, which is also the cull below.
+	const anchorPoint = $derived.by<[number, number] | null>(() => {
+		const placed = anchorUnit;
+		const viewState = currentViewState;
+		if (!placed || !viewState) return null;
+		return projectToCanvas(
+			[placed.worldX, placed.worldY - UNIT_PLATE_RADIUS],
+			viewState,
+			deckWidth,
+			deckHeight,
+		);
+	});
+
+	// The same cull the city card gets: bits-ui doesn't hide a floating panel
+	// whose anchor has been clipped away, so a card would sit against the box's
+	// edge naming a unit that is no longer on screen.
+	const unitCardOffCanvas = $derived.by(() => {
+		if (cardUnit === null) return false;
+		const point = anchorPoint;
+		// A card whose unit has no marker is the page's own close, not a cull.
+		if (!point) return false;
+		const [x, y] = point;
+		return x < 0 || x > deckWidth || y < 0 || y > deckHeight;
+	});
+
+	$effect(() => {
+		onUnitCardOffCanvas(unitCardOffCanvas);
+	});
+
+	// The anchor element, handed to the page on every hover and right-click.
+	// Its identity never changes — only its position — so the page can capture
+	// it at hover time and still have it when its open delay fires.
+	let unitAnchorEl = $state<HTMLElement | null>(null);
+
+	// Raise the hover across to the page, which owns the card and its delays.
+	// Only on a CHANGE of marker: `onHover` reassigns `hoverState` on every
+	// pointer move, and the page restarts its open delay each time it is told
+	// about a new unit — so raising every move would mean a card that only
+	// opens once the pointer stops dead. A banner gets this from the DOM,
+	// whose `mouseenter` fires once on arrival.
+	//
+	// No held-button guard, unlike a banner's: deck's `_onPointerMove` bails
+	// on the left or right button, so a marker sliding under a dragged pointer
+	// raises no hover to begin with.
+	let raisedUnit: number | null = null;
+	$effect(() => {
+		const marker = hoveredUnit;
+		const element = unitAnchorEl;
+		// Without the anchor there is nothing to hang a card off, so that reads
+		// as no hover — and when the element arrives the id changes, which
+		// raises the hover then rather than swallowing it.
+		const id = marker != null && element != null ? marker.xmlId : null;
+		if (id === raisedUnit) return;
+		raisedUnit = id;
+		if (id != null && element != null) onUnitHover(id, element);
+		else onUnitLeave();
 	});
 
 	// ─── The city card's anchor ───────────────────────────────────────
@@ -740,11 +999,6 @@
 		borders: NationBorder[];
 		subBorders: NationBorder[];
 		contestedBorders: NationBorder[];
-	}
-
-	interface ReligionFill {
-		polygon: [number, number][];
-		color: [number, number, number, number];
 	}
 
 	// Nation borders are inset slightly into the territory so adjacent nations'
@@ -1186,73 +1440,6 @@
 		return { borders, subBorders, contestedBorders };
 	}
 
-	function computeReligionFills(mapTiles: MapTile[]): ReligionFill[] {
-		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- Map used locally in function, not as reactive state
-		const tileMap = new Map<string, MapTile>();
-		for (const t of mapTiles) tileMap.set(`${t.x},${t.y}`, t);
-
-		const fills: ReligionFill[] = [];
-		for (const tile of mapTiles) {
-			const founder = tile.religions[0]?.founder_nation;
-			if (!founder) continue;
-			const colorHex = getCivilizationColor(founder);
-			if (!colorHex) continue;
-			const rgb = hexToRgb(colorHex);
-			const [cx, cy] = hexToPixel(tile.x, tile.y);
-			const verts = hexPolygon(cx, cy);
-
-			// Match the political layer's per-vertex centroid inset so the fill
-			// stops at the nation border instead of bleeding past it. At each
-			// vertex i of the hex, the 3 meeting tiles are T plus the two
-			// corner-adjacent neighbors (across edge i-1 and edge i). Centroid of
-			// same-nation tiles at the vertex; interior nation vertices have all
-			// 3 same-nation, centroid lands on the vertex, no inset → fill still
-			// extends to the hex edge along city sub-borders.
-			let polygon: [number, number][];
-			if (!tile.owner_nation) {
-				polygon = hexPolygon(cx, cy);
-			} else {
-				const neighbors = hexNeighbors(tile.x, tile.y);
-				polygon = [];
-				for (let i = 0; i < 6; i++) {
-					const [n1x, n1y] = neighbors[(i + 5) % 6];
-					const [n2x, n2y] = neighbors[i];
-					const adj1 = tileMap.get(`${n1x},${n1y}`);
-					const adj2 = tileMap.get(`${n2x},${n2y}`);
-
-					let sumX = cx;
-					let sumY = cy;
-					let count = 1;
-					if (adj1?.owner_nation === tile.owner_nation) {
-						const [tx, ty] = hexToPixel(adj1.x, adj1.y);
-						sumX += tx;
-						sumY += ty;
-						count++;
-					}
-					if (adj2?.owner_nation === tile.owner_nation) {
-						const [tx, ty] = hexToPixel(adj2.x, adj2.y);
-						sumX += tx;
-						sumY += ty;
-						count++;
-					}
-					const cenX = sumX / count;
-					const cenY = sumY / count;
-					const v = verts[i];
-					polygon.push([
-						v[0] + (cenX - v[0]) * NATION_BORDER_INSET,
-						v[1] + (cenY - v[1]) * NATION_BORDER_INSET,
-					]);
-				}
-			}
-
-			fills.push({
-				polygon,
-				color: [rgb[0], rgb[1], rgb[2], 80],
-			});
-		}
-		return fills;
-	}
-
 	interface RiverSegment {
 		path: [number, number][];
 	}
@@ -1417,13 +1604,6 @@
 		if (import.meta.env.DEV) console.timeEnd("computePoliticalData");
 		return result;
 	});
-	const religionFills = $derived.by<ReligionFill[]>(() => {
-		if (tiles.length === 0) return [];
-		if (import.meta.env.DEV) console.time("computeReligionFills");
-		const result = computeReligionFills(tiles);
-		if (import.meta.env.DEV) console.timeEnd("computeReligionFills");
-		return result;
-	});
 	const rivers = $derived.by<RiverSegment[]>(() => {
 		if (tiles.length === 0) return [];
 		if (import.meta.env.DEV) console.time("computeRivers");
@@ -1560,16 +1740,52 @@
 				currentViewState = normalizeViewState(vs);
 				hoverState = null;
 			},
-			// Hover dispatch: deck.gl returns the picked layer's data item.
-			// Our pickable PolygonLayer is fed the MapTile array directly,
-			// so `object` is a MapTile (or undefined when off any tile).
-			onHover: (info: { object?: MapTile; x: number; y: number }) => {
-				if (info.object) {
-					hoverState = { tile: info.object, x: info.x, y: info.y };
-				} else {
+			// Hover dispatch: deck.gl returns the picked layer's data item, so
+			// which arm of `hoverState` this is comes off the layer's id. The
+			// pickable PolygonLayer is fed the MapTile array directly and the
+			// plate layer its PlacedUnit array, so `object` is one or the other
+			// (or undefined, off every pickable layer).
+			//
+			// The pick itself is what answers "on the marker or on the hex", and
+			// it is the PLATE that is pickable rather than the glyph — a solid
+			// circle, so the hit area is the whole marker and not the flag's
+			// strokes with the gaps between them falling through to the tile.
+			onHover: (info: {
+				object?: MapTile | PlacedUnit;
+				layer?: { id: string } | null;
+				x: number;
+				y: number;
+			}) => {
+				if (!info.object) {
 					hoverState = null;
+					return;
 				}
+				if (info.layer?.id === UNIT_PLATE_LAYER_ID) {
+					const placed = info.object as PlacedUnit;
+					hoverState = {
+						kind: "unit",
+						marker: placed.marker,
+						x: info.x,
+						y: info.y,
+					};
+					return;
+				}
+				hoverState = {
+					kind: "tile",
+					tile: info.object as MapTile,
+					x: info.x,
+					y: info.y,
+				};
 			},
+			// A marker reads as something to click; everything else on the map
+			// is the camera's. deck's own default ignores hovering altogether
+			// (`({isDragging}) => isDragging ? 'grabbing' : 'grab'`), which is
+			// why the map is a hand everywhere today — and `isHovering` can't
+			// stand in for the test, because the tile-picking layer is pickable
+			// and would point at every hex. `_updateCursor` runs each frame off
+			// `props.getCursor`, so reading `hoveredUnit` here is enough.
+			getCursor: ({ isDragging }: { isDragging: boolean }) =>
+				isDragging ? "grabbing" : hoveredUnit ? "pointer" : "grab",
 			// Layers populated by the $effect below as soon as derivatives resolve.
 			layers: [],
 		});
@@ -1631,10 +1847,9 @@
 		// omitted rather than blanking the whole map.
 		if (!t3d || !ibm) return null;
 		const political = politicalData;
-		const fills = religionFills;
 		const riv = rivers;
 		const pol = showPolitical;
-		const rel = showReligion;
+		const unitsOn = unitsVisible;
 
 		// Per-family composite IconLayers — one per family that has any tile
 		// AND a loaded manifest. Iterating over loaded manifests means
@@ -1818,7 +2033,7 @@
 			}),
 			...compositeLayers,
 			// Rivers sit on tile edges, above terrain/improvements but below the
-			// political/religion overlays. Rounded joints/caps let the per-edge
+			// political overlay. Rounded joints/caps let the per-edge
 			// segments read as continuous waterways where they share vertices.
 			new PathLayer<RiverSegment>({
 				id: "rivers",
@@ -1831,16 +2046,6 @@
 				jointRounded: true,
 				capRounded: true,
 				pickable: false,
-			}),
-			new PolygonLayer<ReligionFill>({
-				id: "religion-layer",
-				data: fills,
-				getPolygon: (d: ReligionFill) => d.polygon,
-				getFillColor: (d: ReligionFill) => d.color,
-				stroked: false,
-				filled: true,
-				pickable: false,
-				visible: rel,
 			}),
 			new PathLayer<NationBorder>({
 				id: "political-sub-borders",
@@ -1900,6 +2105,55 @@
 				filled: true,
 				pickable: true,
 			}),
+			// The units, over everything else their tile holds — a resource, an
+			// improvement, a city centre. AFTER `tile-picking`, which otherwise
+			// takes every pick: a pickable layer placed before it never wins
+			// one, and the plate has to, or a marker would read as part of the
+			// hex under it.
+			//
+			// The plate is the pick target, so the hit area is the whole marker.
+			// Its colour is the owner's, which is the one thing on the map that
+			// says whose army this is. It reads as the ring around the art disc
+			// and through the disc itself, where the portrait's painted sky is
+			// transparent — a median 39% of the disc across the 102, 7% at the
+			// most covered.
+			new ScatterplotLayer<PlacedUnit>({
+				id: UNIT_PLATE_LAYER_ID,
+				data: placedUnits,
+				getPosition: (d: PlacedUnit) => [d.worldX, d.worldY],
+				getRadius: UNIT_PLATE_RADIUS,
+				getFillColor: (d: PlacedUnit) => hexToRgb(d.marker.color),
+				getLineColor: [0, 0, 0, 200],
+				getLineWidth: UNIT_PLATE_LINE_WIDTH,
+				radiusUnits: "common",
+				lineWidthUnits: "common",
+				stroked: true,
+				filled: true,
+				pickable: true,
+				visible: unitsOn,
+			}),
+			// The game's painted unit art over the plate, one disc per type.
+			// `IconLayer`'s auto-packing fetches a url once per id and packs it
+			// into an atlas itself, so the content-hashed
+			// `/sprites/units/*.png` identify the discs and no atlas bake is
+			// needed — a game holds at most 40 distinct unit types.
+			new IconLayer<PlacedUnit>({
+				id: UNIT_ART_LAYER_ID,
+				data: artUnits,
+				getIcon: (d: PlacedUnit) => ({
+					id: d.marker.portraitUrl as string,
+					url: d.marker.portraitUrl as string,
+					width: UNIT_ART_RASTER_PX,
+					height: UNIT_ART_RASTER_PX,
+				}),
+				loadOptions: { fetch: fetchArtDisc },
+				getPosition: (d: PlacedUnit) => [d.worldX, d.worldY],
+				getSize: UNIT_ART_DIAMETER,
+				sizeUnits: "common",
+				sizeBasis: "width",
+				pickable: false,
+				visible: unitsOn,
+			}),
 		];
 	}
 
@@ -1917,10 +2171,12 @@
 		void familyManifests;
 		void tiles;
 		void politicalData;
-		void religionFills;
 		void rivers;
 		void showPolitical;
-		void showReligion;
+		void showUnits;
+		void isFinalTurn;
+		void placedUnits;
+		void artUnits;
 
 		const layers = buildLayers();
 		if (layers) targetDeck.setProps({ layers });
@@ -2102,6 +2358,20 @@
 	{#if hoverPanel}
 		{@render tilePanel(hoverPanel)}
 	{/if}
+
+	<!-- The unit card's anchor: a zero-size point at the current marker's
+	     plate top, which the page's Popover hangs off as it hangs the city
+	     card off a banner. Not a button and not a hover target — the marker
+	     in the canvas is both; this only has to be somewhere, so it takes
+	     neither the pointer nor the tab order. -->
+	<div
+		bind:this={unitAnchorEl}
+		class="unit-card-anchor"
+		style={anchorPoint
+			? `left: ${anchorPoint[0]}px; top: ${anchorPoint[1]}px;`
+			: "display: none;"}
+		aria-hidden="true"
+	></div>
 </div>
 
 <style>
@@ -2117,6 +2387,13 @@
 		width: 100%;
 		height: 100%;
 		display: block;
+	}
+
+	.unit-card-anchor {
+		position: absolute;
+		width: 0;
+		height: 0;
+		pointer-events: none;
 	}
 
 	.zoom-controls {

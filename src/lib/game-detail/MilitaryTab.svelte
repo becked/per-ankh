@@ -12,6 +12,7 @@
 		formatArchetype,
 		formatEnum,
 		nationName,
+		unitName,
 	} from "$lib/utils/formatting";
 	import { CHART_THEME, getNationChartColor } from "$lib/config";
 	import { LAW_TO_CLASS } from "$lib/generated/law-classes";
@@ -213,7 +214,7 @@
 	const sharedBuildUnitTypes = $derived<string[]>(
 		comparisonRowKeys(
 			buildBlocks.flatMap((bl) => [bl.a, bl.b]),
-			(p, q) => formatEnum(p, "UNIT_").localeCompare(formatEnum(q, "UNIT_")),
+			(p, q) => unitName(p).localeCompare(unitName(q)),
 		),
 	);
 
@@ -317,7 +318,7 @@
 			? `<img src="${url}" alt="" style="width:15px;height:15px"/>`
 			: "";
 		const qty = count != null ? `${count}× ` : "";
-		return `<div style="display:flex;align-items:center;gap:6px;color:${TOOLTIP_TEXT}">${ic}<span>${qty}${formatEnum(u.unitType, "UNIT_")}</span><span style="color:${TOOLTIP_MUTED}">str ${u.strength}${u.naval ? " · sea" : ""}</span></div>`;
+		return `<div style="display:flex;align-items:center;gap:6px;color:${TOOLTIP_TEXT}">${ic}<span>${qty}${unitName(u.unitType)}</span><span style="color:${TOOLTIP_MUTED}">str ${u.strength}${u.naval ? " · sea" : ""}</span></div>`;
 	}
 
 	// Tooltip for a unit-tech-unlock marker: the tech + the qualifying units it
@@ -765,7 +766,7 @@
 				// number of rows tall, the donuts beneath them line up too. Same
 				// name ordering the duel's shared union uses.
 				const keys = comparisonRowKeys([built, army], (x, y) =>
-					formatEnum(x, "UNIT_").localeCompare(formatEnum(y, "UNIT_")),
+					unitName(x).localeCompare(unitName(y)),
 				);
 				const columns: CardColumn[] = [
 					{
@@ -1146,7 +1147,7 @@
 									? 'rounded-r-lg'
 									: ''}"
 							>
-								{formatEnum(row.unit_type, "UNIT_")}
+								{unitName(row.unit_type)}
 							</td>
 							{#each displayedUnitPlayers as player (player.playerId)}
 								<td

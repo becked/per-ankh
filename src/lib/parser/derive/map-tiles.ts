@@ -10,24 +10,19 @@
 //   - `tile.xmlId === city.tileXmlId` → city center; drives is_city_center
 //     + is_capital flags.
 //
-// religions attach by city territory (the city the tile belongs to).
-//
 // `specialist` comes from `tileSpecialist` (derive/free-specialists.ts),
 // which is also what improvement_data reads.
 
-import type { City, CityReligion } from "../parsers/cities.js";
+import type { City } from "../parsers/cities.js";
 import type { Player } from "../parsers/players.js";
-import type { Religion } from "../parsers/religions.js";
 import type { Tile } from "../parsers/tiles.js";
-import type { MapTile, ReligionInfo } from "../types.js";
-import { playerByXmlId, strCmp } from "./_helpers.js";
+import type { MapTile } from "../types.js";
+import { playerByXmlId } from "./_helpers.js";
 import { tileSpecialist } from "./free-specialists.js";
 
 export function deriveMapTiles(
 	tiles: Tile[],
 	cities: City[],
-	cityReligions: CityReligion[],
-	religions: Religion[],
 	players: Player[],
 	freeSpecialists: Map<number, string>,
 ): MapTile[] {
@@ -36,44 +31,6 @@ export function deriveMapTiles(
 	// city_center tile lookup: tile_xml_id → City
 	const cityCenterByTile = new Map<number, City>();
 	for (const c of cities) cityCenterByTile.set(c.tileXmlId, c);
-
-	// religion → founder_nation
-	const founderNation = new Map<string, string | null>();
-	for (const r of religions) {
-		founderNation.set(
-			r.religionName,
-			r.founderPlayerXmlId !== null
-				? (playerMap.get(r.founderPlayerXmlId)?.nation ?? null)
-				: null,
-		);
-	}
-
-	// city_xml_id → ReligionInfo[] (state religion first, then alphabetical
-	// — simplified vs the Rust query's adoption-event ordering, since we
-	// don't yet have story_events resolution wired here).
-	const religionsByCity = new Map<number, ReligionInfo[]>();
-	for (const cr of cityReligions) {
-		const arr = religionsByCity.get(cr.cityXmlId) ?? [];
-		arr.push({
-			religion_name: cr.religion,
-			founder_nation: founderNation.get(cr.religion) ?? null,
-		});
-		religionsByCity.set(cr.cityXmlId, arr);
-	}
-	for (const [cityXmlId, list] of religionsByCity) {
-		const city = cities.find((c) => c.xmlId === cityXmlId);
-		const stateReligion =
-			city?.playerXmlId !== null && city?.playerXmlId !== undefined
-				? (playerMap.get(city.playerXmlId)?.stateReligion ?? null)
-				: null;
-		list.sort((a, b) => {
-			const aIsState =
-				stateReligion !== null && a.religion_name === stateReligion ? 0 : 1;
-			const bIsState =
-				stateReligion !== null && b.religion_name === stateReligion ? 0 : 1;
-			return aIsState - bIsState || strCmp(a.religion_name, b.religion_name);
-		});
-	}
 
 	// Build city-by-xml-id map for territory lookups.
 	const cityByXmlId = new Map<number, (typeof cities)[number]>();
@@ -94,10 +51,6 @@ export function deriveMapTiles(
 				? playerMap.get(t.ownerPlayerXmlId)
 				: undefined;
 		const center = cityCenterByTile.get(t.xmlId);
-		const tileReligions =
-			territoryCity !== undefined
-				? (religionsByCity.get(territoryCity.xmlId) ?? [])
-				: [];
 		return {
 			x: t.x,
 			y: t.y,
@@ -111,7 +64,6 @@ export function deriveMapTiles(
 			has_road: t.hasRoad,
 			specialist: tileSpecialist(t, freeSpecialists),
 			tribe_site: t.tribeSite,
-			religions: tileReligions,
 			river_w: t.riverW,
 			river_sw: t.riverSw,
 			river_se: t.riverSe,

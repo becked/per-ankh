@@ -13,6 +13,8 @@ import {
 	cognomenName,
 	formatEnum,
 	nationName,
+	traitName,
+	unitName,
 } from "$lib/utils/formatting";
 import {
 	ANY_RELIGION,
@@ -21,21 +23,6 @@ import {
 	type Criterion,
 	type Objective,
 } from "./types";
-
-/**
- * A unit's display name. The tribal units come in two tiers — `_1` is the
- * base unit, `_2` the one the game calls "Elite …" — and formatEnum drops the
- * trailing digit, so both would read the same without this.
- */
-export function unitName(unit: string): string {
-	const base = formatEnum(unit, "UNIT_");
-	return /_2$/.test(unit) ? `Elite ${base}` : base;
-}
-
-/** A trait's display name; the game shows an archetype by its bare name. */
-export function traitName(trait: string): string {
-	return formatEnum(trait.replace(/_ARCHETYPE$/, ""), "TRAIT_");
-}
 
 function plural(n: number, noun: string, pluralNoun = `${noun}s`): string {
 	return `${n} ${n === 1 ? noun : pluralNoun}`;

@@ -46,7 +46,7 @@
 		onTurnChange,
 		onOpenTab,
 		showPolitical = $bindable(true),
-		showReligion = $bindable(false),
+		showUnits = $bindable(true),
 	}: {
 		game: Awaited<ReturnType<typeof cloudApi.getGame>>;
 		players: DetailPlayer[];
@@ -58,7 +58,7 @@
 		// eslint-disable-next-line no-unused-vars -- Callback type signature
 		onOpenTab: (tab: GameTabId) => void;
 		showPolitical?: boolean;
-		showReligion?: boolean;
+		showUnits?: boolean;
 	} = $props();
 
 	const finalTurn = $derived(game.game_details.total_turns);
@@ -418,7 +418,7 @@
 				{selectedTurn}
 				{onTurnChange}
 				bind:showPolitical
-				bind:showReligion
+				bind:showUnits
 			/>
 		</div>
 	</div>

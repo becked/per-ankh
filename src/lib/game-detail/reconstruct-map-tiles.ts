@@ -9,12 +9,6 @@
 //                                in the cloud parser; see derive/city-statistics.ts:69)
 //   - game_details.map_width     for x,y → tile_xml_id (parser uses
 //                                xml_id = y*width + x at parsers/tiles.ts:149–150)
-//
-// Parity gaps from desktop's SQL — intentional for v1:
-//   - Religion filtering by founded_turn / acquired_turn is NOT applied;
-//     religions show as final-state when the tile is owned at turn. The
-//     desktop applies a complex per-religion filter we'd need additional
-//     parser fields to reproduce.
 
 import { ownershipChangeTurn } from "$lib/parser/types";
 import type { FullGameData, MapTile } from "$lib/parser/types";
@@ -93,9 +87,9 @@ export function reconstructMapTiles(
 		const cityFoundedByTurn =
 			cityInfo !== undefined && cityInfo.founded_turn <= turn;
 
-		// owner_city, religions, and city-center flags are visible only when
-		// the tile is owned at this turn AND the (final-turn) territory city
-		// existed by this turn.
+		// owner_city and the city-center flags are visible only when the tile
+		// is owned at this turn AND the (final-turn) territory city existed by
+		// this turn.
 		const showCityChrome = owned && cityFoundedByTurn;
 
 		return {
@@ -125,7 +119,6 @@ export function reconstructMapTiles(
 			owner_player_xml_id: owned ? ownerXmlId : null,
 			// City-chrome gated.
 			owner_city: showCityChrome ? t.owner_city : null,
-			religions: showCityChrome ? t.religions : [],
 			is_city_center: t.is_city_center && cityFoundedByTurn,
 			is_capital: t.is_capital && cityFoundedByTurn,
 		};

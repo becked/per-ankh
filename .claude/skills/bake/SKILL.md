@@ -24,7 +24,7 @@ Assets, from a pinacotheca checkout:
 npm run bake:terrain-3d        # Terrain atlas (terrain-3d.{webp,json})
 npm run bake:improvements      # Improvements (base + per-family urban atlases) + nation-asset-aliases.json
 npm run bake:resources         # Resource icons
-npm run bake:sprites           # Misc sprites (crests, techs, units, laws, religions, yields, projects, resources, icons)
+npm run bake:sprites           # Misc sprites (crests, techs, units, laws, religions, yields, projects, resources, effect-units, icons)
 ```
 
 Data tables from `Reference/XML/`. These leave a `.bake/*.json` sidecar that `bake:finalize` turns into the committed TS module — running one of them alone changes nothing until finalize runs:
@@ -49,9 +49,9 @@ Self-contained bakers — each writes its `src/lib/generated/` module directly, 
 
 ```bash
 npm run bake:science-yields    # science-yields.ts (from Reference/XML)
-npm run bake:unit-stats        # unit-stats.ts (src/ AND cloud/src/; unit strength/tech/naval/
-                               # cycle + bonus-card grants — the Worker copy is what the
-                               # challenge scorer reads)
+npm run bake:unit-stats        # unit-stats.ts (src/ AND cloud/src/; unit name/strength/tech/
+                               # naval/cycle + bonus-card grants — the Worker copy is what
+                               # the challenge scorer reads, and `unitName` reads the name)
 npm run bake:atlas-pool        # atlas-pool.ts (src/ AND cloud/src/; needs an owtournamentatlas checkout)
 npm run bake:family-pools      # cloud/src/generated/family-pools.ts — each nation's
                                # family pool, the baseline every cut rate is measured against
@@ -62,6 +62,11 @@ npm run bake:character-opinion # character-opinion.ts (the coefficients a charac
                                # of their own leader is summed from, and the bands that sum
                                # falls in — one of which modifies the strength of any unit
                                # that character leads)
+npm run bake:effect-units      # effect-units.ts (the effect units a unit can carry — its
+                               # type's, its promotions' and its general's traits' — each
+                               # one's game name, its <zIconName> glyph, the six columns the
+                               # game's own attack and defense are summed from, and the
+                               # display gate resolved per unit type)
 npm run bake:improvement-builds # improvement-builds.ts (src/ AND cloud/src/; worker-turn build
                                # cost per improvement, plus the in-place upgrade chains the
                                # challenge scorer reads)
@@ -73,6 +78,12 @@ npm run bake:yield-colors      # yield-colors.ts (each yield's chart colour)
 npm run bake:orders-sources    # orders-sources.ts (orders-per-turn + legitimacy constants)
 npm run bake:power-tiers       # power-tiers.ts (military-power comparison tiers)
 npm run bake:cognomens         # cognomens.ts (cognomen → legitimacy + display string)
+npm run bake:trait-names       # trait-names.ts (TRAIT_NAMES override table — 105 of the 306
+                               # traits, self-contained rather than sidecar+finalize, so a
+                               # checkout that hasn't run it keeps the committed table
+                               # instead of getting an empty one; the only name baker that
+                               # resolves a link() against another info table, since
+                               # TRAIT_ENVOY_TO_THE_HUNS names a tribe)
 npm run bake:wonders           # wonders.ts (src/ AND cloud/src/)
 npm run bake:dynasty-traits    # dynasty-traits.ts (src/ AND cloud/src/; the traits the game
                                # ties to a historical ruler) + leader-traits.ts (frontend only)
@@ -92,11 +103,13 @@ npm run bake:finalize          # Emits committed manifest TS modules + reconcile
 npm run bake:all               # Every baker above except owtt + momentum, then finalize
 ```
 
-`bake:all` runs 35 of the 37 bakers above, in the order listed, then `finalize`. It deliberately omits `bake:owtt` and `bake:momentum` — rerun those by hand when their sources change. Membership doesn't follow from what a baker reads: `bake:atlas-pool` needs an owtournamentatlas checkout and is in `bake:all`, while `bake:owtt` needs one of its own and isn't — so a new baker records its choice here either way. Separately, `bake:favicon` / `bake:og` generate site icons and OG images, and the UX-review bundle under `docs/ux-review/` is captured by `./per-ankh ux-review` (a CLI command, not an npm script).
+`bake:all` runs 37 of the 39 bakers above, then `finalize`. The fences above group them by route, not by run order — which lives only in the `bake:all` chain in `package.json`, where a new baker goes at the position it needs to run. It deliberately omits `bake:owtt` and `bake:momentum` — rerun those by hand when their sources change. Membership doesn't follow from what a baker reads: `bake:atlas-pool` needs an owtournamentatlas checkout and is in `bake:all`, while `bake:owtt` needs one of its own and isn't — so a new baker records its choice here either way. Separately, `bake:favicon` / `bake:og` generate site icons and OG images, and the UX-review bundle under `docs/ux-review/` is captured by `./per-ankh ux-review` (a CLI command, not an npm script).
 
 ## Adding a name-override table
 
-The seven `*-names` bakers are the same script with the nouns swapped, and `bake-game-option-names.ts` is the copy to crib from when the text carries `link(...)` markup, `bake-name-text.ts` when it doesn't. The shape: read the info XML's `<zType>` + name key, resolve that key against every merged `text-*.xml` `<en-US>`, run it through `stripMarkup` (which already resolves OW's `link(...)` markup and plural forms), and **emit only entries whose resolved name differs from `formatEnum`** so the table holds real overrides and everything else falls through at runtime. Wiring a new one means four edits to `scripts/build-manifests.ts` (sidecar path const, `read*Sidecar`, `emit*Ts`, and the read/format/write/log quartet in `main`) plus a `package.json` entry in both `bake:*` and `bake:all`.
+The eight `*-names` bakers are the same script with the nouns swapped, and `bake-game-option-names.ts` is the copy to crib from when the text carries `link(...)` markup, `bake-name-text.ts` when it doesn't. The shape: read the info XML's `<zType>` + name key, resolve that key against every merged `text-*.xml` `<en-US>`, run it through `stripMarkup` (which already resolves OW's `link(...)` markup and plural forms), and **emit only entries whose resolved name differs from `formatEnum`** so the table holds real overrides and everything else falls through at runtime.
+
+Two ways to land the output, and the choice is the one decision worth making. The sidecar route — seven of the eight — means four edits to `scripts/build-manifests.ts` (sidecar path const, `read*Sidecar`, `emit*Ts`, and the read/format/write/log quartet in `main`) plus a `package.json` entry in both `bake:*` and `bake:all`. The self-contained route — `bake-trait-names.ts`, cribbing its emit from `bake-character-opinion.ts` — writes `src/lib/generated/` directly and needs no `build-manifests.ts` edit at all, which also means `bake:finalize` can't empty the table in a checkout where that baker hasn't run. Prefer it for a new table; the seven predate it.
 
 Two wrinkles the newer bakers handle. OW packs a string's grammatical variants into one `~`-separated field — `TEXT_NATION_HITTITE` is `Hatti~Hittite~a Hittite~Hittites` (noun ~ adjective ~ member ~ plural) — so take field 0 for the display form. And some infos reach their text through a second hop: `nation.xml` names a `<GenderedName>` that `genderedText*.xml` maps per grammatical gender to the `TEXT_*` key (take the masculine row) — `bake-nation-names.ts` is the one that does this.
 

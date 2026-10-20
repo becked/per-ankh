@@ -238,3 +238,28 @@ body {
 .chrome-rows dd {
 	min-width: 0;
 }
+
+/*
+ * The variant the map's two cards use for a record read at a glance: the value
+ * lit against the muted label rather than both sitting in the panel's tan, and
+ * the rows closed up so a card stays short enough not to reposition under the
+ * pointer. Shared by the city card and the unit card rather than scoped in
+ * each — they sit side by side on the same map and a second copy is where the
+ * two would drift. `.chrome-rows.record-rows` outranks `.chrome-rows` on
+ * specificity, so source order doesn't decide it.
+ */
+.chrome-rows.record-rows {
+	/* Enough to keep the 14px sprites on consecutive rows apart; the rows are
+	   still tighter than `.chrome-rows`' 16px line box and 2px gap. */
+	row-gap: 3px;
+}
+
+.chrome-rows.record-rows dt {
+	font-size: 9px;
+}
+
+.chrome-rows.record-rows dd {
+	font-size: 11px;
+	line-height: 1.3;
+	color: rgb(var(--color-bright));
+}

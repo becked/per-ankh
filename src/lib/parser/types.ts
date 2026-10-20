@@ -33,7 +33,6 @@ export type { CityStatistics } from "../types/CityStatistics.js";
 export type { ImprovementInfo } from "../types/ImprovementInfo.js";
 export type { ImprovementData } from "../types/ImprovementData.js";
 export type { MapTile } from "../types/MapTile.js";
-export type { ReligionInfo } from "../types/ReligionInfo.js";
 export type { GameReligion } from "../types/GameReligion.js";
 export type { PlayerWonder } from "../types/PlayerWonder.js";
 export type { StoryEvent } from "../types/StoryEvent.js";
@@ -103,6 +102,11 @@ export interface MatchMetadata {
 	game_mode: string | null;
 	difficulty: string | null;
 	opponent_level: string | null;
+	// The game's AI-advantage setting (`<Game Advantage=…>`), which every
+	// non-human player's effect players are seeded from. Optional: `undefined`
+	// means a blob parsed before PARSER_VERSION 2.25.0, where the advantage is
+	// UNKNOWN; `null` is a save that carries no attribute.
+	advantage?: string | null;
 	victory_conditions: string | null;
 	enabled_mods: string | null;
 	enabled_dlc: string | null;
@@ -251,6 +255,33 @@ export interface UnitPromotionInfo {
 	unit_xml_id: number;
 	promotion: string;
 	is_acquired: boolean;
+}
+
+/**
+ * One `<BonusEffectUnits>` entry: an effect unit the unit carries outside its
+ * type, its promotions and its general, which `loadBonusEffectUnit`
+ * (Unit.cs:4485) re-adds through the PROMOTION channel on load — so it counts
+ * toward the unit's attack and defense. PARSER_VERSION 2.25.0+; the array is
+ * absent on older blobs, where a unit's bonus effects are UNKNOWN rather than
+ * none.
+ */
+export interface UnitEffectInfo {
+	unit_xml_id: number;
+	effect: string;
+	stacks: number;
+}
+
+/**
+ * One `<PlayerFamily>` entry: which family a unit belongs to in one player's
+ * eyes. The entry for the unit's OWN player is the one `Unit.getFamily`
+ * (Unit.cs:4246) reads, and that family's standing with that player is worth
+ * −20% to +10% of the unit's strength (`familyOpinion().meEffectUnit`,
+ * Unit.cs:4382). PARSER_VERSION 2.25.0+; absent on older blobs.
+ */
+export interface UnitFamilyInfo {
+	unit_xml_id: number;
+	player_xml_id: number;
+	family: string;
 }
 
 /**
@@ -460,6 +491,15 @@ export interface FullGameData {
 	diplomacy: DiplomacyRelation[];
 	units: UnitInfo[];
 	unit_promotions: UnitPromotionInfo[];
+	// The only two arrays here declared optional, and for a reason the others
+	// don't have: an ABSENT array and an EMPTY one are different claims for
+	// these, and both are reachable. A blob from before PARSER_VERSION 2.25.0
+	// carries neither array — most stored blobs are of that vintage — while a
+	// freshly parsed save can carry an empty one, as a turn-1 save with no
+	// families founded and no bonus effects granted does. The unit card reads
+	// the difference (see `combatGaps`), so the compiler has to keep it.
+	unit_effects?: UnitEffectInfo[];
+	unit_families?: UnitFamilyInfo[];
 	player_resources: PlayerResourceInfo[];
 	projects_produced: ProjectProducedInfo[];
 	player_goals: PlayerGoalInfo[];
@@ -475,4 +515,4 @@ export interface FullGameData {
  * fixes, MINOR for additive fields, MAJOR for breaking schema changes.
  * Initial value `2.0.0` mirrors `FullGameData.version: 2`.
  */
-export const PARSER_VERSION = "2.24.0";
+export const PARSER_VERSION = "2.25.0";

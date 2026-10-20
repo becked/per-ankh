@@ -61,7 +61,6 @@ import {
 	WISDOM_GOVERNOR_SCIENCE_MODIFIER,
 	SCIENCE_TRIANGLE_OFFSET,
 	SCIENCE_DISCONTENT_MODIFIER,
-	COMPETITIVE_EQUIVALENT_RATING,
 	COMPETITIVE_SCIENCE_STIPEND,
 	KNOWLEDGE_TIERS,
 	FAMILY_CLASS_SCIENCE_PER_SPECIALIST,
@@ -84,6 +83,7 @@ import {
 	formatArchetype,
 	formatEnum,
 	nationName,
+	traitName,
 } from "$lib/utils/formatting";
 import { hexNeighbors } from "$lib/utils/hex";
 import {
@@ -92,6 +92,7 @@ import {
 	projectDisplayName,
 	type DetailPlayer,
 } from "./helpers";
+import { boostRating, modifyRating } from "./rating-curve";
 import { specialistName } from "./specialists";
 import { standingShiftMarkers, type StandingShift } from "./standings";
 
@@ -696,26 +697,6 @@ const round1 = (n: number) => Math.round(n * 10) / 10;
 // fixed-point rate, so these mirror the C# exactly and divide only at the end
 // — rounding earlier drifts off the real value.
 
-/** `Utils.triangle` (Utils.cs:119) — the sign-preserving triangular number. */
-function triangle(n: number): number {
-	const abs = Math.abs(n);
-	// abs*(abs+1) is always even, so the game's integer divide is exact here.
-	return Math.sign(n) * ((abs * (abs + 1)) / 2);
-}
-
-/** `Utils.triangleOffset` (Utils.cs:132). */
-function triangleOffset(n: number, offset: number): number {
-	const value = Math.abs(n) + offset;
-	if (value <= 0) return n;
-	return Math.sign(n) * (triangle(value) - offset);
-}
-
-/** `Utils.triangleBoost` (Utils.cs:124) — the governor rating curve. */
-function triangleBoost(n: number): number {
-	if (n === 0) return 0;
-	return Math.sign(n) * triangle(Math.abs(n) + 1);
-}
-
 /**
  * A governor's percent science modifier on their city —
  * `InfoHelpers.boostRating` over rating.xml's aiYieldGovernorModifier. Same
@@ -724,39 +705,7 @@ function triangleBoost(n: number): number {
  * negative-Wisdom governor genuinely costs the city science.
  */
 function governorSciencePct(wisdom: number, competitive: boolean): number {
-	if (!competitive) {
-		return WISDOM_GOVERNOR_SCIENCE_MODIFIER * triangleBoost(wisdom);
-	}
-	const equivalent = Math.max(1, COMPETITIVE_EQUIVALENT_RATING);
-	// C# integer division truncates toward zero.
-	return Math.trunc(
-		(WISDOM_GOVERNOR_SCIENCE_MODIFIER * wisdom * triangleBoost(equivalent)) /
-			equivalent,
-	);
-}
-
-/**
- * `InfoHelpers.modifyRating` (InfoHelpers.cs:1205) — bend a flat rate by a
- * character's rating.
- *
- * Normally the rating runs through the triangular curve, so high ratings pay
- * off steeply. Under Competitive Mode the curve is instead linearized around
- * COMPETITIVE_EQUIVALENT_RATING, which is the whole point of the option
- * ("high Rating values have a less dramatic effect"): the two agree at that
- * rating and diverge sharply above it.
- */
-function modifyRating(
-	value: number,
-	rating: number,
-	offset: number,
-	competitive: boolean,
-): number {
-	if (!competitive) return value * triangleOffset(rating, offset);
-	const equivalent = Math.max(1, COMPETITIVE_EQUIVALENT_RATING);
-	// C# integer division truncates toward zero.
-	return Math.trunc(
-		(value * rating * triangleOffset(equivalent, offset)) / equivalent,
-	);
+	return boostRating(WISDOM_GOVERNOR_SCIENCE_MODIFIER, wisdom, competitive);
 }
 
 /**
@@ -1086,7 +1035,7 @@ export function scienceBreakdown(
 	}
 	for (const trait of cityContext.leaderTraits) {
 		collect(playerRules, LEADER_TRAIT_IMPROVEMENT_MODIFIER[trait], [
-			{ text: `under a ${formatEnum(trait, "TRAIT_")} ruler` },
+			{ text: `under a ${traitName(trait)} ruler` },
 		]);
 	}
 	const cityRules = new Map<string, CityRule[]>();
@@ -1117,7 +1066,7 @@ export function scienceBreakdown(
 		if (city.governor_xml_id != null) {
 			for (const trait of cityContext.governorTraits(city.governor_xml_id)) {
 				collect(rules, GOVERNOR_TRAIT_IMPROVEMENT_MODIFIER[trait], [
-					{ text: `under a ${formatEnum(trait, "TRAIT_")} governor` },
+					{ text: `under a ${traitName(trait)} governor` },
 				]);
 			}
 		}

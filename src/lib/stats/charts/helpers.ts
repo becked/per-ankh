@@ -7,7 +7,7 @@ import {
 	MILITARY_POWER_COLOR,
 	YIELD_COLORS,
 } from "$lib/generated/yield-colors";
-import { formatEnum, nationName } from "$lib/utils/formatting";
+import { formatEnum, nationName, traitName } from "$lib/utils/formatting";
 
 // Strip leaderless enum prefix for axis labels. The stats SQL returns
 // raw values (NATION_PERSIA, TRAIT_INTELLIGENT, etc.); the chart axes
@@ -18,8 +18,10 @@ import { formatEnum, nationName } from "$lib/utils/formatting";
 export function fmtNation(value: string): string {
 	return nationName(value);
 }
+// Traits are the other exception, and a wider one — 105 of the 306 aren't
+// their token either (TRAIT_CLERGY_JEWISH is "Kohen").
 export function fmtTrait(value: string): string {
-	return formatEnum(value, "TRAIT_");
+	return traitName(value);
 }
 export function fmtClass(value: string): string {
 	// Stored values are FAMILYCLASS_* (e.g. FAMILYCLASS_CHAMPIONS).

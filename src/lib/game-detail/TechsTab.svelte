@@ -78,6 +78,7 @@
 		type LeaderChangeMarker,
 		type KnowledgeFlipMarker,
 	} from "./science-techs";
+	import { competitiveMode } from "./rating-curve";
 
 	let {
 		players,
@@ -706,11 +707,7 @@
 	// the save doesn't store — it stays in the signed "Other" remainder.
 
 	// Null when the blob predates 2.11.0: UNKNOWN, not "not competitive".
-	const competitive = $derived(
-		gameOptions == null
-			? null
-			: gameOptions.GAMEOPTION_COMPETITIVE_MODE === true,
-	);
+	const competitive = $derived(competitiveMode(gameOptions));
 	const characterById = $derived(new Map(characters.map((c) => [c.xml_id, c])));
 	// Character → their traits, for the breakdown's city-bonus rows. The
 	// save records acquisition but not removal, so a trait a character later

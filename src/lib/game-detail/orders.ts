@@ -28,7 +28,7 @@ import { COGNOMENS } from "$lib/generated/cognomens";
 import { DIFFICULTY_NAMES } from "$lib/generated/difficulty-names";
 import { GOAL_NAMES } from "$lib/generated/goal-names";
 import { rulerCognomen, rulerName, storyEventType } from "./helpers";
-import { formatEnum } from "$lib/utils/formatting";
+import { formatEnum, traitName } from "$lib/utils/formatting";
 import type {
 	CharacterInfo,
 	CharacterTraitInfo,
@@ -111,7 +111,7 @@ export function ordersEndBreakdown(opts: {
 			const v = ORDERS_SOURCES[t.trait_name];
 			if (v != null) {
 				rows.push({
-					label: `${formatEnum(t.trait_name, "TRAIT_")} (${characterLabel(opts.ruler)})`,
+					label: `${traitName(t.trait_name)} (${characterLabel(opts.ruler)})`,
 					value: v,
 				});
 			}

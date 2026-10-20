@@ -5,6 +5,7 @@ import type {
 	CharacterTraitInfo,
 	FullGameData,
 	PlayerGoalInfo,
+	UnitInfo,
 } from "$lib/parser/types";
 import type { YieldHistory } from "$lib/types/YieldHistory";
 import type { YieldDataPoint } from "$lib/types/YieldDataPoint";
@@ -22,7 +23,13 @@ import {
 	nationName,
 } from "$lib/utils/formatting";
 import { toRgba } from "$lib/utils/color";
-import { CHART_THEME, getChartColor, getNationChartColor } from "$lib/config";
+import {
+	CHART_THEME,
+	getChartColor,
+	getCivilizationColor,
+	getNationChartColor,
+	getSeriesColor,
+} from "$lib/config";
 import { SPRITE_MANIFEST } from "$lib/generated/sprite-manifest";
 import { UNIT_STATS } from "$lib/generated/unit-stats";
 import { TECH_NAMES } from "$lib/generated/tech-names";
@@ -471,7 +478,12 @@ export type SpriteCategory =
 	| "improvements"
 	| "specialists"
 	| "projects"
-	| "resources";
+	| "resources"
+	// Effect-unit glyphs, keyed by the effect unit's `<zIconName>` rather than
+	// its zType — the two differ for 47 of the 134 entries a unit can carry, and
+	// the art is named by the icon. `$lib/generated/effect-units` puts that
+	// name on each row as `icon`; pass it through, not the zType.
+	| "effect-units";
 
 // Known tech name corrections (game data typos or alternate names)
 const TECH_SPRITE_FIXES: Record<string, string> = {
@@ -1320,6 +1332,67 @@ export function improvementDisplayName(zType: string): string {
  */
 export function projectDisplayName(zType: string): string {
 	return PROJECT_NAMES[zType] ?? formatEnum(zType, "PROJECT_");
+}
+
+/** Who a unit belongs to, named and coloured. */
+export interface UnitOwner {
+	/** The roster's label for a player — the nation, disambiguated by name only
+	 * in a mirror — or the tribe's name. */
+	label: string;
+	/** NATION_* or TRIBE_*, which is what the crest sprite takes. */
+	civilization: string | null;
+	/** The colour the unit wears on the map and on its card. */
+	color: string;
+}
+
+/**
+ * Resolve a unit's owner, grouping by the PLAYER rather than by the nation: a
+ * mirror match (1 of the 16 saves in `test-data/saves/` is NATION_EGYPT ×2)
+ * would otherwise merge two opposing Egypts. A unit with no `player_xml_id` is
+ * a tribe's — `tribe` is NOT the test, because the save writes `Tribe="NONE"`
+ * and the parser keeps it as a string, so the field is non-null on every one of
+ * the corpus's 1,157 player-owned military units.
+ *
+ * The colour follows the rule CityPopover's Units-in-Territory headings
+ * established: the roster's own colour for a player, which is what tells a
+ * mirror's two Egypts apart and is also what that player wears on every chart;
+ * the baked civilization table for a tribe, which covers all 23; and
+ * `getSeriesColor` for an owner neither answers for — a `player_xml_id` off the
+ * roster, or a tribe outside the baked tables. Not the `getChartColor` ramp the
+ * roster itself draws from: that one is six colours wrapped by index and
+ * `resolvePlayers` hands a mirror's players those same six by ordinal, so no
+ * index into it is free of a player's colour.
+ *
+ * `fallbackIndex` is only ever reached by that last arm, and the three callers
+ * want different things from it. A LIST of owners — the city card's
+ * Units-in-Territory headings — passes each group's sorted position, so two
+ * unresolvable owners still read apart. A single unit — the map marker's plate
+ * and the unit card's heading, which must agree with each other or a card would
+ * contradict the plate that opened it — leaves it at 0. Nothing in the corpus
+ * reaches it either way: all 1,411 military units resolve an owner colour.
+ */
+export function unitOwner(
+	unit: Pick<UnitInfo, "player_xml_id" | "tribe">,
+	players: DetailPlayer[],
+	fallbackIndex = 0,
+): UnitOwner {
+	const player =
+		unit.player_xml_id != null
+			? players.find((p) => p.playerId === unit.player_xml_id)
+			: undefined;
+	const civilization = player?.nation ?? unit.tribe;
+	return {
+		label:
+			player?.label ??
+			(unit.player_xml_id != null
+				? `Player ${unit.player_xml_id}`
+				: formatEnum(unit.tribe, "TRIBE_")),
+		civilization,
+		color:
+			player?.color ??
+			(civilization != null ? getCivilizationColor(civilization) : undefined) ??
+			getSeriesColor(fallbackIndex),
+	};
 }
 
 export function formatCityCell(column: CityColumn, city: CityRow): string {

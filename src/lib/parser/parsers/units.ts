@@ -56,12 +56,28 @@ export interface UnitPromotion {
 	isAcquired: boolean;
 }
 
+/**
+ * One `<BonusEffectUnits>` entry — an effect unit the unit carries outside its
+ * type, its promotions and its general. `loadBonusEffectUnit` (Unit.cs:4485)
+ * re-adds each one through the PROMOTION channel on load, so it counts toward
+ * the unit's attack and defense: 255 of the 2,179 tile-nested units across
+ * `test-data/saves/` carry one (284 rows), and one of the nine distinct
+ * effects — EFFECTUNIT_GUARD1, on 4 units — pays a combat modifier.
+ */
 export interface UnitEffect {
 	unitXmlId: number;
 	effect: string;
 	stacks: number;
 }
 
+/**
+ * One `<PlayerFamily>` entry — which family this unit belongs to in one
+ * player's eyes. `Unit.getFamily` (Unit.cs:4246) reads the entry for the
+ * unit's OWN player, and that family's standing with that player applies
+ * `familyOpinion().meEffectUnit` (`:4382`), worth −20% to +10% strength.
+ * 1,827 of the corpus's 2,179 units resolve to a family of their own player's,
+ * and 1,633 of those sit on a non-neutral band.
+ */
 export interface UnitFamily {
 	unitXmlId: number;
 	playerXmlId: number;
@@ -324,5 +340,21 @@ export function unitPromotionToRow(p: UnitPromotion): Record<string, unknown> {
 		unit_xml_id: p.unitXmlId,
 		promotion: p.promotion,
 		is_acquired: p.isAcquired,
+	};
+}
+
+export function unitEffectToRow(e: UnitEffect): Record<string, unknown> {
+	return {
+		unit_xml_id: e.unitXmlId,
+		effect: e.effect,
+		stacks: e.stacks,
+	};
+}
+
+export function unitFamilyToRow(f: UnitFamily): Record<string, unknown> {
+	return {
+		unit_xml_id: f.unitXmlId,
+		player_xml_id: f.playerXmlId,
+		family: f.familyName,
 	};
 }

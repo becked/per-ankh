@@ -262,6 +262,33 @@ export const MAX_DISABLED_IMPROVEMENTS = 1_000;
 //         (<ReligionHeadID>, also already parsed and unwired) doubles both
 //         religion terms, and 12 of the corpus's 203 unit generals head a
 //         religion. Purely additive; absent means UNKNOWN on each, not absent.
+// 2.25.0 — the three channels of a unit's effect-unit dictionary the blob
+//         could not answer, which is what makes the unit card's attack and
+//         defense the game's own numbers rather than a floor. `<PlayerFamily>`
+//         and `<BonusEffectUnits>` arrive as the new top-level unit_families
+//         and unit_effects arrays — both already parsed by `parseUnitFamilies`
+//         / `parseUnitEffects` and previously unwired — and the game-wide AI
+//         advantage as match_metadata.advantage. Across test-data/saves:
+//         1,827 of 2,179 tile-nested units resolve to a family of their own
+//         player's and 1,633 of those sit on a non-neutral opinion band
+//         (−20% to +10% strength); 255 units carry a bonus effect unit (284
+//         rows, 9 distinct effects, of which EFFECTUNIT_GUARD1 on 4 units pays
+//         +10% defense); and 6 of the 16 saves set a non-NONE advantage, all
+//         of them bonus tiers that confer no effect unit — only the
+//         ADVANTAGE_PENALTY_* tiers do, and the corpus has none. Additive on
+//         all three; absent means UNKNOWN on each, not absent.
+//
+//         NOT additive on one: this is the first version whose map_tiles[]
+//         carry no `religions`. The parser wrote that array and nothing read
+//         it once the map's religion overlay went, so the derive dropped it
+//         one commit earlier, under 2.24.0 — this is the version that first
+//         ships the shorter tile. MINOR rather than MAJOR per §10 because no
+//         reader loses anything: a 2.24.0-or-older blob still carries the
+//         field and no code path consults it, so the removal breaks no
+//         consumer. A field a reader DID consult would be MAJOR, and MAJOR
+//         is not free here — `PARSER_VERSION`'s major mirrors
+//         `FullGameData.version: 2` (src/lib/parser/types.ts), so it moves
+//         with the envelope or not at all.
 export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.0.0",
 	"2.1.0",
@@ -293,13 +320,14 @@ export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.22.0",
 	"2.23.0",
 	"2.24.0",
+	"2.25.0",
 ]);
 
 // The latest accepted version. Echoed back on stats responses and
 // embedded in stats cache keys so a parser bump (after the matching
 // extraction code lands) naturally orphans every old entry. Bump in
 // lockstep with the `KNOWN_PARSER_VERSIONS` addition above.
-export const CURRENT_PARSER_VERSION = "2.24.0";
+export const CURRENT_PARSER_VERSION = "2.25.0";
 
 // ----- Reusable atoms -----
 
@@ -424,6 +452,12 @@ const MatchMetadataSchema = v.object({
 	game_mode: v.nullable(v.string()),
 	difficulty: v.nullable(v.string()),
 	opponent_level: v.nullable(v.string()),
+	// The game's AI-advantage setting (2.25.0+); `optional` for the same
+	// deploy-gap reason as in GameDetailsSchema above. Absent means "unknown"
+	// — an older blob — rather than ADVANTAGE_NONE, which is what null says.
+	// Only here: `deriveGameDetails` does not copy it, so there is no
+	// game_details.advantage for a schema entry to guard.
+	advantage: v.optional(v.nullable(v.string())),
 	victory_conditions: v.nullable(v.string()),
 	enabled_mods: v.nullable(v.string()),
 	enabled_dlc: v.nullable(v.string()),

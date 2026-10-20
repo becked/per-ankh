@@ -51,10 +51,12 @@
 		updatePositionStrategy?: "optimized" | "always";
 		// What an outside interaction does to the panel. bits-ui's default
 		// closes it, which is right for a panel the page is meant to dismiss.
-		// "ignore" holds it open, for one that outlives what goes on behind
-		// it — the map's LOCKED city card, where a pan begins with a
-		// pointerdown on the canvas and the default took the card down at the
-		// start of every drag. Escape closes it either way.
+		// "ignore" holds it open, for one the POINTER owns rather than the
+		// page — the map's two cards, anchored to a marker drawn inside the
+		// canvas or a banner floating over it. Both are outside the portaled
+		// panel, so the default took the card down at the start of every pan
+		// and on a click on the thing it is open on. Escape closes it either
+		// way.
 		interactOutsideBehavior?: InteractOutsideBehavior;
 		// Width / size override for the floating panel. The surface, rounding,
 		// scroll, and shadow are fixed; width varies per use.
