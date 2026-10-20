@@ -480,7 +480,7 @@ export type SpriteCategory =
 	| "projects"
 	| "resources"
 	// Effect-unit glyphs, keyed by the effect unit's `<zIconName>` rather than
-	// its zType — the two differ for 36 of the entries a unit can carry, and
+	// its zType — the two differ for 47 of the 134 entries a unit can carry, and
 	// the art is named by the icon. `$lib/generated/effect-units` puts that
 	// name on each row as `icon`; pass it through, not the zType.
 	| "effect-units";

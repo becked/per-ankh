@@ -2,6 +2,7 @@ import { COGNOMENS } from "$lib/generated/cognomens";
 import { NAME_TEXT } from "$lib/generated/name-text";
 import { NATION_NAMES } from "$lib/generated/nation-names";
 import { TRAIT_NAMES } from "$lib/generated/trait-names";
+import { UNIT_STATS } from "$lib/generated/unit-stats";
 
 /**
  * Formats enum-style values from the backend by removing prefixes and applying title casing.
@@ -113,17 +114,29 @@ export function traitName(trait: string | null | undefined): string {
 /**
  * The name Old World gives a unit, from its `UNIT_*` token.
  *
- * The tribal units come in two tiers — `_1` is the base unit, `_2` the one the
- * game calls "Elite …" — and `formatEnum` strips the trailing digit, so both
- * tiers would read the same name without the prefix this puts back.
+ * `formatEnum` over the zType disagrees with the game for 13 of `unit.xml`'s
+ * 91 combat units, and not only on the tribal tiers: it title-cases the id, so
+ * it keeps the British spelling the game localizes ("Armoured Elephant" for
+ * "Armored Elephant"), cannot recover an apostrophe ("Dmt Warrior" for "D'mt
+ * Warrior"), reverses a compound ("Archer Elephant" for "Elephant Archer"),
+ * and for a handful the id is a filing name rather than a name at all —
+ * `UNIT_SCOUT_HANNO_NAVIGATOR` is "Explorer" and `UNIT_HITTITE_CHARIOT_2` is
+ * "Three Man Chariot", not "Elite Hittite Chariot". The six religion disciples
+ * substitute their religion ("Hindu Brahmin", not "Hinduism Disciple"). The
+ * baked `name` on `UNIT_STATS` carries all of it, resolved the way
+ * `HelpText.buildUnitNameVariable` (`HelpText.Game.cs:2704`) resolves it.
+ *
+ * The `formatEnum` fallback is only reached by a unit type newer than the
+ * baked reference snapshot, where it drops the Elite tier the way
+ * `specialistName`'s fallback drops a specialist's.
  *
  * Here rather than beside either set of callers because both reach it: the
- * game-detail cards name a unit on the map and in a city's territory, and the
- * challenge rules name one in an objective and in the rules editor's options.
+ * game-detail cards name a unit on the map, in a city's territory and across
+ * the Military tab, and the challenge rules name one in an objective and in
+ * the rules editor's options.
  */
 export function unitName(unit: string): string {
-	const base = formatEnum(unit, "UNIT_");
-	return /_2$/.test(unit) ? `Elite ${base}` : base;
+	return UNIT_STATS[unit]?.name ?? formatEnum(unit, "UNIT_");
 }
 
 /**

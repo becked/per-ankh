@@ -38,13 +38,12 @@
 //   events_images/tab-characters_normal.png      → icons/CHARACTERS.png
 //   events_images/Icon_Attack.png                → icons/ATTACK.png
 //   events_images/Icon_Defense.png               → icons/DEFENSE.png
-//   other/unit-build.png                         → icons/UNIT_BUILD.png
 //   unit_effects/ + unit_traits/ + other/        → effect-units/, keyed by
 //                                                  effectUnit.xml's zIconName
 //
 // EFFECT UNITS also read the Reference XML, for the same reason portraits do:
 // the art is named by the effect unit's <zIconName>, which is not its zType for
-// 23 of the 91 entries a unit can carry (EFFECTUNIT_MELEE → UNITTRAIT_MELEE,
+// 47 of the 134 entries a unit can carry (EFFECTUNIT_MELEE → UNITTRAIT_MELEE,
 // EFFECTUNIT_PROMOTABLE → EFFECTUNIT_AGGRESSOR), and the names cross three
 // pinacotheca dirs — of the 144 distinct icon names in effectUnit.xml, 125 are
 // in unit_effects/, 14 in unit_traits/ and 3 in other/. So the category is
@@ -304,8 +303,6 @@ const ICON_MAPPINGS: readonly IconMapping[] = [
 	// so the manifest keys carry those names rather than the filenames'.
 	{ source: "events_images/Icon_Attack.png", target: "ATTACK.png" },
 	{ source: "events_images/Icon_Defense.png", target: "DEFENSE.png" },
-	// The unit-build glyph, which marks the turn a unit was trained.
-	{ source: "other/unit-build.png", target: "UNIT_BUILD.png" },
 ];
 
 function contentHash(buf: Buffer): string {

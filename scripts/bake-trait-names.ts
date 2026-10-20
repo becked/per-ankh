@@ -35,13 +35,13 @@
 //
 // OUTPUT: src/lib/generated/trait-names.ts (checked in, self-contained — no
 // .bake sidecar, so bake:finalize never wipes it when this hasn't run, the
-// arrangement bake-character-opinion.ts and bake-promotion-names.ts use).
+// arrangement bake-character-opinion.ts and bake-effect-units.ts use).
 // Frontend only: the Worker returns raw TRAIT_* tokens and never labels one
 // (cloud/src/stats/aggregate.ts keeps only the _ARCHETYPE suffix rule), so
 // there is nothing for a cloud/src/generated/ copy to do.
 //
 // Only entries whose resolved name DIFFERS from the runtime formatEnum()
-// fallback are emitted, matching the promotion / tech / project / nation name
+// fallback are emitted, matching the tech / project / nation name
 // bakes: an ordinary trait falls through without a lookup, and the table stays
 // honest when a patch renames one.
 //

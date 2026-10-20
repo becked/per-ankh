@@ -12,7 +12,7 @@
 	// Specialists tab for rural / urban specialists — hence the icon category
 	// and label being the caller's to choose.
 	import SpriteIcon from "./SpriteIcon.svelte";
-	import { formatEnum } from "$lib/utils/formatting";
+	import { unitName } from "$lib/utils/formatting";
 	import type { BuildItem, SpriteCategory } from "./helpers";
 
 	let {
@@ -27,7 +27,7 @@
 		max,
 		labelWidth = "110px",
 		iconCategory = "units",
-		labelOf = (key: string) => formatEnum(key, "UNIT_"),
+		labelOf = unitName,
 		showDiff = false,
 	}: {
 		// Panel heading. With neither a title nor a stat pair the header bar
@@ -62,6 +62,10 @@
 		// width whether or not a key resolves to art, so a row that ships no
 		// sprite still lines its label up with one that does.
 		iconCategory?: SpriteCategory;
+		// Row label. Defaults to the unit case — the only one of the four
+		// subjects whose name needs no argument — so the Military tab's panels
+		// name a unit the way the rest of the app does; the other callers pass
+		// their own baked-name wrapper.
 		// eslint-disable-next-line no-unused-vars -- callback type signature
 		labelOf?: (key: string) => string;
 		// Trailing ±N column: how far ahead the leading side is on that row. Level

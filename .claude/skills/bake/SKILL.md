@@ -49,9 +49,9 @@ Self-contained bakers — each writes its `src/lib/generated/` module directly, 
 
 ```bash
 npm run bake:science-yields    # science-yields.ts (from Reference/XML)
-npm run bake:unit-stats        # unit-stats.ts (src/ AND cloud/src/; unit strength/tech/naval/
-                               # cycle + bonus-card grants — the Worker copy is what the
-                               # challenge scorer reads)
+npm run bake:unit-stats        # unit-stats.ts (src/ AND cloud/src/; unit name/strength/tech/
+                               # naval/cycle + bonus-card grants — the Worker copy is what
+                               # the challenge scorer reads, and `unitName` reads the name)
 npm run bake:atlas-pool        # atlas-pool.ts (src/ AND cloud/src/; needs an owtournamentatlas checkout)
 npm run bake:family-pools      # cloud/src/generated/family-pools.ts — each nation's
                                # family pool, the baseline every cut rate is measured against

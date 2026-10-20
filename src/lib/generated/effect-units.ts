@@ -10,7 +10,7 @@ export interface EffectUnit {
 	readonly name: string;
 	/**
 	 * `<zIconName>` — the key the `effect-units` sprite category takes,
-	 * which is NOT the zType for 23 of the entries a unit can carry.
+	 * which is NOT the zType for 47 of the entries a unit can carry.
 	 */
 	readonly icon: string;
 	/**

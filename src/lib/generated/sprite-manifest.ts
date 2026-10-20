@@ -424,7 +424,6 @@ export const SPRITE_MANIFEST: Readonly<Record<string, string>> = {
 	"icons/TURN": "/sprites/icons/TURN.7b8cdd83.png",
 	"icons/TURN_SUMMARY_AMBITION":
 		"/sprites/icons/TURN_SUMMARY_AMBITION.b41227be.png",
-	"icons/UNIT_BUILD": "/sprites/icons/UNIT_BUILD.0993a54a.png",
 	"icons/VICTORY_NORMAL": "/sprites/icons/VICTORY_NORMAL.5f8bfc26.png",
 	"improvements/IMPROVEMENT_ACADEMY":
 		"/sprites/improvements/IMPROVEMENT_ACADEMY.2eae6650.png",

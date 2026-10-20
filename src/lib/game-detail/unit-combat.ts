@@ -484,7 +484,7 @@ interface UnitPlayerLike {
  * The effect players the unit's player holds that pay one of the six columns.
  *
  * The bake proves there are only two ways to hold one, which is what makes
- * this short: `Player.initPlayerEffects` (Player.cs:15912) gives every
+ * this short: `Player.initPlayerEffects` (Player.cs:15896) gives every
  * non-human player the game's `<Advantage>` effect player, and `Player.cs:11997`
  * gives the player each of their reigning leader's traits'
  * `LeaderEffectPlayer`. Everything else in the accumulation — techs, laws,
@@ -573,7 +573,7 @@ export function combatGaps(input: {
 	// family half of this gap costs a tribe's unit nothing. The bonus half
 	// costs any unit, which is why the test is the fields' presence.
 	if (!input.unitChannelsKnown) gaps.push("units");
-	// `initPlayerEffects` (Player.cs:15912) gives the advantage effect player
+	// `initPlayerEffects` (Player.cs:15896) gives the advantage effect player
 	// to non-human players only, so a human's unit loses nothing by not
 	// knowing it.
 	if (!input.advantageKnown && input.hasPlayer && !input.isHuman) {
