@@ -491,7 +491,7 @@
 	//     save time, so this branch is unmeasured; it exists because the two
 	//     states have to be told apart, and until `tribe` was parsed nothing
 	//     could.
-	const unownedCityBorders = $derived.by(() => {
+	const unownedCityBorderColors = $derived.by(() => {
 		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- locally-scoped Map, not reactive state
 		const map = new Map<string, [number, number, number, number]>();
 		for (const [cityName, tribe] of unownedCityTribeByName) {
@@ -771,7 +771,7 @@
 	//      CREST_NATION_INDIA exists in the game).
 	// Existence is checked against the SPRITE_MANIFEST baked from
 	// static/sprites/crests/CREST_*.png.
-	function resolveNationCrestKey(
+	function resolveCityCrestKey(
 		ownerNation: string | null,
 		tribe?: string | null,
 	): string | null {
@@ -847,7 +847,7 @@
 				nationColor: t.owner_nation
 					? (getCivilizationColor(t.owner_nation) ?? "rgb(var(--color-tan))")
 					: "rgb(var(--color-tan))",
-				nationCrestKey: resolveNationCrestKey(
+				nationCrestKey: resolveCityCrestKey(
 					t.owner_nation,
 					unownedCityTribeByName.get(t.owner_city),
 				),
@@ -1138,7 +1138,7 @@
 		// or held by a tribe. Its own list rather than part of `borders`
 		// because it is keyed on the city instead of on the owning nation,
 		// which is how the game colours it too (`Game.getBorderColors`).
-		contestedBorders: NationBorder[];
+		unownedCityBorders: NationBorder[];
 	}
 
 	// Nation borders are inset slightly into the territory so adjacent nations'
@@ -1396,7 +1396,7 @@
 		// `borderByCity` says which cities those are and in what colour; a city
 		// absent from it has an owner, so its tiles belong to the nation
 		// outline above.
-		const contestedBorders = buildTerritoryOutline({
+		const unownedCityBorders = buildTerritoryOutline({
 			mapTiles,
 			tileMap,
 			vertexMap,
@@ -1569,7 +1569,7 @@
 			}
 		}
 
-		return { borders, subBorders, contestedBorders };
+		return { borders, subBorders, unownedCityBorders };
 	}
 
 	interface RiverSegment {
@@ -1730,9 +1730,9 @@
 	// profile during turn-slider scrubbing without shipping log spam.
 	const politicalData = $derived.by<PoliticalData>(() => {
 		if (tiles.length === 0)
-			return { borders: [], subBorders: [], contestedBorders: [] };
+			return { borders: [], subBorders: [], unownedCityBorders: [] };
 		if (import.meta.env.DEV) console.time("computePoliticalData");
-		const result = computePoliticalData(tiles, unownedCityBorders);
+		const result = computePoliticalData(tiles, unownedCityBorderColors);
 		if (import.meta.env.DEV) console.timeEnd("computePoliticalData");
 		return result;
 	});
@@ -2211,8 +2211,8 @@
 			// city's dominant colour, the way the game paints it, not a marker
 			// the political overlay can switch off.
 			new PathLayer<NationBorder>({
-				id: "contested-city-borders",
-				data: political.contestedBorders,
+				id: "unowned-city-borders",
+				data: political.unownedCityBorders,
 				getPath: (d: NationBorder) => d.path,
 				getColor: (d: NationBorder) => d.color,
 				getWidth: (d: NationBorder) => d.width,
@@ -2452,7 +2452,7 @@
 		cityFamily={panel.tile.owner_city
 			? (cityFamilyCrestByName.get(panel.tile.owner_city) ?? null)
 			: null}
-		nationCrestKey={resolveNationCrestKey(
+		nationCrestKey={resolveCityCrestKey(
 			panel.tile.owner_nation,
 			panel.tile.owner_city
 				? unownedCityTribeByName.get(panel.tile.owner_city)
