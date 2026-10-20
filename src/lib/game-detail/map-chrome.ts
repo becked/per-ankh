@@ -48,12 +48,12 @@ export interface UnitMarker {
 	 */
 	color: string;
 	/**
-	 * The white flag glyph (`units/<TYPE>__ICON`), or null where we ship none —
-	 * 4 of the corpus's 1,411 military units, in 3 types with no `unit.xml`
-	 * entry. The plate then draws alone; the marker never falls back to the
-	 * painted portrait, a categorically different image in a glyph slot.
+	 * The game's painted unit art (`units/<TYPE>`), cut to a disc and drawn
+	 * over the plate — or null where we ship none: 4 of the corpus's 1,411
+	 * military units, in 3 types with no `unit.xml` entry, which have neither
+	 * the art nor the flag glyph it replaced. The plate then draws alone.
 	 */
-	glyphUrl: string | null;
+	portraitUrl: string | null;
 }
 
 /**

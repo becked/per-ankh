@@ -18,6 +18,7 @@
 	import { SPRITE_MANIFEST } from "$lib/generated/sprite-manifest";
 	import { familyCrestKey, familyForOwner } from "$lib/game-detail/helpers";
 	import { hexNeighbors } from "$lib/utils/hex";
+	import { circularPng } from "$lib/utils/circular-image";
 	import MapTooltip from "$lib/MapTooltip.svelte";
 	import MapCityBanners, {
 		bannerFoot,
@@ -50,16 +51,27 @@
 	const HEX_RADIUS_Y = HEX_V_SPACING / 1.5;
 
 	// A unit marker's plate, in WORLD units, so it holds the same share of its
-	// hex at every zoom. The flag glyphs are 40×53 to 64×64 and cluster on
-	// 58×58 (25 of the 86), and a world unit is an atlas pixel here — the
-	// terrain cell is `cellWidth` units wide — so a 34-unit radius clears the
-	// widest glyph without the plate swallowing the tile: 68 across against a
+	// hex at every zoom. The painted art draws at one fixed width rather than
+	// at its own pixel size, and a world unit is an atlas pixel here — the
+	// terrain cell is `cellWidth` units wide — so a 48-unit radius seats that
+	// disc with a ring of the owner's colour around it: 96 across against a
 	// 199-unit hex. Two units on one hex sit a plate's width apart, which still
-	// leaves both inside the hex (3 of the corpus's 1,408 occupied military
-	// tiles hold two).
-	const UNIT_PLATE_RADIUS = 34;
+	// leaves both inside the hex — the pair reaches 98 units from the hex
+	// centre against its 99.5 apothem (3 of the corpus's 1,408 occupied
+	// military tiles hold two).
+	const UNIT_PLATE_RADIUS = 48;
 	const UNIT_PLATE_LINE_WIDTH = 3;
-	const UNIT_STACK_SPACING = 72;
+	const UNIT_STACK_SPACING = 100;
+
+	// The art disc over it. One drawn width for every type, so the portrait
+	// set's three outliers (226–253 px against a 128 median) stop mattering,
+	// and a 128-pixel raster, which is what 99 of the 102 already ship at. The
+	// square crop sits high in a portrait taller than it is wide: these are
+	// painted vignettes, and the bottom of the frame is ground rather than
+	// subject.
+	const UNIT_ART_DIAMETER = 80;
+	const UNIT_ART_RASTER_PX = 128;
+	const UNIT_ART_CROP_Y = 0.1;
 
 	// Atlas paths come from the bake-pipeline manifest. URLs are content-
 	// hashed (e.g. /atlases/terrain-3d.a1b2c3d4.webp), so they're safe to
@@ -723,9 +735,9 @@
 	// The two layers' ids, named once. The plate's is what both `onHover` and
 	// the right-click discriminate on to tell a marker from the hex under it,
 	// so a literal in either place would drift from the layer it names; the
-	// glyph's sits beside it so the pair reads as one marker.
+	// art's sits beside it so the pair reads as one marker.
 	const UNIT_PLATE_LAYER_ID = "unit-plates";
-	const UNIT_GLYPH_LAYER_ID = "unit-glyphs";
+	const UNIT_ART_LAYER_ID = "unit-art";
 
 	/** A marker placed in world units, with its share of a shared hex. */
 	interface PlacedUnit {
@@ -766,51 +778,59 @@
 		return out;
 	});
 
-	// Each distinct glyph's own pixel size, measured once from the loaded
-	// image. `IconLayer`'s auto-packing needs a cell size per icon and the
-	// sprite manifest carries only URLs, so the alternative was one box for all
-	// 86 — which upscales the 40×53 glyph by 60% to match the 64×64 one. A
-	// glyph that hasn't resolved yet is simply absent from the layer's data,
+	// Each distinct portrait, cut to a disc once and kept as the PNG the icon
+	// layer hands deck.gl. `IconLayer` draws a rectangular image and has no
+	// round crop of its own, so the circle has to be in the pixels — the same
+	// reason `loadCircularAvatars` rasterizes Discord avatars for ECharts. A
+	// portrait that hasn't been cut yet is simply absent from the layer's data,
 	// so the plate draws alone for a frame, exactly as it does for a unit we
-	// ship no glyph for.
-	let glyphSizes = $state<Record<string, { width: number; height: number }>>(
-		{},
-	);
-	// Which glyphs have been asked for, as a plain Set so the effect below
+	// ship no art for.
+	let artDiscs = $state<Record<string, Blob>>({});
+	// Which portraits have been asked for, as a plain Set so the effect below
 	// doesn't read the state it writes — the same arrangement `ensureFamilyAtlas`
 	// uses for the urban atlases. A url stays in it after a failed load too:
-	// one attempt per glyph per session, and the plate draws alone for the rest,
-	// rather than re-requesting a 404 on every rebuild.
+	// one attempt per portrait per session, and the plate draws alone for the
+	// rest, rather than re-requesting a 404 on every rebuild.
 	// eslint-disable-next-line svelte/prefer-svelte-reactivity -- module-scope guard, not reactive state
-	const glyphsRequested = new Set<string>();
+	const artRequested = new Set<string>();
 
 	$effect(() => {
-		// Nothing is fetched until the layer is actually on: a glyph with no
-		// measurement is absent from the layer's data, so `getIcon` never runs
-		// on it and deck.gl's own auto-packing doesn't fetch it either. A map
-		// nobody switched the layer on over costs no unit art.
+		// Nothing is fetched until the layer is actually on: a portrait with no
+		// disc is absent from the layer's data, so `getIcon` never runs on it
+		// and deck.gl's own auto-packing doesn't fetch it either. A map nobody
+		// switched the layer on over costs no unit art.
 		if (!unitsVisible) return;
 		for (const { marker } of placedUnits) {
-			const url = marker.glyphUrl;
-			if (url == null || glyphsRequested.has(url)) continue;
-			glyphsRequested.add(url);
-			const image = new Image();
-			image.onload = () => {
-				glyphSizes = {
-					...glyphSizes,
-					[url]: { width: image.naturalWidth, height: image.naturalHeight },
-				};
-			};
-			image.src = url;
+			const url = marker.portraitUrl;
+			if (url == null || artRequested.has(url)) continue;
+			artRequested.add(url);
+			void circularPng(url, UNIT_ART_RASTER_PX, UNIT_ART_CROP_Y).then(
+				(disc) => {
+					artDiscs = { ...artDiscs, [url]: disc };
+				},
+				// A portrait that won't load leaves its plate drawing alone.
+				() => {},
+			);
 		}
 	});
 
-	// The markers whose glyph is ready to draw. Separate from `placedUnits` so
+	// `IconLayer` loads every icon by fetching its url, and the url we give it
+	// names a portrait whose disc is already in hand. Answer that fetch from
+	// the cut PNG: deck.gl re-reading `/sprites/units/*.png` would get the
+	// uncut rectangle, and handing it a `data:` url instead is refused — an
+	// icon is fetched rather than assigned to an `<img>`, so it answers to
+	// `connect-src`, which doesn't carry `data:` the way `img-src` does (the
+	// policy in svelte.config.js).
+	const fetchArtDisc = (url: string): Promise<Response> =>
+		Promise.resolve(new Response(artDiscs[url]));
+
+	// The markers whose disc is ready to draw. Separate from `placedUnits` so
 	// the plate layer — which is the pick target, and so what the card hangs
 	// off — never waits on an image.
-	const glyphUnits = $derived(
+	const artUnits = $derived(
 		placedUnits.filter(
-			(p) => p.marker.glyphUrl != null && glyphSizes[p.marker.glyphUrl] != null,
+			(p) =>
+				p.marker.portraitUrl != null && artDiscs[p.marker.portraitUrl] != null,
 		),
 	);
 
@@ -2093,8 +2113,10 @@
 			//
 			// The plate is the pick target, so the hit area is the whole marker.
 			// Its colour is the owner's, which is the one thing on the map that
-			// says whose army this is — the glyph over it is a pure white
-			// silhouette (21–32% of its pixels opaque).
+			// says whose army this is. It reads as the ring around the art disc
+			// and through the disc itself, where the portrait's painted sky is
+			// transparent — a median 39% of the disc across the 102, 7% at the
+			// most covered.
 			new ScatterplotLayer<PlacedUnit>({
 				id: UNIT_PLATE_LAYER_ID,
 				data: placedUnits,
@@ -2110,22 +2132,23 @@
 				pickable: true,
 				visible: unitsOn,
 			}),
-			// The game's own flag glyph over the plate, each at its own pixel
-			// size. `IconLayer`'s auto-packing fetches a URL once per id and
-			// packs it itself, so the content-hashed `/sprites/units/*.png`
-			// feed it directly and no atlas bake is needed — a game holds at
-			// most 40 distinct unit types.
+			// The game's painted unit art over the plate, one disc per type.
+			// `IconLayer`'s auto-packing fetches a url once per id and packs it
+			// into an atlas itself, so the content-hashed
+			// `/sprites/units/*.png` identify the discs and no atlas bake is
+			// needed — a game holds at most 40 distinct unit types.
 			new IconLayer<PlacedUnit>({
-				id: UNIT_GLYPH_LAYER_ID,
-				data: glyphUnits,
-				getIcon: (d: PlacedUnit) => {
-					const url = d.marker.glyphUrl as string;
-					const { width, height } = glyphSizes[url];
-					return { id: url, url, width, height };
-				},
+				id: UNIT_ART_LAYER_ID,
+				data: artUnits,
+				getIcon: (d: PlacedUnit) => ({
+					id: d.marker.portraitUrl as string,
+					url: d.marker.portraitUrl as string,
+					width: UNIT_ART_RASTER_PX,
+					height: UNIT_ART_RASTER_PX,
+				}),
+				loadOptions: { fetch: fetchArtDisc },
 				getPosition: (d: PlacedUnit) => [d.worldX, d.worldY],
-				getSize: (d: PlacedUnit) =>
-					glyphSizes[d.marker.glyphUrl as string].width,
+				getSize: UNIT_ART_DIAMETER,
 				sizeUnits: "common",
 				sizeBasis: "width",
 				pickable: false,
@@ -2153,7 +2176,7 @@
 		void showUnits;
 		void isFinalTurn;
 		void placedUnits;
-		void glyphUnits;
+		void artUnits;
 
 		const layers = buildLayers();
 		if (layers) targetDeck.setProps({ layers });

@@ -178,7 +178,7 @@
 				// The same resolver the unit card's heading runs, so the plate and
 				// the card it opens agree on whose colour this is.
 				color: unitOwner(u, players).color,
-				glyphUrl: getSpritePath("units", u.unit_type, { glyph: true }),
+				portraitUrl: getSpritePath("units", u.unit_type),
 			});
 		}
 		return out;
