@@ -11,8 +11,8 @@
 //   Reference/XML/Infos/color.xml — <zHexValue> per colour.
 //   Mods/*/Infos/{nation,tribe,teamColor,playerColor,color}-{add,change}.xml —
 //     the campaign/scenario content, merged last-wins by zType with per-field
-//     updates, the bake-family-colors Mods pattern. Uploaded campaign saves
-//     carry these civs.
+//     updates (scripts/lib/reference-xml.ts, shared with bake-crest-sprites).
+//     Uploaded campaign saves carry these civs.
 //
 // THE TWO CHAINS ARE NOT THE SAME CHAIN:
 //
@@ -44,6 +44,19 @@
 //     civ by on the map, where TextColor writes the player's NAME and its
 //     minimap city dot (Game.cs:21744).
 //
+//   The BORDER a city nobody holds draws in — one leg, one value, shared.
+//     Game.getBorderColors (Game.cs:21782) colours territory from the CITY
+//     rather than from the tile's owning player, and for a city whose tribe is
+//     set it reads City.getPrimaryPlayerColor (City.cs:3279) and then
+//     meBorderColor:
+//       tribe <TeamColor> → teamColor <TeamPlayerColor>
+//         → playerColor <BorderColor> → color <zHexValue>
+//     This is the TeamPlayerColor leg the tribe note above warns off for a
+//     tribe's own colour — and here that is the point: the value is the same
+//     near-black for every tribe, which is what the game paints a captured
+//     city's border. So it is emitted as ONE constant, and the bake fails if
+//     the tribes ever stop agreeing rather than silently picking one.
+//
 // BASE vs CAMPAIGN: nothing in nation.xml flags a campaign nation — the Mods
 // entries carry exactly the base entries' fields — so the only derivable split
 // is which file an entry came from. An entry is base if it appears in
@@ -66,15 +79,14 @@
 //
 // Run: npm run bake:civilization-colors
 
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { XMLParser } from "fast-xml-parser";
 import { format as prettierFormat, resolveConfig } from "prettier";
 
-import { resolveReferenceXml } from "./lib/paths.js";
+import { loadMergedEntries, type WithBase } from "./lib/reference-xml.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, "..");
@@ -89,73 +101,14 @@ interface Entry {
 	TeamPlayerColor?: string;
 	aePlayerColors?: { zValue?: string | string[] };
 	AssetColor?: string;
+	BorderColor?: string;
 	CrestColor?: string;
 	zHexValue?: string;
 }
 
 // `inBase` is presence in Infos/<stem>.xml — see BASE vs CAMPAIGN above.
-type Merged = Entry & { inBase: boolean };
-
-const parser = new XMLParser({
-	ignoreAttributes: true,
-	parseTagValue: false,
-	ignoreDeclaration: true,
-	ignorePiTags: true,
-});
-
-function parseEntries(xml: string): Entry[] {
-	const parsed = parser.parse(xml) as { Root?: { Entry?: Entry | Entry[] } };
-	const raw = parsed.Root?.Entry;
-	return raw == null ? [] : Array.isArray(raw) ? raw : [raw];
-}
-
-function definedFields<T extends object>(o: T): Partial<T> {
-	return Object.fromEntries(
-		Object.entries(o).filter(([, v]) => v !== undefined),
-	) as Partial<T>;
-}
-
-// Base Infos/<stem>.xml plus every Mods/*/Infos/<stem>-{add,change}.xml, in
-// that order, collapsed by zType with a per-field merge — a -change entry that
-// only touches gameplay fields keeps the earlier colour assignment. Each
-// merged entry records whether the base file defined it.
-async function loadMerged(stem: string): Promise<Map<string, Merged>> {
-	const xmlDir = resolveReferenceXml();
-	const merged = new Map<string, Merged>();
-
-	const absorb = (entries: Entry[], inBase: boolean): void => {
-		for (const e of entries) {
-			if (!e.zType) continue;
-			const prev = merged.get(e.zType);
-			merged.set(
-				e.zType,
-				prev == null
-					? { ...e, inBase }
-					: { ...prev, ...definedFields(e), inBase: prev.inBase || inBase },
-			);
-		}
-	};
-
-	absorb(
-		parseEntries(
-			await readFile(resolve(xmlDir, "Infos", `${stem}.xml`), "utf-8"),
-		),
-		true,
-	);
-	const modsRoot = resolve(xmlDir, "Mods");
-	const mods = (await readdir(modsRoot, { withFileTypes: true }))
-		.filter((e) => e.isDirectory())
-		.map((e) => e.name)
-		.sort();
-	for (const mod of mods) {
-		for (const suffix of ["add", "change"]) {
-			const path = resolve(modsRoot, mod, "Infos", `${stem}-${suffix}.xml`);
-			if (!existsSync(path)) continue;
-			absorb(parseEntries(await readFile(path, "utf-8")), false);
-		}
-	}
-	return merged;
-}
+// The merge itself is shared (scripts/lib/reference-xml.ts).
+type Merged = WithBase<Entry>;
 
 // #rrggbbaa → #rrggbb, rejecting an alpha that carries meaning. See ALPHA IS
 // NORMALISED above for why a pass-through 8-digit value is a rendering bug.
@@ -179,11 +132,11 @@ function toOpaqueHex(hex: string, context: string): string {
 async function main(): Promise<void> {
 	const [nations, tribes, teamColors, playerColors, colors] = await Promise.all(
 		[
-			loadMerged("nation"),
-			loadMerged("tribe"),
-			loadMerged("teamColor"),
-			loadMerged("playerColor"),
-			loadMerged("color"),
+			loadMergedEntries<Entry>("nation"),
+			loadMergedEntries<Entry>("tribe"),
+			loadMergedEntries<Entry>("teamColor"),
+			loadMergedEntries<Entry>("playerColor"),
+			loadMergedEntries<Entry>("color"),
 		],
 	);
 
@@ -277,6 +230,39 @@ async function main(): Promise<void> {
 			(p) => p.CrestColor,
 		),
 	);
+	// The one border primary every tribe shares — see the BORDER note in the
+	// header. Resolved per tribe and then collapsed, so a tribe that stops
+	// agreeing fails the bake instead of letting one hex stand in for the
+	// others.
+	const borderByTribe = new Map<string, string>();
+	for (const [zType, tribe] of tribes) {
+		const hex = resolve_(
+			zType,
+			tribe.TeamColor,
+			(team) => team.TeamPlayerColor,
+			(p) => p.BorderColor,
+		);
+		if (hex == null) {
+			if (tribe.inBase) {
+				throw new Error(
+					`bake-civilization-colors: ${zType} → ${tribe.TeamColor ?? "(no TeamColor)"} did not resolve to a border colour`,
+				);
+			}
+			console.warn(
+				`bake-civilization-colors: WARN unresolved campaign tribe border ${zType}`,
+			);
+			continue;
+		}
+		borderByTribe.set(zType, hex);
+	}
+	const distinctBorders = [...new Set(borderByTribe.values())].sort();
+	if (distinctBorders.length !== 1) {
+		throw new Error(
+			`bake-civilization-colors: the tribes' border primary is no longer one shared colour — ${distinctBorders.join(", ")} across ${borderByTribe.size} tribes. It is emitted as a single constant; split it per tribe, or fix the chain.`,
+		);
+	}
+	const tribeBorderColor = distinctBorders[0];
+
 	const baseNations = [...nations]
 		.filter(([zType, n]) => n.inBase && nationColors[zType] != null)
 		.map(([zType]) => zType)
@@ -332,6 +318,18 @@ async function main(): Promise<void> {
 		`export const BASE_NATIONS: readonly string[] = ${JSON.stringify(baseNations)};`,
 	);
 	lines.push("");
+	lines.push("// The border colour the game paints a city no player holds:");
+	lines.push("// Game.getBorderColors reads the CITY's primary player colour");
+	lines.push("// (City.getPrimaryPlayerColor → the tribe's TeamPlayerColor,");
+	lines.push("// which is PLAYERCOLOR_BARBARIANS for every tribe) and then");
+	lines.push("// its BorderColor. One value, shared by all");
+	lines.push(
+		`// ${borderByTribe.size} tribes — the bake fails if they ever disagree.`,
+	);
+	lines.push(
+		`export const TRIBE_BORDER_COLOR = ${JSON.stringify(tribeBorderColor)};`,
+	);
+	lines.push("");
 
 	const config = await resolveConfig(OUTPUT_TS);
 	const formatted = await prettierFormat(lines.join("\n"), {
@@ -349,7 +347,7 @@ async function main(): Promise<void> {
 	}
 	await writeFile(OUTPUT_TS, formatted);
 	console.log(
-		`bake-civilization-colors: ${Object.keys(nationColors).length} nations (${baseNations.length} base) + ${Object.keys(tribeColors).length} tribes → ${OUTPUT_TS.replace(REPO_ROOT + "/", "")}`,
+		`bake-civilization-colors: ${Object.keys(nationColors).length} nations (${baseNations.length} base) + ${Object.keys(tribeColors).length} tribes, border ${tribeBorderColor} → ${OUTPUT_TS.replace(REPO_ROOT + "/", "")}`,
 	);
 }
 

@@ -73,7 +73,14 @@ npm run bake:improvement-builds # improvement-builds.ts (src/ AND cloud/src/; wo
 npm run bake:starting-techs    # starting-techs.ts (each nation's starting techs)
 npm run bake:family-colors     # family-colors.ts (each family's in-game colour)
 npm run bake:civilization-colors # civilization-colors.ts (each nation's and tribe's in-game
-                               # colour, plus the base nation roster the /stats facet offers)
+                               # colour, plus the base nation roster the /stats facet offers,
+                               # plus the one border colour every tribe shares — the border
+                               # the game paints a city no player holds)
+npm run bake:crest-sprites     # crest-sprites.ts (tribe → its crest, and crest → the sprite
+                               # its art ships under; CREST_TRIBE_ANARCHY draws
+                               # CREST_TRIBE_REBELS. Self-contained rather than
+                               # sidecar+finalize, like bake:trait-names, so a checkout that
+                               # hasn't run it keeps the committed table)
 npm run bake:yield-colors      # yield-colors.ts (each yield's chart colour)
 npm run bake:orders-sources    # orders-sources.ts (orders-per-turn + legitimacy constants)
 npm run bake:power-tiers       # power-tiers.ts (military-power comparison tiers)

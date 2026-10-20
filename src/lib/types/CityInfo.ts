@@ -79,6 +79,25 @@ damage?: number,
  */
 assimilate_turns?: number,
 /**
+ * The tribe holding the city (<Tribe>), or null when a nation does. A
+ * capture hands the city to nobody under TRIBE_ANARCHY
+ * (`Unit.doCityCapture`, Unit.cs:2004), which is why an unowned city is not
+ * the same thing as an untended one. Optional: `undefined` is a blob parsed
+ * before PARSER_VERSION 2.26.0, where WHO holds an unowned city is UNKNOWN
+ * rather than nobody — the three-state convention `general_xml_id`
+ * documents in src/lib/parser/types.ts.
+ */
+tribe?: string | null,
+/**
+ * The player capturing the city (<CapturePlayer>), and the tribe doing so
+ * (<CaptureTribe>) when it isn't a player. Non-null on either is the
+ * game's own "is being captured" test (`ClientUI.cs:7319` gates the
+ * capture label on `hasCapturePlayer() || hasCaptureTribe()`) — not
+ * <CaptureTurns>, which sits at 0 for 2 of the corpus's 6 captures.
+ * Optional, with the same three states as `tribe` above.
+ */
+capture_player_xml_id?: number | null, capture_tribe?: string | null,
+/**
  * Culture level as string enum (CULTURE_WEAK, CULTURE_DEVELOPING, CULTURE_STRONG, CULTURE_ESTABLISHED, CULTURE_LEGENDARY)
  */
 culture_level: string | null, growth_count: number, unit_production_count: number, specialist_count: number, buy_tile_count: number, hurry_civics_count: number, hurry_money_count: number, hurry_training_count: number, hurry_population_count: number, };

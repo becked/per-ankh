@@ -289,6 +289,23 @@ export const MAX_DISABLED_IMPROVEMENTS = 1_000;
 //         is not free here — `PARSER_VERSION`'s major mirrors
 //         `FullGameData.version: 2` (src/lib/parser/types.ts), so it moves
 //         with the envelope or not at all.
+// 2.26.0 — what the save records about a city nobody holds, so the map can
+//         draw one the way the game does instead of as bare terrain. A
+//         capture hands the city to nobody and names the captor beside it
+//         (`Unit.doCityCapture`, Unit.cs:2004), so `owner_player_xml_id`
+//         alone cannot tell a captured city from a tribe's own.
+//         city_statistics.cities[] gains tribe, capture_player_xml_id and
+//         capture_tribe, read under the names `City.writeGameXML` writes
+//         (<Tribe>, <CapturePlayer>, <CaptureTribe>; City.cs:1263, :1251,
+//         :1255). Across test-data/saves: 6 of 326 city rows are frozen
+//         mid-capture, in 6 of the 16 saves, every one of them Player="-1",
+//         Family="NONE" and TRIBE_ANARCHY with CapturePlayer set and
+//         CaptureTurns absent on 2. Additive on all three; absent means
+//         UNKNOWN on each, not "not being captured".
+//
+//         <CaptureTurns> is deliberately NOT parsed: it has no denominator
+//         in the save, because `City.getCaptureThreshold` (City.cs:2118)
+//         computes one at runtime from per-team culture.
 export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.0.0",
 	"2.1.0",
@@ -321,13 +338,14 @@ export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.23.0",
 	"2.24.0",
 	"2.25.0",
+	"2.26.0",
 ]);
 
 // The latest accepted version. Echoed back on stats responses and
 // embedded in stats cache keys so a parser bump (after the matching
 // extraction code lands) naturally orphans every old entry. Bump in
 // lockstep with the `KNOWN_PARSER_VERSIONS` addition above.
-export const CURRENT_PARSER_VERSION = "2.25.0";
+export const CURRENT_PARSER_VERSION = "2.26.0";
 
 // ----- Reusable atoms -----
 
