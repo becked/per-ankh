@@ -59,6 +59,21 @@ function r2Bucket(): string {
 	return getEnv(target === "staging" ? "staging" : "prod").r2Bucket;
 }
 
+// `./per-ankh dev` serves the Worker here (scripts/per-ankh.ts), and wrangler
+// picks the next free port if it's taken — so a local sweep against a shifted
+// port needs --api-base rather than this default.
+const LOCAL_API_BASE = "http://localhost:8787/v1";
+
+// The Worker's HTTP base for the current target. Unlike every other resolver
+// here, `local` does NOT read the prod entry: the .wrangler state simulates
+// prod's *data*, but the Worker answering is the one `./per-ankh dev` is
+// running. Only the reparse sweep needs this — every other admin command
+// reaches D1 and R2 through wrangler, which needs no origin.
+export function apiBase(): string {
+	if (target === "local") return LOCAL_API_BASE;
+	return getEnv(target === "staging" ? "staging" : "prod").apiBase;
+}
+
 // The screenshots bucket (issue #289) — a second bucket, so every R2 call
 // below takes which one it means. Exported because the one caller that wants
 // it, the game delete, reads the keys out of D1 and so names the bucket

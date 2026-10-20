@@ -15,6 +15,7 @@ import * as security from "./commands/security";
 import * as tournament from "./commands/tournament";
 import * as cache from "./commands/cache";
 import * as duelEventTitles from "./commands/duel-event-titles";
+import * as reparse from "./commands/reparse";
 import * as devLogin from "./commands/dev-login";
 
 function printHelp(): void {
@@ -47,6 +48,12 @@ function printHelp(): void {
 			"  list-channels [--limit N]             List all linked creator channels",
 			"",
 			"Corpus sweeps (minutes — reads every matching save from R2):",
+			"  reparse-all [--dry-run] [--user U] [--limit N] [--version V]",
+			"              [--concurrency N] [--cache-dir DIR]",
+			"                                   Reparse every game whose stored parser_version",
+			"                                   isn't the current one: parse locally, re-upload",
+			"                                   through the Worker. Needs ADMIN_CLI_TOKEN",
+			"                                   exported (--dry-run doesn't).",
 			"  duel-event-titles [--csv] [--out FILE] [--concurrency N] [--cache-dir DIR]",
 			"                                   Event stories that have fired in a two-player",
 			"                                   multiplayer duel, with per-event counts",
@@ -154,6 +161,8 @@ export async function main(argv: string[]): Promise<void> {
 			return games.runPurge(subArgs, opts);
 		case "events":
 			return events.run(subArgs, opts);
+		case "reparse-all":
+			return reparse.run(subArgs, opts);
 		case "duel-event-titles":
 			return duelEventTitles.run(subArgs, opts);
 		case "nuke-user":
