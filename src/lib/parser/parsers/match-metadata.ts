@@ -84,6 +84,17 @@ export function parseMatchMetadata(
 		// of multi-human MP without the PI).
 		difficulty: players.find((p) => p.isSaveOwner)?.difficulty ?? null,
 		opponent_level: optAttrStr(root["@_OpponentLevel"]),
+		// The AI advantage the game was set up with. `Player.initPlayerEffects`
+		// (Player.cs:15896) gives every non-human player this advantage's
+		// `meEffectPlayer`, and the three ADVANTAGE_PENALTY_* tiers confer an
+		// effect unit worth −5%, −10% or −25% strength to every unit that
+		// player owns — the only term in the unit card's attack and defense
+		// that is game-wide rather than per-unit. The six non-NONE values in
+		// `test-data/saves/` are all bonuses rather than penalties
+		// (3 VERY_HIGH, 2 SMALL, 1 MODERATE), and those confer no effect unit
+		// at all, so the corpus prices this at zero while a penalty save would
+		// not.
+		advantage: optAttrStr(root["@_Advantage"]),
 		victory_conditions: victoryConditions,
 		enabled_mods: enabledMods,
 		enabled_dlc: enabledDlc,

@@ -36,6 +36,23 @@
 //   events_images/tab-tribes_normal.png          → icons/TRIBES.png
 //   events_images/tab-relationships-normal.png   → icons/RELATIONSHIPS.png
 //   events_images/tab-characters_normal.png      → icons/CHARACTERS.png
+//   events_images/Icon_Attack.png                → icons/ATTACK.png
+//   events_images/Icon_Defense.png               → icons/DEFENSE.png
+//   other/unit-build.png                         → icons/UNIT_BUILD.png
+//   unit_effects/ + unit_traits/ + other/        → effect-units/, keyed by
+//                                                  effectUnit.xml's zIconName
+//
+// EFFECT UNITS also read the Reference XML, for the same reason portraits do:
+// the art is named by the effect unit's <zIconName>, which is not its zType for
+// 23 of the 91 entries a unit can carry (EFFECTUNIT_MELEE → UNITTRAIT_MELEE,
+// EFFECTUNIT_PROMOTABLE → EFFECTUNIT_AGGRESSOR), and the names cross three
+// pinacotheca dirs — of the 144 distinct icon names in effectUnit.xml, 125 are
+// in unit_effects/, 14 in unit_traits/ and 3 in other/. So the category is
+// keyed by the ICON name rather than the zType, and the zType→icon map is
+// baked beside the table that needs it (scripts/bake-effect-units.ts emits it
+// as each row's `icon`). Two icon names ship no art at all — the two halves of
+// EFFECTPLAYER_NAVAL_DETRACTOR_LEADER, which carry no <zIconName> and have no
+// file under their own zType — and are reported in the summary.
 //
 // PORTRAITS also read the OW Reference XML (Reference/XML/Infos/
 // characterPortrait*.xml) — like bake-improvements, this baker needs BOTH a
@@ -280,6 +297,15 @@ const ICON_MAPPINGS: readonly IconMapping[] = [
 		target: "CHARACTERS.png",
 		square: true,
 	},
+	// The game's own attack and defense glyphs, which the unit card's stat
+	// strip puts beside each number the way TOOLTIP_UNIT does
+	// (Reference/XML/UI/includes/tooltips-game.xml:270). These are the
+	// HUDIconTypes the help text spells as `icon(ATTACK)` / `icon(DEFENSE)`,
+	// so the manifest keys carry those names rather than the filenames'.
+	{ source: "events_images/Icon_Attack.png", target: "ATTACK.png" },
+	{ source: "events_images/Icon_Defense.png", target: "DEFENSE.png" },
+	// The unit-build glyph, which marks the turn a unit was trained.
+	{ source: "other/unit-build.png", target: "UNIT_BUILD.png" },
 ];
 
 function contentHash(buf: Buffer): string {
@@ -452,6 +478,89 @@ async function copyIcons(sidecar: SpriteSidecar): Promise<number> {
 	return ICON_MAPPINGS.length;
 }
 
+// ─── Reference XML ───────────────────────────────────────────────────────
+//
+// Two categories key their art off the game's own tables rather than off the
+// filenames: portraits (zType → art) and effect units (zType → icon name).
+// Both read Infos files with this one config.
+const infosXmlParser = new XMLParser({
+	ignoreAttributes: true,
+	parseTagValue: false,
+	ignoreDeclaration: true,
+	ignorePiTags: true,
+});
+
+// ─── Effect-unit glyphs ──────────────────────────────────────────────────
+
+// Where an effect unit's art lives: the dirs are tried in this order and the
+// first hit wins, which is also how many of each they hold (see the header).
+const EFFECT_UNIT_ART_DIRS = ["unit_effects", "unit_traits", "other"];
+
+interface EffectUnitEntry {
+	zType?: string;
+	zIconName?: string;
+}
+
+// Every distinct <zIconName> in effectUnit.xml, falling back to the zType for
+// an entry that carries none. Keyed by the icon name, because that is what the
+// runtime asks for: `$lib/generated/effect-units` puts the name on each row
+// and the card passes it straight through (see SpriteCategory's
+// `effect-units`).
+async function loadEffectUnitIcons(infosDir: string): Promise<Set<string>> {
+	const xml = await readFile(resolve(infosDir, "effectUnit.xml"), "utf-8");
+	const parsed = infosXmlParser.parse(xml) as {
+		Root?: { Entry?: EffectUnitEntry | EffectUnitEntry[] };
+	};
+	const entry = parsed.Root?.Entry;
+	const entries = Array.isArray(entry) ? entry : entry ? [entry] : [];
+	const icons = new Set<string>();
+	for (const e of entries) {
+		// The template <Entry> at the head of every Infos file has every tag
+		// empty, which an empty zType drops.
+		const zType = typeof e.zType === "string" ? e.zType.trim() : "";
+		if (zType === "") continue;
+		const icon = typeof e.zIconName === "string" ? e.zIconName.trim() : "";
+		icons.add(icon !== "" ? icon : zType);
+	}
+	return icons;
+}
+
+async function copyEffectUnits(sidecar: SpriteSidecar): Promise<number> {
+	const dst = resolve(SPRITES_OUT, "effect-units");
+	await wipeAndRecreate(dst);
+
+	const icons = await loadEffectUnitIcons(
+		resolve(resolveReferenceXml(), "Infos"),
+	);
+	let baked = 0;
+	const missing: string[] = [];
+	for (const icon of [...icons].sort()) {
+		const dir = EFFECT_UNIT_ART_DIRS.find((d) =>
+			existsSync(resolve(PINACOTHECA_SPRITES, d, `${icon}.png`)),
+		);
+		if (dir == null) {
+			// No art under this name in this pinacotheca build — SpriteIcon
+			// renders nothing, which the card's fixed-size slot absorbs.
+			missing.push(icon);
+			continue;
+		}
+		await bakeOne(
+			resolve(PINACOTHECA_SPRITES, dir, `${icon}.png`),
+			dst,
+			"effect-units",
+			icon,
+			sidecar,
+		);
+		baked += 1;
+	}
+	if (missing.length > 0) {
+		console.log(
+			`[sprites] effect-units: ${missing.length} icon name(s) with no art, skipped: ${missing.join(", ")}`,
+		);
+	}
+	return baked;
+}
+
 // Display size for leader portraits. Sources are 256×256; the Leaders-tab
 // detail panel shows them small, so 128px is a comfortable ~2× for sharpness
 // while keeping each webp tiny. Bump here if a larger portrait surface appears.
@@ -460,13 +569,6 @@ const PORTRAIT_SIZE = 128;
 // The age variant we ship — a reigning ruler's natural look. Each portrait
 // zType lists one art sprite per age group; we take this one.
 const PORTRAIT_AGE_GROUP = "CHARACTER_AGE_GROUP_ADULT";
-
-const portraitXmlParser = new XMLParser({
-	ignoreAttributes: true,
-	parseTagValue: false,
-	ignoreDeclaration: true,
-	ignorePiTags: true,
-});
 
 interface PortraitAgePair {
 	zIndex?: string;
@@ -502,7 +604,7 @@ async function loadPortraitArt(infosDir: string): Promise<Map<string, string>> {
 	const artByZType = new Map<string, string>();
 	for (const file of ordered) {
 		const xml = await readFile(resolve(infosDir, file), "utf-8");
-		const parsed = portraitXmlParser.parse(xml) as {
+		const parsed = infosXmlParser.parse(xml) as {
 			Root?: { Entry?: PortraitEntry | PortraitEntry[] };
 		};
 		const entry = parsed.Root?.Entry;
@@ -642,6 +744,7 @@ async function main(): Promise<void> {
 		sidecar,
 	);
 	counts.icons = await copyIcons(sidecar);
+	counts["effect-units"] = await copyEffectUnits(sidecar);
 	counts.portraits = await copyPortraits(sidecar);
 
 	// Sort keys so the resulting JSON is deterministic across runs.

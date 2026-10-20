@@ -67,8 +67,12 @@ import {
 } from "./tiles.js";
 import {
 	parsePlayerUnitsProduced,
+	parseUnitEffects,
+	parseUnitFamilies,
 	parseUnitPromotions,
 	parseUnits,
+	unitEffectToRow,
+	unitFamilyToRow,
 	unitPromotionToRow,
 	unitToRow,
 } from "./units.js";
@@ -112,6 +116,8 @@ import {
 	type ReligionOpinionEntry,
 	type TileOwnershipEntry,
 	type TileVisibilityInfo,
+	type UnitEffectInfo,
+	type UnitFamilyInfo,
 	type UnitInfo,
 	type UnitPromotionInfo,
 	type YieldPriceEntry,
@@ -155,6 +161,8 @@ export function extractAllGameData(
 	const tileOwnership = parseTileOwnershipHistory(root);
 	const units = parseUnits(root);
 	const unitPromotions = parseUnitPromotions(root);
+	const unitEffects = parseUnitEffects(root);
+	const unitFamilies = parseUnitFamilies(root);
 	const playerUnitsProduced = parsePlayerUnitsProduced(root);
 
 	// 2. Match metadata (depends on parsed players for winner resolution).
@@ -260,6 +268,12 @@ export function extractAllGameData(
 	const unitPromotionsWire: UnitPromotionInfo[] = unitPromotions.map(
 		(p) => unitPromotionToRow(p) as unknown as UnitPromotionInfo,
 	);
+	const unitEffectsWire: UnitEffectInfo[] = unitEffects.map(
+		(e) => unitEffectToRow(e) as unknown as UnitEffectInfo,
+	);
+	const unitFamiliesWire: UnitFamilyInfo[] = unitFamilies.map(
+		(f) => unitFamilyToRow(f) as unknown as UnitFamilyInfo,
+	);
 	const playerResourcesWire: PlayerResourceInfo[] = playerResources.map(
 		(r) => playerResourceToRow(r) as unknown as PlayerResourceInfo,
 	);
@@ -334,6 +348,8 @@ export function extractAllGameData(
 		diplomacy: diplomacyWire,
 		units: unitsWire,
 		unit_promotions: unitPromotionsWire,
+		unit_effects: unitEffectsWire,
+		unit_families: unitFamiliesWire,
 		player_resources: playerResourcesWire,
 		projects_produced: projectsProducedWire,
 		player_goals: playerGoalsWire,

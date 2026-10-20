@@ -37,7 +37,6 @@ import { IMPROVEMENT_NAMES } from "$lib/generated/improvement-names";
 import { SHRINE_TYPE, IMPROVEMENT_ICON } from "$lib/generated/science-yields";
 import { PROJECT_ICON } from "$lib/generated/project-icons";
 import { PROJECT_NAMES } from "$lib/generated/project-names";
-import { PROMOTION_NAMES } from "$lib/generated/promotion-names";
 import {
 	OWTT_BASE_URL,
 	OWTT_NATION_INDEX,
@@ -479,7 +478,12 @@ export type SpriteCategory =
 	| "improvements"
 	| "specialists"
 	| "projects"
-	| "resources";
+	| "resources"
+	// Effect-unit glyphs, keyed by the effect unit's `<zIconName>` rather than
+	// its zType — the two differ for 36 of the entries a unit can carry, and
+	// the art is named by the icon. `$lib/generated/effect-units` puts that
+	// name on each row as `icon`; pass it through, not the zType.
+	| "effect-units";
 
 // Known tech name corrections (game data typos or alternate names)
 const TECH_SPRITE_FIXES: Record<string, string> = {
@@ -1389,17 +1393,6 @@ export function unitOwner(
 			(civilization != null ? getCivilizationColor(civilization) : undefined) ??
 			getSeriesColor(fallbackIndex),
 	};
-}
-
-/**
- * Display name for a promotion zType: the baked PROMOTION_NAMES override with
- * formatEnum as fallback. The override is the tiered lines, which the game
- * numbers with Roman numerals — Combat I / II / III, where formatEnum's
- * trailing-digit strip leaves "Combat". 12 of the 41 promotions, and the four
- * most common lines among them.
- */
-export function promotionName(zType: string): string {
-	return PROMOTION_NAMES[zType] ?? formatEnum(zType, "PROMOTION_");
 }
 
 export function formatCityCell(column: CityColumn, city: CityRow): string {
