@@ -35,6 +35,7 @@ import { d1Query, r2Get, sqlStr } from "../wrangler";
 import type { CommandOpts } from "../../lib/cli";
 import { flagInt, flagString, parseFlags, printJson } from "../../lib/cli";
 import { bold, dim, info, warn } from "../../lib/format";
+import { mapLimit } from "../../lib/map-limit";
 import { resolveReferenceXml } from "../../lib/paths";
 import { extractXmlFromZip } from "../../../src/lib/parser/extract-zip";
 import { stripMarkup } from "../../../src/lib/utils/formatting";
@@ -172,28 +173,6 @@ async function loadTitles(): Promise<{
 		}
 	}
 	return { titles, known };
-}
-
-// Run `task` over `items` with a bounded number in flight. Wrangler spawns
-// dominate the wall clock and each decompressed save is held in memory while
-// it is scanned, so both ends want a ceiling.
-async function mapLimit<T>(
-	items: T[],
-	limit: number,
-	task: (item: T, index: number) => Promise<void>,
-): Promise<void> {
-	let next = 0;
-	const workers = Array.from(
-		{ length: Math.min(limit, items.length) },
-		async () => {
-			for (;;) {
-				const i = next++;
-				if (i >= items.length) return;
-				await task(items[i], i);
-			}
-		},
-	);
-	await Promise.all(workers);
 }
 
 // One save's fired events. Counted per game first so that a game contributes
