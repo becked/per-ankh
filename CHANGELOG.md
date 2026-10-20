@@ -1,5 +1,54 @@
 # Changelog
 
+## [2026-10-20-2bb219f] - 2026-10-20
+
+### Features
+
+- (os-shots) capture the app on each OS and compare the results — [06fc9ce](https://github.com/becked/per-ankh/commit/06fc9ce028ff1b171fa4963ee624c85a6c3fb41a)
+- (screenshot) the pass an operator runs is one command, not three — [de72ffd](https://github.com/becked/per-ankh/commit/de72ffd9f5f297ec48962d2077869c6b758bdedd)
+- (map) units in territory on the city popover — [4e7cb29](https://github.com/becked/per-ankh/commit/4e7cb294d1ec1a539a428ce409bd6f85307cb41c)
+- (colors) bake nation and tribe colours from the reference XML — [4c35ce5](https://github.com/becked/per-ankh/commit/4c35ce56e5ea9a2dee30ac9a31d995dc7582bc2f)
+- (map) the city popover opens on hover — [5d4e691](https://github.com/becked/per-ankh/commit/5d4e691f923f89ec40988fc1af3d0847d437e70c)
+- (map) right-click locks a tile's panel to the map — [7a69f3b](https://github.com/becked/per-ankh/commit/7a69f3bcd9c4bc69b8da2c68f822cdf594a186c3)
+- (map) right-click locks the city card, as it locks a tile's panel — [73d8efc](https://github.com/becked/per-ankh/commit/73d8efcea3b61a9db8e5e98cc1c6c628f625821b)
+- (parser) the general leading a unit — 2.23.0 — [53e30d9](https://github.com/becked/per-ankh/commit/53e30d9c3b2dce46dc42a4295104fd34becad930)
+- a general's opinion of their leader — 2.24.0 — [cb79631](https://github.com/becked/per-ankh/commit/cb79631ac4f96bb6b6b315b27bc0a1b7a84ab3b1)
+- units on the map, with a card on hover — [4486d2d](https://github.com/becked/per-ankh/commit/4486d2d1266d938d15fe1b6994bcf3e0a7e71f84)
+- what a general's traits confer, in the game's own words — [f4e29ab](https://github.com/becked/per-ankh/commit/f4e29ab3144f158a29302b56d63a558d6ffb8154)
+- the map opens with its units on, and without a religion layer — [281545b](https://github.com/becked/per-ankh/commit/281545b86808d52e56b64b0f59bd024af8df0d22)
+- a unit marker wears its painted art, cut to a disc — [8e12874](https://github.com/becked/per-ankh/commit/8e128748062ad12970b4ceb48014996b6590a4df)
+- the unit card reads as the game's own unit tooltip — 2.25.0 — [c9667f0](https://github.com/becked/per-ankh/commit/c9667f08cdb4843ec3a56bdf0e0e69386994e554)
+- the unit card reads on the city card's size ladder — [0eea7c6](https://github.com/becked/per-ankh/commit/0eea7c638c81f03784f2f724f09584e37a94ca55)
+
+### Fixes
+
+- (screenshot) a partial run stays comparable, and the copies go back to one — [91dcb67](https://github.com/becked/per-ankh/commit/91dcb67f6fa865e7d82a4c9353444e205a04d009)
+- (deps) override postcss-selector-parser to clear GHSA-rj75-hqrm-r3gf — [bb8ce4e](https://github.com/becked/per-ankh/commit/bb8ce4e88c8579795239c734f64a2588d7afd1a1)
+- (map) the city roster's two Egypts are one colour — [db4fbf6](https://github.com/becked/per-ankh/commit/db4fbf616c1847012be2fa96864d14c21c6f8c24)
+- (colors) the roster's fallback ramp, the bake's floor and its citation — [3e92f57](https://github.com/becked/per-ankh/commit/3e92f579d81fe90873164d13dc5ecdcaf62a6b49)
+- (map) the city card drops its "At turn N" heading — [a06c05b](https://github.com/becked/per-ankh/commit/a06c05b7300186438d4a67271949c60fb4381253)
+- (map) a locked city card outlives a hover, and leaves with its city — [b5cd978](https://github.com/becked/per-ankh/commit/b5cd978a55024b0b7dfa209175a4de5ef148fbac)
+- (bake) the fourth council seat, the corpus count and the citations — [95679be](https://github.com/becked/per-ankh/commit/95679be975f4b82f6e8e73a8eacc0043d43108b0)
+- a trait reads as the game names it, from one table — [6e704c7](https://github.com/becked/per-ankh/commit/6e704c795886c9bdc5a51b57b891d507e1e1fff4)
+- the range row says what the +1 is — [af50014](https://github.com/becked/per-ankh/commit/af500140f04c1a2e89c8aee5d2593f7c9c80a644)
+- both map cards let go of the game they named — [d5d511a](https://github.com/becked/per-ankh/commit/d5d511a63136fa3bd59c3eea5fa0a5c2ecd967d7)
+- a unit wears the name the game gives it, and seven more findings — [89ee500](https://github.com/becked/per-ankh/commit/89ee500bd47c1eea36121186452e048bc99580ac)
+- a left-click on a marker leaves its card standing — [5a49461](https://github.com/becked/per-ankh/commit/5a49461759cdb1409acf35c24cd7afc65fcd035a)
+
+### Other
+
+- (scripts) share the capture primitives and the Access headers — [72c85af](https://github.com/becked/per-ankh/commit/72c85aff12a9a7e341eee80098d92466cf21050a)
+- (screenshot) name the command for what it takes, not its axis — [9806ba5](https://github.com/becked/per-ankh/commit/9806ba553e3b09bf433e40beae9c5c4936c78f92)
+- (screenshot) correct the rationale that still read the UI font as platform-supplied — [44ec15c](https://github.com/becked/per-ankh/commit/44ec15ce8d857ce6c3271b48486d3c6b583e2395)
+- (screenshot) the Os prefix stays only where it names a column — [91f250a](https://github.com/becked/per-ankh/commit/91f250ae27861988220882a132001fbf52a34971)
+- (screenshot) the lightbox is one definition, read by both viewers — [894c68d](https://github.com/becked/per-ankh/commit/894c68db97cf5147781bd3de459167497a5e566a)
+- (save-format) `<LastSeenUnits>` is player AI state, not a Tile child — [09fe088](https://github.com/becked/per-ankh/commit/09fe08871ed463a1accda185d4a88f8f59d62eea)
+- (bake) format bake-civilization-colors with prettier — [09c3e25](https://github.com/becked/per-ankh/commit/09c3e250515d8ea4da6bcff36865ac7c571cf1c2)
+- (colors) nation and tribe colours are the baked table — [4974f4b](https://github.com/becked/per-ankh/commit/4974f4b0cc9c1396c36eb365d2e5a94424ff3aa3)
+- the gap analysis still called GeneralID unparsed — [f4872c0](https://github.com/becked/per-ankh/commit/f4872c0a551b1c7af5a902519ab6d838843616d2)
+- the bake skill's name-baker split, and what its fences order — [91a010d](https://github.com/becked/per-ankh/commit/91a010d8c1582d0a3f9456e6cfcc1c1985fbeab2)
+- no tile carries the religions the map stopped reading — [8f320c4](https://github.com/becked/per-ankh/commit/8f320c4f9c13aaf45365dbcc8b8278d568a82b39)
+
 ## [2026-10-12-714e7ae] - 2026-10-12
 
 ### Fixes
