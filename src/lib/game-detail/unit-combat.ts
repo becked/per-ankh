@@ -404,6 +404,27 @@ export function unitCombat(input: UnitCombatInput): UnitCombat {
 	};
 }
 
+/**
+ * The effect units an archetype trait confers on a unit its holder leads —
+ * what the unit card leaves out of the general's list, where the archetype
+ * crest beside the general's name already says it.
+ *
+ * Only four archetypes confer anything at all — Commander, Hero, Tactician and
+ * Zealot have a `GENERAL_TRAITS` entry and the other ten do not — and none of
+ * the eight effect units between them carries a combat column, an `unlocks`
+ * child or a `validUnits` gate. So what this hides is a name the crest repeats,
+ * never a term one of the card's numbers was summed from.
+ */
+export function archetypeEffectUnits(archetype: string | null): Set<string> {
+	const conferred = archetype == null ? null : GENERAL_TRAITS[archetype];
+	if (conferred == null) return new Set();
+	return new Set(
+		[conferred.general, conferred.leader].filter(
+			(type): type is string => type != null,
+		),
+	);
+}
+
 // ─── The two channels that are a blob join ────────────────────────────────
 
 /** The fields the family channel reads off a unit. */

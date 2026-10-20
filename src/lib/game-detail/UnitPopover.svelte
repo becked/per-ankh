@@ -4,7 +4,7 @@
 	// reads it: the unit and its nation on one line, the attack and defense
 	// strip under it, the effect-unit glyphs the game grids beside that strip,
 	// and two things the game's tooltip has no room for — the general it names
-	// and the turn it was trained.
+	// and the turn it was built.
 	//
 	// The page owns the Popover wrapper (and its chrome frame), as it does for
 	// the city card; this is the content.
@@ -14,16 +14,26 @@
 	// there is no per-turn zone to split off — the whole card is one vintage,
 	// which is why it has no turn input.
 	import type { cloudApi } from "$lib/api-cloud";
-	import { unitName } from "$lib/utils/formatting";
+	import {
+		archetypeSpriteKey,
+		formatArchetype,
+		unitName,
+	} from "$lib/utils/formatting";
 	import SpriteIcon from "./SpriteIcon.svelte";
 	import {
 		characterTraitNames,
 		generalOpinionOfLeader,
 	} from "./character-opinion";
-	import { rulerName, rulerPortrait, unitOwner } from "./helpers";
+	import {
+		getSpritePath,
+		rulerName,
+		rulerPortrait,
+		unitOwner,
+	} from "./helpers";
 	import type { DetailPlayer } from "./helpers";
 	import { competitiveMode } from "./rating-curve";
 	import {
+		archetypeEffectUnits,
 		COMBAT_GAP_NOTES,
 		combatGaps,
 		generalRatingModifiers,
@@ -167,6 +177,20 @@
 	// and the value SpriteIcon takes, resolved once so they cannot disagree.
 	const generalPortrait = $derived(general ? rulerPortrait(general) : null);
 
+	// The general's archetype, resolved the way the portrait above is — the
+	// sprite key and the label together, and null where we ship no glyph, so
+	// the slot can't keep a box and its gap around an image that never
+	// arrives. Four of the 14 archetypes have no art: the setup placeholders
+	// (Preset, Random, Pick Later, Customize Leader).
+	const archetype = $derived.by(() => {
+		const trait = general?.archetype;
+		if (trait == null) return null;
+		const key = archetypeSpriteKey(trait);
+		return getSpritePath("traits-trimmed", key) == null
+			? null
+			: { key, label: formatArchetype(trait) };
+	});
+
 	// ─── The three channels that are a blob join ───────────────────────
 	// `unit_effects` and `unit_families` arrived together in PARSER_VERSION
 	// 2.25.0, so one test covers both: absent means the unit's bonus effects
@@ -238,6 +262,26 @@
 			: null,
 	);
 
+	// The unit's own record as one list: what its promotions confer, then what
+	// it carries without one — rows of the same shape, in the order
+	// `unitCombat` claims the two channels. The game spends the promotions as
+	// an unnamed glyph grid beside its stat strip; the card has the room to
+	// name them, so they read here with the rest instead.
+	const unitEffects = $derived(
+		combat == null ? [] : [...combat.promotions, ...combat.own],
+	);
+
+	// What the crest beside the general's name stands in for, left out of the
+	// list under it: "Tactician General" below a Tactician crest is the same
+	// fact twice. Gated on the trait rather than on the crest's art — the four
+	// archetypes whose glyph we don't ship confer nothing, so the two can't
+	// disagree — and read off `general.archetype`, which the parser takes from
+	// the same `<TraitTurn>` children `characterTraitNames` feeds `unitCombat`.
+	const generalEffects = $derived.by(() => {
+		const hidden = archetypeEffectUnits(general?.archetype ?? null);
+		return (combat?.general ?? []).filter((effect) => !hidden.has(effect.type));
+	});
+
 	// Why the two numbers may not be the game's own — one marker beside them,
 	// with every reason in its title, rather than a paragraph under the card.
 	const gaps = $derived(
@@ -260,31 +304,33 @@
 {#if unit && owner && combat}
 	<div class="space-y-3 text-xs">
 		<header class="flex items-start gap-2">
-			<!-- Unit on the left, nation on the right, both at the card's own size
-			     — the game's own header line, which sets the unit's name and its
-			     nation in the same two sizes side by side. -->
+			<!-- Unit on the left, nation on the right, at one size as the game's
+			     own header line sets them — the card's 11px text with a 14px
+			     glyph, the pairing every row under it takes. -->
 			<!-- Fixed-size slot: SpriteIcon renders nothing when the glyph is
 			     missing (4 of the corpus's military units, in 3 types with no
 			     `unit.xml` entry), which would unalign the heading. -->
-			<span class="flex w-5 flex-none pt-0.5">
+			<span class="flex w-3.5 flex-none pt-0.5">
 				<SpriteIcon
 					category="units"
 					value={unit.unit_type}
-					size={20}
+					size={14}
 					glyph
 					alt={label}
 				/>
 			</span>
-			<h2 class="min-w-0 text-sm font-bold" style="color: {owner.color};">
+			<h2 class="min-w-0 text-[11px] font-bold" style="color: {owner.color};">
 				{label}
 			</h2>
-			<p class="ml-auto flex flex-none items-center gap-1 text-sm text-bright">
-				<span class="flex w-5 flex-none">
+			<p
+				class="ml-auto flex flex-none items-center gap-1 text-[11px] text-bright"
+			>
+				<span class="flex w-3.5 flex-none">
 					{#if owner.civilization}
 						<SpriteIcon
 							category="crests"
 							value={owner.civilization}
-							size={20}
+							size={14}
 							alt={owner.label}
 						/>
 					{/if}
@@ -311,51 +357,34 @@
 			</div>
 		</header>
 
-		<!-- The stat strip, and the promotion glyphs the game grids beside it. -->
-		<section class="flex items-start gap-3">
-			<div class="flex flex-none items-center gap-3 text-sm text-bright">
-				{#if combat.attack != null}
-					<span class="inline-flex items-center gap-1" title={gapNote}>
-						{combat.attack}
-						<span class="flex w-4 flex-none">
-							<SpriteIcon
-								category="icons"
-								value="ATTACK"
-								size={16}
-								alt="Attack"
-							/>
-						</span>
+		<!-- The stat strip. The numbers read at the card's 11px text with 14px
+		     icons, the pairing every row here takes. -->
+		<section class="flex items-center gap-3 text-[11px] text-bright">
+			{#if combat.attack != null}
+				<span class="inline-flex items-center gap-1" title={gapNote}>
+					{combat.attack}
+					<span class="flex w-3.5 flex-none">
+						<SpriteIcon
+							category="icons"
+							value="ATTACK"
+							size={14}
+							alt="Attack"
+						/>
 					</span>
-				{/if}
-				{#if combat.defense != null}
-					<span class="inline-flex items-center gap-1" title={gapNote}>
-						{combat.defense}
-						<span class="flex w-4 flex-none">
-							<SpriteIcon
-								category="icons"
-								value="DEFENSE"
-								size={16}
-								alt="Defense"
-							/>
-						</span>
+				</span>
+			{/if}
+			{#if combat.defense != null}
+				<span class="inline-flex items-center gap-1" title={gapNote}>
+					{combat.defense}
+					<span class="flex w-3.5 flex-none">
+						<SpriteIcon
+							category="icons"
+							value="DEFENSE"
+							size={14}
+							alt="Defense"
+						/>
 					</span>
-				{/if}
-			</div>
-			{#if combat.promotions.length > 0}
-				<!-- Eight to a row, the constraint the game's own UIGrid carries
-				     (ConstraintCount="8"). -->
-				<ul class="ml-auto grid grid-cols-8 justify-items-end gap-0.5">
-					{#each combat.promotions as promotion (promotion.type)}
-						<li class="flex h-[13px] w-[13px] flex-none" title={promotion.name}>
-							<SpriteIcon
-								category="effect-units"
-								value={promotion.icon}
-								size={13}
-								alt={promotion.name}
-							/>
-						</li>
-					{/each}
-				</ul>
+				</span>
 			{/if}
 		</section>
 
@@ -370,45 +399,34 @@
 					{/if}
 				</dd>
 				{#if unit.create_turn != null}
-					<dt>
-						<span class="inline-flex items-center gap-1">
-							<span class="flex w-3.5 flex-none">
-								<SpriteIcon
-									category="icons"
-									value="UNIT_BUILD"
-									size={14}
-									alt="Trained"
-								/>
-							</span>
-							Trained
-						</span>
-					</dt>
+					<dt>Built</dt>
 					<dd>Turn {unit.create_turn}</dd>
 				{/if}
 			</dl>
 		</section>
 
-		<!-- What the unit carries without a promotion or a general behind it:
+		<!-- What the unit carries in its own right: what its promotions confer,
 		     its type's and its unit traits' effect units, the band its player's
 		     opinion of its family falls in, and whatever its player's own
 		     effect players put on it. The game grids all of these beside the
-		     stat strip; the card has the room to name them. -->
-		{#if combat.own.length > 0}
+		     stat strip, the promotions as bare glyphs; the card has the room to
+		     name every one of them. -->
+		{#if unitEffects.length > 0}
 			<section>
 				<!-- Flowed rather than one per line: a military unit carries 2 to 7
-				     of these across the corpus, and the game's own tooltip spends a
-				     single 8-column strip on them. -->
+				     of its own across the corpus, and the game's own tooltip spends
+				     a single 8-column strip on them. -->
 				<ul class="flex flex-wrap gap-x-3 gap-y-1">
-					{#each combat.own as effect (effect.type)}
-						<li class="flex items-center gap-1.5 text-[11px] text-bright">
+					{#each unitEffects as effect (effect.type)}
+						<li class="flex items-center gap-1.5 text-[9px] text-bright">
 							<!-- Fixed-size slot: two of effectUnit.xml's icon names ship no
 							     art, so SpriteIcon renders nothing and the name would
 							     otherwise shift left of its neighbours. -->
-							<span class="flex w-3.5 flex-none">
+							<span class="flex w-3 flex-none">
 								<SpriteIcon
 									category="effect-units"
 									value={effect.icon}
-									size={14}
+									size={12}
 									alt={effect.name}
 								/>
 							</span>
@@ -433,27 +451,44 @@
 						<!-- Reserved slot: a save can name a portrait neither the Reference
 					     XML nor pinacotheca defines, which `rulerPortrait` is the test
 					     for. -->
-						<span class="flex w-6 flex-none">
+						<span class="flex w-3.5 flex-none">
 							{#if generalPortrait}
 								<SpriteIcon
 									category="portraits"
 									value={generalPortrait}
-									size={24}
+									size={14}
 									alt={rulerName(general) ?? "General"}
 								/>
 							{/if}
 						</span>
+						{#if archetype}
+							<!-- From traits-trimmed, the squared copy that fills its box
+							     (#85) — the untrimmed tile reads a size smaller at the
+							     same px, which is why the map chrome's rail takes the
+							     same one. -->
+							<span class="flex w-3.5 flex-none" title={archetype.label}>
+								<SpriteIcon
+									category="traits-trimmed"
+									value={archetype.key}
+									size={14}
+									alt={archetype.label}
+								/>
+							</span>
+						{/if}
 						{rulerName(general) ?? "Unnamed"}
 					</p>
-					{#if combat.general.length > 0}
+					{#if generalEffects.length > 0}
+						<!-- These read UNDER the general's name, so each name and its
+						     glyph step down together — the rule the city card's unit
+						     roster states for the same shape. -->
 						<ul class="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
-							{#each combat.general as effect (effect.type)}
-								<li class="flex items-center gap-1.5 text-[11px] text-bright">
-									<span class="flex w-3.5 flex-none">
+							{#each generalEffects as effect (effect.type)}
+								<li class="flex items-center gap-1.5 text-[9px] text-bright">
+									<span class="flex w-3 flex-none">
 										<SpriteIcon
 											category="effect-units"
 											value={effect.icon}
-											size={14}
+											size={12}
 											alt={effect.name}
 										/>
 									</span>
