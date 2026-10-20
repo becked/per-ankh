@@ -39,6 +39,7 @@
 		gzipJson,
 		parseSaveFile,
 		ParseFailure,
+		recoverUploaderIndex,
 	} from "$lib/parser/upload-helpers";
 	import { cloudApi, ApiError, DuplicateUploadError } from "$lib/api-cloud";
 	import HieroglyphParade from "$lib/HieroglyphParade.svelte";
@@ -163,30 +164,15 @@
 			return;
 		}
 
-		// Derive uploader index from the original `user_nation`. Observer
-		// originals (null) stay observer. For claimed originals, find the
-		// unique human whose nation matches; ambiguous matches surface as
-		// errors so we don't silently re-claim the wrong player.
-		let uploaderIndex: number | null;
-		if (row.userNation === null) {
-			uploaderIndex = null;
-		} else {
-			const candidates = data.player_roster.filter(
-				(p) => p.is_human && p.nation === row.userNation,
-			);
-			if (candidates.length === 1) {
-				uploaderIndex = candidates[0].player_index;
-			} else {
-				setStatus(row.gameId, {
-					kind: "error",
-					message:
-						candidates.length === 0
-							? `No human player matches stored nation ${row.userNation}`
-							: `Multiple human players match stored nation ${row.userNation}`,
-				});
-				return;
-			}
+		// Derive uploader index from the original `user_nation` — shared with
+		// the headless sweep, which posts to the same endpoint and so has to
+		// recover the same seat.
+		const recovered = recoverUploaderIndex(data.player_roster, row.userNation);
+		if (!recovered.ok) {
+			setStatus(row.gameId, { kind: "error", message: recovered.message });
+			return;
 		}
+		const uploaderIndex = recovered.uploaderIndex;
 
 		// Upload
 		setStatus(row.gameId, { kind: "uploading" });
