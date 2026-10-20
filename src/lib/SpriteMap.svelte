@@ -847,7 +847,7 @@
 				nationColor: t.owner_nation
 					? (getCivilizationColor(t.owner_nation) ?? "rgb(var(--color-tan))")
 					: "rgb(var(--color-tan))",
-				nationCrestKey: resolveCityCrestKey(
+				civilizationCrestKey: resolveCityCrestKey(
 					t.owner_nation,
 					unownedCityTribeByName.get(t.owner_city),
 				),
@@ -2452,7 +2452,7 @@
 		cityFamily={panel.tile.owner_city
 			? (cityFamilyCrestByName.get(panel.tile.owner_city) ?? null)
 			: null}
-		nationCrestKey={resolveCityCrestKey(
+		civilizationCrestKey={resolveCityCrestKey(
 			panel.tile.owner_nation,
 			panel.tile.owner_city
 				? unownedCityTribeByName.get(panel.tile.owner_city)

@@ -10,7 +10,7 @@
 	let {
 		tile,
 		cityFamily = null,
-		nationCrestKey = null,
+		civilizationCrestKey = null,
 		capture = null,
 		screenX,
 		screenY,
@@ -21,10 +21,13 @@
 		tile: MapTile;
 		// Resolved family enum like "FAMILY_PTOLEMY", or null if unknown / not city.
 		cityFamily?: string | null;
-		// Crest sprite enum to render for the nation icon. Resolved by the parent
-		// against nation-asset-aliases so variant nations (NATION_AMUN, NATION_ATHENS)
+		// Crest sprite enum for whoever HOLDS this tile's city — a nation or,
+		// for a city under capture or a tribe's own, a tribe. "Civilization" is
+		// the repo's word for that union (`getCivilizationColor`). Resolved by
+		// the parent: a tribe through the baked crest tables, a nation against
+		// nation-asset-aliases so variant nations (NATION_AMUN, NATION_ATHENS)
 		// fall back to their parent civ's crest (CREST_NATION_EGYPT, ...).
-		nationCrestKey?: string | null;
+		civilizationCrestKey?: string | null;
 		// Who is taking this tile's city, when one is. Null is "not being
 		// captured"; a null `nation` inside it is a capture whose captor the
 		// blob can't name — a blob from before PARSER_VERSION 2.26.0, or a
@@ -136,8 +139,12 @@
 	{#if headerLabel}
 		<div class="header">
 			<div class="crests">
-				{#if nationCrestKey}
-					<SpriteIcon category="crests" value={nationCrestKey} size={18} />
+				{#if civilizationCrestKey}
+					<SpriteIcon
+						category="crests"
+						value={civilizationCrestKey}
+						size={18}
+					/>
 				{/if}
 				{#if cityFamily}
 					<SpriteIcon category="crests" value={cityFamily} size={18} />
