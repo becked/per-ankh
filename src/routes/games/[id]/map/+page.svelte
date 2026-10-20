@@ -348,7 +348,7 @@
 		}}
 		customAnchor={cityCard.anchor}
 		updatePositionStrategy="always"
-		interactOutsideBehavior={cityCard.locked ? "ignore" : "close"}
+		interactOutsideBehavior="ignore"
 		side="top"
 		align="center"
 		contentClass="w-[min(94vw,44rem)]"
@@ -380,7 +380,7 @@
 		}}
 		customAnchor={unitCard.anchor}
 		updatePositionStrategy="always"
-		interactOutsideBehavior={unitCard.locked ? "ignore" : "close"}
+		interactOutsideBehavior="ignore"
 		side="top"
 		align="center"
 		contentClass="w-[min(94vw,22rem)]"

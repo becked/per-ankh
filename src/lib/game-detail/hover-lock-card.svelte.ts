@@ -20,13 +20,16 @@
 // hands its hex back to the hover panel. Locking is pointer-only: the map view
 // is desktop-only (#270).
 //
-// A locked card also stops answering outside clicks — the page passes
-// `interactOutsideBehavior: "ignore"` while `locked`. A pan begins with a
-// pointerdown on the canvas, which bits-ui counts as an interaction outside
-// the card, so the default behaviour took the card down at the start of every
-// drag — where a locked tile panel, a plain div with nothing listening for a
-// click, rides the camera out. The ✕ and the marker's right-click remain, and
-// so does Escape.
+// Neither card answers an outside click, locked or not — the page passes
+// `interactOutsideBehavior: "ignore"` in both states. The card is portaled to
+// `document.body`, so bits-ui counts a press on the very thing holding it open
+// as an interaction outside it: the default took the card down at the start of
+// every pan, and on a plain left-click on its own marker, which nothing then
+// undid — SpriteMap raises a hover only on a CHANGE of marker, so a card
+// dismissed under a stationary pointer stayed down until the pointer left and
+// came back. A tile panel, a plain div with nothing listening for a click, has
+// never had either problem. Closing is the pointer leaving while unlocked, the
+// ✕ or a second right-click while locked, and Escape either way.
 //
 // Two things follow from the lock outliving the pointer. Hovering another
 // marker leaves a locked card where it is rather than carrying it over and
