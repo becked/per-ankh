@@ -59,9 +59,9 @@ function r2Bucket(): string {
 	return getEnv(target === "staging" ? "staging" : "prod").r2Bucket;
 }
 
-// `./per-ankh dev` serves the Worker here (scripts/per-ankh.ts), and wrangler
-// picks the next free port if it's taken — so a local sweep against a shifted
-// port needs --api-base rather than this default.
+// `./per-ankh dev` serves the Worker here (scripts/per-ankh.ts). Wrangler
+// picks the next free port if 8787 is taken, and nothing overrides this
+// constant — a local sweep against a shifted port has to free the port first.
 const LOCAL_API_BASE = "http://localhost:8787/v1";
 
 // The Worker's HTTP base for the current target. Unlike every other resolver

@@ -30,20 +30,12 @@
 // the CLI cannot do for itself. Downloads are cached on disk and reused, so a
 // re-run after a failure costs no further remote reads.
 
-import { existsSync } from "node:fs";
-import { mkdir, readFile, stat } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
 
-import {
-	apiBase,
-	d1Query,
-	getTarget,
-	isLocal,
-	r2Get,
-	sqlStr,
-} from "../wrangler";
+import { apiBase, d1Query, getTarget, isLocal, sqlStr } from "../wrangler";
+import { readCachedSave } from "../saves";
 import type { CommandOpts } from "../../lib/cli";
 import { flagInt, flagString, parseFlags, printJson } from "../../lib/cli";
 import { confirmTyping } from "../../lib/confirm";
@@ -58,9 +50,9 @@ import {
 	warn,
 	type Column,
 } from "../../lib/format";
-import { readDotVars } from "../../lib/dotvars";
+import { DEV_VARS_PATH, readDotVars } from "../../lib/dotvars";
 import { mapLimit } from "../../lib/map-limit";
-import { extractXmlFromZip } from "../../../src/lib/parser/extract-zip";
+import { ParseError } from "../../../src/lib/parser/extract-zip";
 import {
 	parseActivePlayerIndex,
 	parseSaveXml,
@@ -71,6 +63,7 @@ import {
 	gzipJson,
 	recoverUploaderIndex,
 } from "../../../src/lib/parser/upload-helpers";
+import { validateCompletedGame } from "../../../src/lib/parser/validation";
 
 // The credential, by the same split purge.ts documents: committed config comes
 // from the environment table, a secret comes from the process environment,
@@ -78,16 +71,6 @@ import {
 // copy as a `wrangler secret`. Same name on both sides so there is no
 // translation to remember.
 const TOKEN_ENV = "ADMIN_CLI_TOKEN";
-
-// Same two hops scripts/ux-review/discover.ts makes to reach this file.
-const DEV_VARS = resolve(
-	dirname(fileURLToPath(import.meta.url)),
-	"..",
-	"..",
-	"..",
-	"cloud",
-	".dev.vars",
-);
 
 // Each in-flight game holds a decompressed save and its parse tree in memory
 // (~20 MB of tree per file — docs/save-file-format.md, "DOM memory caution"),
@@ -141,23 +124,29 @@ function resolveToken(): string | null {
 	// reads ADMIN_DISCORD_ID from that file. Never for a remote target: there
 	// the file has no authority over what the deployed Worker holds.
 	if (isLocal()) {
-		const fromDotVars = readDotVars(DEV_VARS)[TOKEN_ENV];
+		const fromDotVars = readDotVars(DEV_VARS_PATH)[TOKEN_ENV];
 		if (fromDotVars) return fromDotVars;
 	}
 	return null;
 }
 
-// The stale set. The predicate is the one the Worker's own reparse lists use
-// (`parser_version != ?` — handleGamesOutOfDate / handleAdminListOutOfDate),
-// restated here because every admin command reaches D1 through wrangler rather
-// than through the API; `parser_version` is NOT NULL (migration 0002), so the
-// plain `!=` matches every out-of-date row.
+// The stale set. The destination is never a choice — the blob this sweep posts
+// is whatever the local parse produces, so it carries THIS checkout's
+// PARSER_VERSION — which is why the predicate is pinned to that version. It is
+// the one the Worker's own reparse lists use (`parser_version != ?` —
+// handleGamesOutOfDate / handleAdminListOutOfDate), restated here because every
+// admin command reaches D1 through wrangler rather than through the API;
+// `parser_version` is NOT NULL (migration 0002), so the plain `!=` matches every
+// out-of-date row. `--from-version` narrows that set to one stored cohort and
+// can only narrow it: a game already at PARSER_VERSION is never selected, so no
+// run spends a download, a parse and an upload to earn a 409.
 async function loadStale(
-	version: string,
+	fromVersion: string | undefined,
 	userId: string | undefined,
 	limit: number | undefined,
 ): Promise<StaleGame[]> {
-	const where = [`g.parser_version != ${sqlStr(version)}`];
+	const where = [`g.parser_version != ${sqlStr(PARSER_VERSION)}`];
+	if (fromVersion) where.push(`g.parser_version = ${sqlStr(fromVersion)}`);
 	if (userId) where.push(`g.user_id = ${sqlStr(userId)}`);
 	return d1Query<StaleGame>(
 		`SELECT g.game_id, g.user_id, g.game_name, g.display_name,
@@ -242,46 +231,35 @@ async function processOne(
 	cacheDir: string,
 	token: string,
 ): Promise<Outcome> {
-	const dest = resolve(cacheDir, `${game.game_id}.zip`);
 	try {
-		// An empty file from an interrupted earlier run would fail the archive
-		// check forever, so only a non-empty cache entry counts.
-		const cached = existsSync(dest) && (await stat(dest)).size > 0;
-		if (!cached && !(await r2Get(`saves/${game.game_id}.zip`, dest))) {
-			return { kind: "missing" };
-		}
-		const buf = await readFile(dest);
-		const xml = extractXmlFromZip(
-			buf.buffer.slice(
-				buf.byteOffset,
-				buf.byteOffset + buf.byteLength,
-			) as ArrayBuffer,
-		);
+		const save = await readCachedSave(game.game_id, cacheDir);
+		if (!save) return { kind: "missing" };
 		const data = extractAllGameData(
-			parseSaveXml(xml),
-			parseActivePlayerIndex(xml),
+			parseSaveXml(save.xml),
+			parseActivePlayerIndex(save.xml),
 		);
-		// Not `validateCompletedGame`: the gate is checked here so the skip is
-		// named, rather than spending an upload on a 400. An admin reparse
-		// cannot carry `challenge_id` (handleGameUpload refuses it), and
-		// without it the Worker's `game_over` gate rejects the save — so a
-		// challenge map or run, which is an in-progress game by definition, is
-		// not reparsable through this endpoint by anyone, browser sweep
-		// included. Reported as a skip because it is a property of the game,
-		// not a fault in this run.
-		if (data.match_metadata.game_over !== true) {
-			return {
-				kind: "skipped",
-				why: "not a completed game — the reparse path can't carry challenge_id",
-			};
-		}
+		// The one completion gate (src/lib/parser/validation.ts), checked here
+		// rather than spending an upload on a 400: an admin reparse cannot carry
+		// `challenge_id` (handleGameUpload refuses it), and without it the
+		// Worker's `game_over` gate rejects the save — so a challenge map or run,
+		// which is an in-progress game by definition, is not reparsable through
+		// this endpoint by anyone, browser sweep included. It throws, and the
+		// catch below maps its NOT_COMPLETED back to a named skip, because that
+		// is a property of the game rather than a fault in this run.
+		validateCompletedGame(data);
 		const recovered = recoverUploaderIndex(
 			data.player_roster,
 			game.user_nation,
 		);
 		if (!recovered.ok) return { kind: "failed", why: recovered.message };
-		return postReparse(game, buf, data, recovered.uploaderIndex, token);
+		return postReparse(game, save.zip, data, recovered.uploaderIndex, token);
 	} catch (e) {
+		if (e instanceof ParseError && e.code === "NOT_COMPLETED") {
+			return {
+				kind: "skipped",
+				why: "not a completed game — the reparse path can't carry challenge_id",
+			};
+		}
 		return { kind: "failed", why: e instanceof Error ? e.message : String(e) };
 	}
 }
@@ -309,10 +287,25 @@ function describe(outcome: Outcome): string {
 
 export async function run(args: string[], opts: CommandOpts): Promise<void> {
 	const { flags } = parseFlags(args);
-	const version = flagString(flags, "version") ?? PARSER_VERSION;
+	// Selection, not destination: every reparse writes PARSER_VERSION, so this
+	// picks which stored cohort to sweep (`--from-version 2.15.0` for the 2.15.0
+	// games and nothing else).
+	const fromVersion = flagString(flags, "from-version");
+	if (fromVersion === PARSER_VERSION) {
+		throw new Error(
+			`--from-version ${PARSER_VERSION} is this checkout's own parser ` +
+				`version — those games are already current.`,
+		);
+	}
 	const userId = flagString(flags, "user");
-	const limit =
-		flags.limit === undefined ? undefined : flagInt(flags, "limit", 0);
+	let limit: number | undefined;
+	if (flags.limit !== undefined) {
+		// flagInt falls back for a bare `--limit`, `--limit 0` and `--limit abc`,
+		// and a LIMIT 0 sweep would report "nothing to do" the way a corpus
+		// already at PARSER_VERSION does.
+		limit = flagInt(flags, "limit", 0);
+		if (limit <= 0) throw new Error("--limit takes a positive integer");
+	}
 	const concurrency = flagInt(flags, "concurrency", DEFAULT_CONCURRENCY);
 	const dryRun = flags["dry-run"] !== undefined;
 	const cacheDir = resolve(
@@ -320,9 +313,13 @@ export async function run(args: string[], opts: CommandOpts): Promise<void> {
 			resolve(tmpdir(), "per-ankh-reparse-saves"),
 	);
 
-	const games = await loadStale(version, userId, limit);
+	const games = await loadStale(fromVersion, userId, limit);
 	if (games.length === 0) {
-		ok(`No games with a parser_version other than ${version}.`);
+		ok(
+			fromVersion
+				? `No games stored at parser ${fromVersion}.`
+				: `No games with a parser_version other than ${PARSER_VERSION}.`,
+		);
 		return;
 	}
 
@@ -334,11 +331,18 @@ export async function run(args: string[], opts: CommandOpts): Promise<void> {
 		.sort((a, b) => b[1] - a[1])
 		.map(([v, n]) => `${v} ${n}`)
 		.join(", ");
-	info(`${games.length} game(s) to reparse to ${version} — from ${spread}`);
+	info(
+		`${games.length} game(s) to reparse to ${PARSER_VERSION} — from ${spread}`,
+	);
 
 	if (dryRun) {
 		if (opts.json) {
-			printJson({ version, target: getTarget(), dry_run: true, games });
+			printJson({
+				to_version: PARSER_VERSION,
+				target: getTarget(),
+				dry_run: true,
+				games,
+			});
 			return;
 		}
 		printTable(
@@ -377,7 +381,7 @@ export async function run(args: string[], opts: CommandOpts): Promise<void> {
 	// row. Against prod, over the whole corpus, that is worth typing for.
 	if (!opts.yes) {
 		const yes = await confirmTyping(
-			`REPARSE ${games.length} game(s) on ${bold(getTarget())} to parser ${version}.\n` +
+			`REPARSE ${games.length} game(s) on ${bold(getTarget())} to parser ${PARSER_VERSION}.\n` +
 				`  Each one: re-upload its save, replace its blob and derived rows.\n` +
 				`  Owners' games are rewritten in place; screenshots and collections survive.`,
 			"reparse",
@@ -408,7 +412,7 @@ export async function run(args: string[], opts: CommandOpts): Promise<void> {
 
 	if (opts.json) {
 		printJson({
-			version,
+			to_version: PARSER_VERSION,
 			target: getTarget(),
 			counts,
 			results: results.map((r) => ({

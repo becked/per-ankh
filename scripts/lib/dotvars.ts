@@ -3,6 +3,23 @@
 // absence is an error or a degraded mode.
 
 import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+// The local Worker's own vars file. `wrangler dev` loads cloud/.dev.vars, so it
+// is the one place a CLI can read the value the Worker `./per-ankh dev` is
+// running actually holds — which is why three callers want this exact path (the
+// channel resolver's YouTube key, the reparse sweep's admin token, the UX-review
+// discovery's admin id) and why it is defined once here rather than re-derived
+// per caller. Never authoritative for a remote target: there the file has no
+// say over what the deployed Worker holds.
+export const DEV_VARS_PATH = resolve(
+	dirname(fileURLToPath(import.meta.url)),
+	"..",
+	"..",
+	"cloud",
+	".dev.vars",
+);
 
 export function readDotVars(path: string): Record<string, string> {
 	let text: string;

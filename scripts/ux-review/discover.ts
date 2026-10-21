@@ -8,11 +8,10 @@
 import { randomBytes } from "node:crypto";
 import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 
 import { VISIBLE_TO_VIEWER_WHERE } from "../../cloud/src/screenshots/scope";
-import { readDotVars } from "../lib/dotvars";
+import { DEV_VARS_PATH, readDotVars } from "../lib/dotvars";
 import { info, warn } from "../lib/format";
 import {
 	d1Query,
@@ -21,10 +20,6 @@ import {
 	r2Get,
 	sqlStr,
 } from "../admin/wrangler";
-
-// scripts/ux-review/ → repo root is two levels up.
-const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
-const DEV_VARS = resolve(REPO_ROOT, "cloud", ".dev.vars");
 
 // Matches cloud/src/session.ts SESSION_TTL_SECONDS.
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30;
@@ -170,7 +165,7 @@ export async function discoverScreenshotGame(): Promise<GameRow | null> {
 // ADMIN_DISCORD_ID from cloud/.dev.vars. Null when the file is absent or the
 // var is unset — both read as "this checkout has no local admin".
 function adminDiscordId(): string | null {
-	const v = readDotVars(DEV_VARS).ADMIN_DISCORD_ID;
+	const v = readDotVars(DEV_VARS_PATH).ADMIN_DISCORD_ID;
 	return v != null && v !== "" ? v : null;
 }
 
