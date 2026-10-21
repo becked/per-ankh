@@ -45,3 +45,14 @@ ADMIN_DISCORD_ID=
 # (enable "YouTube Data API v3"). In prod/staging set it out-of-band:
 #   npx wrangler secret put YOUTUBE_API_KEY   (and again with --env staging)
 YOUTUBE_API_KEY=
+
+# Optional: bearer token for `./per-ankh admin reparse-all --local`, the
+# headless reparse sweep. It has no session, so POST
+# /v1/admin/games/:user_id/reparse-upload accepts this instead
+# (siteAdminFromCliToken, cloud/src/admin.ts); no other admin route does.
+# The sweep reads this same file when targeting --local, so the value below
+# is all there is to set — but ADMIN_DISCORD_ID above must also be set, and
+# you must have logged in as it once, since the audit row names that user.
+# In prod/staging it's a real secret:
+#   npx wrangler secret put ADMIN_CLI_TOKEN   (and again with --env staging)
+ADMIN_CLI_TOKEN=dev-admin-cli-token

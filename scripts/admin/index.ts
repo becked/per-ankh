@@ -15,6 +15,7 @@ import * as security from "./commands/security";
 import * as tournament from "./commands/tournament";
 import * as cache from "./commands/cache";
 import * as duelEventTitles from "./commands/duel-event-titles";
+import * as reparse from "./commands/reparse";
 import * as devLogin from "./commands/dev-login";
 
 function printHelp(): void {
@@ -46,7 +47,17 @@ function printHelp(): void {
 			"  remove-channel <user_id> <platform>   Unlink a user's channel for a platform",
 			"  list-channels [--limit N]             List all linked creator channels",
 			"",
-			"Corpus sweeps (minutes — reads every matching save from R2):",
+			"Corpus sweeps (one wrangler spawn per matching save, hundreds of them):",
+			"  reparse-all [--dry-run] [--user U] [--limit N] [--from-version V]",
+			"              [--concurrency N] [--cache-dir DIR]",
+			"                                   Rewrite every game whose stored parser_version",
+			"                                   isn't the current one: parse locally, then re-upload",
+			"                                   through the Worker, which replaces its blob and",
+			"                                   derived rows in place (screenshots, collections and",
+			"                                   tournament links survive). The target is always this",
+			"                                   checkout's PARSER_VERSION; --from-version V narrows",
+			"                                   the sweep to the games stored at exactly V. Needs",
+			"                                   ADMIN_CLI_TOKEN exported (--dry-run doesn't).",
 			"  duel-event-titles [--csv] [--out FILE] [--concurrency N] [--cache-dir DIR]",
 			"                                   Event stories that have fired in a two-player",
 			"                                   multiplayer duel, with per-event counts",
@@ -154,6 +165,8 @@ export async function main(argv: string[]): Promise<void> {
 			return games.runPurge(subArgs, opts);
 		case "events":
 			return events.run(subArgs, opts);
+		case "reparse-all":
+			return reparse.run(subArgs, opts);
 		case "duel-event-titles":
 			return duelEventTitles.run(subArgs, opts);
 		case "nuke-user":

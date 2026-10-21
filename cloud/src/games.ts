@@ -48,7 +48,7 @@ import {
 	parseScopeParam,
 } from "./games-scope";
 import type { SessionData, SessionEnv } from "./session";
-import { isSiteAdmin } from "./admin";
+import { isSiteAdmin, siteAdminFromCliToken } from "./admin";
 import { buildAvatarUrl } from "./auth";
 import { displayNameSql } from "./identity";
 import { captureOnlineIds } from "./online-ids";
@@ -96,6 +96,12 @@ export interface GamesEnv extends SessionEnv, EventsEnv, ScreenshotStorageEnv {
 	SHARE_BUCKET: R2Bucket;
 	SHARE_DB: QueryableD1;
 	ALLOWED_ORIGINS: string;
+	// Bearer token for the headless admin reparse sweep (`./per-ankh admin
+	// reparse-all`), read by siteAdminFromCliToken. Declared here as well as
+	// on AdminCliAuthEnv for the same reason ADMIN_DISCORD_ID is declared on
+	// both SessionEnv and AdminAuthEnv: the gate owns the contract, the env
+	// this Worker's handlers are typed against has to carry the field.
+	ADMIN_CLI_TOKEN?: string;
 	// Upload-bucket rate limits (apply to uploads + reimports together).
 	// Strings because wrangler.toml `[vars]` are always strings at runtime;
 	// parsed with parseInt at the call site.
@@ -1270,10 +1276,16 @@ async function linkTournamentMatch(
 // `targetUserId` instead of the session user, rate limits are skipped, and
 // the audit event uses event_type='admin_reimport' with `actingAdminUserId`
 // stashed in metadata. Set only by handleAdminReparseUpload after
-// isSiteAdmin succeeds.
+// isSiteAdmin or siteAdminFromCliToken succeeds.
 export interface AdminUploadOverride {
 	targetUserId: string;
 	actingAdminUserId: string;
+	// How the admin proved it. Both values name the same `user_id`, but not
+	// the same claim: "session" is a logged-in admin in a browser, "cli" is a
+	// holder of ADMIN_CLI_TOKEN with the id resolved from ADMIN_DISCORD_ID.
+	// Recorded in the audit row because the two have different blast radii and
+	// different ways of being revoked.
+	actingVia: "session" | "cli";
 }
 
 export async function handleGameUpload(
@@ -2298,7 +2310,10 @@ export async function handleGameUpload(
 							}
 						: {}),
 					...(adminOverride
-						? { acting_user_id: adminOverride.actingAdminUserId }
+						? {
+								acting_user_id: adminOverride.actingAdminUserId,
+								acting_via: adminOverride.actingVia,
+							}
 						: {}),
 				}),
 			)
@@ -3654,6 +3669,13 @@ export async function handleAdminDownload(
 	});
 }
 
+// The one admin endpoint reachable without a session: `./per-ankh admin
+// reparse-all` parses saves headless and posts the result here, so it
+// authenticates with ADMIN_CLI_TOKEN (cloud/src/admin.ts). The session path is
+// tried first — it is what the browser sweeps use, and it costs one KV read —
+// and both paths converge on the same override, so everything downstream
+// (rate-limit skip, admin_reimport audit, screenshot restore) is shared rather
+// than mirrored.
 export async function handleAdminReparseUpload(
 	targetUserId: string,
 	request: Request,
@@ -3661,18 +3683,24 @@ export async function handleAdminReparseUpload(
 ): Promise<Response> {
 	const cors = cloudCorsHeaders(env, request);
 	const session = await sessionFromRequest(env, request);
-	if (!(await isSiteAdmin(env, session))) {
-		return errorResponse("Not found", 404, cors, "NOT_FOUND");
+	// session is non-null whenever isSiteAdmin is true (it returns false for a
+	// null session); the explicit check is what narrows the type.
+	if (session && (await isSiteAdmin(env, session))) {
+		return handleGameUpload(request, env, {
+			targetUserId,
+			actingAdminUserId: session.data.user_id,
+			actingVia: "session",
+		});
 	}
-	// session is guaranteed non-null since isSiteAdmin returns false for null
-	// sessions; satisfy the type checker.
-	if (!session) {
-		return errorResponse("Not found", 404, cors, "NOT_FOUND");
+	const cliAdminUserId = await siteAdminFromCliToken(env, request);
+	if (cliAdminUserId) {
+		return handleGameUpload(request, env, {
+			targetUserId,
+			actingAdminUserId: cliAdminUserId,
+			actingVia: "cli",
+		});
 	}
-	return handleGameUpload(request, env, {
-		targetUserId,
-		actingAdminUserId: session.data.user_id,
-	});
+	return errorResponse("Not found", 404, cors, "NOT_FOUND");
 }
 
 // List game ids + display labels for the admin reindex sweep. Unlike the

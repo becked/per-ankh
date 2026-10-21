@@ -15,9 +15,6 @@
 // sourced from YOUTUBE_API_KEY in the environment or cloud/.dev.vars — the same
 // secret the local Worker uses.
 
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-
 import {
 	type Column,
 	emdash,
@@ -36,7 +33,7 @@ import {
 	parseFlags,
 	printJson,
 } from "../../lib/cli";
-import { readDotVars } from "../../lib/dotvars";
+import { DEV_VARS_PATH, readDotVars } from "../../lib/dotvars";
 import { d1Exec, d1Query, sqlStr } from "../wrangler";
 // cloud/ is a CJS package (no "type":"module") while scripts/ runs as ESM, so
 // the video registry's named exports surface only through the default-interop
@@ -49,15 +46,6 @@ import type {
 	VideoProvider,
 } from "../../../cloud/src/video/types";
 const { providerForUrl, supportedPlatforms } = videoRegistry;
-
-// scripts/admin/commands/channels.ts → repo root is three levels up.
-const REPO_ROOT = resolve(
-	dirname(fileURLToPath(import.meta.url)),
-	"..",
-	"..",
-	"..",
-);
-const DEV_VARS_PATH = resolve(REPO_ROOT, "cloud", ".dev.vars");
 
 // Mirrors AddChannelSchema's bound (cloud/src/schemas/channel.ts).
 const MAX_URL_LEN = 500;

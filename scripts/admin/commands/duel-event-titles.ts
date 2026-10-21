@@ -24,19 +24,19 @@
 // cached on disk and reused, so re-running to reshape the output costs no
 // further remote reads.
 
-import { existsSync } from "node:fs";
-import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 
 import { XMLParser } from "fast-xml-parser";
 
-import { d1Query, r2Get, sqlStr } from "../wrangler";
+import { d1Query, sqlStr } from "../wrangler";
+import { readCachedSave } from "../saves";
 import type { CommandOpts } from "../../lib/cli";
 import { flagInt, flagString, parseFlags, printJson } from "../../lib/cli";
 import { bold, dim, info, warn } from "../../lib/format";
+import { mapLimit } from "../../lib/map-limit";
 import { resolveReferenceXml } from "../../lib/paths";
-import { extractXmlFromZip } from "../../../src/lib/parser/extract-zip";
 import { stripMarkup } from "../../../src/lib/utils/formatting";
 
 // Both spellings of the duel map size present in the corpus.
@@ -172,28 +172,6 @@ async function loadTitles(): Promise<{
 		}
 	}
 	return { titles, known };
-}
-
-// Run `task` over `items` with a bounded number in flight. Wrangler spawns
-// dominate the wall clock and each decompressed save is held in memory while
-// it is scanned, so both ends want a ceiling.
-async function mapLimit<T>(
-	items: T[],
-	limit: number,
-	task: (item: T, index: number) => Promise<void>,
-): Promise<void> {
-	let next = 0;
-	const workers = Array.from(
-		{ length: Math.min(limit, items.length) },
-		async () => {
-			for (;;) {
-				const i = next++;
-				if (i >= items.length) return;
-				await task(items[i], i);
-			}
-		},
-	);
-	await Promise.all(workers);
 }
 
 // One save's fired events. Counted per game first so that a game contributes
@@ -371,23 +349,13 @@ export async function run(args: string[], opts: CommandOpts): Promise<void> {
 	let scanned = 0;
 
 	await mapLimit(games, concurrency, async (game, i) => {
-		const dest = resolve(cacheDir, `${game.game_id}.zip`);
 		try {
-			// An empty file from an interrupted earlier run would fail the
-			// archive check forever, so only a non-empty cache entry counts.
-			const cached = existsSync(dest) && (await stat(dest)).size > 0;
-			if (!cached && !(await r2Get(`saves/${game.game_id}.zip`, dest))) {
+			const save = await readCachedSave(game.game_id, cacheDir);
+			if (!save) {
 				missing.push(game.game_id);
 				return;
 			}
-			const buf = await readFile(dest);
-			const xml = extractXmlFromZip(
-				buf.buffer.slice(
-					buf.byteOffset,
-					buf.byteOffset + buf.byteLength,
-				) as ArrayBuffer,
-			);
-			for (const [zType, stat] of scanSave(xml)) {
+			for (const [zType, stat] of scanSave(save.xml)) {
 				const agg = stats.get(zType) ?? emptyStat();
 				agg.games += stat.games;
 				agg.playerGames += stat.playerGames;

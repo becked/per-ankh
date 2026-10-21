@@ -1095,10 +1095,11 @@ Download any game's raw ZIP (admin).
 Re-import a save into a target user's library (admin).
 
 - **Path:** `user_id` (21-char) — the library owner the upload runs as.
+- **Auth:** the **only** admin endpoint that accepts a credential other than a session. A logged-in site admin (`ADMIN_DISCORD_ID`) works as everywhere else; so does `Authorization: Bearer <ADMIN_CLI_TOKEN>` with no session at all, which is how `./per-ankh admin reparse-all` sweeps the corpus headless (it parses saves locally and posts each one here). The token is scoped to this endpoint — presenting it at any other `/v1/admin/*` route is a `404` — and is unset by default, in which case only the session path exists. The session path is tried first.
 - **Body:** same `multipart/form-data` as [`POST /v1/games`](#post-v1games); `tournament_match_id` is rejected here.
 - **Response:** `UploadGameResponse` — same shapes as `POST /v1/games`.
-- **Errors:** `404 NOT_FOUND` (non-admin), `400 INVALID_FORM` (`tournament_match_id` supplied), plus all `POST /v1/games` errors.
-- **Notes:** Runs as the target user; upload rate limits are skipped and the action is audited as `admin_reimport` (doesn't count toward the user's upload caps).
+- **Errors:** `404 NOT_FOUND` (neither credential satisfied), `400 INVALID_FORM` (`tournament_match_id` supplied), plus all `POST /v1/games` errors.
+- **Notes:** Runs as the target user; upload rate limits are skipped and the action is audited as `admin_reimport` (doesn't count toward the user's upload caps). The audit row's metadata carries `acting_user_id` — the admin's own id, resolved from `ADMIN_DISCORD_ID` on the token path so both credentials name the same principal — alongside `acting_via` (`"session"` or `"cli"`), which is the only field distinguishing them. A save that is not a completed game cannot be reparsed here at all: `challenge_id` is rejected on an admin reparse, and without it the `game_over` gate refuses the upload, so a challenge map or run stays at the parser version it was uploaded with.
 
 ---
 
