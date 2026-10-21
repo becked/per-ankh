@@ -42,6 +42,18 @@ export function reconstructMapTiles(
 	//    Latest tile_ownership_history entry that changed hands at or before
 	//    the turn — `ownershipChangeTurn`, because the save keys each entry to
 	//    the turn after the change.
+	//
+	//    Three states, and the map below keeps them apart by presence as well
+	//    as by value: no entry is land no player has ever held, an entry with
+	//    an owner id is land someone holds, and an entry whose owner is null is
+	//    land a player held and then RELEASED. The third is what a capture
+	//    writes — `City.setPlayer` re-sets every territory tile to the city's
+	//    new holder (`City.cs:3479`), and a capture's holder is nobody
+	//    (`Unit.doCityCapture`, Unit.cs:2004), so each tile takes
+	//    `Tile.setOwner(PlayerType.NONE, TRIBE_ANARCHY, getID())` and keeps
+	//    its city territory while losing its owning player. Released is not
+	//    the same state as never-held, so `.get()` alone — which answers
+	//    `undefined` for both — can't be the gate.
 	const ownerAtTurn = new Map<number, number | null>();
 	const latestTurnSeen = new Map<number, number>();
 	for (const entry of data.tile_ownership_history) {
@@ -79,18 +91,27 @@ export function reconstructMapTiles(
 	// 4. Project each final-turn tile through the per-turn gate.
 	const out: MapTile[] = data.map_tiles.map((t) => {
 		const xmlId = tileXmlId(t.x, t.y, mapWidth);
-		const ownerXmlId = ownerAtTurn.get(xmlId) ?? null;
-		const owned = ownerXmlId !== null;
+		const row = ownerAtTurn.get(xmlId);
+		const ownerXmlId = row ?? null;
+		const held = ownerXmlId !== null;
+		// A row whose owner is null: see the three states above. The tile is
+		// standing territory of a city nobody holds, so everything built on it
+		// stays — `Tile.setOwner` only clears an improvement under
+		// `hasOwner()` (Tile.cs:7588), and the game keeps drawing the city,
+		// because it colours territory from the CITY rather than from the
+		// tile's owning player (`Game.getBorderColors`, Game.cs:21782).
+		const released = row === null;
+		const developed = held || released;
 
 		const cityInfo =
 			t.owner_city !== null ? cityByName.get(t.owner_city) : undefined;
 		const cityFoundedByTurn =
 			cityInfo !== undefined && cityInfo.founded_turn <= turn;
 
-		// owner_city and the city-center flags are visible only when the tile
-		// is owned at this turn AND the (final-turn) territory city existed by
-		// this turn.
-		const showCityChrome = owned && cityFoundedByTurn;
+		// owner_city and the city-center flags are visible whenever the tile is
+		// held or released at this turn AND the (final-turn) territory city
+		// existed by this turn.
+		const showCityChrome = developed && cityFoundedByTurn;
 
 		return {
 			x: t.x,
@@ -104,19 +125,22 @@ export function reconstructMapTiles(
 			river_w: t.river_w,
 			river_sw: t.river_sw,
 			river_se: t.river_se,
-			// Owned-at-turn gated.
-			improvement: owned ? t.improvement : null,
-			improvement_pillaged: owned ? t.improvement_pillaged : false,
-			improvement_turns_left: owned ? t.improvement_turns_left : null,
-			has_road: owned ? t.has_road : false,
+			// Held-or-released gated: what a player built on the tile, which
+			// survives the owner.
+			improvement: developed ? t.improvement : null,
+			improvement_pillaged: developed ? t.improvement_pillaged : false,
+			improvement_turns_left: developed ? t.improvement_turns_left : null,
+			has_road: developed ? t.has_road : false,
 			// Carried through the same ownership gate as `improvement`, so a free
 			// specialist inherits this module's existing final-state
 			// approximation rather than a new one: the aqueduct and the farm are
-			// shown as of the final turn for any turn the tile was owned,
+			// shown as of the final turn for any turn the tile was developed,
 			// exactly as the improvement itself is.
-			specialist: owned ? t.specialist : null,
-			owner_nation: owned ? (playerNation.get(ownerXmlId) ?? null) : null,
-			owner_player_xml_id: owned ? ownerXmlId : null,
+			specialist: developed ? t.specialist : null,
+			// Null on a released tile, and deliberately: nobody owns it. That
+			// null is what the render side keys the unowned-city treatment on.
+			owner_nation: held ? (playerNation.get(ownerXmlId) ?? null) : null,
+			owner_player_xml_id: held ? ownerXmlId : null,
 			// City-chrome gated.
 			owner_city: showCityChrome ? t.owner_city : null,
 			is_city_center: t.is_city_center && cityFoundedByTurn,

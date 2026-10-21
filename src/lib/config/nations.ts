@@ -13,6 +13,7 @@
 
 import {
 	NATION_COLORS,
+	TRIBE_BORDER_COLOR,
 	TRIBE_COLORS,
 } from "$lib/generated/civilization-colors";
 
@@ -47,6 +48,16 @@ export function getNationColor(nation: string): string | undefined {
 export function getTribeColor(tribe: string): string | undefined {
 	return TRIBE_COLORS[zTypeFor("TRIBE_", tribe)];
 }
+
+/**
+ * The border the game paints around a city no player holds. `getBorderColors`
+ * (Game.cs:21782) colours territory from the CITY, and for a city whose tribe
+ * is set it reads that tribe's `TeamPlayerColor` — one shared near-black for
+ * every tribe, which is why this is a constant and not a lookup. Re-exported
+ * from the baked table so callers reach it the way they reach the per-civ
+ * colours, rather than importing `$lib/generated` directly.
+ */
+export const UNOWNED_CITY_BORDER_COLOR = TRIBE_BORDER_COLOR;
 
 /**
  * Get color for either a nation or tribe

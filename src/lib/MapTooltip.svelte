@@ -10,7 +10,8 @@
 	let {
 		tile,
 		cityFamily = null,
-		nationCrestKey = null,
+		civilizationCrestKey = null,
+		capture = null,
 		screenX,
 		screenY,
 		canvasWidth,
@@ -20,10 +21,19 @@
 		tile: MapTile;
 		// Resolved family enum like "FAMILY_PTOLEMY", or null if unknown / not city.
 		cityFamily?: string | null;
-		// Crest sprite enum to render for the nation icon. Resolved by the parent
-		// against nation-asset-aliases so variant nations (NATION_AMUN, NATION_ATHENS)
+		// Crest sprite enum for whoever HOLDS this tile's city — a nation or,
+		// for a city under capture or a tribe's own, a tribe. "Civilization" is
+		// the repo's word for that union (`getCivilizationColor`). Resolved by
+		// the parent: a tribe through the baked crest tables, a nation against
+		// nation-asset-aliases so variant nations (NATION_AMUN, NATION_ATHENS)
 		// fall back to their parent civ's crest (CREST_NATION_EGYPT, ...).
-		nationCrestKey?: string | null;
+		civilizationCrestKey?: string | null;
+		// Who is taking this tile's city, when one is. Null is "not being
+		// captured"; a null `nation` inside it is a capture whose captor the
+		// blob can't name — a blob from before PARSER_VERSION 2.26.0, or a
+		// tribe doing the capturing, which has no nation. The row is omitted
+		// for both, because the state already reads from the border.
+		capture?: { nation: string | null } | null;
 		screenX: number;
 		screenY: number;
 		// The deck canvas the panel sits over, in CSS pixels — the box it
@@ -58,7 +68,10 @@
 	const terrainLabel = $derived.by(() => {
 		if (!tile.terrain) return null;
 		// When inside a city, "Urban" duplicates the city header — suppress.
-		if (tile.terrain === "TERRAIN_URBAN" && tile.owner_nation) return null;
+		// The condition is "inside a city", which is what owner_city says: a
+		// city nobody holds has no owner_nation on any of its tiles, so those
+		// tiles were printing "Urban Hill" under the city's own header.
+		if (tile.terrain === "TERRAIN_URBAN" && tile.owner_city) return null;
 		const terrain = formatEnum(tile.terrain, "TERRAIN_");
 		if (!tile.height) return terrain;
 		return `${terrain} ${formatEnum(tile.height, "HEIGHT_")}`;
@@ -78,6 +91,17 @@
 	// record which kind it holds.
 	const specialistLabel = $derived(
 		tile.specialist ? specialistName(tile.specialist) : null,
+	);
+
+	// The captor, named only when the blob names one — see `capture` above.
+	// In its own nation's colour, which is what the game writes it in
+	// (ClientUI.cs:7333 fills the capture bar in
+	// `capturePlayer().getPlayerNameColor(...)`); the city NAME above keeps the
+	// unowned tan, because nobody owns the city.
+	const captorNation = $derived(capture?.nation ?? null);
+	const captorColor = $derived(
+		(captorNation ? getCivilizationColor(captorNation) : null) ??
+			"rgb(var(--color-tan))",
 	);
 
 	// Conservative size estimate for edge-flip clamping. Exact CSS size depends on
@@ -115,8 +139,12 @@
 	{#if headerLabel}
 		<div class="header">
 			<div class="crests">
-				{#if nationCrestKey}
-					<SpriteIcon category="crests" value={nationCrestKey} size={18} />
+				{#if civilizationCrestKey}
+					<SpriteIcon
+						category="crests"
+						value={civilizationCrestKey}
+						size={18}
+					/>
 				{/if}
 				{#if cityFamily}
 					<SpriteIcon category="crests" value={cityFamily} size={18} />
@@ -143,6 +171,10 @@
 		{#if specialistLabel}
 			<dt>Specialist</dt>
 			<dd>{specialistLabel}</dd>
+		{/if}
+		{#if captorNation}
+			<dt>Capturing</dt>
+			<dd style="color: {captorColor};">{nationName(captorNation)}</dd>
 		{/if}
 	</dl>
 
