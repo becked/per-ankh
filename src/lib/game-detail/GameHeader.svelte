@@ -125,16 +125,16 @@
 	const needsReparse = $derived(isNewer(PARSER_VERSION, game.parser_version));
 	const isAdmin = $derived(page.data.user?.is_admin ?? false);
 	// One target for both callers, built here and gated null so the banner
-	// only shows when a reparse is actually actionable. uploader_nation is the
-	// raw choice (null = observer), not the COALESCE'd display user_nation —
-	// feeding the display value would re-claim the first human on observer
-	// uploads. The label is the same effective title the breadcrumb leaf uses.
+	// only shows when a reparse is actually actionable. The seat is the stored
+	// `uploader_player_index` (null = observer), posted back verbatim — not a
+	// nation, which names two seats in a mirror matchup. The label is the same
+	// effective title the breadcrumb leaf uses.
 	const reparse = $derived.by(() => {
 		if (!needsReparse) return null;
 		const target = {
 			game_id: gameId,
 			game_name: gameTitle,
-			uploader_nation: game.uploader_nation ?? null,
+			uploader_player_index: game.uploader_player_index ?? null,
 		};
 		if (isOwner) return { target, adminMode: false };
 		// Site admins get the same banner on a *public* game they don't own,

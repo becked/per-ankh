@@ -299,7 +299,7 @@ The caller's games whose `parser_version` differs from a target (drives bulk rep
 
 - **Auth:** Session (scoped to the caller).
 - **Query:** `version` (required).
-- **Response 200:** `{ games: [...], total }` (GameListItem-shaped). Not paginated.
+- **Response 200:** `{ games: [...], total }` (GameListItem-shaped). Not paginated. Each row carries `uploader_player_index` — the seat the uploader claimed, null for an observer upload — which the reparse posts back unchanged so the same player is re-claimed.
 - **Errors:** `401 UNAUTHORIZED`, `400 INVALID_QUERY`.
 
 ### `GET /v1/games/:id/download`

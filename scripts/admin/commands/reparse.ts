@@ -59,10 +59,7 @@ import {
 } from "../../../src/lib/parser/parse-xml";
 import { extractAllGameData } from "../../../src/lib/parser/parsers/index";
 import { PARSER_VERSION } from "../../../src/lib/parser/types";
-import {
-	gzipJson,
-	recoverUploaderIndex,
-} from "../../../src/lib/parser/upload-helpers";
+import { gzipJson } from "../../../src/lib/parser/upload-helpers";
 import { validateCompletedGame } from "../../../src/lib/parser/validation";
 
 // The credential, by the same split purge.ts documents: committed config comes
@@ -86,10 +83,10 @@ interface StaleGame {
 	// owner's name: that is `users.display_name`, joined below as owner_name.
 	display_name: string | null;
 	owner_name: string | null;
-	// The raw `games.user_nation` — null means the original was an observer
-	// upload. NOT a COALESCE'd display value: feeding one of those to
-	// recoverUploaderIndex would re-claim the first human on an observer game.
-	user_nation: string | null;
+	// The seat the uploader claimed (`player_summaries.is_uploader`), posted
+	// back verbatim so the reparse re-claims the same player. Null means the
+	// original was an observer upload and stays one.
+	uploader_player_index: number | null;
 	parser_version: string;
 }
 
@@ -148,9 +145,17 @@ async function loadStale(
 	const where = [`g.parser_version != ${sqlStr(PARSER_VERSION)}`];
 	if (fromVersion) where.push(`g.parser_version = ${sqlStr(fromVersion)}`);
 	if (userId) where.push(`g.user_id = ${sqlStr(userId)}`);
+	// The uploader-seat subquery is `uploaderPlayerIndexSql` in
+	// cloud/src/games.ts, spelled again because nothing in scripts/ imports
+	// from cloud/src/ (the bakers write both trees rather than share modules).
+	// The two must agree: this sweep and the browser's post to the same
+	// endpoint, so a divergence is a reparse that changes whose game it is.
 	return d1Query<StaleGame>(
 		`SELECT g.game_id, g.user_id, g.game_name, g.display_name,
-		        u.display_name AS owner_name, g.user_nation, g.parser_version
+		        u.display_name AS owner_name, g.parser_version,
+		        (SELECT ps.player_index FROM player_summaries ps
+		          WHERE ps.game_id = g.game_id AND ps.is_uploader = 1)
+		          AS uploader_player_index
 		   FROM games g
 		   LEFT JOIN users u ON u.user_id = g.user_id
 		  WHERE ${where.join(" AND ")}
@@ -248,12 +253,7 @@ async function processOne(
 		// catch below maps its NOT_COMPLETED back to a named skip, because that
 		// is a property of the game rather than a fault in this run.
 		validateCompletedGame(data);
-		const recovered = recoverUploaderIndex(
-			data.player_roster,
-			game.user_nation,
-		);
-		if (!recovered.ok) return { kind: "failed", why: recovered.message };
-		return postReparse(game, save.zip, data, recovered.uploaderIndex, token);
+		return postReparse(game, save.zip, data, game.uploader_player_index, token);
 	} catch (e) {
 		if (e instanceof ParseError && e.code === "NOT_COMPLETED") {
 			return {

@@ -65,49 +65,10 @@ export function defaultSelection(
 }
 
 // A reparse re-uploads a save whose perspective was already chosen once, so
-// the uploader is recovered rather than picked: find the unique human in the
-// freshly parsed roster whose nation matches the stored one.
-export type UploaderRecovery =
-	{ ok: true; uploaderIndex: number | null } | { ok: false; message: string };
-
-/**
- * Recover `uploader_player_index` for a reparse from the game's stored
- * uploader nation.
- *
- * `uploaderNation` must be the raw `games.user_nation` (the API serves it as
- * `uploader_nation`), NOT a COALESCE'd display value — null means the original
- * was an observer upload and stays one. An ambiguous or absent match is
- * returned as a failure rather than guessed, because the alternative is
- * silently re-claiming the wrong seat: `is_uploader`, `user_won` and the
- * profile's whole record of the game hang off this index.
- *
- * Shared by the browser sweep (BulkReparseModal) and the headless one
- * (`./per-ankh admin reparse-all`), which must agree — the two write through
- * the same endpoint and a divergence would show up as a reparse that quietly
- * changed whose game it is.
- */
-export function recoverUploaderIndex(
-	roster: readonly Pick<
-		PlayerRosterEntry,
-		"player_index" | "is_human" | "nation"
-	>[],
-	uploaderNation: string | null,
-): UploaderRecovery {
-	if (uploaderNation === null) return { ok: true, uploaderIndex: null };
-	const candidates = roster.filter(
-		(p) => p.is_human && p.nation === uploaderNation,
-	);
-	if (candidates.length === 1) {
-		return { ok: true, uploaderIndex: candidates[0].player_index };
-	}
-	return {
-		ok: false,
-		message:
-			candidates.length === 0
-				? `No human player matches stored nation ${uploaderNation}`
-				: `Multiple human players match stored nation ${uploaderNation}`,
-	};
-}
+// the uploader is neither picked nor re-derived: both sweeps carry the stored
+// `player_summaries.is_uploader` seat in and post it back. The server
+// re-validates it against the fresh roster (UNKNOWN_PLAYER_INDEX), which is
+// what catches an index the new parser no longer has.
 
 // Enriched human-player option for the upload picker. Superset of the roster
 // entry — player_index / online_id still drive the upload + dedup logic — plus

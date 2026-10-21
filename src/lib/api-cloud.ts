@@ -229,11 +229,11 @@ export interface GameListItem {
 	save_date: string | null;
 	total_turns: number;
 	user_nation: string | null;
-	// The uploader's original player choice as the raw nation enum, or null
-	// for an observer upload — distinct from `user_nation`, which the list
-	// endpoints COALESCE to the first human's nation for display. Reparse
-	// round-trips this so the same player (or observer) is re-claimed.
-	uploader_nation: string | null;
+	// The seat the uploader claimed (`player_summaries.is_uploader`), or null
+	// for an observer upload. Reparse round-trips this so the same player (or
+	// observer) is re-claimed. Not `user_nation`: that's derived from this
+	// one, and a nation names two seats in a mirror matchup.
+	uploader_player_index: number | null;
 	user_won: boolean | null;
 	winner_nation: string | null;
 	victory_type: string | null;
@@ -1154,11 +1154,12 @@ export const cloudApi = {
 			user_id?: string | null;
 			user_nation?: string | null;
 			// Raw uploader nation choice (null = observer), un-COALESCE'd —
-			// drives the reparse from the detail page.
+			// the map view's opening player.
 			uploader_nation?: string | null;
 			// The claimed seat's player_index (null = observer). What the
-			// owner's player picker checks against — a nation can't tell two
-			// humans playing the same one apart.
+			// owner's player picker checks against, and what the reparse from
+			// the detail page round-trips — a nation can't do either, because
+			// it can't tell two humans playing the same one apart.
 			uploader_player_index?: number | null;
 			user_won?: boolean | null;
 			user_display_name?: string | null;

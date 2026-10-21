@@ -1155,6 +1155,28 @@ function normalizeGameListRow(
 
 // ---------- Helpers ----------
 
+/**
+ * Correlated subquery yielding the uploader's `player_index` for a game, or
+ * NULL when the original upload was an observer (no `is_uploader` row).
+ *
+ * This is the uploader's identity. `games.user_nation` is derived *from* it
+ * and cannot stand in for it: the game lets two humans claim the same nation
+ * — `Game.IsValidNationForIndex` returns true outright under
+ * `TEAMNATION_ALLOW_DUPLICATES`, and under the multi-human default
+ * (`TEAMNATION_TEAM_UNIQUE`) rejects a duplicate only when the two share a
+ * team, so a 1v1 mirror matchup is legal — and a nation then names two seats.
+ *
+ * At most one row per game carries the flag (handleGameUpload binds
+ * `player_index === uploaderIndex`), so the bare subquery needs no LIMIT.
+ * Spelled once because four handlers serve this to the reparse surfaces and
+ * a divergence would show up as a reparse that changed whose game it is. The
+ * headless sweep spells it a fifth time (`scripts/admin/commands/reparse.ts`),
+ * which reads D1 through wrangler and can't import this.
+ */
+const uploaderPlayerIndexSql = (gamesAlias: string): string =>
+	`(SELECT ps.player_index FROM player_summaries ps
+	   WHERE ps.game_id = ${gamesAlias}.game_id AND ps.is_uploader = 1)`;
+
 // Resolved tournament context for an upload — populated from the form's
 // tournament_match_id (and the parsed blob's slot mappings + winner). Used
 // by linkTournamentMatch to stamp the match as reported. Kept structurally
@@ -2519,7 +2541,7 @@ export async function handleGameList(
 		            WHERE ps.game_id = games.game_id AND ps.is_human = 1
 		            ORDER BY ps.player_index ASC LIMIT 1
 		        )) AS user_nation,
-		        user_nation AS uploader_nation,
+		        ${uploaderPlayerIndexSql("games")} AS uploader_player_index,
 		        user_won, winner_nation, victory_type,
 		        map_size, is_public, collection_id, created_at, parser_version
 		 FROM games WHERE ${where}
@@ -2859,11 +2881,7 @@ export async function handleGameDetail(
 		`SELECT g.user_id, g.is_public, g.display_name, g.user_won,
 		        g.parser_version,
 		        g.user_nation AS uploader_nation,
-		        (
-		            SELECT ps.player_index FROM player_summaries ps
-		            WHERE ps.game_id = g.game_id AND ps.is_uploader = 1
-		            LIMIT 1
-		        ) AS uploader_player_index,
+		        ${uploaderPlayerIndexSql("g")} AS uploader_player_index,
 		        COALESCE(g.user_nation, (
 		            SELECT ps.nation FROM player_summaries ps
 		            WHERE ps.game_id = g.game_id AND ps.is_human = 1
@@ -2883,9 +2901,11 @@ export async function handleGameDetail(
 			// Part of the blob cache key — see cacheKey in blob-cache.ts.
 			parser_version: string;
 			user_nation: string | null;
-			// Raw uploader choice (un-COALESCE'd) for the reparse round-trip;
-			// null = observer upload. Distinct from user_nation above, which
-			// falls back to the first human for display.
+			// Raw uploader choice (un-COALESCE'd); null = observer upload.
+			// Distinct from user_nation above, which falls back to the first
+			// human for display. Read by the map view to pick the player the
+			// chrome opens on, NOT by the reparse — that round-trips
+			// uploader_player_index below, which a mirror matchup can't blur.
 			uploader_nation: string | null;
 			// The claimed seat's player_index, from the is_uploader flag the
 			// summaries carry. Null on an observer upload — the nation above
@@ -2990,10 +3010,11 @@ export async function handleGameDetail(
 		...baseBlob,
 		user_id: row.user_id,
 		user_nation: row.user_nation,
-		// Raw uploader nation (null = observer) so a reparse from the detail
-		// page re-claims the same player/observer — see ReparseButton. The
-		// index beside it is what the owner's player picker checks (see
-		// GameActions).
+		// Raw uploader nation (null = observer) — the map view keys its
+		// opening player on it. The index beside it is what the owner's
+		// player picker checks (see GameActions) and what a reparse from the
+		// detail page round-trips (see ReparseButton); a nation can't do the
+		// latter two, because it names two seats in a mirror matchup.
 		uploader_nation: row.uploader_nation,
 		uploader_player_index: row.uploader_player_index,
 		user_won: coerceD1Bool(row.user_won),
@@ -3718,7 +3739,8 @@ export async function handleGamesOutOfDate(
 	const rows = await env.SHARE_DB.prepare(
 		`SELECT game_id, game_name, display_name, save_date, total_turns,
 		        user_nation, user_won, winner_nation, victory_type, map_size,
-		        is_public, collection_id, created_at, parser_version
+		        is_public, collection_id, created_at, parser_version,
+		        ${uploaderPlayerIndexSql("games")} AS uploader_player_index
 		 FROM games
 		 WHERE user_id = ? AND parser_version != ?
 		 ORDER BY created_at DESC`,
@@ -3739,6 +3761,7 @@ export async function handleGamesOutOfDate(
 			collection_id: number | null;
 			created_at: string;
 			parser_version: string;
+			uploader_player_index: number | null;
 		}>();
 	const games = (rows.results ?? []).map((r) => ({
 		game_id: r.game_id,
@@ -3747,9 +3770,9 @@ export async function handleGamesOutOfDate(
 		save_date: r.save_date,
 		total_turns: r.total_turns,
 		user_nation: r.user_nation,
-		// Out-of-date lists select the raw user_nation (no display COALESCE),
-		// so it doubles as the uploader's original choice for the reparse.
-		uploader_nation: r.user_nation,
+		// The seat the uploader claimed, which the reparse re-sends so the
+		// same player (or observer) is re-claimed. Null = observer upload.
+		uploader_player_index: r.uploader_player_index,
 		user_won: coerceD1Bool(r.user_won),
 		winner_nation: r.winner_nation,
 		victory_type: r.victory_type,
@@ -3799,6 +3822,7 @@ export async function handleAdminListOutOfDate(
 		        g.total_turns, g.user_nation, g.user_won, g.winner_nation,
 		        g.victory_type, g.map_size, g.is_public, g.collection_id,
 		        g.created_at, g.parser_version,
+		        ${uploaderPlayerIndexSql("g")} AS uploader_player_index,
 		        ${displayNameSql("u")} AS owner_display_name
 		 FROM games g
 		 JOIN users u ON g.user_id = u.user_id
@@ -3822,6 +3846,7 @@ export async function handleAdminListOutOfDate(
 			collection_id: number | null;
 			created_at: string;
 			parser_version: string;
+			uploader_player_index: number | null;
 			owner_display_name: string;
 		}>();
 	const games = (rows.results ?? []).map((r) => ({
@@ -3833,9 +3858,9 @@ export async function handleAdminListOutOfDate(
 		save_date: r.save_date,
 		total_turns: r.total_turns,
 		user_nation: r.user_nation,
-		// Raw user_nation doubles as the uploader's original choice (no
-		// display COALESCE on the out-of-date query) for the reparse.
-		uploader_nation: r.user_nation,
+		// The seat the uploader claimed, which the reparse re-sends so the
+		// same player (or observer) is re-claimed. Null = observer upload.
+		uploader_player_index: r.uploader_player_index,
 		user_won: coerceD1Bool(r.user_won),
 		winner_nation: r.winner_nation,
 		victory_type: r.victory_type,
