@@ -11,13 +11,7 @@
 		worldY: number;
 		/** Owner nation's colour, resolved as the tile hover panel resolves it. */
 		nationColor: string;
-		/**
-		 * Crest of whoever HOLDS the city — its nation, or its tribe for a city
-		 * under capture, which is the anarchy crest. "Civilization" is the
-		 * repo's word for that union (`getCivilizationColor`). Null when no
-		 * crest resolves, which is what makes the slot optional below.
-		 */
-		civilizationCrestKey: string | null;
+		nationCrestKey: string | null;
 		familyCrestKey: string | null;
 		isCapital: boolean;
 		/** Citizens, or null away from the final turn — the count is end-of-game. */
@@ -141,12 +135,8 @@
 		onblur={onBannerLeave}
 		oncontextmenu={(e) => onBannerToggleLock(banner.cityName, e.currentTarget)}
 	>
-		{#if full && banner.civilizationCrestKey}
-			<SpriteIcon
-				category="crests"
-				value={banner.civilizationCrestKey}
-				size={10}
-			/>
+		{#if full && banner.nationCrestKey}
+			<SpriteIcon category="crests" value={banner.nationCrestKey} size={10} />
 		{/if}
 		{#if full && banner.familyCrestKey}
 			<SpriteIcon category="crests" value={banner.familyCrestKey} size={10} />

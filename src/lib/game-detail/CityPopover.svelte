@@ -135,39 +135,8 @@
 			})
 			.join(", "),
 	);
-	// Who is taking the city, when the selected turn sits inside the capture the
-	// SAVE froze — the last ownership span, unowned and running to the final
-	// turn. `<CapturePlayer>` is a single current value (City.cs:1251), not a
-	// history, and the eventual owner from `tile_ownership_history` is the
-	// captor for 1,320 of the corpus's 1,342 closed released spans and the
-	// DEFENDER for the other 22. So an EARLIER unowned span shows the state —
-	// through the border on the map and "Unowned, mid-capture" in the line
-	// below — without a name, rather than the wrong one. Null too when the
-	// captor is a tribe (`capture_tribe`, which names no player) or when the
-	// blob predates the field.
-	const captorAtTurn = $derived.by(() => {
-		const span = spanAtTurn;
-		if (span == null || span.playerXmlId !== null || span.to !== finalTurn) {
-			return undefined;
-		}
-		return playerAt(city?.capture_player_xml_id ?? null);
-	});
-	const captorColor = $derived(
-		(captorAtTurn?.nation ? getCivilizationColor(captorAtTurn.nation) : null) ??
-			"rgb(var(--color-tan))",
-	);
-
 	const familyAtTurn = $derived(
 		city ? familyForOwner(city, spanAtTurn?.playerXmlId ?? null) : null,
-	);
-	// The game writes `Family="NONE"` for a city with no family
-	// (`Infos.zTYPE_NONE`, City.cs:1159) — 6 of the corpus's 326 city rows, all
-	// of them mid-capture — and `formatEnum` renders that as "None", a row that
-	// says nothing. A real family is what the row is for.
-	const familyNameAtTurn = $derived(
-		familyAtTurn?.family != null && familyAtTurn.family !== "NONE"
-			? familyAtTurn.family
-			: null,
 	);
 	// Per-family crest where we ship the art, else the family-class archetype
 	// — the same rule the banner's crest follows.
@@ -519,23 +488,7 @@
 						Unowned
 					{/if}
 				</dd>
-				{#if captorAtTurn}
-					<dt>Capturing</dt>
-					<dd style="color: {captorColor};">
-						<span class="inline-flex items-center gap-1">
-							{#if captorAtTurn.nation}
-								<SpriteIcon
-									category="crests"
-									value={captorAtTurn.nation}
-									size={14}
-									alt={nationName(captorAtTurn.nation)}
-								/>
-							{/if}
-							{captorAtTurn.label}
-						</span>
-					</dd>
-				{/if}
-				{#if familyNameAtTurn}
+				{#if familyAtTurn?.family}
 					<dt>Family</dt>
 					<dd>
 						<span class="inline-flex items-center gap-1">
@@ -546,7 +499,7 @@
 									size={14}
 								/>
 							{/if}
-							{formatEnum(familyNameAtTurn, "FAMILY_")}
+							{formatEnum(familyAtTurn.family, "FAMILY_")}
 						</span>
 					</dd>
 				{/if}

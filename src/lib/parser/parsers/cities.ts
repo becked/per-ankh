@@ -62,27 +62,6 @@ export interface City {
 	// assimilate.
 	damage: number;
 	assimilateTurns: number;
-	// The three things the save records about a city nobody holds. A capture
-	// hands the city to nobody and names the captor beside it
-	// (`Unit.doCityCapture`, Unit.cs:2004: `setPlayer(PlayerType.NONE,
-	// ANARCHY_TRIBE, ...)` then `setCapturePlayer(getPlayer())`), so
-	// `playerXmlId` alone can't tell a captured city from a tribe's own.
-	//
-	// Read under the names `City.writeGameXML` writes, each emitted only when
-	// the city has one: <Tribe> under `isTribe()` (City.cs:1263),
-	// <CapturePlayer> under `hasCapturePlayer()` (City.cs:1251) and
-	// <CaptureTribe> under `hasCaptureTribe()` (City.cs:1255).
-	//
-	// So `tribe != null` IS the test for a city a tribe holds — unlike a
-	// unit's, where the save writes `Tribe="NONE"` and the field is non-null on
-	// every player-owned unit (see `unitOwner`, src/lib/game-detail/helpers.ts).
-	// Measured across test-data/saves: of 326 city rows, 320 omit <Tribe>
-	// entirely and the 6 that carry it are TRIBE_ANARCHY. The <Family>
-	// ATTRIBUTE is the opposite — `Infos.zTYPE_NONE` (City.cs:1159), so
-	// `family` reads the literal "NONE" on exactly those 6.
-	tribe: string | null;
-	capturePlayerXmlId: number | null;
-	captureTribe: string | null;
 }
 
 export interface CityProductionItem {
@@ -222,9 +201,6 @@ export function parseCities(root: Record<string, unknown>): City[] {
 			citizens: optInt(node.Citizens) ?? 1,
 			damage: optInt(node.Damage) ?? 0,
 			assimilateTurns: optInt(node.AssimilateTurns) ?? 0,
-			tribe: optStr(node.Tribe),
-			capturePlayerXmlId: optInt(node.CapturePlayer),
-			captureTribe: optStr(node.CaptureTribe),
 			governorXmlId: optInt(node.GovernorID),
 			governorTurn: optInt(node.GovernorTurn),
 			hurryCivicsCount: optInt(node.HurryCivicsCount) ?? 0,

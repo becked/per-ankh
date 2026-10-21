@@ -84,11 +84,3 @@ export const BASE_NATIONS: readonly string[] = [
 	"NATION_TAMIL",
 	"NATION_YUEZHI",
 ];
-
-// The border colour the game paints a city no player holds:
-// Game.getBorderColors reads the CITY's primary player colour
-// (City.getPrimaryPlayerColor → the tribe's TeamPlayerColor,
-// which is PLAYERCOLOR_BARBARIANS for every tribe) and then
-// its BorderColor. One value, shared by all
-// 23 tribes — the bake fails if they ever disagree.
-export const TRIBE_BORDER_COLOR = "#323030";

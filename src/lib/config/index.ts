@@ -20,7 +20,6 @@ export {
 
 // Re-export nation and tribe colors
 export {
-	UNOWNED_CITY_BORDER_COLOR,
 	getNationColor,
 	getTribeColor,
 	getCivilizationColor,

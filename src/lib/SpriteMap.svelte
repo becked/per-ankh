@@ -10,20 +10,11 @@
 	import type { MapTile } from "$lib/types/MapTile";
 	import type { CityInfo } from "$lib/types/CityInfo";
 	import type { PlayerNationEntry } from "$lib/parser/types";
-	import {
-		UNOWNED_CITY_BORDER_COLOR,
-		getCivilizationColor,
-		getMutedTerrainColor,
-		getTribeColor,
-	} from "$lib/config";
+	import { getCivilizationColor, getMutedTerrainColor } from "$lib/config";
 	import {
 		ATLAS_MANIFEST,
 		NATION_ALIASES_URL,
 	} from "$lib/generated/atlas-manifest";
-	import {
-		CREST_SPRITE_NAMES,
-		TRIBE_CRESTS,
-	} from "$lib/generated/crest-sprites";
 	import { SPRITE_MANIFEST } from "$lib/generated/sprite-manifest";
 	import { familyCrestKey, familyForOwner } from "$lib/game-detail/helpers";
 	import { hexNeighbors } from "$lib/utils/hex";
@@ -441,102 +432,6 @@
 		return map;
 	});
 
-	// The tribe a capture hands a city to. `Unit.doCityCapture` (Unit.cs:2004)
-	// calls `setPlayer(PlayerType.NONE, infos().Globals.ANARCHY_TRIBE, ...)`, so
-	// this is the tribe every city under capture carries — as opposed to a city
-	// a real tribe holds, which carries its own.
-	const ANARCHY_TRIBE = "TRIBE_ANARCHY";
-
-	// city_name → the tribe holding it, or null/undefined when a nation does.
-	// Feeds the crest, which the game takes from the city's tribe when it has
-	// one (`City.getCrest`, City.cs:3319).
-	const cityTribeByName = $derived.by(() => {
-		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- locally-scoped Map, not reactive state
-		const map = new Map<string, string | null | undefined>();
-		for (const c of cities) {
-			if (!map.has(c.city_name)) map.set(c.city_name, c.tribe);
-		}
-		return map;
-	});
-
-	// city_name → the tribe it READS AS, for the cities no player holds at the
-	// represented turn. Membership is the test for "unowned city": a city
-	// absent from this map has an owner, so its tiles belong to the nation
-	// outline and its crest to its nation.
-	//
-	// An ABSENT `tribe` resolves to anarchy rather than to nothing, which is
-	// what makes this one map rather than two readings that can disagree. A
-	// blob from before PARSER_VERSION 2.26.0 carries no `tribe` at all, and a
-	// `PARSER_VERSION` bump leaves most blobs on the old shape — so that
-	// default decides the common case, not the edge one. It is also the right
-	// reading: all 6 of the corpus's frozen captures are anarchy, and the
-	// anarchy treatment is what the map already gave every one of them.
-	const unownedCityTribeByName = $derived.by(() => {
-		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- locally-scoped Map, not reactive state
-		const map = new Map<string, string>();
-		for (const t of tiles) {
-			if (!t.is_city_center || !t.owner_city || t.owner_nation) continue;
-			map.set(t.owner_city, cityTribeByName.get(t.owner_city) ?? ANARCHY_TRIBE);
-		}
-		return map;
-	});
-
-	// …and the colour that tribe's territory border draws in. The game colours
-	// territory from the CITY rather than from the tile's owning player
-	// (`Game.getBorderColors`, Game.cs:21782), and the tribe picks the colour:
-	//   - under capture (TRIBE_ANARCHY) → the near-black every tribe shares,
-	//     which is what the game paints a city being taken;
-	//   - held by a real tribe → that tribe's own colour, the one
-	//     `InfoHelpers.getTribeColor` reads. The corpus holds no such city at
-	//     save time, so this branch is unmeasured; it exists because the two
-	//     states have to be told apart, and until `tribe` was parsed nothing
-	//     could.
-	const unownedCityBorderColors = $derived.by(() => {
-		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- locally-scoped Map, not reactive state
-		const map = new Map<string, [number, number, number, number]>();
-		for (const [cityName, tribe] of unownedCityTribeByName) {
-			const tribeHex =
-				tribe === ANARCHY_TRIBE ? undefined : getTribeColor(tribe);
-			map.set(cityName, tribeHex ? opaqueRgba(tribeHex) : CAPTURE_BORDER_COLOR);
-		}
-		return map;
-	});
-
-	// city_name → who is taking it, for a city under capture at the FINAL turn.
-	// The three states the readers need are the map's own: absent is "not being
-	// captured", a `nation` is the captor, and a null `nation` is "under capture
-	// by someone this blob can't name" — a pre-2.26.0 blob, which recorded no
-	// captor at all, or a tribe doing the capturing, which has no nation.
-	//
-	// Final turn only, because the save holds no capture HISTORY: `<Tribe>` and
-	// `<CapturePlayer>` are single current values, and the eventual owner from
-	// `tile_ownership_history` is the captor for 1,320 of the corpus's 1,342
-	// closed released spans and the DEFENDER for the other 22. So an earlier
-	// turn shows the state, through the border, without a name — the same
-	// reason `citizens` is carried on the banner only at the final turn.
-	const captureByCity = $derived.by(() => {
-		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- locally-scoped Map, not reactive state
-		const map = new Map<string, { nation: string | null }>();
-		if (!isFinalTurn) return map;
-		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- locally-scoped Map, not reactive state
-		const nationByPlayer = new Map<number, string | null>();
-		for (const p of playerNations) {
-			nationByPlayer.set(p.player_xml_id, p.nation);
-		}
-		for (const c of cities) {
-			// The game's own test for "is being captured" — `ClientUI.cs:7319`
-			// gates the capture label on `hasCapturePlayer() || hasCaptureTribe()`.
-			if (c.capture_player_xml_id == null && c.capture_tribe == null) continue;
-			map.set(c.city_name, {
-				nation:
-					c.capture_player_xml_id != null
-						? (nationByPlayer.get(c.capture_player_xml_id) ?? null)
-						: null,
-			});
-		}
-		return map;
-	});
-
 	// city_name → founding nation, the nation whose architecture the city renders
 	// in (see renderNationFor). Resolves each city's first_owner_player_xml_id
 	// through the player_nations sidecar. Empty when player_nations is absent,
@@ -751,17 +646,7 @@
 		if (tile) onToggleLock(tile);
 	}
 
-	// Resolve the crest sprite key for whoever holds a tile's city — the value
-	// `getSpritePath("crests", …)` takes, so without the CREST_ prefix it adds.
-	//
-	// A TRIBE first, when one holds the city: `City.getCrest` (City.cs:3319)
-	// returns `tribeInfo().meCrest` before it looks at a nation, which is what
-	// gives a city under capture the anarchy badge rather than an empty slot.
-	// Both legs are baked, because neither is a naming rule — TRIBE_BARBARIANS
-	// wears CREST_TRIBE_GENERIC, and CREST_TRIBE_ANARCHY's art ships as
-	// CREST_TRIBE_REBELS (scripts/bake-crest-sprites.ts).
-	//
-	// Else the nation, with the same 3-tier fallback as before:
+	// Resolve owner_nation → crest sprite key with a 3-tier fallback:
 	//   1. The nation's own crest if shipped (handles MAURYA/TAMIL/YUEZHI,
 	//      KUSH/HYKSOS/MITANNI — which all have their own crest but whose
 	//      urban-family alias points elsewhere).
@@ -770,21 +655,8 @@
 	//   3. CREST_TRIBE_GENERIC as a last resort (e.g. INDIA family — no
 	//      CREST_NATION_INDIA exists in the game).
 	// Existence is checked against the SPRITE_MANIFEST baked from
-	// static/sprites/crests/CREST_*.png.
-	function resolveCityCrestKey(
-		ownerNation: string | null,
-		tribe?: string | null,
-	): string | null {
-		if (tribe) {
-			const crest = TRIBE_CRESTS[tribe];
-			if (crest) {
-				const sprite = CREST_SPRITE_NAMES[crest] ?? crest;
-				if (SPRITE_MANIFEST[`crests/${sprite}`] != null) {
-					return sprite.replace(/^CREST_/, "");
-				}
-			}
-			return "TRIBE_GENERIC";
-		}
+	// static/sprites/crests/CREST_NATION_*.png.
+	function resolveNationCrestKey(ownerNation: string | null): string | null {
 		if (!ownerNation) return null;
 		const stem = ownerNation.replace(/^NATION_/, "");
 		if (SPRITE_MANIFEST[`crests/CREST_NATION_${stem}`] != null) {
@@ -815,16 +687,17 @@
 		return [px, py];
 	}
 
-	// One banner per city-centre tile that STANDS at the represented turn,
+	// One banner per city-centre tile that is OWNED at the represented turn,
 	// joined to CityInfo by name. Taking the per-turn tiles as the source of
-	// truth means a banner appears one turn AFTER founded_turn — the centre
-	// tile's first ownership row lands at founded_turn + 1 in 3,601 of the
-	// 3,604 cities measured across the 122 local blobs (2 at +0, 1 at −3).
-	//
-	// A city nobody holds keeps its banner, because the game keeps drawing it:
-	// `reconstructMapTiles` admits a RELEASED tile's city chrome, and the name
-	// there stays the unowned tan — nobody owns the city, and painting it in
-	// the captor's colour would read as ownership.
+	// truth has two consequences, both measured across the 122 local blobs and
+	// both matching what the sprites already do (reconstructMapTiles nulls
+	// `improvement` on an unowned tile):
+	//   - a banner appears one turn AFTER founded_turn — the centre tile's
+	//     first ownership row lands at founded_turn + 1 in 3,601 of the 3,604
+	//     cities (2 at +0, 1 at −3);
+	//   - a city sitting unowned mid-capture has no banner until the capture
+	//     resolves. 573 cities, in 96 of the 122 games, have a capture or an
+	//     unowned span.
 	const cityBanners = $derived.by(() => {
 		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- locally-scoped Map, not reactive state
 		const byName = new Map<string, CityInfo>();
@@ -847,10 +720,7 @@
 				nationColor: t.owner_nation
 					? (getCivilizationColor(t.owner_nation) ?? "rgb(var(--color-tan))")
 					: "rgb(var(--color-tan))",
-				civilizationCrestKey: resolveCityCrestKey(
-					t.owner_nation,
-					unownedCityTribeByName.get(t.owner_city),
-				),
+				nationCrestKey: resolveNationCrestKey(t.owner_nation),
 				familyCrestKey: cityFamilyCrestByName.get(t.owner_city) ?? null,
 				isCapital: t.is_capital,
 				citizens: isFinalTurn
@@ -1093,12 +963,6 @@
 		return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 	}
 
-	/** The same colour as deck.gl's fully opaque RGBA. */
-	function opaqueRgba(hex: string): [number, number, number, number] {
-		const [r, g, b] = hexToRgb(hex);
-		return [r, g, b, 255];
-	}
-
 	async function loadManifest(name: string): Promise<AtlasManifest> {
 		const entry = ATLAS_MANIFEST[name];
 		if (!entry) throw new Error(`unknown atlas: ${name}`);
@@ -1134,11 +998,7 @@
 	interface PoliticalData {
 		borders: NationBorder[];
 		subBorders: NationBorder[];
-		// The territory outline of each city NO PLAYER holds — under capture,
-		// or held by a tribe. Its own list rather than part of `borders`
-		// because it is keyed on the city instead of on the owning nation,
-		// which is how the game colours it too (`Game.getBorderColors`).
-		unownedCityBorders: NationBorder[];
+		contestedBorders: NationBorder[];
 	}
 
 	// Nation borders are inset slightly into the territory so adjacent nations'
@@ -1155,14 +1015,17 @@
 	const NATION_BORDER_SMOOTH_ITERATIONS = 3;
 	const SUB_BORDER_ALPHA = 200;
 	const SUB_BORDER_WIDTH = 1.5;
-	// A city no player holds resolves to owner_nation === null on every one of
-	// its tiles, and its border is what says so. The game draws that border
-	// from the CITY rather than from the tile's owning player
-	// (`Game.getBorderColors`, Game.cs:21782 → `City.getPrimaryPlayerColor`,
-	// City.cs:3279), which for a city under capture is the near-black every
-	// tribe shares — so it renders at a nation border's own weight and full
-	// alpha, as the city's dominant colour, not as a faint marker.
-	const CAPTURE_BORDER_COLOR = opaqueRgba(UNOWNED_CITY_BORDER_COLOR);
+	// Cities not held by a playing nation (being captured, or in revolt/anarchy)
+	// resolve to owner_nation === null, which is why their urban tiles fall back
+	// to the generic sprite. We outline such a city's territory matching the
+	// in-game "border turns black while capturing" treatment — kept thin and
+	// very translucent (more so than the rivers) so it's a faint marker, and
+	// tinted toward the in-game rebel red (#c84732 darkened toward black) to hint
+	// at the contested/revolt state rather than drawing a hard black line.
+	const CONTESTED_BORDER_COLOR: [number, number, number, number] = [
+		56, 20, 14, 100,
+	];
+	const CONTESTED_BORDER_WIDTH = 2;
 
 	// Stable key for a hex vertex pixel coord. Hex tessellation is exact, so the
 	// same physical vertex computed from neighboring tiles produces identical (or
@@ -1229,9 +1092,9 @@
 	// null). Each group's outer boundary is inset toward the group's centroid
 	// at every vertex — so adjacent same-group tiles share inset corners and
 	// their boundary edges chain into closed loops — then Chaikin-smoothed.
-	// Used for both nation borders (keyed on owner_nation) and the borders of
-	// cities no player holds (keyed on owner_city); `colorFor` returns the
-	// stroke colour for a group, or null to drop it.
+	// Used for both nation borders (keyed on owner_nation) and contested-city
+	// borders (keyed on owner_city); `colorFor` returns the stroke colour for a
+	// group, or null to drop it.
 	function buildTerritoryOutline(opts: {
 		mapTiles: MapTile[];
 		tileMap: Map<string, MapTile>;
@@ -1346,10 +1209,7 @@
 		return out;
 	}
 
-	function computePoliticalData(
-		mapTiles: MapTile[],
-		borderByCity: Map<string, [number, number, number, number]>,
-	): PoliticalData {
+	function computePoliticalData(mapTiles: MapTile[]): PoliticalData {
 		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- Map used locally in function, not as reactive state
 		const tileMap = new Map<string, MapTile>();
 		for (const t of mapTiles) tileMap.set(`${t.x},${t.y}`, t);
@@ -1387,25 +1247,33 @@
 				t.owner_nation && getCivilizationColor(t.owner_nation)
 					? t.owner_nation
 					: null,
-			colorFor: (key) => opaqueRgba(getCivilizationColor(key)!),
+			colorFor: (key) => {
+				const rgb = hexToRgb(getCivilizationColor(key)!);
+				return [rgb[0], rgb[1], rgb[2], 255];
+			},
 			width: NATION_BORDER_WIDTH,
 		});
 
-		// The border of a city no player holds, keyed on owner_city — its
-		// territory tiles are exactly the ones with a city and no owner nation.
-		// `borderByCity` says which cities those are and in what colour; a city
-		// absent from it has an owner, so its tiles belong to the nation
-		// outline above.
-		const unownedCityBorders = buildTerritoryOutline({
+		// Contested-city borders: a city whose centre tile is owner_nation === null
+		// (being captured, or in revolt/anarchy — the same condition that makes its
+		// urban tiles fall back to the generic sprite). Outline that city's
+		// null-owned tiles, keyed on owner_city, in solid black.
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- Set used locally in function, not as reactive state
+		const contestedCities = new Set<string>();
+		for (const t of mapTiles) {
+			if (t.is_city_center && !t.owner_nation && t.owner_city)
+				contestedCities.add(t.owner_city);
+		}
+		const contestedBorders = buildTerritoryOutline({
 			mapTiles,
 			tileMap,
 			vertexMap,
 			keyOf: (t) =>
-				!t.owner_nation && t.owner_city && borderByCity.has(t.owner_city)
+				!t.owner_nation && t.owner_city && contestedCities.has(t.owner_city)
 					? t.owner_city
 					: null,
-			colorFor: (key) => borderByCity.get(key) ?? null,
-			width: NATION_BORDER_WIDTH,
+			colorFor: () => CONTESTED_BORDER_COLOR,
+			width: CONTESTED_BORDER_WIDTH,
 		});
 
 		// Sub-borders: boundaries between two different cities within the same
@@ -1569,7 +1437,7 @@
 			}
 		}
 
-		return { borders, subBorders, unownedCityBorders };
+		return { borders, subBorders, contestedBorders };
 	}
 
 	interface RiverSegment {
@@ -1730,9 +1598,9 @@
 	// profile during turn-slider scrubbing without shipping log spam.
 	const politicalData = $derived.by<PoliticalData>(() => {
 		if (tiles.length === 0)
-			return { borders: [], subBorders: [], unownedCityBorders: [] };
+			return { borders: [], subBorders: [], contestedBorders: [] };
 		if (import.meta.env.DEV) console.time("computePoliticalData");
-		const result = computePoliticalData(tiles, unownedCityBorderColors);
+		const result = computePoliticalData(tiles);
 		if (import.meta.env.DEV) console.timeEnd("computePoliticalData");
 		return result;
 	});
@@ -1946,7 +1814,7 @@
 	// family atlas is loaded. Reads `tiles`, `nationAliases`, and the founder
 	// map; mutates `familyManifests` (which the layers effect tracks separately).
 	// Doesn't re-trigger on its own writes since it doesn't read familyManifests.
-	// Keys on the founding nation (see renderNationFor) so an unowned, captured
+	// Keys on the founding nation (see renderNationFor) so a captured/contested
 	// city's founder family atlas is fetched even when no playing nation uses it.
 	$effect(() => {
 		if (nationAliases.size === 0) return;
@@ -2205,14 +2073,12 @@
 				pickable: false,
 				visible: pol,
 			}),
-			// The border of each city no player holds — the anarchy near-black for
-			// one under capture, the tribe's own colour for one a tribe holds.
-			// Always visible, and at a nation border's own weight: it is the
-			// city's dominant colour, the way the game paints it, not a marker
-			// the political overlay can switch off.
+			// Contested (being-captured / in-revolt) city outlines, in black.
+			// Always visible — they flag a city in flux regardless of the political
+			// overlay toggle, matching the in-game black capture border.
 			new PathLayer<NationBorder>({
-				id: "unowned-city-borders",
-				data: political.unownedCityBorders,
+				id: "contested-city-borders",
+				data: political.contestedBorders,
 				getPath: (d: NationBorder) => d.path,
 				getColor: (d: NationBorder) => d.color,
 				getWidth: (d: NationBorder) => d.width,
@@ -2452,15 +2318,7 @@
 		cityFamily={panel.tile.owner_city
 			? (cityFamilyCrestByName.get(panel.tile.owner_city) ?? null)
 			: null}
-		civilizationCrestKey={resolveCityCrestKey(
-			panel.tile.owner_nation,
-			panel.tile.owner_city
-				? unownedCityTribeByName.get(panel.tile.owner_city)
-				: null,
-		)}
-		capture={panel.tile.owner_city
-			? (captureByCity.get(panel.tile.owner_city) ?? null)
-			: null}
+		nationCrestKey={resolveNationCrestKey(panel.tile.owner_nation)}
 		screenX={panel.x}
 		screenY={panel.y}
 		canvasWidth={deckWidth}
