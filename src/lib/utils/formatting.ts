@@ -55,6 +55,27 @@ export function nationName(nation: string | null | undefined): string {
 }
 
 /**
+ * How a human seat is labelled in a player picker: the in-game leader name,
+ * falling back to the nation for a save that recorded none.
+ *
+ * Shared by the picker that asks the question at upload (BulkUploadModal) and
+ * the one that corrects the answer afterwards (GameActions) — they label the
+ * same seats of the same save, so they can't drift. Takes the roster shape
+ * structurally (`PlayerRosterEntry`, and the picker's `PlayerChoice` superset
+ * of it) rather than importing it, since this module is the display layer.
+ *
+ * No further fallback: `nationName` already resolves a null nation to
+ * "Unknown", so a seat with neither name nor nation gets that rather than a
+ * placeholder.
+ */
+export function seatLabel(seat: {
+	player_name: string;
+	nation: string | null;
+}): string {
+	return seat.player_name || nationName(seat.nation);
+}
+
+/**
  * The cognomen Old World gives a ruler, from its `COGNOMEN_*` token — with the
  * article, as the game writes it ("the Wise", "alcaras the Wise").
  *

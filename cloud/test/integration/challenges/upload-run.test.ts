@@ -426,11 +426,22 @@ describe("what a run on the board locks", () => {
 		});
 	});
 
-	it("the run's game — private or deleted — until the challenge closes", async () => {
+	it("the run's game — private, deleted, or reseated — until the challenge closes", async () => {
 		const { runner, challenge, gameId } = await challengeWithRun();
 		const path = `/v1/games/${gameId}`;
 		await expectErrorCode(
 			await request.patch({ path, as: runner, body: { is_public: false } }),
+			{ status: 409, code: "LINKED_TO_OPEN_CHALLENGE" },
+		);
+		// The upload pinned the uploader to the map's seat
+		// (CHALLENGE_WRONG_SEAT) and the verdict was scored against it once,
+		// so the owner's player correction is locked too.
+		await expectErrorCode(
+			await request.patch({
+				path,
+				as: runner,
+				body: { uploader_player_index: null },
+			}),
 			{ status: 409, code: "LINKED_TO_OPEN_CHALLENGE" },
 		);
 		await expectErrorCode(await request.delete({ path, as: runner }), {

@@ -19,8 +19,7 @@
 	import { profileHref } from "$lib/utils/profile-href";
 	import Breadcrumb, { type Crumb } from "$lib/Breadcrumb.svelte";
 	import SegmentedNav from "$lib/ui/SegmentedNav.svelte";
-	import ReimportButton from "$lib/ReimportButton.svelte";
-	import AdminReimportButton from "$lib/AdminReimportButton.svelte";
+	import ReparseButton from "$lib/ReparseButton.svelte";
 	import GameActions from "$lib/GameActions.svelte";
 	import { getGameScreenshots } from "./screenshots-context.svelte";
 	import { getGameVisibility } from "./visibility-context.svelte";
@@ -80,36 +79,6 @@
 					: -1,
 	);
 
-	// Re-import banner: shown to owners when the stored parser_version is
-	// older than the current build's PARSER_VERSION. The blob carries
-	// parser_version through from the gzipped JSON in R2, so this works
-	// without a separate API call. Hidden for anonymous viewers (public
-	// games) and non-owner signed-in viewers (`isOwner` is false in both).
-	const needsReparse = $derived(isNewer(PARSER_VERSION, game.parser_version));
-	const isReimportAvailable = $derived(isOwner && needsReparse);
-
-	// Site admins get the same banner on a *public* game they don't own, wired
-	// to the admin reparse path (targets the original owner, reuses the
-	// uploader's original nation choice, no re-prompt) — the same machinery as
-	// the /admin reparse sweep, for one game. Private games they don't own
-	// return 403 from getGame, so they never reach this page. `game.user_id`
-	// is always present on a loaded game but typed optional, so the target
-	// (owner id + uploader_nation) is derived here and gated null → the banner
-	// only shows when reparse is actually actionable. uploader_nation is the
-	// raw choice (null = observer), not the COALESCE'd display user_nation.
-	// Owners keep the owner path above.
-	const isAdmin = $derived(page.data.user?.is_admin ?? false);
-	const adminReparseTarget = $derived.by(() => {
-		if (isOwner || !isAdmin || !needsReparse || game.user_id == null)
-			return null;
-		return {
-			game_id: gameId,
-			game_name: game.game_details.game_name ?? null,
-			uploader_nation: game.uploader_nation ?? null,
-			user_id: game.user_id,
-		};
-	});
-
 	// Effective game title, forming the breadcrumb's leaf (current page)
 	// segment. The [id] layout's own derivation, read off `page.data` the way
 	// the root layout reads that load's `meta`: the <head>/OG title and the
@@ -147,6 +116,37 @@
 		trail.push({ label: gameTitle });
 		return trail;
 	});
+
+	// Reparse banner: shown when the stored parser_version is older than the
+	// current build's PARSER_VERSION. The blob carries parser_version through
+	// from the gzipped JSON in R2, so this works without a separate API call.
+	// Hidden from anonymous viewers (public games) and non-admin non-owner
+	// signed-in viewers.
+	const needsReparse = $derived(isNewer(PARSER_VERSION, game.parser_version));
+	const isAdmin = $derived(page.data.user?.is_admin ?? false);
+	// One target for both callers, built here and gated null so the banner
+	// only shows when a reparse is actually actionable. uploader_nation is the
+	// raw choice (null = observer), not the COALESCE'd display user_nation —
+	// feeding the display value would re-claim the first human on observer
+	// uploads. The label is the same effective title the breadcrumb leaf uses.
+	const reparse = $derived.by(() => {
+		if (!needsReparse) return null;
+		const target = {
+			game_id: gameId,
+			game_name: gameTitle,
+			uploader_nation: game.uploader_nation ?? null,
+		};
+		if (isOwner) return { target, adminMode: false };
+		// Site admins get the same banner on a *public* game they don't own,
+		// wired to the admin path: the reparse posts on behalf of the original
+		// owner, so the game keeps its owner and nation. Private games they
+		// don't own return 403 from getGame, so they never reach this page.
+		// `game.user_id` is always present on a loaded game but typed
+		// optional, so a missing id drops the banner rather than building a
+		// target the admin endpoint can't use.
+		if (!isAdmin || game.user_id == null) return null;
+		return { target: { ...target, user_id: game.user_id }, adminMode: true };
+	});
 </script>
 
 <!-- Trail on the left, the view toggle centred, the actions and save date on
@@ -182,6 +182,8 @@
 			{collections}
 			displayName={game.display_name ?? null}
 			gameName={game.game_details.game_name ?? null}
+			players={game.player_roster}
+			uploaderPlayerIndex={game.uploader_player_index ?? null}
 		/>
 		<p class="text-sm text-gray-200">
 			{formatDate(game.game_details.save_date)}
@@ -207,7 +209,7 @@
 	</div>
 {/if}
 
-{#if isReimportAvailable || adminReparseTarget}
+{#if reparse}
 	<div
 		class="mb-4 flex w-fit flex-wrap items-center gap-3 rounded-lg border border-surface bg-surface-sunken p-2 shadow-lg"
 	>
@@ -215,10 +217,6 @@
 			This game was parsed with version {game.parser_version}. Reparse to use
 			the latest version ({PARSER_VERSION}).
 		</p>
-		{#if isReimportAvailable}
-			<ReimportButton {gameId} />
-		{:else if adminReparseTarget}
-			<AdminReimportButton target={adminReparseTarget} />
-		{/if}
+		<ReparseButton target={reparse.target} adminMode={reparse.adminMode} />
 	</div>
 {/if}
