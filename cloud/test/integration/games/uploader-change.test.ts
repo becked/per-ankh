@@ -8,6 +8,11 @@
 // (cloud/src/ratings/duels.ts). The fixture seats two humans — player 0 on
 // Egypt, player 1 on Rome — plus an AI, and records player 0 as the winner,
 // so a correction to player 1 has to flip the nation and the win at once.
+//
+// One refusal lives elsewhere: the lock on a run on an open challenge sits
+// with the other two locks that same row carries, in
+// integration/challenges/upload-run.test.ts, which already has the challenge
+// and its run built.
 
 import { applyD1Migrations, env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -19,6 +24,7 @@ import {
 import { makeTournament, makeUser } from "../../helpers/builders";
 import { postMultipart, request } from "../../helpers/requests";
 import { buildUploadFormData } from "../../helpers/save-blob";
+import { PER_USER_UPLOADER_CHANGE_PER_HOUR } from "../../../src/games";
 
 beforeAll(async () => {
 	await applyD1Migrations(env.SHARE_DB, env.TEST_MIGRATIONS);
@@ -65,6 +71,23 @@ async function loadAuditMetadata(gameId: string): Promise<string[]> {
 		.bind(gameId)
 		.all<{ metadata: string | null }>();
 	return (rows.results ?? []).map((r) => r.metadata ?? "");
+}
+
+// Spend the user's whole hourly correction budget without firing N requests.
+// One statement rather than a loop: the rows differ only in their rowid.
+async function seedUploaderChangeEvents(
+	userId: string,
+	count: number,
+): Promise<void> {
+	await env.SHARE_DB.prepare(
+		`INSERT INTO events (event_type, user_id)
+		 WITH RECURSIVE seq(i) AS (
+		   SELECT 1 UNION ALL SELECT i + 1 FROM seq WHERE i < ?
+		 )
+		 SELECT 'uploader_change', ? FROM seq`,
+	)
+		.bind(count, userId)
+		.run();
 }
 
 // Upload the two-human fixture claiming player 0, and return its game_id.
@@ -165,6 +188,59 @@ describe("PATCH /v1/games/:id uploader_player_index", () => {
 				body: { uploader_player_index: 2 },
 			}),
 			{ status: 400, code: "UNKNOWN_PLAYER_INDEX" },
+		);
+
+		expect(await loadGame(gameId)).toEqual({
+			user_nation: "NATION_EGYPT",
+			user_won: 1,
+		});
+		expect(await loadUploaderSeat(gameId)).toBe(0);
+		expect(await loadAuditMetadata(gameId)).toHaveLength(0);
+	});
+
+	it("rejects a change once the hourly budget is spent, changing nothing", async () => {
+		const owner = await makeUser({ discordUsername: "frank-uploader" });
+		const gameId = await uploadAsPlayerZero(owner);
+		await seedUploaderChangeEvents(
+			owner.userId,
+			PER_USER_UPLOADER_CHANGE_PER_HOUR,
+		);
+
+		// The budget is checked before anything else in the branch, so the
+		// refusal costs neither the R2 read nor a write.
+		await expectErrorCode(
+			await request.patch({
+				path: `/v1/games/${gameId}`,
+				as: owner,
+				body: { uploader_player_index: 1 },
+			}),
+			{ status: 429, code: "RATE_LIMIT_USER" },
+		);
+
+		expect(await loadGame(gameId)).toEqual({
+			user_nation: "NATION_EGYPT",
+			user_won: 1,
+		});
+		expect(await loadUploaderSeat(gameId)).toBe(0);
+		expect(await loadAuditMetadata(gameId)).toHaveLength(0);
+	});
+
+	it("rejects a change when the blob is gone, changing nothing", async () => {
+		const owner = await makeUser({ discordUsername: "grace-uploader" });
+		const gameId = await uploadAsPlayerZero(owner);
+
+		// The roster the pick is validated against lives only in the blob, so
+		// a games row whose object is missing can't be corrected at all —
+		// 404 BLOB_MISSING, the same code the owner's detail read returns.
+		await env.SHARE_BUCKET.delete(`games/${gameId}.json.gz`);
+
+		await expectErrorCode(
+			await request.patch({
+				path: `/v1/games/${gameId}`,
+				as: owner,
+				body: { uploader_player_index: 1 },
+			}),
+			{ status: 404, code: "BLOB_MISSING" },
 		);
 
 		expect(await loadGame(gameId)).toEqual({

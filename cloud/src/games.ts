@@ -139,7 +139,7 @@ const PER_USER_PATCH_PER_HOUR = 60;
 // budget above because this branch reads and decompresses the game's blob
 // from R2 to validate the pick, where the other PATCH fields are D1-only.
 // Still far past human use — a save has one uploader to get right.
-const PER_USER_UPLOADER_CHANGE_PER_HOUR = 20;
+export const PER_USER_UPLOADER_CHANGE_PER_HOUR = 20;
 
 // Save-download limits. Per-user is the meaningful signal (auth required);
 // per-IP is a backstop for one user spamming from one IP.
@@ -3058,9 +3058,10 @@ export async function handleGameDetail(
 // uploader_player_index corrects which player the owner was — the pick made
 // at upload time, which decides games.user_nation / user_won and the
 // player_summaries.is_uploader flag the duel ratings attribute by. Refused
-// on a tournament-linked save (UPLOADER_LOCKED_TOURNAMENT), rate-limited
-// 20/hr/user, audited as 'uploader_change'. Ratings follow on the next cron
-// rebuild; no reparse is involved, since the roster is already in the blob.
+// on a tournament-linked save (UPLOADER_LOCKED_TOURNAMENT) and on a run on
+// an open challenge (LINKED_TO_OPEN_CHALLENGE), rate-limited 20/hr/user,
+// audited as 'uploader_change'. Ratings follow on the next cron rebuild; no
+// reparse is involved, since the roster is already in the blob.
 export async function handleGamePatch(
 	gameId: string,
 	request: Request,
@@ -3235,6 +3236,16 @@ export async function handleGamePatch(
 				cors,
 				"UPLOADER_LOCKED_TOURNAMENT",
 			);
+		}
+
+		// Same for a run on an open challenge, the guard going private and
+		// deleting already share: the upload path requires a run's uploader to
+		// BE the map's seat (CHALLENGE_WRONG_SEAT above), and the verdict is
+		// scored once and persisted, never rescored — so moving the seat would
+		// leave a live leaderboard row attributed to a player the uploader no
+		// longer claims.
+		if (await isRunOnOpenChallenge(env.SHARE_DB, gameId)) {
+			return openChallengeRunResponse(cors);
 		}
 
 		// Uncached read, like the owner branch of the detail endpoint: the

@@ -36,7 +36,7 @@
 	import RulesList from "$lib/challenges/RulesList.svelte";
 	import { asScorable, scoreChallenge } from "$lib/challenges/scoring";
 	import type { ChallengeRules, Verdict } from "$lib/challenges/types";
-	import { nationName } from "$lib/utils/formatting";
+	import { nationName, seatLabel } from "$lib/utils/formatting";
 	import { profileHref } from "$lib/utils/profile-href";
 	import { PRIMARY_BTN } from "$lib/ui/classes";
 	import RadioGroup from "$lib/ui/RadioGroup.svelte";
@@ -513,12 +513,6 @@
 		void goto(doneRedirect ?? fallback);
 	}
 
-	// Display name for a player option: the in-game leader name, falling back to
-	// the nation, then an em-dash (mirrors the picker's prior fallback chain).
-	function displayName(p: PlayerChoice): string {
-		return p.player_name || nationName(p.nation) || "—";
-	}
-
 	// "3 cities · 95 turns · Winner" — the per-option stats line.
 	function statsLine(p: PlayerChoice, totalTurns: number): string {
 		const parts = [
@@ -690,7 +684,7 @@
 										<RadioItem value={String(human.player_index)} />
 										<div class="min-w-0 flex-1 text-xs">
 											<span class="font-bold text-white"
-												>{displayName(human)}</span
+												>{seatLabel(human)}</span
 											>
 											{#if human.player_name && human.nation}
 												<span class="text-gray-400">
@@ -747,7 +741,7 @@
 										<RadioItem value={String(human.player_index)} />
 										<div class="min-w-0 flex-1 text-xs">
 											<span class="font-bold text-white"
-												>{displayName(human)}</span
+												>{seatLabel(human)}</span
 											>
 											{#if human.player_name && human.nation}
 												<span class="text-gray-400">

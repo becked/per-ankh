@@ -41,7 +41,7 @@
 	import ScreenshotUploadModal from "$lib/screenshots/ScreenshotUploadModal.svelte";
 	import { toast } from "$lib/ui/toast";
 	import { saveBlobAs } from "$lib/utils/download";
-	import { nationName } from "$lib/utils/formatting";
+	import { nationName, seatLabel } from "$lib/utils/formatting";
 	import { profileHref } from "$lib/utils/profile-href";
 	import { loginBounce } from "$lib/utils/safe-next";
 
@@ -122,12 +122,15 @@
 	// pick between, so the control isn't offered at all.
 	const humanPlayers = $derived(players.filter((p) => p.is_human));
 	// The picker's rows: every human seat, then the observer option. One list
-	// so the row markup isn't written twice, labelled the way the upload
-	// picker labels the same seats (name, with the nation beside it).
+	// so the row markup isn't written twice, labelled through the same
+	// seatLabel the upload picker uses on the same seats, with the nation
+	// beside it.
 	const playerRows = $derived([
 		...humanPlayers.map((p) => ({
 			index: p.player_index as number | null,
-			label: p.player_name || nationName(p.nation),
+			label: seatLabel(p),
+			// Only beside a named seat — seatLabel already falls back to the
+			// nation, and the row shouldn't print it twice.
 			nation: p.player_name ? nationName(p.nation) : null,
 		})),
 		{ index: null, label: "I didn't play in this game", nation: null },
@@ -716,7 +719,7 @@
 			{#if openPopover === "player"}
 				<!-- svelte-ignore a11y_click_events_have_key_events -->
 				<div
-					class="action-popover absolute right-0 top-full z-50 mt-2 w-60 rounded border-2 border-black bg-blue-gray p-2 shadow-lg"
+					class="action-popover absolute right-0 top-full z-50 mt-2 w-56 rounded border-2 border-black bg-blue-gray p-2 shadow-lg"
 					role="dialog"
 					tabindex="-1"
 					onclick={(e) => e.stopPropagation()}

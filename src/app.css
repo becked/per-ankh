@@ -62,7 +62,8 @@
 /*
  * Self-hosted Noto Sans Egyptian Hieroglyphs (OFL). Scoped via unicode-range
  * so the font only downloads on pages that actually render U+13000-U+143FA
- * (the HieroglyphParade band on /upload, BulkReparseModal, ReimportButton).
+ * (the HieroglyphParade band on /upload, BulkReparseModal and
+ * BulkReindexModal).
  * License: static/fonts/NotoSansEgyptianHieroglyphs-OFL.txt.
  */
 @font-face {
