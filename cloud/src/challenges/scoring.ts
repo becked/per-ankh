@@ -90,7 +90,7 @@ export interface ScorableBlob {
 		map_width: number | null;
 		map_height: number | null;
 		difficulty: string | null;
-		opponent_level: string | null;
+		setup_parameters?: Record<string, string> | null;
 		game_options: Record<string, true> | null;
 		disabled_improvements: string[] | null;
 		game_version: string | null;
@@ -362,7 +362,10 @@ export function extractSetup(blob: ScorableBlob): ChallengeSetup {
 		map_width: m.map_width,
 		map_height: m.map_height,
 		difficulty: m.difficulty,
-		opponent_level: m.opponent_level,
+		// From the setup bag that replaced the `opponent_level` field in
+		// PARSER_VERSION 2.28.0; null on a blob below it, as for a save that
+		// never set the attribute.
+		opponent_level: m.setup_parameters?.OpponentLevel ?? null,
 		game_options: m.game_options,
 		disabled_improvements: m.disabled_improvements,
 		game_version: m.game_version,

@@ -6,6 +6,7 @@ import {
 	optAttrStr,
 	optInt,
 	optStr,
+	parsePositionalList,
 	requireInt,
 	requireStr,
 } from "../parse-xml.js";
@@ -22,6 +23,11 @@ export interface Player {
 	email: string | null;
 	aiControlledToTurn: number | null;
 	difficulty: string | null;
+	// The player's starting development — the AI tier for an AI seat, and the
+	// human one where `ALLOW_HUMAN_DEVELOPMENT_OPTIONS` lets a game set it.
+	// Per-player in the save, beside Prosperity, and null on a save that
+	// carries no <Development> list.
+	development: string | null;
 	lastTurnCompleted: number | null;
 	turnEnded: boolean;
 	legitimacy: number | null;
@@ -47,7 +53,16 @@ export function parsePlayers(
 	root: Record<string, unknown>,
 	activePlayerIndex: number | null,
 ): Player[] {
-	const playerDifficulties = parsePlayerDifficulties(root);
+	// Both are positional per-player lists at the root, one entry per player in
+	// player order — see parsePositionalList.
+	const playerDifficulties = parsePositionalList(
+		root.Difficulty,
+		"PlayerDifficulty",
+	);
+	const playerDevelopments = parsePositionalList(
+		root.Development,
+		"PlayerDevelopment",
+	);
 	const players: Player[] = [];
 
 	for (const node of asArray(root.Player) as unknown[]) {
@@ -78,6 +93,7 @@ export function parsePlayers(
 			email: optAttrStr(node["@_Email"]),
 			aiControlledToTurn,
 			difficulty: playerDifficulties[xmlId] ?? null,
+			development: playerDevelopments[xmlId] ?? null,
 			lastTurnCompleted: optInt(node.LastTurnCompleted),
 			// Rust bool::from_str accepts only "true"/"false" exactly.
 			turnEnded: optStr(node.TurnEnded) === "true",
@@ -127,26 +143,6 @@ function parseCurrentLeader(node: Record<string, unknown>): number | null {
 
 	const id = parseInt(last, 10);
 	return Number.isNaN(id) ? null : id;
-}
-
-/**
- * Pull per-player difficulty tiers from `<Difficulty><PlayerDifficulty>…
- * </PlayerDifficulty>…</Difficulty>`. The returned array is positional —
- * `result[playerXmlId]` is that player's tier (or `null` if the element is
- * missing or malformed). The `<PlayerDifficulty>` element is NOT in
- * ALWAYS_ARRAY_TAGS, so fast-xml-parser already coerces multiple siblings
- * to an array of text-only strings; asArray normalizes the single-child case.
- */
-function parsePlayerDifficulties(
-	root: Record<string, unknown>,
-): (string | null)[] {
-	const difficultyElem = root.Difficulty;
-	if (!isElement(difficultyElem)) return [];
-	const out: (string | null)[] = [];
-	for (const child of asArray(difficultyElem.PlayerDifficulty) as unknown[]) {
-		out.push(typeof child === "string" && child !== "" ? child : null);
-	}
-	return out;
 }
 
 /**

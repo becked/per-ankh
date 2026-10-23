@@ -225,8 +225,15 @@
 			: [],
 	);
 
+	// The game-wide AI handicap, from the setup bag that replaced the
+	// `advantage` field in PARSER_VERSION 2.28.0. `undefined` on a blob below
+	// it — which is what `advantageKnown` below reports — and null on a bag
+	// from a save that left the setting at NONE.
+	const advantage = $derived(game.match_metadata.setup_parameters?.Advantage);
+	const advantageKnown = $derived(game.match_metadata.setup_parameters != null);
+
 	const effectPlayers = $derived(
-		unitEffectPlayers(player, game.match_metadata.advantage, leaderTraits),
+		unitEffectPlayers(player, advantage, leaderTraits),
 	);
 
 	// ─── The numbers, and the glyphs they were summed from ─────────────
@@ -291,7 +298,7 @@
 					hasGeneral: general != null,
 					generalKnown: unit.general_xml_id !== undefined,
 					unitChannelsKnown,
-					advantageKnown: game.match_metadata.advantage !== undefined,
+					advantageKnown,
 					isHuman: player?.is_human ?? false,
 					ratingsKnown: competitive != null,
 					traitsKnown,

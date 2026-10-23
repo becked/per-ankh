@@ -1,8 +1,11 @@
 // Combines match metadata + the resolved winner (player_name, nation, victory
-// type) + a player roster. The headline `difficulty` field carries the save
-// owner's tier (already derived in MatchMetadata); each PlayerInfo also
-// carries its own `difficulty` so the Settings tab can render a per-human
-// breakdown when human players are on different tiers.
+// type) + a player roster. The `difficulty` field carries the save owner's
+// PROSPERITY tier (already derived in MatchMetadata); each PlayerInfo carries
+// its own, plus its starting development, so the Settings tab's Players table
+// can show every seat's per-player setup rather than collapsing them.
+//
+// The three `setup_*` arrays are indexed by player xml id, which is NOT the
+// index into `players` below — that is sorted by name.
 //
 // `match_id` is a desktop-DB artifact; for the cloud blob we populate 0 and
 // flag the divergence here. Frontend tab components don't use match_id.
@@ -25,10 +28,12 @@ export function deriveGameDetails(
 			player_id: p.xmlId,
 			player_name: p.playerName,
 			nation: p.nation,
+			dynasty: p.dynasty,
 			is_human: p.isHuman,
 			legitimacy: p.legitimacy,
 			state_religion: p.stateReligion,
 			difficulty: p.difficulty,
+			development: p.development,
 			leader_character_xml_id: p.leaderCharacterXmlId,
 			chosen_heir_xml_id: p.chosenHeirXmlId,
 			succession_gender: p.successionGender,
@@ -49,8 +54,12 @@ export function deriveGameDetails(
 		game_options: metadata.game_options,
 		disabled_improvements: metadata.disabled_improvements,
 		game_mode: metadata.game_mode,
-		opponent_level: metadata.opponent_level,
 		difficulty: metadata.difficulty,
+		setup_parameters: metadata.setup_parameters ?? null,
+		occurrence_levels: metadata.occurrence_levels ?? null,
+		setup_nations: metadata.setup_nations ?? null,
+		setup_archetypes: metadata.setup_archetypes ?? null,
+		setup_dynasties: metadata.setup_dynasties ?? null,
 		victory_conditions: metadata.victory_conditions,
 		enabled_mods: metadata.enabled_mods,
 		enabled_dlc: metadata.enabled_dlc,
