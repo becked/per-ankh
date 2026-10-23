@@ -204,6 +204,32 @@ export function getElementChildren(
 }
 
 /**
+ * Read a positional per-player list — the shape `GameParameters.writeGameXML`
+ * (GameParameters.cs:536) writes every per-player setup parameter in:
+ *
+ *   <Difficulty><PlayerDifficulty>DIFFICULTY_NOBLE</PlayerDifficulty>…</Difficulty>
+ *   <Nation><PlayerNation>RANDOM</PlayerNation>…</Nation>
+ *
+ * One child per player, in player order, so `result[playerXmlId]` is that
+ * player's value. A missing or empty entry is `null` rather than dropped —
+ * dropping one would shift every later player's value onto the wrong seat.
+ * Returns `[]` when the container is absent.
+ *
+ * The child elements are NOT in ALWAYS_ARRAY_TAGS, so fast-xml-parser already
+ * coerces multiple siblings to an array of text-only strings; asArray
+ * normalizes the single-child case.
+ */
+export function parsePositionalList(
+	node: unknown,
+	child: string,
+): (string | null)[] {
+	if (!isElement(node)) return [];
+	return (asArray(node[child]) as unknown[]).map((v) =>
+		typeof v === "string" && v !== "" ? v : null,
+	);
+}
+
+/**
  * Parse a container whose children are dynamically named with text-integer
  * values, e.g.:
  *

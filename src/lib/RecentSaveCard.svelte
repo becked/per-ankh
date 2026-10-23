@@ -13,8 +13,11 @@
 		escapeHtml,
 		nationName,
 	} from "$lib/utils/formatting";
-	import { DIFFICULTY_NAMES } from "$lib/generated/difficulty-names";
-	import { mapScriptLabel, mapSizeLabel } from "$lib/map-settings";
+	import {
+		mapScriptLabel,
+		mapSizeLabel,
+		prosperityName,
+	} from "$lib/map-settings";
 	import {
 		CHART_THEME,
 		CHART_REFERENCE_LINE_COLOR,
@@ -362,19 +365,16 @@
 				Multiplayer
 			</StatTile>
 		{:else}
-			<StatTile label="Difficulty">
+			<StatTile label="Prosperity">
 				{#snippet icon()}
 					<SpriteIcon
 						category="crests"
 						value="TRIBE_REBELS"
 						size={10}
-						alt="Difficulty"
+						alt="Prosperity"
 					/>
 				{/snippet}
-				{game.difficulty
-					? (DIFFICULTY_NAMES[game.difficulty] ??
-						formatEnum(game.difficulty, "DIFFICULTY_"))
-					: "—"}
+				{game.difficulty ? prosperityName(game.difficulty) : "—"}
 			</StatTile>
 		{/if}
 	</div>

@@ -6,8 +6,11 @@
 
 import { techName, improvementDisplayName } from "$lib/game-detail/helpers";
 import { specialistName } from "$lib/game-detail/specialists";
-import { DIFFICULTY_NAMES } from "$lib/generated/difficulty-names";
-import { mapScriptLabel, mapSizeLabel } from "$lib/map-settings";
+import {
+	mapScriptLabel,
+	mapSizeLabel,
+	prosperityName,
+} from "$lib/map-settings";
 import {
 	characterName,
 	cognomenName,
@@ -192,10 +195,7 @@ export function describeSetup(s: ChallengeSetup): string[] {
 		s.map_class ? mapScriptLabel(s.map_class) : null,
 	].filter(Boolean);
 	if (map.length) parts.push(map.join(" "));
-	if (s.difficulty)
-		parts.push(
-			DIFFICULTY_NAMES[s.difficulty] ?? formatEnum(s.difficulty, "DIFFICULTY_"),
-		);
+	if (s.difficulty) parts.push(prosperityName(s.difficulty));
 	parts.push(s.ai_count === 0 ? "no AI" : `vs ${plural(s.ai_count, "AI")}`);
 	return parts;
 }

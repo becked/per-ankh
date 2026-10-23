@@ -25,8 +25,8 @@ import {
 	ORDERS_SOURCES,
 } from "$lib/generated/orders-sources";
 import { COGNOMENS } from "$lib/generated/cognomens";
-import { DIFFICULTY_NAMES } from "$lib/generated/difficulty-names";
 import { GOAL_NAMES } from "$lib/generated/goal-names";
+import { prosperityName } from "$lib/map-settings";
 import { rulerCognomen, rulerName, storyEventType } from "./helpers";
 import { formatEnum, traitName } from "$lib/utils/formatting";
 import type {
@@ -91,10 +91,7 @@ export function ordersEndBreakdown(opts: {
 		const v = ORDERS_SOURCES[opts.difficulty];
 		if (v != null) {
 			rows.push({
-				label: `Difficulty (${
-					DIFFICULTY_NAMES[opts.difficulty] ??
-					formatEnum(opts.difficulty, "DIFFICULTY_")
-				})`,
+				label: `Prosperity (${prosperityName(opts.difficulty)})`,
 				value: v,
 			});
 		}

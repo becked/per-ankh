@@ -14,6 +14,7 @@ import {
 	optAttrStr,
 	optInt,
 	optStr,
+	parsePositionalList,
 	requireStr,
 } from "../parse-xml.js";
 import type { MatchMetadata, RawWinnerInfo, WinnerInfo } from "../types.js";
@@ -91,20 +92,20 @@ export function parseMatchMetadata(
 		// the match-level "Difficulty" stamp is the save owner's tier, set by
 		// parsePlayers via the <?ActivePlayer N?> PI or the single-human fallback.
 		// Returns null when no save owner could be identified (observer upload
-		// of multi-human MP without the PI).
+		// of multi-human MP without the PI). Old World calls this setting
+		// PROSPERITY — "Difficulty" is the preset that expands into it plus the
+		// five AI/tribe/calamity knobs. The field keeps the save's own name.
 		difficulty: players.find((p) => p.isSaveOwner)?.difficulty ?? null,
-		opponent_level: optAttrStr(root["@_OpponentLevel"]),
-		// The AI advantage the game was set up with. `Player.initPlayerEffects`
-		// (Player.cs:15896) gives every non-human player this advantage's
-		// `meEffectPlayer`, and the three ADVANTAGE_PENALTY_* tiers confer an
-		// effect unit worth −5%, −10% or −25% strength to every unit that
-		// player owns — the only term in the unit card's attack and defense
-		// that is game-wide rather than per-unit. The six non-NONE values in
-		// `test-data/saves/` are all bonuses rather than penalties
-		// (3 VERY_HIGH, 2 SMALL, 1 MODERATE), and those confer no effect unit
-		// at all, so the corpus prices this at zero while a penalty save would
-		// not.
-		advantage: optAttrStr(root["@_Advantage"]),
+		setup_parameters: parseSetupParameters(root),
+		occurrence_levels: parseOccurrenceLevels(root),
+		// The setup side of the three per-player parameters whose resolved side
+		// the save records separately: `<Player @Nation>` / `@Dynasty` hold what
+		// the game rolled, and these hold what the player picked. 40 of the 48
+		// player rows in `test-data/saves/` picked RANDOM or NONE and resolved to
+		// a concrete nation, which is what makes the pair worth keeping.
+		setup_nations: parsePositionalList(root.Nation, "PlayerNation"),
+		setup_archetypes: parsePositionalList(root.Archetype, "LeaderArchetype"),
+		setup_dynasties: parsePositionalList(root.Dynasty, "PlayerDynasty"),
 		victory_conditions: victoryConditions,
 		enabled_mods: enabledMods,
 		enabled_dlc: enabledDlc,
@@ -155,18 +156,29 @@ function parseGameContent(root: Record<string, unknown>): string | null {
 
 /**
  * Read the chosen per-script map options the game persisted, as a flat
- * `zType → value` map. Mirrors how OW writes them (Game.cs):
+ * `zType → value` map, under the names `GameParameters.writeGameXML` actually
+ * writes (GameParameters.cs:807 and :814; `readGameXML` reads the same at
+ * :1148 / :1168):
  *
- *   <MapOptionsMulti>
+ *   <MapMultiOptions>
  *     <MAP_OPTIONS_MULTI_RESOURCE_DENSITY>MAP_OPTION_HIGH_RESOURCES</...>
- *   </MapOptionsMulti>
- *   <MapOptionsSingle>
- *     <MAP_OPTIONS_SINGLE_MIRROR>true</MAP_OPTIONS_SINGLE_MIRROR>
- *   </MapOptionsSingle>
+ *   </MapMultiOptions>
+ *   <MapSingleOptions>
+ *     <MAP_OPTIONS_SINGLE_MIRROR>1</MAP_OPTIONS_SINGLE_MIRROR>
+ *   </MapSingleOptions>
  *
- * Multi values are MAP_OPTION_* zType strings; Single values are boolean
- * toggles ("true"/"false", case-insensitive). Both elements are written only
- * when the player set a non-default option, so a default game yields `{}`.
+ * This read was `<MapOptionsMulti>` / `<MapOptionsSingle>` — names the game
+ * never writes — and compared the single values against "true", which they
+ * never are. Both elements are present on every one of the 16 saves in
+ * `test-data/saves/` under the names above and on none of them under the old
+ * ones, so every stored blob below PARSER_VERSION 2.28.0 carries
+ * `map_options = {}` and the Settings tab's Options row has never rendered.
+ *
+ * Multi values are MAP_OPTION_* zType strings. Single values are the ints
+ * `p.Value.ToString()` writes — 14 `1` and 16 `0` across the corpus, never
+ * "true"/"false" — so the test is the game's own `p.Value != 0`
+ * (`buildMapOptions`, HelpText.Game.cs:3371).
+ *
  * Map size + aspect ratio are root attributes, not options, so they never
  * appear here.
  */
@@ -175,20 +187,103 @@ function parseMapOptions(
 ): Record<string, string | boolean> {
 	const out: Record<string, string | boolean> = {};
 
-	const multi = root.MapOptionsMulti;
+	const multi = root.MapMultiOptions;
 	if (isElement(multi)) {
 		for (const [opt, value] of getElementChildren(multi)) {
 			if (typeof value === "string" && value !== "") out[opt] = value;
 		}
 	}
 
-	const single = root.MapOptionsSingle;
+	const single = root.MapSingleOptions;
 	if (isElement(single)) {
 		for (const [opt, value] of getElementChildren(single)) {
-			if (typeof value === "string") out[opt] = value.toLowerCase() === "true";
+			if (typeof value === "string" && value !== "") {
+				out[opt] = Number(value) !== 0;
+			}
 		}
 	}
 
+	return out;
+}
+
+// ---------- Setup parameters ----------
+
+/**
+ * The root attributes `GameParameters.writeGameXML` (GameParameters.cs:536)
+ * writes for a game's setup, in the order that method writes them.
+ *
+ * One list rather than eighteen hand-written reads, so a save that predates a
+ * parameter simply yields a bag without that key. `MapClass`, `MapSize`,
+ * `MapAspectRatio` and `GameMode` are deliberately absent: they already have
+ * their own `MatchMetadata` fields, and a second way to read them is what the
+ * bag exists to prevent.
+ */
+const SETUP_ATTRIBUTES: readonly string[] = [
+	"Scenario",
+	"TurnStyle",
+	"TurnTimer",
+	"OpponentLevel",
+	"TribeLevel",
+	"Development",
+	"HumanDevelopment",
+	"Advantage",
+	"SuccessionGender",
+	"SuccessionOrder",
+	"Mortality",
+	"TurnScale",
+	"TeamNation",
+	"ForceMarch",
+	"EventLevel",
+	"VictoryPointModifier",
+	"SimultaneousTurns",
+];
+
+/**
+ * Every setup parameter the save carries, keyed by the attribute name verbatim
+ * — the shape `game_options` and `map_options` already use.
+ *
+ * Most attributes are written only when the setting is not NONE, and
+ * `SimultaneousTurns` only when it is above zero, so an absent key means the
+ * game did not set that parameter. An empty bag is a save that set none of
+ * them; a blob with no bag at all (below PARSER_VERSION 2.28.0) is the
+ * different claim that we do not know.
+ */
+function parseSetupParameters(
+	root: Record<string, unknown>,
+): Record<string, string> {
+	const out: Record<string, string> = {};
+	for (const name of SETUP_ATTRIBUTES) {
+		const value = optAttrStr(root[`@_${name}`]);
+		if (value !== null && value !== "") out[name] = value;
+	}
+	return out;
+}
+
+/**
+ * `<OccurrenceLevels>` as `occurrence class → level`:
+ *
+ *   <OccurrenceLevels>
+ *     <OCCURRENCECLASS_CALAMITIES>OCCURRENCELEVEL_CALAMITIES_LOW</...>
+ *   </OccurrenceLevels>
+ *
+ * Its own field rather than a `setup_parameters` entry because it is an
+ * element with per-class children where the bag is flat scalars. 12 of the 16
+ * saves in `test-data/saves/` carry a non-empty one; the game writes the
+ * element either way, so an empty map is "no calamity setting", not "unknown".
+ *
+ * `GameParameters.GetDifficultyMode` (GameParameters.cs:1907) counts these as
+ * part of the difficulty preset, which is why they belong beside the five
+ * attributes above rather than with the event settings.
+ */
+function parseOccurrenceLevels(
+	root: Record<string, unknown>,
+): Record<string, string> {
+	const out: Record<string, string> = {};
+	const node = root.OccurrenceLevels;
+	if (!isElement(node)) return out;
+	for (const [cls, level] of getElementChildren(node)) {
+		if (typeof level === "string" && level !== "") out[cls] = level;
+	}
 	return out;
 }
 

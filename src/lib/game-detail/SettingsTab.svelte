@@ -1,252 +1,170 @@
 <script lang="ts">
+	// A game's setup, in the seven sections Old World's own setup screens
+	// declare — the words the player read when they made each choice. The rows
+	// and their order come from `gameSetupSections` ($lib/map-settings), which
+	// reads the baked setup tables and applies the game's own visibility rules;
+	// this file is the chrome.
+	//
+	// Above the seven sits an unsectioned strip for the things that aren't setup
+	// choices: the game's name, its mode, its scenario and the build it was
+	// played on. Below them, the Players table carries the PER-PLAYER
+	// parameters, which the game's game-menu hover collapses to the active
+	// player's because it is a HUD and we have a roster.
 	import type { GameDetails } from "$lib/types/GameDetails";
 	import type { DetailPlayer } from "./helpers";
-	import { formatEnum, nationName } from "$lib/utils/formatting";
-	import { DIFFICULTY_NAMES } from "$lib/generated/difficulty-names";
 	import {
-		mapScriptLabel,
-		mapSizeLabel,
-		mapAspectRatioLabel,
+		formatArchetype,
+		formatEnum,
+		nationName,
+	} from "$lib/utils/formatting";
+	import {
 		gameModeLabel,
-		nonDefaultMapOptions,
-		setGameOptions,
+		gameSetupSections,
+		prosperityName,
+		setupValueName,
 	} from "$lib/map-settings";
+	import Panel from "$lib/ui/Panel.svelte";
+	import PanelInset from "$lib/ui/PanelInset.svelte";
 	import SpriteIcon from "./SpriteIcon.svelte";
 
 	let {
 		gameDetails,
 		players,
-		victoryConditions,
-		dlcList,
-		modsList,
+		gameVersion,
 	}: {
 		gameDetails: GameDetails;
 		players: DetailPlayer[];
-		victoryConditions: string;
-		dlcList: string;
-		modsList: string;
+		// The Old World build the save was written by (`match_metadata
+		// .game_version`), which is not a setup choice and so sits in the strip
+		// rather than in a section.
+		gameVersion: string | null;
 	} = $props();
 
-	// Per-human difficulty breakdown. AI rows in single-player carry the AI
-	// baseline tier (e.g. STRONG when the human is on GLORIOUS), which isn't
-	// player-chosen — include only humans in the divergence check.
-	const showBreakdown = $derived(
-		new Set(
-			players
-				.filter((p) => p.is_human)
-				.map((p) => p.difficulty)
-				.filter((d): d is string => d != null),
-		).size > 1,
-	);
-	const showDifficultySection = $derived(
-		gameDetails.difficulty != null || showBreakdown,
-	);
-	const humansWithDifficulty = $derived(
-		players.filter((p) => p.is_human && p.difficulty != null),
-	);
+	const sections = $derived(gameSetupSections(gameDetails));
 
-	// Non-default map options the save recorded (empty on pre-2.7.0 blobs, which
-	// don't carry map_options). Rendered under the Map Settings card.
-	const mapOptions = $derived(nonDefaultMapOptions(gameDetails.map_options));
-	const showMapSettings = $derived(
-		gameDetails.map_class != null ||
-			gameDetails.map_size != null ||
-			gameDetails.map_aspect_ratio != null ||
-			mapOptions.length > 0,
-	);
+	// The strip's own rows. Scenario comes from the setup bag — no corpus save
+	// sets one, so it is normally absent rather than "None".
+	const scenario = $derived(gameDetails.setup_parameters?.Scenario ?? null);
 
-	// Game-wide option flags the save recorded. Null on pre-2.11.0 blobs (the
-	// parser didn't read <GameOptions> yet), so the card stays hidden until the
-	// game is reparsed — same as map options on pre-2.7.0 blobs above.
-	const gameOptions = $derived(setGameOptions(gameDetails.game_options));
+	// The setup side of each player's Nation / Archetype / Dynasty, indexed by
+	// player xml id — NOT by position in `players`, which is name-sorted.
+	// `undefined` on a blob below PARSER_VERSION 2.28.0, which is what hides the
+	// parentheticals until the game is reparsed.
+	const setupNation = (player: DetailPlayer): string | null =>
+		player.player_id == null
+			? null
+			: (gameDetails.setup_nations?.[player.player_id] ?? null);
+	const setupArchetype = (player: DetailPlayer): string | null =>
+		player.player_id == null
+			? null
+			: (gameDetails.setup_archetypes?.[player.player_id] ?? null);
+	const setupDynasty = (player: DetailPlayer): string | null =>
+		player.player_id == null
+			? null
+			: (gameDetails.setup_dynasties?.[player.player_id] ?? null);
+
+	// The game rolled something different from what the player picked. `NONE` is
+	// the save's "not set" sentinel, not a choice, so it is no divergence; an
+	// identical pick is nothing to say twice.
+	function divergence(setup: string | null, resolved: string | null): boolean {
+		return setup != null && setup !== "NONE" && setup !== resolved;
+	}
+
+	// A setup dynasty only means something for a PRESET leader — the game shows
+	// the row on exactly that condition (`buildGameParametersDesc`,
+	// HelpText.Game.cs:3452). Any other archetype leaves the field at
+	// DYNASTY_DEFAULT, which is the absence of a choice rather than one.
+	const PRESET_ARCHETYPE = "TRAIT_PRESET_ARCHETYPE";
+	function dynastyWasPicked(player: DetailPlayer): boolean {
+		return (
+			setupArchetype(player) === PRESET_ARCHETYPE &&
+			divergence(setupDynasty(player), player.dynasty ?? null)
+		);
+	}
+
+	const anyPlayersColumn = $derived(
+		players.some(
+			(p) =>
+				p.development != null ||
+				setupArchetype(p) != null ||
+				setupDynasty(p) != null,
+		),
+	);
 </script>
 
-<div
-	class="mb-4 rounded-lg p-4"
-	style="background-color: rgb(var(--color-surface));"
->
-	<h3 class="mb-3 text-base font-bold text-tan">Game Settings</h3>
-	<div class="grid grid-cols-1 gap-3 md:grid-cols-3">
-		{#if gameDetails.game_mode || showDifficultySection || gameDetails.opponent_level}
-			<div
-				class="flex flex-col gap-3 rounded-lg p-3"
-				style="background-color: rgb(var(--color-surface-raised));"
-			>
-				{#if gameDetails.game_mode}
-					<div class="flex flex-col gap-1">
-						<span class="text-xs font-bold text-gray-400">Game Mode:</span>
-						<ul class="list-disc pl-5 text-sm text-bright">
-							<li>{gameModeLabel(gameDetails.game_mode)}</li>
-						</ul>
-					</div>
-				{/if}
-				{#if gameDetails.opponent_level}
-					<div class="flex flex-col gap-1">
-						<span class="text-xs font-bold text-gray-400">Opponent Level:</span>
-						<ul class="list-disc pl-5 text-sm text-bright">
-							<li>
-								{formatEnum(gameDetails.opponent_level, "OPPONENTLEVEL_")}
-							</li>
-						</ul>
-					</div>
-				{/if}
-				{#if showDifficultySection}
-					<div class="flex flex-col gap-1">
-						<span class="text-xs font-bold text-gray-400">Difficulty:</span>
-						<ul class="list-disc pl-5 text-sm text-bright">
-							{#if gameDetails.difficulty && !showBreakdown}
-								<li>
-									{DIFFICULTY_NAMES[gameDetails.difficulty] ??
-										formatEnum(gameDetails.difficulty, "DIFFICULTY_")}
-								</li>
-							{/if}
-							{#if showBreakdown}
-								{#each humansWithDifficulty as p (p.playerId)}
-									<li>
-										{p.player_name}: {(p.difficulty &&
-											DIFFICULTY_NAMES[p.difficulty]) ??
-											formatEnum(p.difficulty, "DIFFICULTY_")}
-									</li>
-								{/each}
-							{/if}
-						</ul>
-					</div>
-				{/if}
-			</div>
+<section class="mb-4 rounded-lg bg-surface p-3">
+	<div class="grid grid-cols-2 gap-3 md:grid-cols-4">
+		<PanelInset label="Game">
+			<p class="text-sm text-bright">
+				{gameDetails.game_name || "Unnamed"}
+			</p>
+		</PanelInset>
+		<PanelInset label="Mode">
+			<p class="text-sm text-bright">{gameModeLabel(gameDetails.game_mode)}</p>
+		</PanelInset>
+		{#if scenario}
+			<PanelInset label="Scenario">
+				<p class="text-sm text-bright">
+					{setupValueName(scenario, "SCENARIO_")}
+				</p>
+			</PanelInset>
 		{/if}
-		{#if gameDetails.victory_conditions}
-			<div
-				class="flex flex-col gap-1 rounded-lg p-3"
-				style="background-color: rgb(var(--color-surface-raised));"
-			>
-				<span class="text-xs font-bold text-gray-400">Victory Conditions:</span>
-				<ul class="list-disc pl-5 text-sm text-bright">
-					{#each victoryConditions.split(", ") as item (item)}
-						<li>{item}</li>
-					{/each}
-				</ul>
-			</div>
-		{/if}
-		{#if showMapSettings}
-			<div
-				class="flex flex-col gap-3 rounded-lg p-3"
-				style="background-color: rgb(var(--color-surface-raised));"
-			>
-				{#if gameDetails.map_class}
-					<div class="flex flex-col gap-1">
-						<span class="text-xs font-bold text-gray-400">Script:</span>
-						<ul class="list-disc pl-5 text-sm text-bright">
-							<li>{mapScriptLabel(gameDetails.map_class)}</li>
-						</ul>
-					</div>
-				{/if}
-				{#if gameDetails.map_size}
-					<div class="flex flex-col gap-1">
-						<span class="text-xs font-bold text-gray-400">Map Size:</span>
-						<ul class="list-disc pl-5 text-sm text-bright">
-							<li>
-								{mapSizeLabel(
-									gameDetails.map_size,
-								)}{#if gameDetails.map_width && gameDetails.map_height}&nbsp;({gameDetails.map_width}
-									× {gameDetails.map_height}){/if}
-							</li>
-						</ul>
-					</div>
-				{/if}
-				{#if gameDetails.map_aspect_ratio}
-					<div class="flex flex-col gap-1">
-						<span class="text-xs font-bold text-gray-400">Aspect Ratio:</span>
-						<ul class="list-disc pl-5 text-sm text-bright">
-							<li>{mapAspectRatioLabel(gameDetails.map_aspect_ratio)}</li>
-						</ul>
-					</div>
-				{/if}
-				{#if mapOptions.length > 0}
-					<div class="flex flex-col gap-1">
-						<span class="text-xs font-bold text-gray-400">Options:</span>
-						<ul class="list-disc pl-5 text-sm text-bright">
-							{#each mapOptions as opt (opt.option)}
-								<li>{opt.label}: {opt.value}</li>
-							{/each}
-						</ul>
-					</div>
-				{/if}
-			</div>
-		{/if}
-		{#if gameOptions.length > 0}
-			<div
-				class="flex flex-col gap-1 rounded-lg p-3"
-				style="background-color: rgb(var(--color-surface-raised));"
-			>
-				<span class="text-xs font-bold text-gray-400">Game Options:</span>
-				<ul class="list-disc pl-5 text-sm text-bright">
-					{#each gameOptions as opt (opt.option)}
-						<li>{opt.label}</li>
-					{/each}
-				</ul>
-			</div>
-		{/if}
-		{#if gameDetails.enabled_dlc}
-			<div
-				class="flex flex-col gap-1 rounded-lg p-3"
-				style="background-color: rgb(var(--color-surface-raised));"
-			>
-				<span class="text-xs font-bold text-gray-400">DLC Enabled:</span>
-				<ul class="list-disc pl-5 text-sm text-bright">
-					{#each dlcList.split(", ") as item (item)}
-						<li>{item}</li>
-					{/each}
-				</ul>
-			</div>
-		{/if}
-		{#if gameDetails.enabled_mods}
-			<div
-				class="flex flex-col gap-1 rounded-lg p-3"
-				style="background-color: rgb(var(--color-surface-raised));"
-			>
-				<span class="text-xs font-bold text-gray-400">Mods Enabled:</span>
-				<ul class="list-disc pl-5 text-sm text-bright">
-					{#each modsList.split(", ") as item (item)}
-						<li>{item}</li>
-					{/each}
-				</ul>
-			</div>
+		{#if gameVersion}
+			<PanelInset label="Old World Version">
+				<p class="text-sm text-bright">{gameVersion}</p>
+			</PanelInset>
 		{/if}
 	</div>
-</div>
+</section>
 
-<div
-	class="rounded-lg p-4"
-	style="background-color: rgb(var(--color-surface));"
->
-	<h3 class="mb-3 text-base font-bold text-tan">Players</h3>
-	<div
-		class="overflow-x-auto rounded-lg"
-		style="background-color: rgb(var(--color-surface-raised));"
-	>
+{#if sections.length > 0}
+	<div class="mb-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+		{#each sections as section (section.key)}
+			<Panel title={section.label}>
+				<PanelInset>
+					<dl class="flex flex-col gap-1">
+						{#each section.rows as row (row.key)}
+							{#if row.kind === "parameter"}
+								<div
+									class="flex items-baseline justify-between gap-3 text-sm {row.indent
+										? 'pl-3'
+										: ''}"
+								>
+									<dt class="text-gray-400">{row.label}</dt>
+									<dd class="text-right text-bright">{row.value}</dd>
+								</div>
+							{:else}
+								<div class="text-sm">
+									<dt class="font-bold text-bright">{row.label}</dt>
+									{#if row.help}
+										<dd class="text-xs text-gray-400">{row.help}</dd>
+									{/if}
+								</div>
+							{/if}
+						{/each}
+					</dl>
+				</PanelInset>
+			</Panel>
+		{/each}
+	</div>
+{/if}
+
+<Panel title="Players">
+	<PanelInset class="overflow-x-auto">
 		<table class="w-full">
 			<thead>
-				<tr>
-					<th
-						class="border-b-2 border-surface p-3 text-left text-xs font-bold text-gray-400"
-						>Player</th
-					>
-					<th
-						class="border-b-2 border-surface p-3 text-left text-xs font-bold text-gray-400"
-						>Nation</th
-					>
-					<th
-						class="border-b-2 border-surface p-3 text-left text-xs font-bold text-gray-400"
-						>Type</th
-					>
-					<th
-						class="border-b-2 border-surface p-3 text-left text-xs font-bold text-gray-400"
-						>Legitimacy</th
-					>
-					<th
-						class="border-b-2 border-surface p-3 text-left text-xs font-bold text-gray-400"
-						>State Religion</th
-					>
+				<tr class="text-left text-xs font-bold text-gray-400">
+					<th class="border-b-2 border-surface p-3">Player</th>
+					<th class="border-b-2 border-surface p-3">Nation</th>
+					<th class="border-b-2 border-surface p-3">Type</th>
+					<th class="border-b-2 border-surface p-3">Prosperity</th>
+					{#if anyPlayersColumn}
+						<th class="border-b-2 border-surface p-3">Development</th>
+						<th class="border-b-2 border-surface p-3">Leader Archetype</th>
+						<th class="border-b-2 border-surface p-3">Dynasty</th>
+					{/if}
+					<th class="border-b-2 border-surface p-3">Legitimacy</th>
+					<th class="border-b-2 border-surface p-3">State Religion</th>
 				</tr>
 			</thead>
 			<tbody>
@@ -266,11 +184,43 @@
 									/>
 								{/if}
 								{nationName(player.nation)}
+								{#if divergence(setupNation(player), player.nation)}
+									<span class="text-gray-400"
+										>({nationName(setupNation(player))})</span
+									>
+								{/if}
 							</span>
 						</td>
 						<td class="border-b border-surface p-3 text-left text-tan"
 							>{player.is_human ? "Human" : "AI"}</td
 						>
+						<td class="border-b border-surface p-3 text-left text-tan"
+							>{player.difficulty ? prosperityName(player.difficulty) : "—"}</td
+						>
+						{#if anyPlayersColumn}
+							<td class="border-b border-surface p-3 text-left text-tan"
+								>{player.development
+									? setupValueName(player.development, "DEVELOPMENT_")
+									: "—"}</td
+							>
+							<!-- Setup only: the archetype the game resolved lives on the
+							     leader character, which this tab doesn't carry. -->
+							<td class="border-b border-surface p-3 text-left text-tan"
+								>{setupArchetype(player)
+									? formatArchetype(setupArchetype(player) ?? "")
+									: "—"}</td
+							>
+							<td class="border-b border-surface p-3 text-left text-tan">
+								{player.dynasty
+									? setupValueName(player.dynasty, "DYNASTY_")
+									: "—"}
+								{#if dynastyWasPicked(player)}
+									<span class="text-gray-400"
+										>({setupValueName(setupDynasty(player), "DYNASTY_")})</span
+									>
+								{/if}
+							</td>
+						{/if}
 						<td class="border-b border-surface p-3 text-left text-tan"
 							>{player.legitimacy ?? "—"}</td
 						>
@@ -291,5 +241,5 @@
 				{/each}
 			</tbody>
 		</table>
-	</div>
-</div>
+	</PanelInset>
+</Panel>
