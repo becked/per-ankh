@@ -1008,19 +1008,35 @@ export function hasVictoryPoints(
 }
 
 /**
- * The uploader's seat: the first player of the uploader's nation. A nation
- * can't tell two players apart in a mirror match, so the first one wins. With
- * no nation to go on (an observer upload), each caller picks its own fallback.
+ * The uploader's seat: the player holding `uploaderIndex`, which is the seat
+ * `player_summaries.is_uploader` records and the detail payload serves. A
+ * nation can't stand in for it — two humans can play one nation, and the
+ * uploader is not always the lower seat of the two.
+ *
+ * `uploaderNation` is the fallback, and only for the case the id can't answer:
+ * a pre-2.6.0 blob whose `game_details.players` rows carry no id of their own
+ * gets a synthetic negative one wherever {@link resolvePlayers} can't match the
+ * row to the roster, and index equality fails silently against that. Same
+ * id-then-nation shape as {@link findByPlayer}, for the same reason.
+ *
+ * An observer upload claims no seat — `uploaderIndex` is null — so each caller
+ * picks its own fallback.
  *
  * Not the save owner, which has a different source and a different answer:
  * `PlayerRosterEntry.is_save_owner` is the seat the file was written from, and
  * it names the other player on exactly the uploads observer mode exists for.
  */
-export function uploaderPlayer<T extends { nation: string | null }>(
+export function uploaderPlayer<
+	T extends Pick<ResolvedPlayer, "playerId" | "nation">,
+>(
 	players: T[],
-	nation: string,
+	uploaderIndex: number | null,
+	uploaderNation: string | null,
 ): T | undefined {
-	return players.find((p) => p.nation === nation);
+	if (uploaderIndex == null) return undefined;
+	const seated = players.find((p) => p.playerId === uploaderIndex);
+	if (seated || uploaderNation == null) return seated;
+	return players.find((p) => p.nation === uploaderNation);
 }
 
 /**
@@ -1043,18 +1059,30 @@ export function ownedByPlayer<T>(
 }
 
 /**
- * Canonical per-player display order for the detail tabs: the save's
- * uploader ("player") first, then the rest in their existing order.
- * Observer/archival uploads (no userNation) keep the existing order.
+ * The seat the per-player surfaces lead with: the uploader's when the upload
+ * claimed one, the first human's otherwise. An observer/archival upload claims
+ * no seat, and the first human is the side its save is about — the same player
+ * the Worker's COALESCE'd `user_nation` names for display.
+ */
+export function leadPlayerId(
+	players: DetailPlayer[],
+	uploaderPlayerId: number | null,
+): number | null {
+	return uploaderPlayerId ?? players.find((p) => p.is_human)?.playerId ?? null;
+}
+
+/**
+ * Canonical per-player display order for the detail tabs: the seat the view
+ * leads with ("player") first, then the rest in their existing order.
  */
 export function orderPlayersUploaderFirst(
 	players: DetailPlayer[],
-	userNation: string | null,
+	uploaderPlayerId: number | null,
 ): DetailPlayer[] {
-	if (!userNation) return players;
+	const lead = leadPlayerId(players, uploaderPlayerId);
+	if (lead == null) return players;
 	return [...players].sort(
-		(a, b) =>
-			(a.nation === userNation ? 0 : 1) - (b.nation === userNation ? 0 : 1),
+		(a, b) => (a.playerId === lead ? 0 : 1) - (b.playerId === lead ? 0 : 1),
 	);
 }
 

@@ -38,7 +38,7 @@
 	let {
 		players,
 		improvementData,
-		userNation = null,
+		uploaderPlayerId = null,
 		tableState = $bindable<TableState>({
 			search: "",
 			sortColumn: "specialist",
@@ -48,7 +48,10 @@
 	}: {
 		players: DetailPlayer[];
 		improvementData: ImprovementData;
-		userNation?: string | null;
+		// The uploader's seat, or null when the upload claimed none (observer
+		// mode). Orders this tab's per-player surfaces; a nation can't stand in
+		// for it, because two humans can play one.
+		uploaderPlayerId?: number | null;
 		tableState?: TableState;
 	} = $props();
 
@@ -279,7 +282,7 @@
 	// no matchup and hides the comparison rather than showing two sides the
 	// cards above no longer list.
 	const orderedPlayers = $derived(
-		orderPlayersUploaderFirst(displayedPlayers, userNation),
+		orderPlayersUploaderFirst(displayedPlayers, uploaderPlayerId),
 	);
 	const matchup = $derived(orderedPlayers.length === 2 ? orderedPlayers : null);
 
