@@ -112,7 +112,7 @@
 	// rather than nobody. The unknown arm is the default case for stored blobs
 	// today, so it reads the way a missing `damage` does.
 	const GENERAL_UNKNOWN_NOTE =
-		"This game was parsed before a unit's general was read, so the save's general is not in the stored data. Re-uploading the save fills it in.";
+		"This game was parsed before a unit's general was read, so the save's general is not in the stored data. Reparsing the save fills it in.";
 
 	// The character, resolved as CityPopover resolves a governor: by `xml_id`,
 	// so the regnal numeral comes out. There is no arm for an id that resolves

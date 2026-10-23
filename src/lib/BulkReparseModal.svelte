@@ -255,18 +255,13 @@
 		</div>
 
 		{#if phase === "idle"}
-			<p class="mb-4 text-sm text-tan">
-				The parser was upgraded. Re-importing will pull each save's raw ZIP from
-				cloud storage, parse it again, and update the stored data. Game IDs and
-				visibility settings are preserved.
-			</p>
 			<div class="flex gap-2">
 				<button
 					type="button"
 					onclick={start}
 					class="rounded bg-orange px-4 py-2 text-sm font-bold text-white hover:bg-orange/80"
 				>
-					Start reparsing
+					Reparse
 				</button>
 				<button
 					type="button"

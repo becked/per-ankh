@@ -133,7 +133,7 @@
 					onclick={start}
 					class="rounded bg-orange px-4 py-2 text-sm font-bold text-white hover:bg-orange/80"
 				>
-					Start reindexing
+					Reindex
 				</button>
 				<button
 					type="button"
