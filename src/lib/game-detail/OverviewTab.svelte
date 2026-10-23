@@ -23,7 +23,7 @@
 		classifyUnit,
 		UNIT_CLASS_COLORS,
 		improvementDisplayName,
-		saveOwnerPlayer,
+		uploaderPlayer,
 	} from "./helpers";
 	import SpriteIcon from "./SpriteIcon.svelte";
 
@@ -90,11 +90,11 @@
 		wonders: PlayerWonderEntry[];
 	};
 
-	// Exactly one player is the save owner (see saveOwnerPlayer); the first
-	// human when userNation is absent — the legacy path.
-	const saveOwnerId = $derived(
+	// Exactly one player is the uploader (see uploaderPlayer); the first human
+	// when userNation is absent — the legacy path.
+	const uploaderPlayerId = $derived(
 		(userNation != null
-			? saveOwnerPlayer(players, userNation)
+			? uploaderPlayer(players, userNation)
 			: players.find((p) => p.is_human)
 		)?.playerId ?? null,
 	);
@@ -152,12 +152,12 @@
 					(w) => w.nation,
 				).map((w) => ({ wonder: w.wonder, completed_turn: w.completed_turn }));
 
-				const isSaveOwner = p.playerId === saveOwnerId;
-				// Fall back to the uploader's Discord display_name on the
-				// save-owner card when Old World wrote no leader name (common
-				// for solo games where the player didn't customize names).
+				const isUploader = p.playerId === uploaderPlayerId;
+				// Fall back to the uploader's Discord display_name on their own
+				// card when Old World wrote no leader name (common for solo
+				// games where the player didn't customize names).
 				const playerName =
-					isSaveOwner && !p.player_name && userDisplayName
+					isUploader && !p.player_name && userDisplayName
 						? userDisplayName
 						: p.player_name;
 				return {
@@ -165,7 +165,7 @@
 					playerName,
 					nation: p.nation,
 					isHuman: p.is_human,
-					isSaveOwner,
+					isUploader,
 					isWinner:
 						gameDetails.winner_player_id != null &&
 						p.playerId === gameDetails.winner_player_id,
@@ -198,8 +198,8 @@
 				};
 			})
 			.sort((a, b) => {
-				// Save owner first, then other humans alphabetically, then AI alphabetically
-				if (a.isSaveOwner !== b.isSaveOwner) return a.isSaveOwner ? -1 : 1;
+				// Uploader first, then other humans alphabetically, then AI alphabetically
+				if (a.isUploader !== b.isUploader) return a.isUploader ? -1 : 1;
 				if (a.isHuman !== b.isHuman) return a.isHuman ? -1 : 1;
 				const aNation = nationName(a.nation);
 				const bNation = nationName(b.nation);

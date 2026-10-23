@@ -15,18 +15,53 @@ export async function gzipJson(obj: unknown): Promise<Blob> {
 	return new Response(stream).blob();
 }
 
-// Pick a sensible default uploader: if exactly one human's online_id matches
-// the user's known ids, pre-select that human. Anything else (zero matches,
-// or ambiguous multiple matches) defaults to observer (null) so we never
-// auto-claim incorrectly.
+/** A pre-selected seat and the signal that chose it. */
+export type UploaderSuggestion = {
+	playerIndex: number | null;
+	// What the picker tells the user the pre-check means. `null` only when
+	// nothing was suggested, and then `playerIndex` is null too.
+	source: "known-id" | "save-owner" | null;
+};
+
+// Pick a sensible default uploader, and report which signal picked it so the
+// picker can say what the pre-check means.
+//
+// The uploader's own identity goes first: exactly one human whose online_id is
+// in their known set (captured from prior uploads) is the only signal that
+// stays right when someone else saved the file. On an opponent's save of a
+// game you both played, `is_save_owner` names them and that id names you.
+//
+// With no match, `is_save_owner` answers — the seat the file was written from,
+// which is the uploader on an ordinary upload and the only signal there is on
+// the very first one, before `user_online_ids` holds anything to match.
+//
+// Two or more matches claim nothing. Two ids attributed to one user appearing
+// in one roster means at least one of those attributions is already wrong, and
+// claiming writes the suspect id back: `captureOnlineIds` adds the claimed
+// seat's id (cloud/src/games.ts:2279), no screen removes one again, and the id
+// set is what sets the default on the next upload.
+//
+// A default, not an identity: the save owner is who SAVED the file, which
+// differs from who is uploading it exactly on observer uploads (a TO
+// archiving a match, a friend's save), so the picker still asks.
 export function defaultSelection(
-	humans: readonly Pick<PlayerRosterEntry, "player_index" | "online_id">[],
+	humans: readonly Pick<
+		PlayerRosterEntry,
+		"player_index" | "online_id" | "is_save_owner"
+	>[],
 	knownOnlineIds: Set<string>,
-): number | null {
+): UploaderSuggestion {
 	const matches = humans.filter(
 		(h) => h.online_id && knownOnlineIds.has(h.online_id),
 	);
-	return matches.length === 1 ? matches[0].player_index : null;
+	if (matches.length === 1) {
+		return { playerIndex: matches[0].player_index, source: "known-id" };
+	}
+	if (matches.length > 1) return { playerIndex: null, source: null };
+	const owner = humans.find((h) => h.is_save_owner);
+	return owner
+		? { playerIndex: owner.player_index, source: "save-owner" }
+		: { playerIndex: null, source: null };
 }
 
 // A reparse re-uploads a save whose perspective was already chosen once, so
@@ -82,6 +117,7 @@ export interface PlayerChoice {
 	player_name: string;
 	nation: string | null;
 	online_id: string | null;
+	is_save_owner: boolean;
 	city_count: number;
 	is_winner: boolean;
 }
@@ -108,6 +144,7 @@ export function playerChoices(data: FullGameData): PlayerChoice[] {
 			player_name: p.player_name,
 			nation: p.nation,
 			online_id: p.online_id,
+			is_save_owner: p.is_save_owner,
 			city_count: p.nation ? (cityCountByNation.get(p.nation) ?? 0) : 0,
 			is_winner: winnerIndex !== null && p.player_index === winnerIndex,
 		}));

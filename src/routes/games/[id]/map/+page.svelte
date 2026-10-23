@@ -21,8 +21,8 @@
 		classifyUnit,
 		getSpritePath,
 		resolveGamePlayers,
-		saveOwnerPlayer,
 		unitOwner,
+		uploaderPlayer,
 		type DetailPlayer,
 	} from "$lib/game-detail/helpers";
 	import { HoverLockCard } from "$lib/game-detail/hover-lock-card.svelte";
@@ -49,11 +49,11 @@
 		g: typeof data.game,
 		list: DetailPlayer[],
 	): number | null {
-		const owner =
+		const uploader =
 			g.uploader_nation != null
-				? saveOwnerPlayer(list, g.uploader_nation)
+				? uploaderPlayer(list, g.uploader_nation)
 				: list.find((p) => p.playerId === 0);
-		return (owner ?? list[0])?.playerId ?? null;
+		return (uploader ?? list[0])?.playerId ?? null;
 	}
 
 	// The map's turn, defaulting to the final one, and the chrome's player.

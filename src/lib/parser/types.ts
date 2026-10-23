@@ -427,9 +427,10 @@ export interface PlayerNationEntry {
  * Cloud-side per-player roster, in XML order. Two consumers:
  *
  *   1. Upload modal picker (spec §8) — filters where `is_human === true`,
- *      pre-checks rows whose `online_id` matches one of the uploader's
- *      known ids (captured from prior uploads). Submits selected
- *      `player_index`es back to the server as `uploader_player_indexes`.
+ *      pre-checks the row whose `online_id` matches one of the uploader's
+ *      known ids (captured from prior uploads), else the save owner. Submits
+ *      selected `player_index`es back to the server as
+ *      `uploader_player_indexes`.
  *
  *   2. Worker `/v1/games` POST — iterates the full roster to insert one
  *      `player_summaries` row per player, with `is_uploader` flagged on
@@ -444,6 +445,14 @@ export interface PlayerRosterEntry {
 	nation: string | null;
 	is_human: boolean;
 	online_id: string | null;
+	// Whoever's perspective the save was written from — `<?ActivePlayer?>`,
+	// falling back to the single human in the roster (see `resolveSaveOwner`
+	// in parsers/players.ts). True on at most one entry, and on none when a
+	// multi-human save carries no PI. It is who SAVED the file, not who is
+	// uploading it, so the picker reaches for it only when the uploader's own
+	// known ids say nothing — see `defaultSelection` in upload-helpers.ts.
+	// PARSER_VERSION 2.27.0+.
+	is_save_owner: boolean;
 }
 
 // ---------- The envelope ----------
@@ -515,4 +524,4 @@ export interface FullGameData {
  * fixes, MINOR for additive fields, MAJOR for breaking schema changes.
  * Initial value `2.0.0` mirrors `FullGameData.version: 2`.
  */
-export const PARSER_VERSION = "2.26.0";
+export const PARSER_VERSION = "2.27.0";

@@ -823,7 +823,7 @@ export type PlayerSummary = {
 	playerName: string;
 	nation: string | null;
 	isHuman: boolean;
-	isSaveOwner: boolean;
+	isUploader: boolean;
 	isWinner: boolean;
 	finalVP: number | null;
 	finalMilitary: number | null;
@@ -1008,11 +1008,15 @@ export function hasVictoryPoints(
 }
 
 /**
- * The save owner: the first player of the uploader's nation. A nation can't
- * tell two players apart in a mirror match, so the first one wins. With no
- * nation to go on (an observer upload), each caller picks its own fallback.
+ * The uploader's seat: the first player of the uploader's nation. A nation
+ * can't tell two players apart in a mirror match, so the first one wins. With
+ * no nation to go on (an observer upload), each caller picks its own fallback.
+ *
+ * Not the save owner, which has a different source and a different answer:
+ * `PlayerRosterEntry.is_save_owner` is the seat the file was written from, and
+ * it names the other player on exactly the uploads observer mode exists for.
  */
-export function saveOwnerPlayer<T extends { nation: string | null }>(
+export function uploaderPlayer<T extends { nation: string | null }>(
 	players: T[],
 	nation: string,
 ): T | undefined {
