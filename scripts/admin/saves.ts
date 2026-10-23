@@ -27,7 +27,8 @@ export interface CachedSave {
 	// timestamp only here (parseEntryNameDate,
 	// src/lib/parser/parsers/match-metadata.ts). A sweep that dropped it would
 	// write `save_date: null` where the browser sweep writes the date, and the
-	// two must agree (recoverUploaderIndex, src/lib/parser/upload-helpers.ts).
+	// two must agree — the browser reaches the same parse through
+	// `extractAllGameData`'s entryName argument (src/lib/parser/worker.ts).
 	entryName: string;
 }
 

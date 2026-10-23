@@ -1,17 +1,16 @@
 <script module lang="ts">
 	// The minimum each game contributes to the reparse pipeline: its id, a
-	// display name for the row, and the uploader's original nation choice used
-	// to recover the uploader index from the freshly parsed roster. This is
-	// the raw `uploader_nation` (null = observer), NOT the COALESCE'd display
-	// `user_nation` — feeding the display value would re-claim the first human
-	// on observer uploads. `user_id` is the owner id, required only in admin
-	// mode for the on-behalf-of upload. The account page's GameListItem and
-	// the admin page's AdminGameListItem both structurally satisfy this; the
-	// game detail page's reparse banner (ReparseButton) builds one directly.
+	// display name for the row, and the seat the uploader claimed on the
+	// original upload — re-sent verbatim so the reparse re-claims the same
+	// player. Null = observer upload, which stays one. `user_id` is the owner
+	// id, required only in admin mode for the on-behalf-of upload. The
+	// account page's GameListItem and the admin page's AdminGameListItem both
+	// structurally satisfy this; the game detail page's reparse banner
+	// (ReparseButton) builds one directly.
 	export interface ReparseTarget {
 		game_id: string;
 		game_name: string | null;
-		uploader_nation: string | null;
+		uploader_player_index: number | null;
 		user_id?: string;
 	}
 </script>
@@ -25,10 +24,10 @@
 	//
 	// Differences vs BulkUploadModal:
 	//   - Inputs are existing games, not picked files. No file picker.
-	//   - uploader_player_index is recovered from the existing
-	//     `games.user_nation`: find the unique human in the freshly parsed
-	//     roster whose nation matches; observer originals (user_nation =
-	//     null) re-upload as observer.
+	//   - uploader_player_index isn't picked or re-derived — it's the stored
+	//     seat (`player_summaries.is_uploader`), carried in on the target and
+	//     posted straight back. Observer originals (null) re-upload as
+	//     observer.
 	//   - Sequential pipeline (download → parse → upload) per game; the
 	//     parser worker is single-threaded so concurrency wouldn't speed up
 	//     the bottleneck and would complicate UI state.
@@ -38,7 +37,6 @@
 		gzipJson,
 		parseSaveFile,
 		ParseFailure,
-		recoverUploaderIndex,
 	} from "$lib/parser/upload-helpers";
 	import { cloudApi, ApiError, DuplicateUploadError } from "$lib/api-cloud";
 	import HieroglyphParade from "$lib/HieroglyphParade.svelte";
@@ -55,7 +53,7 @@
 	interface Row {
 		gameId: string;
 		gameName: string;
-		userNation: string | null;
+		uploaderIndex: number | null;
 		// Only populated when adminMode=true — the target owner for the
 		// admin-on-behalf-of upload endpoint.
 		userId?: string;
@@ -87,7 +85,7 @@
 		games.map((g) => ({
 			gameId: g.game_id,
 			gameName: g.game_name ?? "Unnamed game",
-			userNation: g.uploader_nation,
+			uploaderIndex: g.uploader_player_index,
 			userId: "user_id" in g ? g.user_id : undefined,
 			status: { kind: "queued" },
 		})),
@@ -120,6 +118,23 @@
 	}
 
 	async function processOne(row: Row): Promise<void> {
+		// Who the upload is posted as: an owner id in admin mode, null for the
+		// session user's own game. An admin row with no owner id is refused
+		// rather than posted — falling back to uploadGame would create a
+		// second game under the admin's own account, since the dedup that
+		// makes an upload a re-import is keyed on (user_id, file_hash) and
+		// would miss. Unreachable from both callers today (AdminGameListItem
+		// carries user_id, GameHeader's admin branch requires it), so this is
+		// a wrong answer that can't be reached rather than one that happens.
+		const ownerId = adminMode ? row.userId : null;
+		if (ownerId === undefined) {
+			setStatus(row.gameId, {
+				kind: "error",
+				message: "No owner on this game — an admin reparse posts as them.",
+			});
+			return;
+		}
+
 		// Download
 		setStatus(row.gameId, { kind: "downloading" });
 		let rawZip: ArrayBuffer;
@@ -163,16 +178,6 @@
 			return;
 		}
 
-		// Derive uploader index from the original `user_nation` — shared with
-		// the headless sweep, which posts to the same endpoint and so has to
-		// recover the same seat.
-		const recovered = recoverUploaderIndex(data.player_roster, row.userNation);
-		if (!recovered.ok) {
-			setStatus(row.gameId, { kind: "error", message: recovered.message });
-			return;
-		}
-		const uploaderIndex = recovered.uploaderIndex;
-
 		// Upload
 		setStatus(row.gameId, { kind: "uploading" });
 		try {
@@ -184,10 +189,13 @@
 				new Blob([parsedZip], { type: "application/zip" }),
 				fileName,
 			);
-			form.append("uploader_player_index", JSON.stringify(uploaderIndex));
+			// Null = the original was an observer upload and stays one. JSON
+			// because the worker reads this field through JSON.parse, so the
+			// encoder has to be the matching one.
+			form.append("uploader_player_index", JSON.stringify(row.uploaderIndex));
 			const res =
-				adminMode && row.userId
-					? await cloudApi.adminReparseUpload(row.userId, form)
+				ownerId !== null
+					? await cloudApi.adminReparseUpload(ownerId, form)
 					: await cloudApi.uploadGame(form);
 			setStatus(row.gameId, {
 				kind: "done",

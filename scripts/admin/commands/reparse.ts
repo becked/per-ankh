@@ -9,7 +9,7 @@
 // a responsiveness wrapper, not a capability. This command is that loop over
 // the corpus.
 //
-// WHAT RUNS WHERE. The parse is local; every WRITE is still the Worker's.
+// WHAT RUNS WHERE. The parse is local; every D1 and R2 WRITE is the Worker's.
 // `handleGameUpload`'s re-import branch is ~1,000 lines of correctness —
 // cascading child deletes, screenshot and report capture-and-restore across the
 // `INSERT OR REPLACE`, collection and tournament preservation, blob-cache key
@@ -29,13 +29,20 @@
 // list, R2 for `saves/<game_id>.zip` — so the token is scoped to the one write
 // the CLI cannot do for itself. Downloads are cached on disk and reused, so a
 // re-run after a failure costs no further remote reads.
+//
+// One write is the command's own, and it is a cache clear rather than a
+// record: the stats bundles in KV, once at the end of a run that rewrote
+// anything, through the same helper `admin cache clear stats` uses. The call
+// site says why nothing else rebuilds them inside a day.
 
 import { mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 
 import { apiBase, d1Query, getTarget, isLocal, sqlStr } from "../wrangler";
+import { clearStatsBundles } from "./cache";
 import { readCachedSave } from "../saves";
+import { uploaderPlayerIndexSql } from "../../../cloud/src/games-scope";
 import type { CommandOpts } from "../../lib/cli";
 import { flagInt, flagString, parseFlags, printJson } from "../../lib/cli";
 import { confirmTyping } from "../../lib/confirm";
@@ -59,10 +66,7 @@ import {
 } from "../../../src/lib/parser/parse-xml";
 import { extractAllGameData } from "../../../src/lib/parser/parsers/index";
 import { PARSER_VERSION } from "../../../src/lib/parser/types";
-import {
-	gzipJson,
-	recoverUploaderIndex,
-} from "../../../src/lib/parser/upload-helpers";
+import { gzipJson } from "../../../src/lib/parser/upload-helpers";
 import { validateCompletedGame } from "../../../src/lib/parser/validation";
 
 // The credential, by the same split purge.ts documents: committed config comes
@@ -86,10 +90,10 @@ interface StaleGame {
 	// owner's name: that is `users.display_name`, joined below as owner_name.
 	display_name: string | null;
 	owner_name: string | null;
-	// The raw `games.user_nation` — null means the original was an observer
-	// upload. NOT a COALESCE'd display value: feeding one of those to
-	// recoverUploaderIndex would re-claim the first human on an observer game.
-	user_nation: string | null;
+	// The seat the uploader claimed (`player_summaries.is_uploader`), posted
+	// back verbatim so the reparse re-claims the same player. Null means the
+	// original was an observer upload and stays one.
+	uploader_player_index: number | null;
 	parser_version: string;
 }
 
@@ -148,9 +152,15 @@ async function loadStale(
 	const where = [`g.parser_version != ${sqlStr(PARSER_VERSION)}`];
 	if (fromVersion) where.push(`g.parser_version = ${sqlStr(fromVersion)}`);
 	if (userId) where.push(`g.user_id = ${sqlStr(userId)}`);
+	// The uploader seat comes from the Worker's own helper rather than a copy
+	// of it: this sweep and the browser post the value back to the same
+	// endpoint, so a divergence would be a reparse that changes whose game it
+	// is. games-scope.ts is importable here where games.ts is not — see its
+	// comment on this fragment.
 	return d1Query<StaleGame>(
 		`SELECT g.game_id, g.user_id, g.game_name, g.display_name,
-		        u.display_name AS owner_name, g.user_nation, g.parser_version
+		        u.display_name AS owner_name, g.parser_version,
+		        ${uploaderPlayerIndexSql("g")} AS uploader_player_index
 		   FROM games g
 		   LEFT JOIN users u ON u.user_id = g.user_id
 		  WHERE ${where.join(" AND ")}
@@ -168,7 +178,6 @@ async function postReparse(
 	game: StaleGame,
 	zip: Buffer,
 	blob: unknown,
-	uploaderIndex: number | null,
 	token: string,
 ): Promise<Outcome> {
 	const form = new FormData();
@@ -178,7 +187,10 @@ async function postReparse(
 		new Blob([new Uint8Array(zip)], { type: "application/zip" }),
 		`${game.game_id}.zip`,
 	);
-	form.append("uploader_player_index", JSON.stringify(uploaderIndex));
+	form.append(
+		"uploader_player_index",
+		JSON.stringify(game.uploader_player_index),
+	);
 
 	const res = await fetch(
 		`${apiBase()}/admin/games/${game.user_id}/reparse-upload`,
@@ -248,12 +260,7 @@ async function processOne(
 		// catch below maps its NOT_COMPLETED back to a named skip, because that
 		// is a property of the game rather than a fault in this run.
 		validateCompletedGame(data);
-		const recovered = recoverUploaderIndex(
-			data.player_roster,
-			game.user_nation,
-		);
-		if (!recovered.ok) return { kind: "failed", why: recovered.message };
-		return postReparse(game, save.zip, data, recovered.uploaderIndex, token);
+		return postReparse(game, save.zip, data, token);
 	} catch (e) {
 		if (e instanceof ParseError && e.code === "NOT_COMPLETED") {
 			return {
@@ -411,11 +418,27 @@ export async function run(args: string[], opts: CommandOpts): Promise<void> {
 	};
 	for (const r of results) counts[r.outcome.kind]++;
 
+	// Flush the stats bundles once, after the sweep rather than per game.
+	// Every reparse rewrote that game's game_player_turn rows, which all three
+	// bundle kinds aggregate — and no bundle key drifts on a reparse, so a
+	// present-but-stale entry is served for its full 24h TTL. The Worker's own
+	// invalidation on an upload only reaches the uploader's bundle
+	// (handleGameUpload), the nightly precompute rebuilds the global slices
+	// hours later, the hourly warm rebuilds only the ones that are *missing*,
+	// and a tournament bundle has no cron at all. Over hundreds of games that
+	// leaves a corpus whose numbers predate the sweep: a band that is all-null
+	// only because the backfill hasn't landed reads as a corpus with nothing
+	// to show. Nothing to flush when nothing was written — a run that only
+	// skipped (409s, missing saves, parse failures) left the corpus alone.
+	const wrote = counts.reimported + counts.created > 0;
+	const statsCleared = wrote ? await clearStatsBundles() : 0;
+
 	if (opts.json) {
 		printJson({
 			to_version: PARSER_VERSION,
 			target: getTarget(),
 			counts,
+			stats_bundles_cleared: statsCleared,
 			results: results.map((r) => ({
 				game_id: r.game.game_id,
 				user_id: r.game.user_id,
@@ -444,7 +467,9 @@ export async function run(args: string[], opts: CommandOpts): Promise<void> {
 		`\n${bold(`${counts.reimported} reparsed`)} of ${games.length}\n` +
 			`${dim(
 				`skipped ${counts.skipped}, missing save ${counts.missing}, ` +
-					`failed ${counts.failed}, new games ${counts.created}`,
+					`failed ${counts.failed}, new games ${counts.created}\n` +
+					`cleared ${statsCleared} stats bundle(s) — next /stats read ` +
+					`recomputes from D1`,
 			)}\n`,
 	);
 	if (counts.failed > 0) process.exitCode = 1;

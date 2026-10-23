@@ -91,9 +91,9 @@ async function seedUploaderChangeEvents(
 }
 
 // Upload the two-human fixture claiming player 0, and return its game_id.
-async function uploadAsPlayerZero(
-	as: { sessionToken: string },
-): Promise<string> {
+async function uploadAsPlayerZero(as: {
+	sessionToken: string;
+}): Promise<string> {
 	const form = await buildUploadFormData({ winnerIndex: 0, aiPlayer: true });
 	const res = await postMultipart({ path: "/v1/games", form, as });
 	const { game_id } = await expectOk<{ game_id: string }>(res);

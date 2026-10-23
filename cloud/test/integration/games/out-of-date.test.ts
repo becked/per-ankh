@@ -4,6 +4,9 @@
 // cover the user's whole library (the paginated GET /v1/games defaults to 50
 // rows and so can't be used). Seeds games via direct INSERT so the suite stays
 // focused on the handler's query, not the upload pipeline.
+//
+// The `uploader_player_index` each row carries is pinned in
+// uploader-seat.test.ts, against all four surfaces that serve it.
 
 import { applyD1Migrations, env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";

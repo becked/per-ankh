@@ -1,13 +1,14 @@
 <script lang="ts">
 	// Single-game reparse button for the game detail page's stale-parser
-	// banner. Two callers, one path: the owner reparses their own game, and a
-	// site admin reparses a *public* game they don't own (adminMode → the
-	// admin endpoint, so the game stays under its original owner). Both drive
-	// BulkReparseModal with a one-game target, which recovers the uploader
-	// index from the stored uploader_nation instead of re-asking — the same
-	// no-prompt path the account page's per-save Reparse row already uses.
-	// Server re-checks site-admin on the admin endpoint, so gating the button
-	// on is_admin is chrome, not security.
+	// banner. One caller (GameHeader's reparse derived), two modes: the owner
+	// reparses their own game, and a site admin reparses a *public* game they
+	// don't own (adminMode → the admin endpoint, so the game stays under its
+	// original owner). Both drive BulkReparseModal with a one-game target
+	// carrying the seat the uploader claimed, which the modal posts back
+	// verbatim rather than re-deriving or re-asking — the same no-prompt path
+	// the account page's per-save Reparse row already uses. Server re-checks
+	// site-admin on the admin endpoint, so gating the button on is_admin is
+	// chrome, not security.
 
 	import { invalidateAll } from "$app/navigation";
 	import BulkReparseModal, {
