@@ -29,9 +29,14 @@
 	let {
 		game,
 		tab,
+		openAtYield = null,
 	}: {
 		game: Awaited<ReturnType<typeof cloudApi.getGame>>;
 		tab: GameTabId;
+		// Which yield the Yields tab opens at, for a host that opened the tab
+		// from one — the map view's yield strip. The analyst view, whose tabs
+		// are opened by name alone, leaves it null.
+		openAtYield?: string | null;
 	} = $props();
 
 	const tabState = getGameTabState();
@@ -185,6 +190,7 @@
 {:else if tab === "economics"}
 	<YieldsTab
 		allYields={game.yield_history}
+		{openAtYield}
 		bind:chartFilters={tabState.chartFilters}
 	/>
 {:else if tab === "military"}
