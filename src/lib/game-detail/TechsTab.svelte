@@ -98,7 +98,7 @@
 		characterTraits = [],
 		gameReligions = [],
 		gameOptions = null,
-		userNation = null,
+		uploaderPlayerId = null,
 		chartFilter = $bindable<Record<string, boolean>>({}),
 	}: {
 		players: DetailPlayer[];
@@ -130,7 +130,10 @@
 		// Set <GameOptions> flags. Null on pre-2.11.0 blobs (and from the frozen
 		// web/ viewer) — "unknown", not "none set".
 		gameOptions?: Record<string, true> | null;
-		userNation?: string | null;
+		// The uploader's seat, or null when the upload claimed none (observer
+		// mode). Orders this tab's per-player surfaces; a nation can't stand in
+		// for it, because two humans can play one.
+		uploaderPlayerId?: number | null;
 		chartFilter?: Record<string, boolean>;
 	} = $props();
 
@@ -140,7 +143,7 @@
 
 	// Canonical player order: uploader first (shared rule with MilitaryTab).
 	const orderedPlayers = $derived(
-		orderPlayersUploaderFirst(players, userNation),
+		orderPlayersUploaderFirst(players, uploaderPlayerId),
 	);
 
 	// Side-by-side (Techs by Turn | Science Sources) only for ≤4-nation games;

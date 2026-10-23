@@ -83,7 +83,7 @@
 		units = [],
 		tileOwnershipHistory = [],
 		totalTurns,
-		userNation = null,
+		uploaderPlayerId = null,
 		tableState = $bindable<TableState>({
 			search: "",
 			sortColumn: "improvement",
@@ -115,13 +115,16 @@
 		// viewer), which drops the Territory view rather than the tab.
 		tileOwnershipHistory?: TileOwnershipEntry[];
 		totalTurns: number;
-		userNation?: string | null;
+		// The uploader's seat, or null when the upload claimed none (observer
+		// mode). Orders this tab's per-player surfaces; a nation can't stand in
+		// for it, because two humans can play one.
+		uploaderPlayerId?: number | null;
 		tableState?: TableState;
 	} = $props();
 
 	type ImprovementInfoRow = ImprovementData["improvements"][number];
 	const orderedPlayers = $derived(
-		orderPlayersUploaderFirst(players, userNation),
+		orderPlayersUploaderFirst(players, uploaderPlayerId),
 	);
 
 	const economies = $derived(

@@ -7,7 +7,11 @@
 	// GameTabState), so it outlives the tab.
 	import type { cloudApi } from "$lib/api-cloud";
 	import { formatEnum } from "$lib/utils/formatting";
-	import { hasVictoryPoints, resolveGamePlayers } from "./helpers";
+	import {
+		hasVictoryPoints,
+		resolveGamePlayers,
+		uploaderPlayer,
+	} from "./helpers";
 	import { getGameTabState, type GameTabId } from "./game-tabs.svelte";
 	import { LAZY_TABS, lazyTab } from "./tab-components.svelte";
 	import OverviewTab from "./OverviewTab.svelte";
@@ -70,16 +74,26 @@
 	const familyOpinionHistory = $derived(game.family_opinion_history ?? []);
 	const projectsProduced = $derived(game.projects_produced ?? []);
 
-	// The uploader's picked nation and Discord display name, from the games
-	// row. The Worker's COALESCE fallback (first human player's nation) means
-	// the nation is virtually always set; the name is null for observer-mode
-	// uploads.
-	const userNation = $derived(game.user_nation ?? null);
+	// The uploader's Discord display name, from the games row. Null for
+	// observer-mode uploads.
 	const userDisplayName = $derived(game.user_display_name ?? null);
 
 	// Per-player iteration source: roster players enriched with a stable
 	// playerId + unique label + color. Mirror-match safe (nation alone isn't).
 	const resolvedPlayers = $derived(resolveGamePlayers(game));
+
+	// The uploader's seat, resolved once for every tab that leads with it.
+	// `uploader_player_index` is the seat they claimed (null = observer upload),
+	// `uploader_nation` the raw pick beside it. Not `user_nation`, which the
+	// Worker COALESCEs to the first human for display and so never reads as
+	// "nobody claimed a seat".
+	const uploaderPlayerId = $derived(
+		uploaderPlayer(
+			resolvedPlayers,
+			game.uploader_player_index ?? null,
+			game.uploader_nation ?? null,
+		)?.playerId ?? null,
+	);
 
 	const victoryConditions = $derived(
 		game.game_details.victory_conditions
@@ -117,7 +131,7 @@
 		improvementData={game.improvement_data}
 		gameReligions={game.game_religions}
 		playerWonders={game.player_wonders}
-		{userNation}
+		{uploaderPlayerId}
 		{userDisplayName}
 	/>
 
@@ -184,7 +198,7 @@
 		{characterTraits}
 		gameReligions={game.game_religions}
 		gameOptions={game.game_details.game_options}
-		{userNation}
+		{uploaderPlayerId}
 		bind:chartFilter={tabState.chartFilters.techs}
 	/>
 {:else if tab === "orders" && OrdersTab}
@@ -215,7 +229,7 @@
 		{characters}
 		lawAdoptionHistory={game.law_adoption_history}
 		techDiscoveryHistory={game.tech_discovery_history}
-		{userNation}
+		{uploaderPlayerId}
 		bind:chartFilter={tabState.chartFilters.military}
 		bind:tableState={tabState.tables.units}
 	/>
@@ -241,7 +255,7 @@
 		{units}
 		tileOwnershipHistory={game.tile_ownership_history}
 		totalTurns={game.game_details.total_turns}
-		{userNation}
+		{uploaderPlayerId}
 		bind:tableState={tabState.tables.improvements}
 	/>
 {:else if tab === "wonders" && WondersTab}
@@ -259,13 +273,13 @@
 		{familyOpinionHistory}
 		{units}
 		totalTurns={game.game_details.total_turns}
-		{userNation}
+		{uploaderPlayerId}
 	/>
 {:else if tab === "specialists" && SpecialistsTab}
 	<SpecialistsTab
 		players={resolvedPlayers}
 		improvementData={game.improvement_data}
-		{userNation}
+		{uploaderPlayerId}
 		bind:tableState={tabState.tables.specialists}
 	/>
 {:else if tab === "settings" && SettingsTab}

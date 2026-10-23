@@ -41,7 +41,7 @@
 		familyOpinionHistory = [],
 		units = [],
 		totalTurns,
-		userNation = null,
+		uploaderPlayerId = null,
 	}: {
 		players: DetailPlayer[];
 		improvementData: ImprovementData;
@@ -53,11 +53,14 @@
 		familyOpinionHistory?: FamilyOpinionEntry[];
 		units?: UnitInfo[];
 		totalTurns: number;
-		userNation?: string | null;
+		// The uploader's seat, or null when the upload claimed none (observer
+		// mode). Orders this tab's per-player surfaces; a nation can't stand in
+		// for it, because two humans can play one.
+		uploaderPlayerId?: number | null;
 	} = $props();
 
 	const orderedPlayers = $derived(
-		orderPlayersUploaderFirst(players, userNation),
+		orderPlayersUploaderFirst(players, uploaderPlayerId),
 	);
 
 	const opinions = $derived(

@@ -62,7 +62,7 @@
 		characters = [],
 		lawAdoptionHistory = [],
 		techDiscoveryHistory = [],
-		userNation = null,
+		uploaderPlayerId = null,
 		chartFilter = $bindable<Record<string, boolean>>({}),
 		tableState = $bindable<TableState>({
 			search: "",
@@ -78,7 +78,10 @@
 		characters?: CharacterInfo[];
 		lawAdoptionHistory?: LawAdoptionHistory[];
 		techDiscoveryHistory?: TechDiscoveryHistory[];
-		userNation?: string | null;
+		// The uploader's seat, or null when the upload claimed none (observer
+		// mode). Orders this tab's per-player surfaces; a nation can't stand in
+		// for it, because two humans can play one.
+		uploaderPlayerId?: number | null;
 		chartFilter?: Record<string, boolean>;
 		tableState?: TableState;
 	} = $props();
@@ -90,7 +93,7 @@
 	// Canonical player order: uploader first, used everywhere this tab lists
 	// the two sides (event bars + H2H blocks) so the ordering is consistent.
 	const orderedPlayers = $derived(
-		orderPlayersUploaderFirst(players, userNation),
+		orderPlayersUploaderFirst(players, uploaderPlayerId),
 	);
 
 	// ─── Head-to-head build comparison ────────────────────────────────
