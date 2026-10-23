@@ -88,12 +88,7 @@
 	}: Props = $props();
 
 	type Popover =
-		| "lock"
-		| "rename"
-		| "collection"
-		| "player"
-		| "download"
-		| "delete";
+		"lock" | "rename" | "collection" | "player" | "download" | "delete";
 	let openPopover = $state<Popover | null>(null);
 
 	// The camera opens a modal instead, so it keeps its own flag — and
