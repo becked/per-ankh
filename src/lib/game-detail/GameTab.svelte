@@ -9,22 +9,10 @@
 	import { formatEnum } from "$lib/utils/formatting";
 	import { hasVictoryPoints, resolveGamePlayers } from "./helpers";
 	import { getGameTabState, type GameTabId } from "./game-tabs.svelte";
+	import { LAZY_TABS, lazyTab } from "./tab-components.svelte";
 	import OverviewTab from "./OverviewTab.svelte";
 	// eslint-disable-next-line no-unused-vars -- TimelineTab pending redesign, see commented block below
 	import TimelineTab from "./TimelineTab.svelte";
-	import EventsTab from "./EventsTab.svelte";
-	import LeadersTab from "./LeadersTab.svelte";
-	import LawsTab from "./LawsTab.svelte";
-	import TechsTab from "./TechsTab.svelte";
-	import OrdersTab from "./OrdersTab.svelte";
-	import YieldsTab from "./YieldsTab.svelte";
-	import MilitaryTab from "./MilitaryTab.svelte";
-	import CitiesTab from "./CitiesTab.svelte";
-	import EconomyTab from "./EconomyTab.svelte";
-	import WondersTab from "./WondersTab.svelte";
-	import FamiliesTab from "./FamiliesTab.svelte";
-	import SpecialistsTab from "./SpecialistsTab.svelte";
-	import SettingsTab from "./SettingsTab.svelte";
 
 	let {
 		game,
@@ -40,6 +28,31 @@
 	} = $props();
 
 	const tabState = getGameTabState();
+
+	// The rest of the tabs arrive as their own chunks (tab-components), so each
+	// is undefined until the one being rendered has loaded — the `&&` in every
+	// branch below. Reading them one tab at a time, rather than through a single
+	// shared component type, is what keeps each branch's props type-checked.
+	const EventsTab = $derived(LAZY_TABS.events.component);
+	const LeadersTab = $derived(LAZY_TABS.leaders.component);
+	const LawsTab = $derived(LAZY_TABS.laws.component);
+	const TechsTab = $derived(LAZY_TABS.techs.component);
+	const OrdersTab = $derived(LAZY_TABS.orders.component);
+	const YieldsTab = $derived(LAZY_TABS.economics.component);
+	const MilitaryTab = $derived(LAZY_TABS.military.component);
+	const CitiesTab = $derived(LAZY_TABS.cities.component);
+	const EconomyTab = $derived(LAZY_TABS.economy.component);
+	const WondersTab = $derived(LAZY_TABS.wonders.component);
+	const FamiliesTab = $derived(LAZY_TABS.families.component);
+	const SpecialistsTab = $derived(LAZY_TABS.specialists.component);
+	const SettingsTab = $derived(LAZY_TABS.settings.component);
+
+	// Fetch the open tab's chunk. In an effect rather than at render so SSR,
+	// which only ever renders Overview, starts no download of its own.
+	const slot = $derived(lazyTab(tab));
+	$effect(() => {
+		slot?.start();
+	});
 
 	// Fields the Worker's blob schema doesn't require (cloud/src/schemas/game.ts).
 	// A blob parsed before a field existed doesn't carry it, so each defaults to
@@ -124,7 +137,7 @@
 		bind:categoryFilters={tabState.timelineFilters}
 	/>
 	-->
-{:else if tab === "events"}
+{:else if tab === "events" && EventsTab}
 	<EventsTab
 		eventLogs={game.event_logs}
 		playerHistory={game.player_history}
@@ -133,7 +146,7 @@
 		bind:chartFilter={tabState.chartFilters.points}
 		bind:tableState={tabState.tables.events}
 	/>
-{:else if tab === "leaders"}
+{:else if tab === "leaders" && LeadersTab}
 	<LeadersTab
 		{characters}
 		{characterTraits}
@@ -143,14 +156,14 @@
 		gameDetails={game.game_details}
 		bind:legitimacyChartFilter={tabState.chartFilters.legitimacy}
 	/>
-{:else if tab === "laws"}
+{:else if tab === "laws" && LawsTab}
 	<LawsTab
 		players={resolvedPlayers}
 		lawAdoptionHistory={game.law_adoption_history}
 		bind:chartFilter={tabState.chartFilters.laws}
 		bind:tableState={tabState.tables.laws}
 	/>
-{:else if tab === "techs"}
+{:else if tab === "techs" && TechsTab}
 	<!-- The final turn's tiles, always: the science breakdown decomposes the
 	     end state (#269). -->
 	<TechsTab
@@ -174,7 +187,7 @@
 		{userNation}
 		bind:chartFilter={tabState.chartFilters.techs}
 	/>
-{:else if tab === "orders"}
+{:else if tab === "orders" && OrdersTab}
 	<OrdersTab
 		players={resolvedPlayers}
 		allYields={game.yield_history}
@@ -187,13 +200,13 @@
 		bind:ordersChartFilter={tabState.chartFilters.orders}
 		bind:legitimacyChartFilter={tabState.chartFilters.legitimacy}
 	/>
-{:else if tab === "economics"}
+{:else if tab === "economics" && YieldsTab}
 	<YieldsTab
 		allYields={game.yield_history}
 		{openAtYield}
 		bind:chartFilters={tabState.chartFilters}
 	/>
-{:else if tab === "military"}
+{:else if tab === "military" && MilitaryTab}
 	<MilitaryTab
 		players={resolvedPlayers}
 		playerHistory={game.player_history}
@@ -206,14 +219,14 @@
 		bind:chartFilter={tabState.chartFilters.military}
 		bind:tableState={tabState.tables.units}
 	/>
-{:else if tab === "cities"}
+{:else if tab === "cities" && CitiesTab}
 	<CitiesTab
 		cityStatistics={game.city_statistics}
 		playerNations={game.player_nations}
 		bind:tableState={tabState.tables.cities}
 		bind:cityVisibleColumns={tabState.cityVisibleColumns}
 	/>
-{:else if tab === "economy"}
+{:else if tab === "economy" && EconomyTab}
 	<EconomyTab
 		players={resolvedPlayers}
 		improvementData={game.improvement_data}
@@ -231,13 +244,13 @@
 		{userNation}
 		bind:tableState={tabState.tables.improvements}
 	/>
-{:else if tab === "wonders"}
+{:else if tab === "wonders" && WondersTab}
 	<WondersTab
 		players={resolvedPlayers}
 		playerWonders={game.player_wonders}
 		disabledImprovements={game.game_details.disabled_improvements}
 	/>
-{:else if tab === "families"}
+{:else if tab === "families" && FamiliesTab}
 	<FamiliesTab
 		players={resolvedPlayers}
 		improvementData={game.improvement_data}
@@ -248,14 +261,14 @@
 		totalTurns={game.game_details.total_turns}
 		{userNation}
 	/>
-{:else if tab === "specialists"}
+{:else if tab === "specialists" && SpecialistsTab}
 	<SpecialistsTab
 		players={resolvedPlayers}
 		improvementData={game.improvement_data}
 		{userNation}
 		bind:tableState={tabState.tables.specialists}
 	/>
-{:else if tab === "settings"}
+{:else if tab === "settings" && SettingsTab}
 	<SettingsTab
 		gameDetails={game.game_details}
 		players={resolvedPlayers}
@@ -263,4 +276,25 @@
 		{dlcList}
 		{modsList}
 	/>
+{:else}
+	<!-- A real tab whose chunk hasn't arrived. `tab` is a GameTabId, so the
+	     only way here is a fetch still in flight or a failed one. The analyst
+	     view's pane is already floored at 400px (GameDetailView) and the map
+	     view's lightbox fills its dialog, so nothing here moves what follows. -->
+	<div class="flex min-h-[200px] items-center justify-center">
+		{#if slot?.failed}
+			<div class="flex flex-col items-center gap-3">
+				<p class="text-sm text-gray-400">This tab didn't load.</p>
+				<button
+					type="button"
+					onclick={() => location.reload()}
+					class="rounded border border-brown px-3 py-1.5 text-xs font-semibold text-tan transition-colors hover:bg-brown"
+				>
+					Reload the page
+				</button>
+			</div>
+		{:else}
+			<p class="text-sm text-gray-400">Loading…</p>
+		{/if}
+	</div>
 {/if}
