@@ -138,7 +138,9 @@ export interface ChallengeSetup {
 	map_aspect_ratio: string | null;
 	map_width: number | null;
 	map_height: number | null;
+	/** The save owner's Prosperity tier (`DIFFICULTY_*`) — Old World's name for that setting. */
 	difficulty: string | null;
+	/** AI aggression (`OPPONENTLEVEL_*`), from the save's setup parameters. */
 	opponent_level: string | null;
 	game_options: Record<string, true> | null;
 	disabled_improvements: string[] | null;

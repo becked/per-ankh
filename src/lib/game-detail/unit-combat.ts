@@ -497,8 +497,10 @@ interface UnitPlayerLike {
  * `AIControlledToTurn`, neither of which is the surrender `isHuman()` also
  * tests — and the advantage gate reads the original flag, not the current one.
  *
- * `advantage` is `undefined` on a blob from before PARSER_VERSION 2.25.0,
- * where that half is simply unknown; `combatGaps` is what reports it.
+ * `advantage` is `undefined` on a blob whose setup bag is missing — one from
+ * before PARSER_VERSION 2.28.0, where that half is simply unknown — and null
+ * on a save that left the setting at NONE; `combatGaps` is what reports the
+ * first case.
  */
 export function unitEffectPlayers(
 	player: UnitPlayerLike | undefined,
@@ -539,7 +541,7 @@ export const COMBAT_GAP_NOTES: Readonly<Record<CombatGap, string>> = {
 	units:
 		"This game was parsed before a unit's family and bonus effects were read, so two terms are missing: its player's opinion of its family is worth \u221220% to +10% strength, and a bonus effect is worth +10% defense. Re-uploading the save fills them in.",
 	advantage:
-		"This game was parsed before the AI advantage was read, so a penalty advantage \u2014 up to 25% of an AI unit's strength \u2014 is not in the stored data. Re-uploading the save fills it in.",
+		"This game was parsed before the game's setup parameters were read, so a penalty AI handicap \u2014 up to 25% of an AI unit's strength \u2014 is not in the stored data. Re-uploading the save fills it in.",
 	general:
 		"This game was parsed before a unit's general was read, so whatever general it has contributes nothing here. Re-uploading the save fills it in.",
 	"rating-curve":
@@ -553,8 +555,9 @@ export const COMBAT_GAP_NOTES: Readonly<Record<CombatGap, string>> = {
  *
  * Each flag is a field's presence, not its value: `unit_families` and
  * `unit_effects` arrived together in PARSER_VERSION 2.25.0 and so share one
- * gap, `match_metadata.advantage` arrived with them but is worth nothing to a
- * human player's unit, and `general_xml_id` arrived back in 2.23.0 \u2014 so a blob
+ * gap, the advantage moved into `match_metadata.setup_parameters` in 2.28.0
+ * but is worth nothing to a human player's unit, and `general_xml_id` arrived
+ * back in 2.23.0 \u2014 so a blob
  * can be missing the general entirely, which costs the rating, trait and
  * opinion terms at once.
  */

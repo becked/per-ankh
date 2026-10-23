@@ -11,10 +11,24 @@ export type PlayerInfo = {
 	player_id?: number;
 	player_name: string;
 	nation: string | null;
+	// The dynasty the game RESOLVED for this player (`<Player @Dynasty>`), the
+	// pair to game_details.setup_dynasties[player_id], which holds what the
+	// player picked. Parsed since the first cloud blob and wired in
+	// PARSER_VERSION 2.28.0; `undefined` means the blob predates the wiring.
+	dynasty?: string | null;
 	is_human: boolean;
 	legitimacy: number | null;
 	state_religion: string | null;
+	// The player's PROSPERITY tier (`DIFFICULTY_*`) — the setting Old World
+	// renamed and whose internal enum kept the old word. Not the headline
+	// "Difficulty", which is the `DIFFICULTYMODE_*` preset this is one
+	// component of.
 	difficulty: string | null;
+	// The player's starting development (`DEVELOPMENT_*`), the per-player
+	// parameter that sits beside Prosperity in `<Development>`. Added in
+	// PARSER_VERSION 2.28.0; `undefined` means the blob predates the field,
+	// `null` means the save carries no <Development> list.
+	development?: string | null;
 	// The player's reigning leader at the end of the save — the last id in
 	// their <Leaders> succession list, matching Player.leader(). Joins to
 	// `characters[].xml_id`. Added in PARSER_VERSION 2.11.0; optional so the

@@ -104,13 +104,48 @@ export interface MatchMetadata {
 	// PARSER_VERSION 2.12.0+.
 	disabled_improvements: string[] | null;
 	game_mode: string | null;
+	// The save owner's PROSPERITY tier — what Old World now calls the
+	// `DIFFICULTY_*` setting. The headline "Difficulty" is a different thing
+	// (`DIFFICULTYMODE_*`), derived at render from this plus the five knobs in
+	// setup_parameters and occurrence_levels. The field keeps the save's name.
 	difficulty: string | null;
-	opponent_level: string | null;
-	// The game's AI-advantage setting (`<Game Advantage=…>`), which every
-	// non-human player's effect players are seeded from. Optional: `undefined`
-	// means a blob parsed before PARSER_VERSION 2.25.0, where the advantage is
-	// UNKNOWN; `null` is a save that carries no attribute.
-	advantage?: string | null;
+	/**
+	 * Every setup parameter the save carries, keyed by the root attribute name
+	 * verbatim (`OpponentLevel`, `Advantage`, `TurnScale`, …) — the shape
+	 * game_options and map_options already use. PARSER_VERSION 2.28.0+.
+	 *
+	 * Three-way, and the three answers are different claims: `undefined` is a
+	 * blob from before the bag existed, so the setup is UNKNOWN; `{}` is a save
+	 * that set no parameter at all; a missing key in a present bag is a
+	 * parameter the game left at NONE and so never wrote.
+	 *
+	 * Replaces the `opponent_level` and `advantage` fields, whose attributes are
+	 * now two keys in here. A blob below 2.28.0 therefore has no AI advantage
+	 * for the unit card to price until it is reparsed — which is what that
+	 * card's own "parsed before the AI advantage was read" caveat already says.
+	 */
+	setup_parameters?: Record<string, string>;
+	/**
+	 * `<OccurrenceLevels>` as occurrence class → level — the calamity frequency,
+	 * which `GameParameters.GetDifficultyMode` (GameParameters.cs:1907) counts
+	 * as part of the difficulty preset. Its own field rather than a
+	 * setup_parameters entry because it is an element with per-class children
+	 * where the bag is flat scalars. PARSER_VERSION 2.28.0+; `undefined` means
+	 * unknown, `{}` means the save set no level.
+	 */
+	occurrence_levels?: Record<string, string>;
+	/**
+	 * The SETUP side of the three per-player parameters the save also records a
+	 * resolved value for, each indexed by player xml id. `<Player @Nation>` and
+	 * `@Dynasty` hold what the game rolled; these hold what the player picked,
+	 * which is `RANDOM`/`NONE` on 40 of the 48 player rows in
+	 * `test-data/saves/`. An entry is null only on a save that wrote an empty
+	 * element — dropping it would shift every later player's value onto the
+	 * wrong seat. PARSER_VERSION 2.28.0+; `undefined` means unknown.
+	 */
+	setup_nations?: (string | null)[];
+	setup_archetypes?: (string | null)[];
+	setup_dynasties?: (string | null)[];
 	victory_conditions: string | null;
 	enabled_mods: string | null;
 	enabled_dlc: string | null;
@@ -528,4 +563,4 @@ export interface FullGameData {
  * fixes, MINOR for additive fields, MAJOR for breaking schema changes.
  * Initial value `2.0.0` mirrors `FullGameData.version: 2`.
  */
-export const PARSER_VERSION = "2.27.1";
+export const PARSER_VERSION = "2.28.0";

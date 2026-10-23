@@ -55,6 +55,13 @@
 			mapOptions.length > 0,
 	);
 
+	// AI aggression, from the setup bag that replaced the `opponent_level`
+	// field in PARSER_VERSION 2.28.0. Null on an older blob, which hides the
+	// row the way a save that never set the attribute does.
+	const opponentLevel = $derived(
+		gameDetails.setup_parameters?.OpponentLevel ?? null,
+	);
+
 	// Game-wide option flags the save recorded. Null on pre-2.11.0 blobs (the
 	// parser didn't read <GameOptions> yet), so the card stays hidden until the
 	// game is reparsed — same as map options on pre-2.7.0 blobs above.
@@ -67,7 +74,7 @@
 >
 	<h3 class="mb-3 text-base font-bold text-tan">Game Settings</h3>
 	<div class="grid grid-cols-1 gap-3 md:grid-cols-3">
-		{#if gameDetails.game_mode || showDifficultySection || gameDetails.opponent_level}
+		{#if gameDetails.game_mode || showDifficultySection || opponentLevel}
 			<div
 				class="flex flex-col gap-3 rounded-lg p-3"
 				style="background-color: rgb(var(--color-surface-raised));"
@@ -80,12 +87,12 @@
 						</ul>
 					</div>
 				{/if}
-				{#if gameDetails.opponent_level}
+				{#if opponentLevel}
 					<div class="flex flex-col gap-1">
 						<span class="text-xs font-bold text-gray-400">Opponent Level:</span>
 						<ul class="list-disc pl-5 text-sm text-bright">
 							<li>
-								{formatEnum(gameDetails.opponent_level, "OPPONENTLEVEL_")}
+								{formatEnum(opponentLevel, "OPPONENTLEVEL_")}
 							</li>
 						</ul>
 					</div>
