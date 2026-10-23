@@ -237,6 +237,7 @@ async function processOne(
 		const data = extractAllGameData(
 			parseSaveXml(save.xml),
 			parseActivePlayerIndex(save.xml),
+			save.entryName,
 		);
 		// The one completion gate (src/lib/parser/validation.ts), checked here
 		// rather than spending an upload on a 400: an admin reparse cannot carry

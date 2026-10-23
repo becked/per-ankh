@@ -312,6 +312,13 @@ export const MAX_DISABLED_IMPROVEMENTS = 1_000;
 //         the upload picker can pre-select a seat on a first upload — before
 //         user_online_ids holds anything to match against. Purely additive;
 //         older blobs lack it and the picker falls back to the known-id match.
+// 2.27.1 — match_metadata.save_date falls back to the timestamp Old World
+//         writes into the save's ZIP entry name, for a save whose root
+//         `SaveDate` attribute is absent (#274) — `Game.getEndAutoSavePath`
+//         (Game.cs:16348) names the file off the same `DateTime.Now` that
+//         `Game.writeGameXML` (Game.cs:1203) formats into the attribute.
+//         Value-only, and only for those saves: where the attribute exists it
+//         still wins.
 export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.0.0",
 	"2.1.0",
@@ -346,13 +353,14 @@ export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.25.0",
 	"2.26.0",
 	"2.27.0",
+	"2.27.1",
 ]);
 
 // The latest accepted version. Echoed back on stats responses and
 // embedded in stats cache keys so a parser bump (after the matching
 // extraction code lands) naturally orphans every old entry. Bump in
 // lockstep with the `KNOWN_PARSER_VERSIONS` addition above.
-export const CURRENT_PARSER_VERSION = "2.27.0";
+export const CURRENT_PARSER_VERSION = "2.27.1";
 
 // ----- Reusable atoms -----
 

@@ -22,6 +22,7 @@ import type { Player } from "./players.js";
 export function parseMatchMetadata(
 	root: Record<string, unknown>,
 	players: Player[],
+	entryName: string | null,
 ): MatchMetadata {
 	const xmlGameId = requireStr(root["@_GameId"], "Root.GameId");
 
@@ -40,8 +41,17 @@ export function parseMatchMetadata(
 		: [null, null];
 
 	const enabledDlc = parseGameContent(root);
+	// The attribute first, the file name whenever the attribute yields no
+	// date: the attribute is what the game wrote, where a file name is
+	// whatever it was last renamed to. Two cases reach the fallback, not one —
+	// no attribute at all, and an attribute that won't parse, because
+	// `Game.writeGameXML` (`Game.cs:1203`) writes
+	// `DateTime.Now.ToString("dd MMMM yyyy")` under the client's culture and
+	// MONTH_INDEX below holds English month names only.
 	const saveDateAttr = optAttrStr(root["@_SaveDate"]);
-	const saveDate = saveDateAttr ? parseSaveDate(saveDateAttr) : null;
+	const saveDate =
+		(saveDateAttr ? parseSaveDate(saveDateAttr) : null) ??
+		parseEntryNameDate(entryName);
 
 	const mapWidth = optInt(root["@_MapWidth"]);
 	// MapHeight is not encoded in the XML; the Rust parser assumes a square
@@ -273,6 +283,62 @@ function parseSaveDate(dateStr: string): string | null {
 	const dayPad = day.toString().padStart(2, "0");
 	const monthPad = month.toString().padStart(2, "0");
 	return `${year}-${monthPad}-${dayPad}`;
+}
+
+// The `yyyy-MM-dd-HH-mm-ss` tail of a completed-save file name. The clock is
+// matched but unused: it is what makes the tail specific enough that a game
+// name ending in digits can't be mistaken for it.
+const ENTRY_NAME_DATE_RE = /-(\d{4})-(\d{2})-(\d{2})-\d{2}-\d{2}-\d{2}\.xml$/i;
+
+/**
+ * Parse the save's write date out of the ZIP entry name, as ISO `YYYY-MM-DD`.
+ * Returns null when the name carries no timestamp.
+ *
+ * This is the fallback for a save whose `SaveDate` attribute yields no date.
+ * Old World did not always write the attribute, and a save from such a build
+ * has no date anywhere in its XML, so every date surface renders "Unknown"
+ * (#274).
+ *
+ * The name is the same instant, not a substitute for it.
+ * `Game.getEndAutoSavePath` (`Game.cs:16348`) formats
+ * `Constants.END_SAVE_FORMAT` — `OW-{0}-Year{turn}-{yyyy-MM-dd-HH-mm-ss}.zip`
+ * — off the same `DateTime.Now` that `Game.writeGameXML` (`Game.cs:1203`)
+ * formats into the attribute, and the ZIP carries that name on its XML entry.
+ * Only the date is kept: the column holds date-only values and consumers
+ * `substr(save_date, 1, 10)` it.
+ *
+ * Anchored on the tail rather than parsed from the prefix because the `{0}`
+ * slot is arbitrary text, not the nation. It is `getSaveID` (`Game.cs:16335`)
+ * — `{GameName}-{nation}` when the game has a name, the bare nation when it
+ * doesn't, and the game name alone when the seat has no nation at all. The
+ * game name reaches it with its invalid-filename characters *deleted* rather
+ * than replaced, so a name holding a path collapses into the prefix
+ * (`CUsersbeckeDocuments…OW-Assyria-Year136-2023-03-15-22-42-24.xml`), and
+ * the nation is localized — `textManager().TEXT(nation().meName)`, which
+ * test-data/saves/match_426504725_05-moroten-droner.zip carries as
+ * `OW-Персия-Year59-2025-09-12-01-24-17.xml`.
+ *
+ * Checked against the calendar, which the attribute path has no need to be:
+ * `DateTime.Now` can't produce February 30th and a renamed file can, and
+ * `new Date` rolls an impossible ISO date over ("2022-02-30" → March 2nd)
+ * rather than rejecting it — so the round-trip is the check, not NaN.
+ *
+ * Measured over test-data/saves/ — 16 saves, 14 completed, builds 1.0.62443
+ * to 1.0.84658. All 16 carry the attribute, so the corpus exercises the
+ * attribute path and not this one; 13 of the 16 entry names end in the tail
+ * and all 13 agree with the attribute's date, with no contradictions. The
+ * other 3 are named `<text>-Turn<n>.xml`, which none of Old World's own save
+ * paths produces (`Constants.{QUICK,AUTO,END}_SAVE_FORMAT`) — this returns
+ * null for them, and their attribute is what dates them.
+ */
+function parseEntryNameDate(entryName: string | null): string | null {
+	if (entryName === null) return null;
+	const m = ENTRY_NAME_DATE_RE.exec(entryName);
+	if (!m) return null;
+	const iso = `${m[1]}-${m[2]}-${m[3]}`;
+	const asDate = new Date(`${iso}T00:00:00Z`);
+	if (Number.isNaN(asDate.getTime())) return null;
+	return asDate.toISOString().slice(0, 10) === iso ? iso : null;
 }
 
 // ---------- Victory conditions ----------
