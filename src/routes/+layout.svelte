@@ -41,8 +41,16 @@
 	// `goto(next, { replaceState, keepFocus, noScroll })` on a dozen pages
 	// (StatsView, GamesTable, ScopeRow, the tournament and profile pages), and
 	// reloading the document on every filter change would discard focus and
-	// scroll — the thing those options exist to preserve. Staying on a route
-	// re-renders nodes that are already imported, so it cannot hit the gap.
+	// scroll — the thing those options exist to preserve. The exemption does
+	// let a same-route render reach the gap: a game's tabs import on demand
+	// (game-detail/tab-components.svelte.ts), so staying on a route can import
+	// a node for the first time and ask for a chunk that is gone.
+	//
+	// Opening a tab does not reach this guard, because it is not a navigation.
+	// The analyst view syncs the hash with the native history.replaceState
+	// (GameDetailView) and the map view's lightbox only sets state, so neither
+	// fires beforeNavigate. GameTab covers that path itself: a tab whose chunk
+	// never arrives renders a failure state offering a reload.
 	beforeNavigate((nav) => {
 		if (!updated.current || nav.willUnload || !nav.to) return;
 		if (nav.to.route.id === nav.from?.route.id) return;
