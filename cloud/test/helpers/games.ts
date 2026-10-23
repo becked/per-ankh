@@ -38,6 +38,30 @@ export async function putBlob(
 	);
 }
 
+// Seat rows for a game. `is_uploader` marks the one the uploader claimed — at
+// most one row per game carries it (handleGameUpload binds a single index), and
+// an observer upload carries none.
+export async function seedSeats(
+	gameId: string,
+	seats: readonly { index: number; nation: string; uploader: boolean }[],
+): Promise<void> {
+	for (const seat of seats) {
+		await env.SHARE_DB.prepare(
+			`INSERT INTO player_summaries (
+				game_id, player_index, player_name, nation, is_human, is_uploader
+			) VALUES (?, ?, ?, ?, 1, ?)`,
+		)
+			.bind(
+				gameId,
+				seat.index,
+				`seat-${seat.index}`,
+				seat.nation,
+				seat.uploader ? 1 : 0,
+			)
+			.run();
+	}
+}
+
 export async function seedGame(
 	user: TestUser,
 	opts: { isPublic: boolean; gameName?: string },

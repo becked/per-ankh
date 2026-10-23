@@ -4,6 +4,9 @@
 // cover the user's whole library (the paginated GET /v1/games defaults to 50
 // rows and so can't be used). Seeds games via direct INSERT so the suite stays
 // focused on the handler's query, not the upload pipeline.
+//
+// The `uploader_player_index` each row carries is pinned in
+// uploader-seat.test.ts, against all four surfaces that serve it.
 
 import { applyD1Migrations, env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -41,35 +44,8 @@ async function seedGame(
 	return gameId;
 }
 
-// Seat rows for a game. `is_uploader` marks the one the uploader claimed —
-// at most one row per game carries it, and an observer upload carries none.
-async function seedSummaries(
-	gameId: string,
-	seats: { index: number; nation: string; uploader: boolean }[],
-): Promise<void> {
-	for (const seat of seats) {
-		await env.SHARE_DB.prepare(
-			`INSERT INTO player_summaries (
-				game_id, player_index, player_name, nation, is_human, is_uploader
-			) VALUES (?, ?, ?, ?, 1, ?)`,
-		)
-			.bind(
-				gameId,
-				seat.index,
-				`seat-${seat.index}`,
-				seat.nation,
-				seat.uploader ? 1 : 0,
-			)
-			.run();
-	}
-}
-
 interface OutOfDateResponse {
-	games: {
-		game_id: string;
-		parser_version: string;
-		uploader_player_index: number | null;
-	}[];
+	games: { game_id: string; parser_version: string }[];
 	total: number;
 }
 
@@ -137,47 +113,5 @@ describe("GET /v1/games/out-of-date", () => {
 			}),
 		);
 		expect(body.total).toBe(1);
-	});
-
-	// The reparse posts uploader_player_index back unchanged, so the list has
-	// to serve the seat itself. A mirror matchup is why it can't serve the
-	// nation instead: Old World lets two humans claim one nation (a 1v1 on
-	// opposite teams is legal under both TEAMNATION_ALLOW_DUPLICATES and the
-	// multi-human default TEAMNATION_TEAM_UNIQUE), and `games.user_nation`
-	// then names two seats rather than one.
-	it("serves the uploader's seat, which a shared nation can't identify", async () => {
-		const user = await makeUser({ discordUsername: "ood-mirror" });
-		const gameId = await seedGame(user, "2.5.0", "mirror-duel");
-		await seedSummaries(gameId, [
-			{ index: 0, nation: "NATION_EGYPT", uploader: false },
-			{ index: 1, nation: "NATION_EGYPT", uploader: true },
-		]);
-
-		const body = await expectOk<OutOfDateResponse>(
-			await request.get({
-				path: `/v1/games/out-of-date?version=${CURRENT}`,
-				as: user,
-			}),
-		);
-		const row = body.games.find((g) => g.game_id === gameId);
-		expect(row?.uploader_player_index).toBe(1);
-	});
-
-	it("serves a null seat for an observer upload", async () => {
-		const user = await makeUser({ discordUsername: "ood-observer" });
-		const gameId = await seedGame(user, "2.5.0", "observer-archive");
-		await seedSummaries(gameId, [
-			{ index: 0, nation: "NATION_ROME", uploader: false },
-			{ index: 1, nation: "NATION_GREECE", uploader: false },
-		]);
-
-		const body = await expectOk<OutOfDateResponse>(
-			await request.get({
-				path: `/v1/games/out-of-date?version=${CURRENT}`,
-				as: user,
-			}),
-		);
-		const row = body.games.find((g) => g.game_id === gameId);
-		expect(row?.uploader_player_index).toBeNull();
 	});
 });

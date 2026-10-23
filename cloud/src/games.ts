@@ -1169,9 +1169,12 @@ function normalizeGameListRow(
  * At most one row per game carries the flag (handleGameUpload binds
  * `player_index === uploaderIndex`), so the bare subquery needs no LIMIT.
  * Spelled once because four handlers serve this to the reparse surfaces and
- * a divergence would show up as a reparse that changed whose game it is. The
- * headless sweep spells it a fifth time (`scripts/admin/commands/reparse.ts`),
- * which reads D1 through wrangler and can't import this.
+ * a divergence would show up as a reparse that changed whose game it is. Two
+ * more readers spell the predicate out instead, neither of which can call
+ * this: the headless sweep (`scripts/admin/commands/reparse.ts`), which reads
+ * D1 through wrangler and can't import from `cloud/src/`, and
+ * `handleAdminReindex`, which binds one `game_id` as a parameter rather than
+ * correlating against a games alias.
  */
 const uploaderPlayerIndexSql = (gamesAlias: string): string =>
 	`(SELECT ps.player_index FROM player_summaries ps

@@ -274,7 +274,7 @@ List a user's games (search + filters + scope).
 
 - **Auth:** Public (owner extras). With `?user_id`, session is optional and a non-owner/anonymous viewer is restricted to `is_public=1`. Without `?user_id`, a session is required (lists the caller's own library).
 - **Query:** `user_id` (21-char), `limit` (default 50, max 500), `offset` (default 0), `scope` (`all`|`public`|`vs_ai`|`mp`|`tournament`|`<collection_id>`), `q` (free-text), `nation`, `date` (`YYYY-MM-DD`), `result` (`win`|`loss`), `sort` (default `date_desc`).
-- **Response 200:** `GameListResponse` — `{ games: GameListItem[], total: number }`.
+- **Response 200:** `GameListResponse` — `{ games: GameListItem[], total: number }`. Every `GameListItem` carries `uploader_player_index` — the seat the uploader claimed, null for an observer upload — which a reparse posts back unchanged so the same player is re-claimed.
 - **Errors:** `400 INVALID_USER_ID`, `401 UNAUTHORIZED`.
 
 ### `GET /v1/games/public-recent`
@@ -299,7 +299,7 @@ The caller's games whose `parser_version` differs from a target (drives bulk rep
 
 - **Auth:** Session (scoped to the caller).
 - **Query:** `version` (required).
-- **Response 200:** `{ games: [...], total }` (GameListItem-shaped). Not paginated. Each row carries `uploader_player_index` — the seat the uploader claimed, null for an observer upload — which the reparse posts back unchanged so the same player is re-claimed.
+- **Response 200:** `{ games: [...], total }` (GameListItem-shaped, `uploader_player_index` included — it is the seat the bulk reparse re-sends). Not paginated.
 - **Errors:** `401 UNAUTHORIZED`, `400 INVALID_QUERY`.
 
 ### `GET /v1/games/:id/download`

@@ -173,7 +173,6 @@ async function postReparse(
 	game: StaleGame,
 	zip: Buffer,
 	blob: unknown,
-	uploaderIndex: number | null,
 	token: string,
 ): Promise<Outcome> {
 	const form = new FormData();
@@ -183,7 +182,10 @@ async function postReparse(
 		new Blob([new Uint8Array(zip)], { type: "application/zip" }),
 		`${game.game_id}.zip`,
 	);
-	form.append("uploader_player_index", JSON.stringify(uploaderIndex));
+	form.append(
+		"uploader_player_index",
+		JSON.stringify(game.uploader_player_index),
+	);
 
 	const res = await fetch(
 		`${apiBase()}/admin/games/${game.user_id}/reparse-upload`,
@@ -253,7 +255,7 @@ async function processOne(
 		// catch below maps its NOT_COMPLETED back to a named skip, because that
 		// is a property of the game rather than a fault in this run.
 		validateCompletedGame(data);
-		return postReparse(game, save.zip, data, game.uploader_player_index, token);
+		return postReparse(game, save.zip, data, token);
 	} catch (e) {
 		if (e instanceof ParseError && e.code === "NOT_COMPLETED") {
 			return {

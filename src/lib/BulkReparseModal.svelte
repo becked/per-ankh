@@ -172,8 +172,9 @@
 				new Blob([parsedZip], { type: "application/zip" }),
 				fileName,
 			);
-			// JSON-encoded so the observer sentinel survives as `null` rather
-			// than the string "null" — the server parses this field as JSON.
+			// Null = the original was an observer upload and stays one. JSON
+			// because the worker reads this field through JSON.parse, so the
+			// encoder has to be the matching one.
 			form.append("uploader_player_index", JSON.stringify(row.uploaderIndex));
 			const res =
 				adminMode && row.userId

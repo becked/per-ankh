@@ -64,12 +64,6 @@ export function defaultSelection(
 		: { playerIndex: null, source: null };
 }
 
-// A reparse re-uploads a save whose perspective was already chosen once, so
-// the uploader is neither picked nor re-derived: both sweeps carry the stored
-// `player_summaries.is_uploader` seat in and post it back. The server
-// re-validates it against the fresh roster (UNKNOWN_PLAYER_INDEX), which is
-// what catches an index the new parser no longer has.
-
 // Enriched human-player option for the upload picker. Superset of the roster
 // entry — player_index / online_id still drive the upload + dedup logic — plus
 // the display stats the picker card shows (city count, winner flag).
