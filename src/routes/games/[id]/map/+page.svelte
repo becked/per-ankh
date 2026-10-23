@@ -42,17 +42,19 @@
 	const players = $derived(resolveGamePlayers(game));
 
 	// Whose view the chrome opens on: the uploader's player, or player 0 for an
-	// observer upload. Keyed on `uploader_nation`, the raw choice — the
-	// response's `user_nation` falls back to the first human's nation, so it's
-	// never null.
+	// observer upload. Keyed on the seat they claimed — the response's
+	// `user_nation` falls back to the first human's nation, so it is never null,
+	// and a nation names two seats whenever two humans play one.
 	function defaultPlayerId(
 		g: typeof data.game,
 		list: DetailPlayer[],
 	): number | null {
 		const uploader =
-			g.uploader_nation != null
-				? uploaderPlayer(list, g.uploader_nation)
-				: list.find((p) => p.playerId === 0);
+			uploaderPlayer(
+				list,
+				g.uploader_player_index ?? null,
+				g.uploader_nation ?? null,
+			) ?? list.find((p) => p.playerId === 0);
 		return (uploader ?? list[0])?.playerId ?? null;
 	}
 

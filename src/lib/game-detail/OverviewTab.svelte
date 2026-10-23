@@ -23,7 +23,6 @@
 		classifyUnit,
 		UNIT_CLASS_COLORS,
 		improvementDisplayName,
-		uploaderPlayer,
 	} from "./helpers";
 	import SpriteIcon from "./SpriteIcon.svelte";
 
@@ -41,7 +40,8 @@
 		gameReligions,
 		playerWonders,
 		eventLogs = [],
-		userNation = null,
+		leadPlayerId = null,
+		uploaderPlayerId = null,
 		userDisplayName = null,
 	}: {
 		gameDetails: GameDetails;
@@ -57,11 +57,13 @@
 		gameReligions: GameReligion[];
 		playerWonders: PlayerWonder[];
 		eventLogs?: EventLog[];
-		// Uploader's picked nation (cloud-only). When set, drives the
-		// save-owner flag below; otherwise falls back to the alphabetical-
-		// first-human heuristic (correct for single-human saves, wrong for
-		// multi-human cloud saves).
-		userNation?: string | null;
+		// The seat to lead with — resolved by `leadPlayerId` (helpers.ts).
+		leadPlayerId?: number | null;
+		// The uploader's own seat (cloud-only), or null when the upload claimed
+		// none — observer mode, where no card carries the save-owner flag
+		// below. Not interchangeable with the lead seat above, which an observer
+		// upload still has.
+		uploaderPlayerId?: number | null;
 		// Uploader's Discord display_name (cloud-only). Used as the player
 		// label for the uploader's nation card when the save itself has no
 		// leader name — Old World writes "" for unnamed solo games.
@@ -90,15 +92,8 @@
 		wonders: PlayerWonderEntry[];
 	};
 
-	// Exactly one player is the uploader (see uploaderPlayer); the first human
-	// when userNation is absent — the legacy path.
-	const uploaderPlayerId = $derived(
-		(userNation != null
-			? uploaderPlayer(players, userNation)
-			: players.find((p) => p.is_human)
-		)?.playerId ?? null,
-	);
-
+	// Only `uploaderPlayerId` flags a card as the save owner — nobody owns an
+	// observer upload, which still leads with a seat.
 	const playerOverviews = $derived<PlayerOverview[]>(
 		players
 			.map((p) => {
@@ -198,8 +193,11 @@
 				};
 			})
 			.sort((a, b) => {
-				// Uploader first, then other humans alphabetically, then AI alphabetically
-				if (a.isUploader !== b.isUploader) return a.isUploader ? -1 : 1;
+				// Lead seat first, then other humans alphabetically, then AI
+				// alphabetically
+				const aLead = a.playerId === leadPlayerId;
+				const bLead = b.playerId === leadPlayerId;
+				if (aLead !== bLead) return aLead ? -1 : 1;
 				if (a.isHuman !== b.isHuman) return a.isHuman ? -1 : 1;
 				const aNation = nationName(a.nation);
 				const bNation = nationName(b.nation);
@@ -344,10 +342,11 @@
 	const duelists = $derived.by(() => {
 		const humans = players.filter((p) => p.is_human);
 		if (humans.length !== 2) return null;
-		// Uploader-first, so the plotted line is "my side" when there is one.
+		// Lead seat first, so the plotted line is "my side" when there is one.
 		const ordered = [...humans].sort(
 			(a, b) =>
-				(a.nation === userNation ? 0 : 1) - (b.nation === userNation ? 0 : 1),
+				(a.playerId === leadPlayerId ? 0 : 1) -
+				(b.playerId === leadPlayerId ? 0 : 1),
 		);
 		return ordered as [DetailPlayer, DetailPlayer];
 	});

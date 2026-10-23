@@ -98,7 +98,7 @@
 		characterTraits = [],
 		gameReligions = [],
 		gameOptions = null,
-		userNation = null,
+		leadPlayerId = null,
 		chartFilter = $bindable<Record<string, boolean>>({}),
 	}: {
 		players: DetailPlayer[];
@@ -130,7 +130,8 @@
 		// Set <GameOptions> flags. Null on pre-2.11.0 blobs (and from the frozen
 		// web/ viewer) — "unknown", not "none set".
 		gameOptions?: Record<string, true> | null;
-		userNation?: string | null;
+		// The seat to lead with — resolved by `leadPlayerId` (helpers.ts).
+		leadPlayerId?: number | null;
 		chartFilter?: Record<string, boolean>;
 	} = $props();
 
@@ -138,9 +139,9 @@
 	// player id every per-player array carries. Mirror-match safe.
 	const playerById = $derived(new Map(players.map((p) => [p.playerId, p])));
 
-	// Canonical player order: uploader first (shared rule with MilitaryTab).
+	// Canonical player order: lead seat first (shared rule with MilitaryTab).
 	const orderedPlayers = $derived(
-		orderPlayersUploaderFirst(players, userNation),
+		orderPlayersUploaderFirst(players, leadPlayerId),
 	);
 
 	// Side-by-side (Techs by Turn | Science Sources) only for ≤4-nation games;

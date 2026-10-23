@@ -41,7 +41,7 @@
 		familyOpinionHistory = [],
 		units = [],
 		totalTurns,
-		userNation = null,
+		leadPlayerId = null,
 	}: {
 		players: DetailPlayer[];
 		improvementData: ImprovementData;
@@ -53,11 +53,12 @@
 		familyOpinionHistory?: FamilyOpinionEntry[];
 		units?: UnitInfo[];
 		totalTurns: number;
-		userNation?: string | null;
+		// The seat to lead with — resolved by `leadPlayerId` (helpers.ts).
+		leadPlayerId?: number | null;
 	} = $props();
 
 	const orderedPlayers = $derived(
-		orderPlayersUploaderFirst(players, userNation),
+		orderPlayersUploaderFirst(players, leadPlayerId),
 	);
 
 	const opinions = $derived(
