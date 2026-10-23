@@ -46,6 +46,7 @@ import {
 	parseAdminGameFilter,
 	parseNationParam,
 	parseScopeParam,
+	uploaderPlayerIndexSql,
 } from "./games-scope";
 import type { SessionData, SessionEnv } from "./session";
 import { isSiteAdmin, siteAdminFromCliToken } from "./admin";
@@ -1155,31 +1156,6 @@ function normalizeGameListRow(
 
 // ---------- Helpers ----------
 
-/**
- * Correlated subquery yielding the uploader's `player_index` for a game, or
- * NULL when the original upload was an observer (no `is_uploader` row).
- *
- * This is the uploader's identity. `games.user_nation` is derived *from* it
- * and cannot stand in for it: the game lets two humans claim the same nation
- * — `Game.IsValidNationForIndex` returns true outright under
- * `TEAMNATION_ALLOW_DUPLICATES`, and under the multi-human default
- * (`TEAMNATION_TEAM_UNIQUE`) rejects a duplicate only when the two share a
- * team, so a 1v1 mirror matchup is legal — and a nation then names two seats.
- *
- * At most one row per game carries the flag (handleGameUpload binds
- * `player_index === uploaderIndex`), so the bare subquery needs no LIMIT.
- * Spelled once because four handlers serve this to the reparse surfaces and
- * a divergence would show up as a reparse that changed whose game it is. Two
- * more readers spell the predicate out instead, neither of which can call
- * this: the headless sweep (`scripts/admin/commands/reparse.ts`), which reads
- * D1 through wrangler and can't import from `cloud/src/`, and
- * `handleAdminReindex`, which binds one `game_id` as a parameter rather than
- * correlating against a games alias.
- */
-const uploaderPlayerIndexSql = (gamesAlias: string): string =>
-	`(SELECT ps.player_index FROM player_summaries ps
-	   WHERE ps.game_id = ${gamesAlias}.game_id AND ps.is_uploader = 1)`;
-
 // Resolved tournament context for an upload — populated from the form's
 // tournament_match_id (and the parsed blob's slot mappings + winner). Used
 // by linkTournamentMatch to stamp the match as reported. Kept structurally
@@ -2072,6 +2048,32 @@ export async function handleGameUpload(
 
 		existingSubmission = await loadSubmissionForGame(env.SHARE_DB, gameId);
 		existingScreenshots = await loadScreenshotsForGame(env.SHARE_DB, gameId);
+
+		// A re-import that posts no seat on a game that records one is not an
+		// observer upload — it is the claim going missing. Every reparse
+		// surface reads the stored seat back out of `is_uploader` and posts it
+		// verbatim (uploaderPlayerIndexSql above), so null arrives only when
+		// the read failed to serve it, and writing it would null `user_nation`
+		// and `user_won`, drop the `is_uploader` row, and take the game out of
+		// its owner's stats corpus (`is_uploader` is the user-corpus
+		// predicate, stats/aggregate.ts) and their duel record
+		// (ratings/duels.ts). UNKNOWN_PLAYER_INDEX catches an index that
+		// disappeared from the roster; it can't catch one that was never
+		// served.
+		//
+		// Becoming an observer on purpose is the player picker's job
+		// (uploader_player_index on PATCH /v1/games/:id), which re-derives all
+		// three from the stored blob without a reparse. The tournament lock
+		// below is the narrower case of the same rule — it refuses a seat
+		// *changed* to a different nation, which this doesn't speak to.
+		if (existing.user_nation !== null && uploaderIndex === null) {
+			return errorResponse(
+				"This game records which player the uploader was. A reparse re-sends that seat; to upload it as an observer, change the player on the game page first.",
+				409,
+				cors,
+				"UPLOADER_CLAIM_DROPPED",
+			);
+		}
 
 		if (linkedMatchIds.length > 0) {
 			const newUploaderNation =
@@ -3395,16 +3397,26 @@ export async function handleGamePatch(
 			// is_uploader is the only player_summaries column the pick feeds;
 			// every other one is derived from the blob and unchanged, so this
 			// flips the flag instead of rebuilding the table the way
-			// handleAdminReindex does. The index binds twice because an
-			// observer correction passes null and `player_index = NULL` is
-			// never true — the IS NOT NULL arm makes that deliberate rather
-			// than a reliance on SQL's null comparison.
+			// handleAdminReindex does.
+			//
+			// Clear, then set — two statements rather than one CASE, because
+			// migration 0053's partial unique index is checked as each row is
+			// written: a single UPDATE that moved the flag to a *lower*
+			// player_index would set the new row before clearing the old one
+			// and trip the index mid-statement. The batch is one transaction,
+			// so no reader sees the cleared state, and an observer correction
+			// is simply the clear with nothing set after it.
 			env.SHARE_DB.prepare(
-				`UPDATE player_summaries
-				 SET is_uploader = CASE
-				     WHEN ? IS NOT NULL AND player_index = ? THEN 1 ELSE 0 END
-				 WHERE game_id = ?`,
-			).bind(uploaderChange.index, uploaderChange.index, gameId),
+				`UPDATE player_summaries SET is_uploader = 0 WHERE game_id = ?`,
+			).bind(gameId),
+			...(uploaderChange.index === null
+				? []
+				: [
+						env.SHARE_DB.prepare(
+							`UPDATE player_summaries SET is_uploader = 1
+							 WHERE game_id = ? AND player_index = ?`,
+						).bind(gameId, uploaderChange.index),
+					]),
 		]);
 
 		// Link the newly claimed seat's OnlineID the way the upload path

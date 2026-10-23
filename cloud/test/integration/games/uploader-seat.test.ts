@@ -16,13 +16,22 @@
 //
 // Games are seeded by direct INSERT: the subject is what the four queries
 // serve, not the upload pipeline.
+//
+// The seat those four serve is only worth anything if it survives the round
+// trip, so two more cases sit below. A re-import that posts no seat for a game
+// that records one is refused rather than written — the posted value is the
+// stored one coming back, so a null there is a lost claim and not an observer
+// upload (UPLOADER_CLAIM_DROPPED, handleGameUpload). And one game carries at
+// most one claimed seat, which is what lets the subquery read the seat back
+// without a LIMIT; migration 0053 is what holds every writer to it.
 
 import { applyD1Migrations, env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
-import { expectOk } from "../../helpers/assertions";
+import { expectErrorCode, expectOk } from "../../helpers/assertions";
 import { makeSiteAdmin, makeUser, type TestUser } from "../../helpers/builders";
 import { seedGame, seedSeats } from "../../helpers/games";
-import { request } from "../../helpers/requests";
+import { postMultipart, request } from "../../helpers/requests";
+import { buildUploadFormData } from "../../helpers/save-blob";
 
 // One site admin for the file: users.discord_id is unique and the Worker
 // recognizes exactly one. Seeded in beforeAll so it survives per-test storage
@@ -115,5 +124,76 @@ describe("uploader seat on the reparse read surfaces", () => {
 			"GET /v1/admin/games/out-of-date": null,
 			"GET /v1/games/:id": null,
 		});
+	});
+});
+
+describe("the claim a re-import has to re-send", () => {
+	it("refuses a re-import that posts no seat where the game records one", async () => {
+		const owner = await makeUser({ discordUsername: "seat-demotion" });
+		// Shared nonce pins the ZIP bytes, so the second post dedups onto the
+		// first game by (user_id, file_hash) and takes the re-import branch.
+		const nonce = "reimport-drops-the-claim";
+		const first = await expectOk<{ game_id: string }>(
+			await postMultipart({
+				path: "/v1/games",
+				form: await buildUploadFormData({
+					winnerIndex: 0,
+					uploaderIndex: 0,
+					nonce,
+				}),
+				as: owner,
+			}),
+		);
+
+		const res = await postMultipart({
+			path: "/v1/games",
+			form: await buildUploadFormData({
+				winnerIndex: 0,
+				uploaderIndex: null,
+				nonce,
+				parserVersion: "2.4.1",
+			}),
+			as: owner,
+		});
+		await expectErrorCode(res, {
+			status: 409,
+			code: "UPLOADER_CLAIM_DROPPED",
+		});
+
+		// Refused before the batch: the claim, the columns derived from it and
+		// the stored parse are all as the first upload left them.
+		const row = await env.SHARE_DB.prepare(
+			`SELECT g.user_nation, g.user_won, g.parser_version,
+			        (SELECT ps.player_index FROM player_summaries ps
+			          WHERE ps.game_id = g.game_id AND ps.is_uploader = 1)
+			          AS uploader_player_index
+			   FROM games g WHERE g.game_id = ?`,
+		)
+			.bind(first.game_id)
+			.first();
+		expect(row).toMatchObject({
+			user_nation: "NATION_EGYPT",
+			user_won: 1,
+			parser_version: "2.4.0",
+			uploader_player_index: 0,
+		});
+	});
+
+	it("refuses a second claimed seat on one game", async () => {
+		const owner = await makeUser({ discordUsername: "seat-cardinality" });
+		const gameId = await seedGame(owner, {
+			isPublic: false,
+			gameName: "two-claims",
+		});
+
+		// The subquery above reads the seat back with no LIMIT, so two flagged
+		// rows would make the surfaces disagree about whose game it is. The
+		// schema is what rules it out, not the writers' care.
+		await expect(
+			seedSeats(gameId, [
+				{ index: 0, nation: "NATION_EGYPT", uploader: true },
+				{ index: 1, nation: "NATION_ROME", uploader: true },
+			]),
+		).rejects.toThrow(/UNIQUE constraint failed/);
 	});
 });

@@ -30,6 +30,11 @@
 // leave challenge runs out: the home page's discovery feed
 // (handlePublicRecentGames), the played-games board (stats/handlers.ts) and the
 // profile header (users.ts), none of which narrows by game type otherwise.
+//
+// uploaderPlayerIndexSql, at the foot of the file, is here for that same
+// reason, and is a projection rather than a predicate: five readers across two
+// trees, and `scripts/` can import this module where it cannot import
+// games.ts.
 
 import type { GlobalPeriod, GlobalSlice, UserScope } from "./stats/types";
 
@@ -403,4 +408,41 @@ export function buildAdminGameFilterWhere(filter: AdminGameFilter): {
 		where: parts.length > 0 ? `WHERE ${joined}` : "",
 		binds,
 	};
+}
+
+// ---------- The uploader's seat ----------
+
+/**
+ * Correlated subquery yielding the uploader's `player_index` for a game, or
+ * NULL when the original upload was an observer (no `is_uploader` row).
+ *
+ * This is the uploader's identity. `games.user_nation` is derived *from* it
+ * and cannot stand in for it: the game lets two humans claim the same nation
+ * — `Game.IsValidNationForIndex` returns true outright under
+ * `TEAMNATION_ALLOW_DUPLICATES`, and under the multi-human default
+ * (`TEAMNATION_TEAM_UNIQUE`) rejects a duplicate only when the two share a
+ * team, so a 1v1 mirror matchup is legal — and a nation then names two seats.
+ *
+ * At most one row per game carries the flag — every writer binds one, and
+ * migration 0053's partial unique index holds them to it — so the bare
+ * subquery needs no LIMIT. (0002's column comment, `many TRUE allowed`, is
+ * the stale half of that pair; no writer ever did.)
+ *
+ * Spelled once for five readers, across both trees: the four handlers in
+ * games.ts that serve the seat to the reparse surfaces, and the headless
+ * sweep that posts it back (`scripts/admin/commands/reparse.ts`), which
+ * queries D1 through wrangler and imports this the way
+ * `scripts/ux-review/discover.ts` imports `screenshots/scope.ts`. A
+ * divergence between any two of them is a reparse that changes whose game it
+ * is. It lives here rather than in games.ts because a `tsx` script can import
+ * this module — its only import is a type — where importing games.ts would
+ * drag in the valibot schemas, `./session` and the generated tables.
+ *
+ * One reader still spells the predicate out: `handleAdminReindex` binds a
+ * single `game_id` as a parameter rather than correlating against a games
+ * alias, so it asks the question in a different shape.
+ */
+export function uploaderPlayerIndexSql(gamesAlias: string): string {
+	return `(SELECT ps.player_index FROM player_summaries ps
+	   WHERE ps.game_id = ${gamesAlias}.game_id AND ps.is_uploader = 1)`;
 }

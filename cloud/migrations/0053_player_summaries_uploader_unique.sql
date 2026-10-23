@@ -1,0 +1,33 @@
+-- One claimed seat per game, enforced by the schema instead of by convention.
+--
+-- `is_uploader` marks the player the uploader said they were, and all three
+-- writers bind exactly one (cloud/src/games.ts): handleGameUpload from the
+-- posted uploader_player_index, handleGamePatch when the owner corrects the
+-- pick, and handleAdminReindex, which reads the flag back before rebuilding
+-- the rows. An observer upload flags none.
+--
+-- Nothing held them to it. `games.user_nation` and `games.user_won` are
+-- derived from this flag, and uploaderPlayerIndexSql (cloud/src/games.ts)
+-- reads the seat back without a LIMIT, so a second flagged row would make the
+-- two disagree about whose game it is — the games row naming one seat's
+-- nation while every reparse surface served the other seat, and the reparse
+-- that posted it back would move the claim. The same flag is the user-corpus
+-- predicate (stats/aggregate.ts) and the fallback in duel attribution
+-- (ratings/duels.ts), which count one seat per game.
+--
+-- 0002's own column comment says the opposite — `-- Selected by uploader;
+-- many TRUE allowed`. No writer has ever done that; this index is which of
+-- the two is true.
+--
+-- Partial, because the unflagged seats are the rest of the roster: a unique
+-- index over (game_id) alone would allow one row per game. No game carries a
+-- second flagged row in either snapshot measured before this landed — 0 of
+-- 1,095 in production (2026-10-23), 0 of 819 in local D1 — so this adds a
+-- constraint without touching data.
+--
+-- Writers must clear before they set: SQLite checks uniqueness as each row is
+-- written, so a single UPDATE that moves the flag to a lower player_index
+-- trips the index mid-statement. handleGamePatch clears the game's rows and
+-- then sets the picked one, two statements in one batch.
+CREATE UNIQUE INDEX idx_summaries_uploader
+    ON player_summaries(game_id) WHERE is_uploader = 1;

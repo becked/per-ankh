@@ -132,6 +132,20 @@ async function collect(
 	return entries;
 }
 
+// Clear every stats bundle — what `cache clear stats` with no --match does,
+// without the prompt or the table. Exported for the reparse sweep, which
+// rewrites game_player_turn across the corpus and so invalidates every bundle
+// at once; it runs under its own typed confirmation and reports the count this
+// returns (reparse.ts). Deliberately not reachable with a --match filter: a
+// sweep's blast radius is the whole corpus, so a narrower clear would leave
+// entries nothing else rebuilds.
+export async function clearStatsBundles(): Promise<number> {
+	const entries = await collect(["stats"], undefined);
+	if (entries.length === 0) return 0;
+	await kvBulkDelete(entries.map((e) => e.name));
+	return entries.length;
+}
+
 function formatExpiry(expiration: number | undefined): string {
 	if (expiration == null) return emdash(null);
 	return formatDate(new Date(expiration * 1000).toISOString());

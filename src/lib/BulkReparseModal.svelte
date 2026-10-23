@@ -118,6 +118,23 @@
 	}
 
 	async function processOne(row: Row): Promise<void> {
+		// Who the upload is posted as: an owner id in admin mode, null for the
+		// session user's own game. An admin row with no owner id is refused
+		// rather than posted — falling back to uploadGame would create a
+		// second game under the admin's own account, since the dedup that
+		// makes an upload a re-import is keyed on (user_id, file_hash) and
+		// would miss. Unreachable from both callers today (AdminGameListItem
+		// carries user_id, GameHeader's admin branch requires it), so this is
+		// a wrong answer that can't be reached rather than one that happens.
+		const ownerId = adminMode ? row.userId : null;
+		if (ownerId === undefined) {
+			setStatus(row.gameId, {
+				kind: "error",
+				message: "No owner on this game — an admin reparse posts as them.",
+			});
+			return;
+		}
+
 		// Download
 		setStatus(row.gameId, { kind: "downloading" });
 		let rawZip: ArrayBuffer;
@@ -177,8 +194,8 @@
 			// encoder has to be the matching one.
 			form.append("uploader_player_index", JSON.stringify(row.uploaderIndex));
 			const res =
-				adminMode && row.userId
-					? await cloudApi.adminReparseUpload(row.userId, form)
+				ownerId !== null
+					? await cloudApi.adminReparseUpload(ownerId, form)
 					: await cloudApi.uploadGame(form);
 			setStatus(row.gameId, {
 				kind: "done",
