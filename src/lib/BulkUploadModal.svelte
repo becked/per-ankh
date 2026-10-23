@@ -29,6 +29,7 @@
 		defaultSelection,
 		parseSaveFile,
 		playerChoices,
+		type UploaderSuggestion,
 		ParseFailure,
 		type PlayerChoice,
 	} from "$lib/parser/upload-helpers";
@@ -56,12 +57,12 @@
 				humans: PlayerChoice[];
 				// Total game turns (match_metadata.total_turns), shown per option.
 				totalTurns: number;
-				// The heuristic's pre-selected player_index (the seat the save was
-				// written from, else a match against the user's past-upload
-				// online_ids — see defaultSelection), or null when there was no
-				// confident guess. Drives the "Suggested" badge independently of
+				// The pre-selected seat and the signal that chose it — a match
+				// against the user's past-upload online_ids, else the seat the
+				// save was written from (see defaultSelection). Drives the
+				// "Suggested" badge and the hint line, independently of
 				// `selected`.
-				suggested: number | null;
+				suggestion: UploaderSuggestion;
 				// `selected` is the participant's player_index (for normal
 				// uploads and tournament-participant uploads), or null for the
 				// non-tournament Observer mode. In tournament-observer mode
@@ -98,7 +99,7 @@
 				retry: {
 					humans: PlayerChoice[];
 					totalTurns: number;
-					suggested: number | null;
+					suggestion: UploaderSuggestion;
 					selected: number | null;
 					slotAPlayerIndex: number | null;
 					slotBPlayerIndex: number | null;
@@ -239,7 +240,7 @@
 				const gzippedData = await gzipJson(data);
 				const rawZipBlob = new Blob([rawZip], { type: "application/zip" });
 				const humans = playerChoices(data);
-				const suggested = defaultSelection(humans, knownOnlineIds);
+				const suggestion = defaultSelection(humans, knownOnlineIds);
 
 				const r = rows.find((r) => r.id === id);
 				if (!r) continue;
@@ -247,7 +248,7 @@
 					kind: "ready",
 					humans,
 					totalTurns: data.match_metadata.total_turns,
-					suggested,
+					suggestion,
 					// In observer mode the uploader doesn't claim a slot for
 					// themselves; slot mappings are entered explicitly via the
 					// per-slot pickers below. A challenge run is always the map's
@@ -256,7 +257,7 @@
 						? challenge.rules.setup.player_index
 						: observerMode
 							? null
-							: suggested,
+							: suggestion.playerIndex,
 					slotAPlayerIndex: null,
 					slotBPlayerIndex: null,
 					verdict,
@@ -440,7 +441,7 @@
 				retry: {
 					humans: ready.humans,
 					totalTurns: ready.totalTurns,
-					suggested: ready.suggested,
+					suggestion: ready.suggestion,
 					selected: ready.selected,
 					slotAPlayerIndex: ready.slotAPlayerIndex,
 					slotBPlayerIndex: ready.slotBPlayerIndex,
@@ -490,7 +491,7 @@
 			kind: "ready",
 			humans: retry.humans,
 			totalTurns: retry.totalTurns,
-			suggested: retry.suggested,
+			suggestion: retry.suggestion,
 			selected: retry.selected,
 			slotAPlayerIndex: retry.slotAPlayerIndex,
 			slotBPlayerIndex: retry.slotBPlayerIndex,
@@ -514,40 +515,19 @@
 		void goto(doneRedirect ?? fallback);
 	}
 
-	// The suggested row when it came from the save naming its own player,
-	// rather than from a match against the uploader's known online ids.
-	function saveOwnerSuggestion(
-		humans: PlayerChoice[],
-		suggested: number | null,
-	): PlayerChoice | undefined {
-		return humans.find((p) => p.is_save_owner && p.player_index === suggested);
-	}
-
-	// The row's question. A save-owner suggestion is a claim about the file,
-	// not about the uploader — the two part company on exactly the uploads
-	// observer mode exists for — so it gets asked by name instead of arriving
-	// as a pre-checked row that a wrong answer can ride through.
-	function suggestionQuestion(
-		humans: PlayerChoice[],
-		suggested: number | null,
-	): string {
-		const saver = saveOwnerSuggestion(humans, suggested);
-		return saver
-			? `Saved by ${seatLabel(saver)} — is that you?`
-			: "Which nation were you?";
-	}
-
-	// The line under it, naming the answer that isn't the pre-checked one.
-	function suggestionHint(
-		humans: PlayerChoice[],
-		suggested: number | null,
-	): string {
-		if (saveOwnerSuggestion(humans, suggested)) {
-			return "Their seat is pre-selected — choose the observer option below if you're uploading it on their behalf.";
+	// The line under the question, naming the answers that aren't pre-checked.
+	// A save-owner pre-check has three, not two: the suggested seat, one of the
+	// others, or observer. The middle one is the case the file can't see — you
+	// and whoever saved it both played — and it is the one a wrong answer makes
+	// expensive, since the claim captures that seat's OnlineID for good.
+	function suggestionHint(source: UploaderSuggestion["source"]): string {
+		if (source === "save-owner") {
+			return "The suggested seat is the one the save was written from. Pick your own if you played a different one, or observer if you didn't play.";
 		}
-		return suggested === null
-			? "Select the player you controlled, or choose observer."
-			: "Based on your past uploads. Change it if its wrong.";
+		if (source === "known-id") {
+			return "Based on your past uploads. Change it if it's wrong.";
+		}
+		return "Select the player you controlled, or choose observer.";
 	}
 
 	// "3 cities · 95 turns · Winner" — the per-option stats line.
@@ -751,10 +731,10 @@
 							{/if}
 						{:else}
 							<h3 class="mt-4 text-xs font-bold text-white">
-								{suggestionQuestion(ready.humans, ready.suggested)}
+								Which nation were you?
 							</h3>
 							<p class="mb-2 mt-0.5 text-xs text-gray-400">
-								{suggestionHint(ready.humans, ready.suggested)}
+								{suggestionHint(ready.suggestion.source)}
 							</p>
 
 							<RadioGroup
@@ -769,7 +749,8 @@
 							>
 								{#each ready.humans as human (human.player_index)}
 									{@const isSel = ready.selected === human.player_index}
-									{@const isSuggested = ready.suggested === human.player_index}
+									{@const isSuggested =
+										ready.suggestion.playerIndex === human.player_index}
 									<label class={optionCardClass(isSel)}>
 										<RadioItem value={String(human.player_index)} />
 										<div class="min-w-0 flex-1 text-xs">

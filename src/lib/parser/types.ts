@@ -427,8 +427,8 @@ export interface PlayerNationEntry {
  * Cloud-side per-player roster, in XML order. Two consumers:
  *
  *   1. Upload modal picker (spec §8) — filters where `is_human === true`,
- *      pre-checks the save owner, else the row whose `online_id` matches one
- *      of the uploader's known ids (captured from prior uploads). Submits
+ *      pre-checks the row whose `online_id` matches one of the uploader's
+ *      known ids (captured from prior uploads), else the save owner. Submits
  *      selected `player_index`es back to the server as
  *      `uploader_player_indexes`.
  *
@@ -449,8 +449,9 @@ export interface PlayerRosterEntry {
 	// falling back to the single human in the roster (see `resolveSaveOwner`
 	// in parsers/players.ts). True on at most one entry, and on none when a
 	// multi-human save carries no PI. It is who SAVED the file, not who is
-	// uploading it, so the picker treats it as a default to confirm rather
-	// than an identity. PARSER_VERSION 2.27.0+.
+	// uploading it, so the picker reaches for it only when the uploader's own
+	// known ids say nothing — see `defaultSelection` in upload-helpers.ts.
+	// PARSER_VERSION 2.27.0+.
 	is_save_owner: boolean;
 }
 
