@@ -161,3 +161,21 @@ export const CHART_REFERENCE_LINE_COLOR = "#6b6459";
  * `rgb(var(--color-orange))`.
  */
 export const CHART_ACCENT_COLOR = "#FFA500";
+
+/**
+ * Shades for the two hover surfaces a chart tab draws: the ECharts tooltip —
+ * styled for every chart at once by the `perankh` theme in Chart.svelte — and
+ * the rich marker tips a tab builds as HTML for its EventRail. They share one
+ * surface because they sit a few pixels apart — a tip hanging below the plot
+ * whose tooltip is above it.
+ *
+ * Hex rather than Tailwind classes or CSS variables: an ECharts option object
+ * can reach neither, and the rail tips are built as inline-styled HTML by the
+ * same formatters. TOOLTIP_SURFACE is `--color-surface-deep` and
+ * TOOLTIP_BORDER is `--color-border-subtle` (src/app.css) — a change there
+ * belongs here too.
+ */
+export const TOOLTIP_TEXT = "#cfc9bd";
+export const TOOLTIP_MUTED = "#9b948a";
+export const TOOLTIP_SURFACE = "#1a1510";
+export const TOOLTIP_BORDER = "#3a352f";

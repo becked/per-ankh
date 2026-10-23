@@ -26,11 +26,14 @@
 		formatEnum,
 		nationName,
 	} from "$lib/utils/formatting";
-	import { CHART_THEME, getNationChartColor } from "$lib/config";
+	import {
+		CHART_THEME,
+		TOOLTIP_MUTED,
+		TOOLTIP_TEXT,
+		getNationChartColor,
+	} from "$lib/config";
 	import SpriteIcon from "./SpriteIcon.svelte";
 	import EventRail, {
-		TOOLTIP_TEXT,
-		TOOLTIP_MUTED,
 		type RailGroup,
 		type RailMarker,
 	} from "./EventRail.svelte";

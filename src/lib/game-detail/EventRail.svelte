@@ -1,18 +1,6 @@
 <script lang="ts" module>
 	import type { DetailPlayer, SpriteCategory } from "./helpers";
 
-	// Text shades for the markers' rich tooltips, shared by every tab that
-	// builds tooltipHtml for a rail (hex literals are the norm inside
-	// chart/tooltip HTML in this codebase).
-	export const TOOLTIP_TEXT = "#cfc9bd";
-	export const TOOLTIP_MUTED = "#9b948a";
-	// The rail's own surface, exported so chart tooltips that reuse the shades
-	// above can sit on the same background (app.css --color-surface-deep /
-	// --color-border-subtle, which Tailwind classes can't reach from an
-	// ECharts option object).
-	export const TOOLTIP_SURFACE = "#1a1510";
-	export const TOOLTIP_BORDER = "#3a352f";
-
 	// One marker on the rail: an icon at its event's turn-x with a rich hover
 	// tooltip. A null iconValue renders a colored dot instead of a sprite.
 	// `label` renders a small text chip instead of either (the Techs rail's

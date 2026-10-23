@@ -1,15 +1,35 @@
 <script module lang="ts">
 	import { registerTheme } from "$lib/echarts";
+	import { TOOLTIP_BORDER, TOOLTIP_SURFACE, TOOLTIP_TEXT } from "$lib/config";
 
 	// Register once: ECharts' default axis-label color is a grey that's hard to
 	// read on our dark background, so default every axis's labels to white. The
-	// rest of the styling comes from CHART_THEME spread into each option.
+	// rest of the styling comes from CHART_THEME spread into each option, bar
+	// the tooltip below.
 	const AXIS_LABEL = { axisLabel: { color: "#FFFFFF" } };
 	registerTheme("perankh", {
 		categoryAxis: AXIS_LABEL,
 		valueAxis: AXIS_LABEL,
 		logAxis: AXIS_LABEL,
 		timeAxis: AXIS_LABEL,
+		// The tooltip is the one surface CHART_THEME can't carry: a chart that
+		// writes its own `tooltip` object replaces the spread wholesale, and the
+		// oldest, most-looked-at plots (Military Power, the yield bands) all do.
+		// Theme values instead merge *under* the option — `mergeDefaultAndTheme`
+		// runs `merge(option, theme)` with no overwrite flag
+		// (node_modules/echarts/lib/model/Component.js) — so these fill in only
+		// the keys a call site left unset, reaching every chart either way.
+		//
+		// The three keys move together. ECharts' default text shade is a mid
+		// grey picked to read on its own white box, so a dark background without
+		// it is grey on near-black; and v6 paints the border in the *nearest
+		// point's* series color unless `borderColor` is set, appending it after
+		// everything else (`TooltipHTMLContent.show`).
+		tooltip: {
+			backgroundColor: TOOLTIP_SURFACE,
+			borderColor: TOOLTIP_BORDER,
+			textStyle: { color: TOOLTIP_TEXT },
+		},
 	});
 </script>
 

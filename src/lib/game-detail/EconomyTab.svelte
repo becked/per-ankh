@@ -23,15 +23,11 @@
 		YieldPriceEntry,
 	} from "$lib/parser/types";
 	import { IMPROVEMENT_BUILDS } from "$lib/generated/improvement-builds";
-	import { CHART_THEME } from "$lib/config";
+	import { CHART_THEME, TOOLTIP_MUTED, TOOLTIP_TEXT } from "$lib/config";
 	import Chart from "$lib/Chart.svelte";
 	import ChartContainer from "$lib/ChartContainer.svelte";
 	import { formatEnum, nationName } from "$lib/utils/formatting";
 	import EventRail, {
-		TOOLTIP_BORDER,
-		TOOLTIP_MUTED,
-		TOOLTIP_SURFACE,
-		TOOLTIP_TEXT,
 		type RailGroup,
 		type RailMarker,
 	} from "./EventRail.svelte";
@@ -286,11 +282,6 @@
 			...CHART_THEME,
 			tooltip: {
 				trigger: "axis",
-				// The rail's dark surface, so the shared TOOLTIP_* text shades read
-				// the same here as they do on the markers below the plot.
-				backgroundColor: TOOLTIP_SURFACE,
-				borderColor: TOOLTIP_BORDER,
-				textStyle: { color: TOOLTIP_TEXT },
 				formatter: (params: unknown) => {
 					const arr = params as {
 						marker: string;
