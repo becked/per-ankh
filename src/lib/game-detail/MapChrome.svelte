@@ -56,7 +56,7 @@
 		// eslint-disable-next-line no-unused-vars -- Callback type signature
 		onTurnChange: (turn: number) => Promise<void> | void;
 		// eslint-disable-next-line no-unused-vars -- Callback type signature
-		onOpenTab: (tab: GameTabId, atYield?: string) => void;
+		onOpenTab: (tab: GameTabId, openAtYield?: string | null) => void;
 		showPolitical?: boolean;
 		showUnits?: boolean;
 	} = $props();

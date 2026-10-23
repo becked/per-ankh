@@ -47,7 +47,7 @@
 		turn: number;
 		finalTurn: number;
 		// eslint-disable-next-line no-unused-vars -- Callback type signature
-		onOpenTab: (tab: GameTabId, atYield?: string) => void;
+		onOpenTab: (tab: GameTabId, openAtYield?: string | null) => void;
 	} = $props();
 
 	// Game-wide, so independent of the player and the turn. Only the four

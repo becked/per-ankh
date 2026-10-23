@@ -30,7 +30,10 @@
 
 	// The chart is scrolled to rather than moved to the front: every yield keeps
 	// the position it has in the analyst view's tab, and its neighbours stay a
-	// scroll away. Nothing scrolls when the stack holds no chart for it.
+	// scroll away. Nothing scrolls when the stack holds no chart for the yield:
+	// the current parser writes a series for every yield the stack charts
+	// (SHARE_YIELD_TYPES), so what reaches that is a blob a parser stored before
+	// it did.
 	//
 	// On the next frame, not this one: the map view renders this tab inside a
 	// <dialog> that is display:none until showModal() (FullscreenDialog), and
@@ -38,7 +41,7 @@
 	// runs after the dialog has opened whichever order the two effects take.
 	$effect(() => {
 		if (!openAtYield || !stack) return;
-		const target = stack.querySelector(`[data-yield="${openAtYield}"]`);
+		const target = stack.querySelector(`[data-yield-type="${openAtYield}"]`);
 		if (!target) return;
 		const frame = requestAnimationFrame(() =>
 			target.scrollIntoView({ block: "start" }),
@@ -56,6 +59,9 @@
 	class="rounded-lg p-4"
 	style="background-color: rgb(var(--color-surface));"
 >
+	<!-- Sticky, so a chart scrolled to would land under it: the scroll-mt on
+	     each chart below is measured from this box's rendered height, and a
+	     change to its padding, border or type size means re-measuring it. -->
 	<div
 		class="sticky top-1 z-10 -ml-4 mb-4 flex w-fit flex-wrap items-center gap-3 rounded-lg border border-surface bg-surface-sunken p-2 shadow-lg"
 	>
@@ -93,7 +99,7 @@
 				     scrolled to would otherwise land under: the toggle's bottom
 				     sits 62px into the scroll port, and 80 leaves it about the
 				     gap the charts keep between themselves. -->
-				<div data-yield={config.yieldType} class="scroll-mt-20">
+				<div data-yield-type={config.yieldType} class="scroll-mt-20">
 					<ChartContainer
 						option={chartOption}
 						height="400px"
