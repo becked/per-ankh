@@ -1,15 +1,17 @@
 // The Settings tab's row model: a GameDetails in, the seven sections Old
 // World's own setup screens declare out, each with its rows already labelled
-// and formatted. Sections and rows come from the baked game-setup tables
-// ($lib/generated/game-setup); the setup VOCABULARY — the value-name and map
-// label helpers these rows format through — is $lib/map-settings, which the
-// save cards and the challenge summaries share.
+// and formatted. Sections and rows come from the baked
+// $lib/generated/game-setup-sections tables; the setup VOCABULARY — the
+// value-name and map label helpers these rows format through — is
+// $lib/map-settings, which the save cards and the challenge summaries share.
 //
-// Its own module rather than part of map-settings because this half reaches
-// every game-setup export and the save cards reach map-settings from the home
-// page: one module holding both put the whole setup vocabulary (+4.2 KB
-// gzipped) in the eager chunk `/` loads, where the Settings tab is lazy
-// (0a332971 "load the tabs on demand, one chunk each").
+// This module and that generated table both sit apart from the vocabulary
+// halves the save cards reach from the home page, because rollup places a
+// whole module in a chunk and the Settings tab is lazy (0a332971 "load the
+// tabs on demand, one chunk each"). Measured on `/`'s static import closure,
+// gzipped: with the row model in map-settings and its tables in game-setup.ts
+// the eager chunk ran ~4.3 KB over main, and with both split it lands within
+// 200 B of it.
 
 import {
 	DIFFICULTY_MODES,
@@ -18,7 +20,7 @@ import {
 	SETUP_PARAMETERS,
 	SETUP_SECTIONS,
 	VICTORY_TOGGLES,
-} from "$lib/generated/game-setup";
+} from "$lib/generated/game-setup-sections";
 import {
 	mapAspectRatioLabel,
 	mapOptionChoiceLabel,
@@ -81,7 +83,7 @@ function setGameOptions(
  * its slot and labels through `formatEnum` — the save says it was set, and
  * dropping it would understate the map.
  */
-export function gameMapOptions(
+function gameMapOptions(
 	options: Record<string, string | boolean> | null | undefined,
 ): { option: string; label: string; value: string }[] {
 	if (!options) return [];
@@ -127,7 +129,7 @@ const CUSTOM_PRESET = "Custom";
  * because an absent class means NONE on either side — the game's own
  * `equalOccurrences`.
  */
-export function difficultyPreset(
+function difficultyPreset(
 	details: Pick<
 		GameDetails,
 		"difficulty" | "setup_parameters" | "occurrence_levels"

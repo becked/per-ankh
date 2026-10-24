@@ -74,13 +74,16 @@ npm run bake:civilization-colors # civilization-colors.ts (each nation's and tri
                                # colour, plus the base nation roster the /stats facet offers,
                                # plus the one border colour every tribe shares — the border
                                # the game paints a city no player holds)
-npm run bake:game-setup        # game-setup.ts (Old World's seven setup sections and their
-                               # parameter labels, the display name of every setup value that
-                               # diverges from formatEnum, the game options with their help
-                               # text and category, the difficulty-mode presets the Difficulty
-                               # row is reverse-looked-up against, and the victory toggles.
-                               # Replaced bake:difficulty-names and bake:game-option-names,
-                               # whose DIFFICULTY_NAMES and GAME_OPTION_NAMES it subsumes)
+npm run bake:game-setup        # game-setup.ts (the display name of every setup value that
+                               # diverges from formatEnum, plus the victory types worth
+                               # points) + game-setup-sections.ts (Old World's seven setup
+                               # sections and their parameter labels, the game options with
+                               # their help text and category, the difficulty-mode presets
+                               # the Difficulty row is reverse-looked-up against, and the
+                               # victory toggles) — two modules so the Settings tab's row
+                               # model stays out of the home page's eager chunk. Replaced
+                               # bake:difficulty-names and bake:game-option-names, whose
+                               # DIFFICULTY_NAMES and GAME_OPTION_NAMES it subsumes
 npm run bake:crest-sprites     # crest-sprites.ts (tribe → its crest, and crest → the sprite
                                # its art ships under; CREST_TRIBE_ANARCHY draws
                                # CREST_TRIBE_REBELS. Self-contained rather than
@@ -121,7 +124,7 @@ npm run bake:all               # Every baker above except owtt + momentum, then 
 
 The six `*-names` bakers are the same script with the nouns swapped, and `bake-name-text.ts` is the copy to crib from. The shape: read the info XML's `<zType>` + name key, resolve that key against every merged `text-*.xml` `<en-US>`, run it through `stripMarkup` (which already resolves OW's `link(...)` markup and plural forms), and **emit only entries whose resolved name differs from `formatEnum`** so the table holds real overrides and everything else falls through at runtime.
 
-Two ways to land the output, and the choice is the one decision worth making. The sidecar route — five of the six — means four edits to `scripts/build-manifests.ts` (sidecar path const, `read*Sidecar`, `emit*Ts`, and the read/format/write/log quartet in `main`) plus a `package.json` entry in both `bake:*` and `bake:all`. The self-contained route — `bake-trait-names.ts`, joined by `bake-game-setup.ts` from outside the six — cribbing their emit from `bake-character-opinion.ts`, writes `src/lib/generated/` directly and needs no `build-manifests.ts` edit at all, which also means `bake:finalize` can't empty the table in a checkout where that baker hasn't run. Prefer it for a new table; the five predate it. It is also the only route a checkout without a pinacotheca tree can land at all, since `bake:finalize` throws on an empty atlas or sprite sidecar.
+Two ways to land the output, and the choice is the one decision worth making. The sidecar route — five of the six — means four edits to `scripts/build-manifests.ts` (sidecar path const, `read*Sidecar`, `emit*Ts`, and the read/format/write/log quartet in `main`) plus a `package.json` entry in both `bake:*` and `bake:all`. The self-contained route — `bake-trait-names.ts`, joined by `bake-game-setup.ts` from outside the six — cribbing their emit from `bake-character-opinion.ts`, writes `src/lib/generated/` directly and needs no `build-manifests.ts` edit at all, which also means `bake:finalize` can't empty the table in a checkout where that baker hasn't run. Prefer it for a new table; the five predate it. It is also the only route a checkout without a pinacotheca tree can land at all, since `bake:finalize` throws on an empty atlas or sprite sidecar. One baker can emit more than one module, and should when its consumers sit in different chunks: rollup places a whole module in a chunk, so `bake-game-setup.ts` splits the setup vocabulary the home page's save cards reach from the Settings tab's row model, which only the lazy tab chunk reads.
 
 Two wrinkles the newer bakers handle. OW packs a string's grammatical variants into one `~`-separated field — `TEXT_NATION_HITTITE` is `Hatti~Hittite~a Hittite~Hittites` (noun ~ adjective ~ member ~ plural) — so take field 0 for the display form. And some infos reach their text through a second hop: `nation.xml` names a `<GenderedName>` that `genderedText*.xml` maps per grammatical gender to the `TEXT_*` key (take the masculine row) — `bake-nation-names.ts` is the one that does this.
 
@@ -136,7 +139,7 @@ Resolve URLs at runtime via the generated manifests:
 - `ATLAS_MANIFEST` and `NATION_ALIASES_URL` from `$lib/generated/atlas-manifest`
 - `SPRITE_MANIFEST` from `$lib/generated/sprite-manifest`
 - `TECH_NAMES` from `$lib/generated/tech-names` (tech display-name overrides from `Reference/XML/Infos/text-infos.xml`; use as `TECH_NAMES[t] ?? formatEnum(t, "TECH_")` so non-overridden techs fall through to the generic formatter)
-- `SETUP_VALUE_NAMES` / `GAME_OPTIONS` / `SETUP_PARAMETERS` from `$lib/generated/game-setup` — but reach for them through the helpers that already do the lookup and the `formatEnum` fallback: `setupValueName` / `prosperityName` in `$lib/map-settings`, and `gameSetupSections` in `$lib/game-detail/setup-sections`, which is where the Settings tab's whole row model lives
+- `SETUP_VALUE_NAMES` from `$lib/generated/game-setup`, and `GAME_OPTIONS` / `SETUP_PARAMETERS` from `$lib/generated/game-setup-sections` — but reach for them through the helpers that already do the lookup and the `formatEnum` fallback: `setupValueName` / `prosperityName` in `$lib/map-settings`, and `gameSetupSections` in `$lib/game-detail/setup-sections`, which is where the Settings tab's whole row model lives
 
 The XML bakers above also emit committed data tables (not URL manifests) under `src/lib/generated/`: `goal-names.ts`, `improvement-names.ts`, `name-text.ts`, `nation-names.ts`, `project-icons.ts`, `victory-ordering.ts`, `map-option-defs.ts`, `map-script-options.ts`, `law-classes.ts`, `specialists.ts`. `law-classes.ts` and `nation-names.ts` are each emitted twice — to `src/lib/generated/` and `cloud/src/generated/` — from the one sidecar, so never hand-mirror them.
 

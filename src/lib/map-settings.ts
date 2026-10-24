@@ -8,10 +8,10 @@
 // sites are unchanged.
 //
 // The Settings tab's row model — `gameSetupSections` and the Difficulty preset
-// behind it — is $lib/game-detail/setup-sections, which reaches every
-// game-setup export where this module reaches one. Keeping the two apart is
-// what keeps the whole setup vocabulary out of the eager chunk the home page's
-// save cards load.
+// behind it — is $lib/game-detail/setup-sections, over the separate baked
+// $lib/generated/game-setup-sections table. Keeping the two apart on both
+// layers is what keeps the row model out of the eager chunk the home page's
+// save cards load; this module reaches SETUP_VALUE_NAMES alone.
 
 import { SETUP_VALUE_NAMES } from "$lib/generated/game-setup";
 import { MAP_OPTION_DEFS } from "$lib/generated/map-option-defs";
