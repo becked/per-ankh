@@ -60,6 +60,7 @@ export function deriveGameDetails(
 		setup_nations: metadata.setup_nations ?? null,
 		setup_archetypes: metadata.setup_archetypes ?? null,
 		setup_dynasties: metadata.setup_dynasties ?? null,
+		setup_humans: metadata.setup_humans ?? null,
 		victory_conditions: metadata.victory_conditions,
 		enabled_mods: metadata.enabled_mods,
 		enabled_dlc: metadata.enabled_dlc,

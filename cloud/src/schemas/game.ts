@@ -327,7 +327,10 @@ export const MAX_DISABLED_IMPROVEMENTS = 1_000;
 //         setup_nations / setup_archetypes / setup_dynasties (the three
 //         positional per-player lists, which hold what the player PICKED where
 //         the player row holds what the game rolled — 40 of 48 corpus player
-//         rows picked RANDOM or NONE and resolved to a concrete nation);
+//         rows picked RANDOM or NONE and resolved to a concrete nation) and
+//         setup_humans (the player indices `<Humans>` lists — the setup's own
+//         human flags, which is the list the game counts to call a game
+//         multiplayer, `iNumHumans > 1`, Game.cs:11957);
 //         game_details.players[] gains development, the per-player parameter
 //         beside Prosperity, and dynasty, the resolved value the parser has
 //         read since the first cloud blob and never wired — the pair to
@@ -412,6 +415,18 @@ export const CURRENT_PARSER_VERSION = "2.28.0";
 // value onto the wrong seat. Capped at MAX_PLAYERS like `players` itself.
 const SetupPlayerListSchema = v.optional(
 	v.nullable(v.pipe(v.array(v.nullable(v.string())), v.maxLength(MAX_PLAYERS))),
+);
+
+// The player indices `<Humans>` lists (2.28.0+) — one entry per HUMAN seat
+// rather than per seat, so the array is a set of player xml ids. Capped at
+// MAX_PLAYERS like `players` itself.
+const SetupHumansSchema = v.optional(
+	v.nullable(
+		v.pipe(
+			v.array(v.pipe(v.number(), v.integer(), v.minValue(0))),
+			v.maxLength(MAX_PLAYERS),
+		),
+	),
 );
 
 const PlayerRosterEntrySchema = v.object({
@@ -504,6 +519,7 @@ const GameDetailsSchema = v.object({
 	setup_nations: SetupPlayerListSchema,
 	setup_archetypes: SetupPlayerListSchema,
 	setup_dynasties: SetupPlayerListSchema,
+	setup_humans: SetupHumansSchema,
 	winner_player_id: v.nullable(v.number()),
 	winner_name: v.nullable(v.string()),
 	winner_civilization: v.nullable(v.string()),
@@ -563,6 +579,7 @@ const MatchMetadataSchema = v.object({
 	setup_nations: SetupPlayerListSchema,
 	setup_archetypes: SetupPlayerListSchema,
 	setup_dynasties: SetupPlayerListSchema,
+	setup_humans: SetupHumansSchema,
 	victory_conditions: v.nullable(v.string()),
 	enabled_mods: v.nullable(v.string()),
 	enabled_dlc: v.nullable(v.string()),

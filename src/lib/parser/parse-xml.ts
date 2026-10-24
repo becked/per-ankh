@@ -215,6 +215,12 @@ export function getElementChildren(
  * dropping one would shift every later player's value onto the wrong seat.
  * Returns `[]` when the container is absent.
  *
+ * One child per player is the WRITER's guarantee rather than this helper's,
+ * and `<Archetype>` is the one container the game can write short, so the
+ * caller that reads that one checks the child count against the player count
+ * itself (`parseMatchMetadata`). Nothing here can tell a short list from a
+ * complete one.
+ *
  * The child elements are NOT in ALWAYS_ARRAY_TAGS, so fast-xml-parser already
  * coerces multiple siblings to an array of text-only strings; asArray
  * normalizes the single-child case.
@@ -227,6 +233,29 @@ export function parsePositionalList(
 	return (asArray(node[child]) as unknown[]).map((v) =>
 		typeof v === "string" && v !== "" ? v : null,
 	);
+}
+
+/**
+ * Read an index list — the shape `GameParameters.writeGameXML`
+ * (GameParameters.cs:747) writes the setup's own human flags in:
+ *
+ *   <Humans><PlayerHuman>0</PlayerHuman><PlayerHuman>2</PlayerHuman></Humans>
+ *
+ * One child per MATCHING player, holding that player's index, so the result is
+ * the set of player xml ids the flag is true for rather than a per-player
+ * slot — which is how the game reads it back (`lbHumans[iPlayer] = true`,
+ * GameParameters.cs:939). A child whose text is not an integer is skipped;
+ * `[]` when the container is absent.
+ */
+export function parseIndexList(node: unknown, child: string): number[] {
+	if (!isElement(node)) return [];
+	const out: number[] = [];
+	for (const v of asArray(node[child]) as unknown[]) {
+		if (typeof v !== "string") continue;
+		const n = parseInt(v, 10);
+		if (!Number.isNaN(n)) out.push(n);
+	}
+	return out;
 }
 
 /**

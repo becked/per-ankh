@@ -14,6 +14,7 @@ import {
 	optAttrStr,
 	optInt,
 	optStr,
+	parseIndexList,
 	parsePositionalList,
 	requireStr,
 } from "../parse-xml.js";
@@ -73,6 +74,23 @@ export function parseMatchMetadata(
 		? resolveWinner(rawWinner, players, teamAssignments)
 		: null;
 
+	// `<Archetype>` is the one positional per-player list the game can write
+	// SHORT: the archetype branch leaves `zArchetype` null when the trait index
+	// is out of range and then writes no element at all
+	// (`GameParameters.writeGameXML`, GameParameters.cs:736), where Difficulty,
+	// Development, Nation and Dynasty each write unconditionally. A short list
+	// shifts every later seat's archetype onto the wrong player, and nothing in
+	// the file says where the gap was, so a list that doesn't carry one child
+	// per player is dropped rather than misattributed. The branch is unreached
+	// today — every sentinel archetype (TRAIT_RANDOM_ARCHETYPE,
+	// TRAIT_PICK_LATER_ARCHETYPE, TRAIT_PRESET_ARCHETYPE) is a real `trait.xml`
+	// row, and child count equals player count on all 16 saves in
+	// `test-data/saves/`.
+	const setupArchetypes = parsePositionalList(
+		root.Archetype,
+		"LeaderArchetype",
+	);
+
 	return {
 		xml_game_id: xmlGameId,
 		total_turns: totalTurns,
@@ -104,8 +122,16 @@ export function parseMatchMetadata(
 		// player rows in `test-data/saves/` picked RANDOM or NONE and resolved to
 		// a concrete nation, which is what makes the pair worth keeping.
 		setup_nations: parsePositionalList(root.Nation, "PlayerNation"),
-		setup_archetypes: parsePositionalList(root.Archetype, "LeaderArchetype"),
+		setup_archetypes:
+			setupArchetypes.length === players.length ? setupArchetypes : [],
 		setup_dynasties: parsePositionalList(root.Dynasty, "PlayerDynasty"),
+		// The setup's own human flags, which `<Humans>` writes as player
+		// indices. The authoritative human count: the game decides a game is
+		// multiplayer by counting this list (`iNumHumans > 1`, Game.cs:11957)
+		// and answers per seat from it (`Game.isPlayerHumanOriginal`,
+		// Game.cs:14575), where `players[].is_human` is our own heuristic over
+		// `@OnlineID` / `@AIControlledToTurn`.
+		setup_humans: parseIndexList(root.Humans, "PlayerHuman"),
 		victory_conditions: victoryConditions,
 		enabled_mods: enabledMods,
 		enabled_dlc: enabledDlc,
@@ -177,7 +203,7 @@ function parseGameContent(root: Record<string, unknown>): string | null {
  * Multi values are MAP_OPTION_* zType strings. Single values are the ints
  * `p.Value.ToString()` writes — 14 `1` and 16 `0` across the corpus, never
  * "true"/"false" — so the test is the game's own `p.Value != 0`
- * (`buildMapOptions`, HelpText.Game.cs:3371).
+ * (`buildMapOptions`, HelpText.Game.cs:3373).
  *
  * Map size + aspect ratio are root attributes, not options, so they never
  * appear here.

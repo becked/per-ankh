@@ -142,10 +142,28 @@ export interface MatchMetadata {
 	 * `test-data/saves/`. An entry is null only on a save that wrote an empty
 	 * element — dropping it would shift every later player's value onto the
 	 * wrong seat. PARSER_VERSION 2.28.0+; `undefined` means unknown.
+	 *
+	 * `setup_archetypes` is `[]` on a save whose `<Archetype>` carries fewer
+	 * children than players, the one case the game writes a per-player list
+	 * short (see `parseMatchMetadata`): an unattributable list rather than a
+	 * misattributed one.
 	 */
 	setup_nations?: (string | null)[];
 	setup_archetypes?: (string | null)[];
 	setup_dynasties?: (string | null)[];
+	/**
+	 * The player xml ids the setup flagged HUMAN, from `<Humans>` — which
+	 * lists indices, not one entry per seat.
+	 *
+	 * The authoritative human count, and the only one that answers the
+	 * game's question: `Game.isMultiplayer()` is `iNumHumans > 1` over this
+	 * list (Game.cs:11957) and `Game.isPlayerHumanOriginal` (Game.cs:14575)
+	 * reads it per seat, where `players[].is_human` is our heuristic over
+	 * `@OnlineID` / `@AIControlledToTurn` and reads a non-active human as AI
+	 * without the OnlineID branch. PARSER_VERSION 2.28.0+; `undefined` means
+	 * unknown.
+	 */
+	setup_humans?: number[];
 	victory_conditions: string | null;
 	enabled_mods: string | null;
 	enabled_dlc: string | null;

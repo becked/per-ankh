@@ -55,6 +55,14 @@ export type GameDetails = {
 	setup_nations: (string | null)[] | null;
 	setup_archetypes: (string | null)[] | null;
 	setup_dynasties: (string | null)[] | null;
+	/**
+	 * The player xml ids the setup flagged human (`<Humans>`, which lists
+	 * indices rather than one entry per seat) — the count the game itself
+	 * calls multiplayer on (`iNumHumans > 1`, Game.cs:11957), where
+	 * `players[].is_human` is a heuristic over the player row. 2.28.0+;
+	 * null = unknown.
+	 */
+	setup_humans: number[] | null;
 	victory_conditions: string | null;
 	enabled_mods: string | null;
 	enabled_dlc: string | null;
