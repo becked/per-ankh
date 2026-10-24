@@ -152,7 +152,7 @@ const PARAMETERS: readonly ParameterSpec[] = [
 		list: { file: "tribeLevel.xml" },
 	},
 	// Characters and Events — the five the game gates together behind
-	// GAMEOPTION_NO_CHARACTERS (HelpText.Game.cs:3655).
+	// GAMEOPTION_NO_CHARACTERS (HelpText.Game.cs:3657).
 	{
 		key: "SuccessionGender",
 		section: "CHARACTERS",
@@ -218,7 +218,7 @@ const PARAMETERS: readonly ParameterSpec[] = [
 		prefix: null,
 	},
 	// Game Rules — the last three are multiplayer-only in the game
-	// (HelpText.Game.cs:3706-3721).
+	// (HelpText.Game.cs:3700 gates Turn Style, :3709 Turn Timer).
 	{
 		key: "ForceMarch",
 		section: "RULES",
@@ -487,7 +487,7 @@ function emit(data: {
 		"",
 		"// The victory types a game can switch on or off (<bToggle>), in info-list",
 		"// order \u2014 the ones the game draws an Enabled/Disabled line for",
-		"// (HelpText.Game.cs:3736). Conquest is absent because it is always on, so",
+		"// (HelpText.Game.cs:3731). Conquest is absent because it is always on, so",
 		"// it has no line of its own.",
 		"export const VICTORY_TOGGLES: readonly string[] = [",
 	);

@@ -253,6 +253,7 @@
 	<SettingsTab
 		gameDetails={game.game_details}
 		players={resolvedPlayers}
+		{characters}
 		gameVersion={game.match_metadata.game_version}
 	/>
 {:else}

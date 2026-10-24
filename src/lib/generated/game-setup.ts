@@ -590,7 +590,7 @@ export const DIFFICULTY_MODES: readonly DifficultyMode[] = [
 
 // The victory types a game can switch on or off (<bToggle>), in info-list
 // order — the ones the game draws an Enabled/Disabled line for
-// (HelpText.Game.cs:3736). Conquest is absent because it is always on, so
+// (HelpText.Game.cs:3731). Conquest is absent because it is always on, so
 // it has no line of its own.
 export const VICTORY_TOGGLES: readonly string[] = [
 	"VICTORY_POINTS",

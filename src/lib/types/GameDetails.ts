@@ -31,8 +31,9 @@ export type GameDetails = {
 	 * The save owner's PROSPERITY tier (`DIFFICULTY_*`) — what Old World now
 	 * calls that setting. NOT the headline "Difficulty", which is the
 	 * `DIFFICULTYMODE_*` preset this is one of six components of and which is
-	 * derived at render (`difficultyPreset` in $lib/map-settings). Null when no
-	 * save owner could be identified.
+	 * derived at render (`difficultyPreset` in
+	 * $lib/game-detail/setup-sections). Null when no save owner could be
+	 * identified.
 	 */
 	difficulty: string | null;
 	/**

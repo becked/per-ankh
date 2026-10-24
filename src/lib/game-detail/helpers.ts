@@ -42,6 +42,7 @@ import {
 	OWTT_NATION_INDEX,
 	OWTT_TECH_ENC,
 } from "$lib/generated/owtt";
+import { VICTORY_POINT_VICTORIES } from "$lib/generated/game-setup";
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -1000,11 +1001,25 @@ export function resolveGamePlayers(
 	return resolveDetailPlayers(game.game_details.players, roster);
 }
 
-/** Whether the game can be won on victory points, so points mean something. */
+/**
+ * Whether the game can be won on victory points, so points mean something —
+ * the game's own `isPointsVictory` (`buildGameParametersDesc`,
+ * HelpText.Game.cs:3726): an ENABLED victory type whose `<iPercentVP>` is
+ * non-zero, which `VICTORY_POINT_VICTORIES` is the baked set of.
+ *
+ * Not the same question as whether `VICTORY_POINTS` itself is on: Double
+ * carries `iPercentVP` 50, so a game with only Double enabled still has a
+ * points threshold. 0 of the 16 saves in `test-data/saves/` enable Double
+ * without Points, so the corpus cannot tell the two answers apart — which is
+ * why it is the game's rule here rather than the simpler test, and why the
+ * Settings tab's Points to Win row and the victory-point charts read this one
+ * predicate instead of two.
+ */
 export function hasVictoryPoints(
 	details: Pick<GameDetails, "victory_conditions">,
 ): boolean {
-	return details.victory_conditions?.includes("VICTORY_POINTS") ?? false;
+	const enabled = new Set(details.victory_conditions?.split("+"));
+	return VICTORY_POINT_VICTORIES.some((v) => enabled.has(v));
 }
 
 /**

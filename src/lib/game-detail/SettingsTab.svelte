@@ -1,7 +1,7 @@
 <script lang="ts">
 	// A game's setup, in the seven sections Old World's own setup screens
 	// declare — the words the player read when they made each choice. The rows
-	// and their order come from `gameSetupSections` ($lib/map-settings), which
+	// and their order come from `gameSetupSections` (./setup-sections), which
 	// reads the baked setup tables and applies the game's own visibility rules;
 	// this file is the chrome.
 	//
@@ -10,8 +10,10 @@
 	// played on. Below them, the Players table carries the PER-PLAYER
 	// parameters, which the game's game-menu hover collapses to the active
 	// player's because it is a HUD and we have a roster.
+	import type { CharacterInfo } from "$lib/parser/types";
 	import type { GameDetails } from "$lib/types/GameDetails";
 	import type { DetailPlayer } from "./helpers";
+	import { dynastyLeaders } from "./helpers";
 	import {
 		formatArchetype,
 		formatEnum,
@@ -19,10 +21,10 @@
 	} from "$lib/utils/formatting";
 	import {
 		gameModeLabel,
-		gameSetupSections,
 		prosperityName,
 		setupValueName,
 	} from "$lib/map-settings";
+	import { gameSetupSections } from "./setup-sections";
 	import Panel from "$lib/ui/Panel.svelte";
 	import PanelInset from "$lib/ui/PanelInset.svelte";
 	import SpriteIcon from "./SpriteIcon.svelte";
@@ -30,10 +32,14 @@
 	let {
 		gameDetails,
 		players,
+		characters,
 		gameVersion,
 	}: {
 		gameDetails: GameDetails;
 		players: DetailPlayer[];
+		// The roster of characters, which is where the archetype the game
+		// RESOLVED lives — the setup side is a per-player setup list.
+		characters: CharacterInfo[];
 		// The Old World build the save was written by (`match_metadata
 		// .game_version`), which is not a setup choice and so sits in the strip
 		// rather than in a section.
@@ -70,9 +76,57 @@
 		return setup != null && setup !== "NONE" && setup !== resolved;
 	}
 
+	// The archetype the game gave each dynasty, by player xml id: its FIRST
+	// leader's, which is the character the game's own row resolves a pick
+	// against (`leaderAtIndex(0).getArchetype()`, `buildGameParametersDesc`,
+	// HelpText.Game.cs:3442) — not the reigning one, whose archetype is a
+	// later succession's and changes as the game runs. A plain record rather
+	// than a Map, like the other derived per-player indexes here (LeadersTab):
+	// rebuilt each derivation and filled in place.
+	const resolvedArchetypes = $derived.by(() => {
+		const out: Record<number, string> = {};
+		for (const player of players) {
+			const archetype = dynastyLeaders(characters, player.playerId)[0]
+				?.archetype;
+			if (archetype) out[player.playerId] = archetype;
+		}
+		return out;
+	});
+
+	/**
+	 * The Leader Archetype cell: the archetype the dynasty got, with the
+	 * player's pick in parens where the two differ — the shape the Nation and
+	 * Dynasty columns beside it already use. (The game's own row prints the
+	 * pair the other way round, the pick with the resolved archetype in
+	 * parens, and only for a RANDOM pick — HelpText.Game.cs:3441.)
+	 *
+	 * The pick is a choice and often not an archetype: 37 of the 48 player
+	 * rows in `test-data/saves/` picked Random or Pick Later, so the pick
+	 * named an archetype for 11 of them, and the resolved archetype differs
+	 * from the pick on all 41 rows that have one. Where nothing resolves it
+	 * the pick is all there is and reads as the value rather than as a
+	 * parenthetical: the other 7 rows, 6 of them in the one save from build
+	 * 1.0.62443, whose 682 characters carry no archetype at all, and one a
+	 * turn-1 seat with no leader yet.
+	 */
+	function archetypeCell(player: DetailPlayer): {
+		value: string;
+		pick: string | null;
+	} {
+		const setup = setupArchetype(player);
+		const resolved = resolvedArchetypes[player.playerId] ?? null;
+		if (resolved == null) {
+			return { value: setup ? formatArchetype(setup) : "—", pick: null };
+		}
+		return {
+			value: formatArchetype(resolved),
+			pick: divergence(setup, resolved) ? formatArchetype(setup ?? "") : null,
+		};
+	}
+
 	// A setup dynasty only means something for a PRESET leader — the game shows
 	// the row on exactly that condition (`buildGameParametersDesc`,
-	// HelpText.Game.cs:3452). Any other archetype leaves the field at
+	// HelpText.Game.cs:3453). Any other archetype leaves the field at
 	// DYNASTY_DEFAULT, which is the absence of a choice rather than one.
 	const PRESET_ARCHETYPE = "TRAIT_PRESET_ARCHETYPE";
 	function dynastyWasPicked(player: DetailPlayer): boolean {
@@ -82,12 +136,18 @@
 		);
 	}
 
+	// The three setup columns, shown when any seat can fill one of them. The
+	// archetype half of that test is the RESOLVED archetype too, because it
+	// comes from `characters` rather than from the setup lists: a blob below
+	// PARSER_VERSION 2.28.0 carries no setup list and still names each
+	// dynasty's archetype.
 	const anyPlayersColumn = $derived(
 		players.some(
 			(p) =>
 				p.development != null ||
 				setupArchetype(p) != null ||
-				setupDynasty(p) != null,
+				setupDynasty(p) != null ||
+				resolvedArchetypes[p.playerId] != null,
 		),
 	);
 </script>
@@ -170,8 +230,13 @@
 			<tbody>
 				{#each players as player (player.playerId)}
 					<tr class="transition-colors duration-200 hover:bg-brown/20">
+						<!-- Old World leaves @Name empty on every seat of a
+						     single-player save, and on a hotseat game's AI seats —
+						     29 of the 48 corpus player rows, 26 of 26 single-player
+						     and 3 of 6 hotseat — so the resolved label, which is
+						     already on the row, is what names those. -->
 						<td class="border-b border-surface p-3 text-left text-tan"
-							>{player.player_name}</td
+							>{player.player_name || player.label}</td
 						>
 						<td class="border-b border-surface p-3 text-left text-tan">
 							<span class="flex items-center gap-2">
@@ -198,18 +263,18 @@
 							>{player.difficulty ? prosperityName(player.difficulty) : "—"}</td
 						>
 						{#if anyPlayersColumn}
+							{@const archetype = archetypeCell(player)}
 							<td class="border-b border-surface p-3 text-left text-tan"
 								>{player.development
 									? setupValueName(player.development, "DEVELOPMENT_")
 									: "—"}</td
 							>
-							<!-- Setup only: the archetype the game resolved lives on the
-							     leader character, which this tab doesn't carry. -->
-							<td class="border-b border-surface p-3 text-left text-tan"
-								>{setupArchetype(player)
-									? formatArchetype(setupArchetype(player) ?? "")
-									: "—"}</td
-							>
+							<td class="border-b border-surface p-3 text-left text-tan">
+								{archetype.value}
+								{#if archetype.pick}
+									<span class="text-gray-400">({archetype.pick})</span>
+								{/if}
+							</td>
 							<td class="border-b border-surface p-3 text-left text-tan">
 								{player.dynasty
 									? setupValueName(player.dynasty, "DYNASTY_")
