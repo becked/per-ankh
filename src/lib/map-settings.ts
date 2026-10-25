@@ -1,18 +1,29 @@
-// Display helpers for map + game settings, built on the baked MAP_OPTION_DEFS
-// and GAME_OPTION_NAMES manifests ($lib/generated/). Shared by the game-detail
-// Settings tab, the save cards, and the tournament map-pool UI — the two generic
-// label helpers (mapOptionLabel / mapOptionChoiceLabel) are re-exported from
-// $lib/tournament/map-script-options so tournament call sites are unchanged.
+// The VOCABULARY of a game's SETUP — the name Old World displays for a map
+// option, a map size, a game mode and every setup value whose display name
+// diverges from its zType — built on the baked MAP_OPTION_DEFS and game-setup
+// manifests ($lib/generated/). Shared by the game-detail Settings tab, the
+// save cards, the challenge map summaries and the tournament map-pool UI; the
+// two generic map-option label helpers (mapOptionLabel / mapOptionChoiceLabel)
+// are re-exported from $lib/tournament/map-script-options so tournament call
+// sites are unchanged.
+//
+// The Settings tab's row model — `gameSetupSections` and the Difficulty preset
+// behind it — is $lib/game-detail/setup-sections, over the separate baked
+// $lib/generated/game-setup-sections table. Keeping the two apart on both
+// layers is what keeps the row model out of the eager chunk the home page's
+// save cards load; this module reaches SETUP_VALUE_NAMES alone.
 
-import { GAME_OPTION_NAMES } from "$lib/generated/game-option-names";
+import { SETUP_VALUE_NAMES } from "$lib/generated/game-setup";
 import { MAP_OPTION_DEFS } from "$lib/generated/map-option-defs";
+import { mapScriptLabel } from "$lib/tournament/map-scripts";
 import { formatEnum } from "$lib/utils/formatting";
 
 // Canonical map-script display name (e.g. MAPCLASS_MapScriptInlandSea2 →
 // "Inland Sea"). The curated KNOWN_MAP_SCRIPTS table strips OW source quirks
 // like the trailing version digit that formatMapClass can't; re-exported here
-// so map_class is labelled the same way everywhere.
-export { mapScriptLabel } from "$lib/tournament/map-scripts";
+// so map_class is labelled the same way everywhere, including the Settings
+// tab's Map Script row ($lib/game-detail/setup-sections).
+export { mapScriptLabel };
 
 // Human label for an option's group name. Falls back to formatEnum on unknown
 // option zTypes (legacy data from a script whose options aren't in the current
@@ -56,13 +67,20 @@ export function mapAspectRatioLabel(zType: string): string {
 // game_mode in a save is the GameModeType enum, which has no zType→name table
 // in the reference XML to bake from. Curate the handful of values by hand;
 // NETWORK is the standard multiplayer mode and reads "Multiplayer" in-game (not
-// the literal "Network" formatEnum would produce).
+// the literal "Network" formatEnum would produce). All 7 of GameModeType's
+// values (Enums.cs:1100) less NONE are here, so nothing falls through to
+// formatEnum: LAN and SERVER read as the multiplayer wizard's own mode buttons
+// name them (TEXT_MP_WIZARD_SCREEN_LAN_MODE_BUTTON "LAN",
+// TEXT_MP_WIZARD_SCREEN_SERVER_MODE_BUTTON "Server Mode"), where formatEnum
+// produced "Lan" and "Server".
 const GAME_MODE_NAMES: Readonly<Record<string, string>> = {
 	SINGLE_PLAYER: "Single Player",
 	SINGLE_PLAYER_SIMPLE: "Single Player (Simple)",
 	NETWORK: "Multiplayer",
+	LAN: "LAN",
 	PLAY_BY_CLOUD: "Play By Cloud",
 	HOTSEAT: "Hotseat",
+	SERVER: "Server Mode",
 };
 
 export function gameModeLabel(value: string | null | undefined): string {
@@ -70,57 +88,38 @@ export function gameModeLabel(value: string | null | undefined): string {
 	return GAME_MODE_NAMES[value] ?? formatEnum(value, "");
 }
 
-// Non-default map options stored on a game save, as { label, value } pairs in
-// save order. Unlike the tournament `nonDefaultOptions` (which walks a script's
-// declared option list), this iterates the concrete options the save recorded
-// and compares each to its baked default — so it needs no MapClass→script
-// matching. Toggles default off, so any present toggle is non-default when true.
-// Map size + aspect ratio are surfaced as their own panel rows (and live as root
-// attributes in a save), so they're skipped here. Options absent from the
-// current bake (legacy/DLC) are skipped.
-export function nonDefaultMapOptions(
-	options: Record<string, string | boolean> | null | undefined,
-): { option: string; label: string; value: string }[] {
-	if (!options) return [];
-	const out: { option: string; label: string; value: string }[] = [];
-	for (const [opt, value] of Object.entries(options)) {
-		if (opt === "MAPSIZE" || opt === "MAPASPECTRATIO") continue;
-		const def = MAP_OPTION_DEFS[opt];
-		if (!def) continue;
-		const isDefault =
-			def.kind === "toggle" ? value === false : value === def.default;
-		if (isDefault) continue;
-		out.push({
-			option: opt,
-			label: mapOptionLabel(opt),
-			value: mapOptionChoiceLabel(opt, value),
-		});
-	}
-	return out;
+// ─── Setup values ─────────────────────────────────────────────────────────
+
+/**
+ * The name Old World displays for a setup value, from its zType.
+ *
+ * The baked table first, then `formatEnum` — the standing shape, because the
+ * table holds only the values whose display name DIVERGES from the enum. Six
+ * of the thirteen setup lists diverge wholesale (`ADVANTAGE_PENALTY_HIGH` is
+ * "High Penalty", `OCCURRENCELEVEL_CALAMITIES_LOW` is "Rare"), and
+ * `VICTORYPOINT_HIGH` is "Very High", so `formatEnum` alone is off by a tier
+ * there rather than merely ugly.
+ */
+export function setupValueName(
+	zType: string | null | undefined,
+	prefix: string,
+): string {
+	return (
+		(zType ? SETUP_VALUE_NAMES[zType] : undefined) ?? formatEnum(zType, prefix)
+	);
 }
 
-// In-game display name for a game-option zType. About half the options carry a
-// setup-screen label that diverges from their internal enum — sometimes naming a
-// different thing entirely (GAMEOPTION_NO_BONUS_IMPROVEMENTS is "No Ancient
-// Ruins") — so this resolves through the baked GAME_OPTION_NAMES overrides and
-// only falls back to formatEnum for the options whose names already agree.
-function gameOptionLabel(zType: string): string {
-	return GAME_OPTION_NAMES[zType] ?? formatEnum(zType, "GAMEOPTION_");
-}
-
-// The game-wide option flags a save recorded, as { option, label } pairs in save
-// order (which is gameOption.xml info-list order, so options stay grouped by
-// setup-screen category). A save writes only the options that are ON, so the map
-// is already the "non-default" set — unlike map options there's no default to
-// compare against. Unknown zTypes (a newer DLC than the current bake) are kept
-// and labelled by formatEnum rather than skipped: the flag is set either way, and
-// dropping it would silently understate the game's rules.
-export function setGameOptions(
-	options: Record<string, true> | null | undefined,
-): { option: string; label: string }[] {
-	if (!options) return [];
-	return Object.keys(options).map((opt) => ({
-		option: opt,
-		label: gameOptionLabel(opt),
-	}));
+/**
+ * The name Old World gives a PROSPERITY tier, from its `DIFFICULTY_*` token —
+ * the label to use everywhere that setting is shown.
+ *
+ * The token is an internal id and the setting was renamed around it, twice
+ * over: the game calls the setting Prosperity (`TEXT_SP_SETUP_ADVANCED_
+ * DIFFICULTY`) and every one of the seven tiers displays as a word the enum
+ * does not contain — `DIFFICULTY_MAGNIFICENT` is "Modest",
+ * `DIFFICULTY_GREAT` is "Fragile". Not to be confused with the headline
+ * Difficulty, which is `difficultyPreset` ($lib/game-detail/setup-sections).
+ */
+export function prosperityName(zType: string | null | undefined): string {
+	return setupValueName(zType, "DIFFICULTY_");
 }

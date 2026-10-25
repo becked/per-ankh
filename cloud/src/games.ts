@@ -494,6 +494,12 @@ function buildGameRow(inp: GameRowInputs): {
 	const winner = md.winner;
 	const victoryType = winner?.victory_type ?? null;
 
+	// The AI-aggression setting, from the setup bag that replaced the
+	// `opponent_level` field in PARSER_VERSION 2.28.0. The column is unchanged;
+	// a blob below 2.28.0 carries no bag and writes null, the same value it
+	// wrote for a save that never set the attribute.
+	const opponentLevel = md.setup_parameters?.OpponentLevel ?? null;
+
 	const roster = blob.player_roster as PlayerRosterEntry[];
 	const { userNation, userWon } = deriveUploaderColumns(
 		roster,
@@ -540,7 +546,7 @@ function buildGameRow(inp: GameRowInputs): {
 				md.map_class,
 				md.game_mode,
 				md.difficulty,
-				md.opponent_level,
+				opponentLevel,
 				gd.winner_civilization,
 				gd.winner_name,
 				victoryType,
@@ -580,7 +586,7 @@ function buildGameRow(inp: GameRowInputs): {
 			md.map_class,
 			md.game_mode,
 			md.difficulty,
-			md.opponent_level,
+			opponentLevel,
 			gd.winner_civilization,
 			gd.winner_name,
 			victoryType,

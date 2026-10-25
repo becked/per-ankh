@@ -27,8 +27,43 @@ export type GameDetails = {
 	 */
 	disabled_improvements: string[] | null;
 	game_mode: string | null;
-	opponent_level: string | null;
+	/**
+	 * The save owner's PROSPERITY tier (`DIFFICULTY_*`) — what Old World now
+	 * calls that setting. NOT the headline "Difficulty", which is the
+	 * `DIFFICULTYMODE_*` preset this is one of six components of and which is
+	 * derived at render (`difficultyPreset` in
+	 * $lib/game-detail/setup-sections). Null when no save owner could be
+	 * identified.
+	 */
 	difficulty: string | null;
+	/**
+	 * Every setup parameter the save carries, keyed by the root attribute name
+	 * verbatim (`OpponentLevel`, `Advantage`, `TurnScale`, …). Added in
+	 * PARSER_VERSION 2.28.0; null on an older blob, which means the setup is
+	 * UNKNOWN — an empty object is the other answer, a save that set none.
+	 * Replaces `opponent_level`, which was a second way to read one of its
+	 * keys.
+	 */
+	setup_parameters: Record<string, string> | null;
+	/** `<OccurrenceLevels>` as occurrence class → level. 2.28.0+; null = unknown. */
+	occurrence_levels: Record<string, string> | null;
+	/**
+	 * The setup side of Nation / Leader Archetype / Dynasty, each indexed by
+	 * player xml id (`players[].player_id`, NOT the position in `players`,
+	 * which is name-sorted). The resolved side is on the player row. 2.28.0+;
+	 * null = unknown.
+	 */
+	setup_nations: (string | null)[] | null;
+	setup_archetypes: (string | null)[] | null;
+	setup_dynasties: (string | null)[] | null;
+	/**
+	 * The player xml ids the setup flagged human (`<Humans>`, which lists
+	 * indices rather than one entry per seat) — the count the game itself
+	 * calls multiplayer on (`iNumHumans > 1`, Game.cs:11957), where
+	 * `players[].is_human` is a heuristic over the player row. 2.28.0+;
+	 * null = unknown.
+	 */
+	setup_humans: number[] | null;
 	victory_conditions: string | null;
 	enabled_mods: string | null;
 	enabled_dlc: string | null;

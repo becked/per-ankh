@@ -191,8 +191,11 @@ export async function runDetail(
 		["Turns", String(game.total_turns)],
 		["Map", `${emdash(game.map_class)} / ${emdash(game.map_size)}`],
 		["Mode", emdash(game.game_mode)],
-		["Difficulty", emdash(game.difficulty)],
-		["Opponent level", emdash(game.opponent_level)],
+		// Old World's own names for the two columns: `difficulty` is the
+		// PROSPERITY tier and `opponent_level` is AI Aggression. Raw zTypes
+		// rather than display names, as everywhere else on this page.
+		["Prosperity", emdash(game.difficulty)],
+		["AI Aggression", emdash(game.opponent_level)],
 		["User nation", emdash(game.user_nation)],
 		["User won", game.user_won == null ? "—" : game.user_won ? "yes" : "no"],
 		["Winner", emdash(game.winner_name ?? game.winner_nation)],

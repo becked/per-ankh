@@ -32,8 +32,6 @@ Data tables from `Reference/XML/`. These leave a `.bake/*.json` sidecar that `ba
 ```bash
 npm run bake:tech-names        # TECH_NAMES override table (in-game display names)
 npm run bake:improvement-names # IMPROVEMENT_NAMES override table
-npm run bake:difficulty-names  # DIFFICULTY_NAMES override table
-npm run bake:game-option-names # GAME_OPTION_NAMES override table
 npm run bake:goal-names        # GOAL_NAMES override table
 npm run bake:name-text         # NAME_TEXT override table (character names)
 npm run bake:nation-names      # NATION_NAMES override table (Hatti, Tamilakam)
@@ -76,6 +74,16 @@ npm run bake:civilization-colors # civilization-colors.ts (each nation's and tri
                                # colour, plus the base nation roster the /stats facet offers,
                                # plus the one border colour every tribe shares — the border
                                # the game paints a city no player holds)
+npm run bake:game-setup        # game-setup.ts (the display name of every setup value that
+                               # diverges from formatEnum, plus the victory types worth
+                               # points) + game-setup-sections.ts (Old World's seven setup
+                               # sections and their parameter labels, the game options with
+                               # their help text and category, the difficulty-mode presets
+                               # the Difficulty row is reverse-looked-up against, and the
+                               # victory toggles) — two modules so the Settings tab's row
+                               # model stays out of the home page's eager chunk. Replaced
+                               # bake:difficulty-names and bake:game-option-names, whose
+                               # DIFFICULTY_NAMES and GAME_OPTION_NAMES it subsumes
 npm run bake:crest-sprites     # crest-sprites.ts (tribe → its crest, and crest → the sprite
                                # its art ships under; CREST_TRIBE_ANARCHY draws
                                # CREST_TRIBE_REBELS. Self-contained rather than
@@ -114,13 +122,13 @@ npm run bake:all               # Every baker above except owtt + momentum, then 
 
 ## Adding a name-override table
 
-The eight `*-names` bakers are the same script with the nouns swapped, and `bake-game-option-names.ts` is the copy to crib from when the text carries `link(...)` markup, `bake-name-text.ts` when it doesn't. The shape: read the info XML's `<zType>` + name key, resolve that key against every merged `text-*.xml` `<en-US>`, run it through `stripMarkup` (which already resolves OW's `link(...)` markup and plural forms), and **emit only entries whose resolved name differs from `formatEnum`** so the table holds real overrides and everything else falls through at runtime.
+The six `*-names` bakers are the same script with the nouns swapped, and `bake-name-text.ts` is the copy to crib from. The shape: read the info XML's `<zType>` + name key, resolve that key against every merged `text-*.xml` `<en-US>`, run it through `stripMarkup` (which already resolves OW's `link(...)` markup and plural forms), and **emit only entries whose resolved name differs from `formatEnum`** so the table holds real overrides and everything else falls through at runtime.
 
-Two ways to land the output, and the choice is the one decision worth making. The sidecar route — seven of the eight — means four edits to `scripts/build-manifests.ts` (sidecar path const, `read*Sidecar`, `emit*Ts`, and the read/format/write/log quartet in `main`) plus a `package.json` entry in both `bake:*` and `bake:all`. The self-contained route — `bake-trait-names.ts`, cribbing its emit from `bake-character-opinion.ts` — writes `src/lib/generated/` directly and needs no `build-manifests.ts` edit at all, which also means `bake:finalize` can't empty the table in a checkout where that baker hasn't run. Prefer it for a new table; the seven predate it.
+Two ways to land the output, and the choice is the one decision worth making. The sidecar route — five of the six — means four edits to `scripts/build-manifests.ts` (sidecar path const, `read*Sidecar`, `emit*Ts`, and the read/format/write/log quartet in `main`) plus a `package.json` entry in both `bake:*` and `bake:all`. The self-contained route — `bake-trait-names.ts`, joined by `bake-game-setup.ts` from outside the six — cribbing their emit from `bake-character-opinion.ts`, writes `src/lib/generated/` directly and needs no `build-manifests.ts` edit at all, which also means `bake:finalize` can't empty the table in a checkout where that baker hasn't run. Prefer it for a new table; the five predate it. It is also the only route a checkout without a pinacotheca tree can land at all, since `bake:finalize` throws on an empty atlas or sprite sidecar. One baker can emit more than one module, and should when its consumers sit in different chunks: rollup places a whole module in a chunk, so `bake-game-setup.ts` splits the setup vocabulary the home page's save cards reach from the Settings tab's row model, which only the lazy tab chunk reads.
 
 Two wrinkles the newer bakers handle. OW packs a string's grammatical variants into one `~`-separated field — `TEXT_NATION_HITTITE` is `Hatti~Hittite~a Hittite~Hittites` (noun ~ adjective ~ member ~ plural) — so take field 0 for the display form. And some infos reach their text through a second hop: `nation.xml` names a `<GenderedName>` that `genderedText*.xml` maps per grammatical gender to the `TEXT_*` key (take the masculine row) — `bake-nation-names.ts` is the one that does this.
 
-Reach for a table whenever a `zType`'s display name might diverge from its enum — that divergence is common and not cosmetic. `GAMEOPTION_NO_BONUS_IMPROVEMENTS` is "No Ancient Ruins" in game, `GAMEOPTION_PLAY_TO_WIN` is "Ruthless AI", and every `DIFFICULTY_*` was remapped wholesale. Assuming `formatEnum` is good enough is how wrong names ship.
+Reach for a table whenever a `zType`'s display name might diverge from its enum — that divergence is common and not cosmetic. `GAMEOPTION_NO_BONUS_IMPROVEMENTS` is "No Ancient Ruins" in game, `GAMEOPTION_PLAY_TO_WIN` is "Ruthless AI", every `DIFFICULTY_*` was remapped wholesale, and `VICTORYPOINT_HIGH` displays as "Very High" — which makes `formatEnum` off by a tier there and silently wrong rather than merely ugly. Assuming `formatEnum` is good enough is how wrong names ship.
 
 ## Content-hashed paths
 
@@ -131,8 +139,9 @@ Resolve URLs at runtime via the generated manifests:
 - `ATLAS_MANIFEST` and `NATION_ALIASES_URL` from `$lib/generated/atlas-manifest`
 - `SPRITE_MANIFEST` from `$lib/generated/sprite-manifest`
 - `TECH_NAMES` from `$lib/generated/tech-names` (tech display-name overrides from `Reference/XML/Infos/text-infos.xml`; use as `TECH_NAMES[t] ?? formatEnum(t, "TECH_")` so non-overridden techs fall through to the generic formatter)
+- `SETUP_VALUE_NAMES` from `$lib/generated/game-setup`, and `GAME_OPTIONS` / `SETUP_PARAMETERS` from `$lib/generated/game-setup-sections` — but reach for them through the helpers that already do the lookup and the `formatEnum` fallback: `setupValueName` / `prosperityName` in `$lib/map-settings`, and `gameSetupSections` in `$lib/game-detail/setup-sections`, which is where the Settings tab's whole row model lives
 
-The XML bakers above also emit committed data tables (not URL manifests) under `src/lib/generated/`: `difficulty-names.ts`, `game-option-names.ts`, `goal-names.ts`, `improvement-names.ts`, `name-text.ts`, `nation-names.ts`, `project-icons.ts`, `victory-ordering.ts`, `map-option-defs.ts`, `map-script-options.ts`, `law-classes.ts`, `specialists.ts`. `law-classes.ts` and `nation-names.ts` are each emitted twice — to `src/lib/generated/` and `cloud/src/generated/` — from the one sidecar, so never hand-mirror them.
+The XML bakers above also emit committed data tables (not URL manifests) under `src/lib/generated/`: `goal-names.ts`, `improvement-names.ts`, `name-text.ts`, `nation-names.ts`, `project-icons.ts`, `victory-ordering.ts`, `map-option-defs.ts`, `map-script-options.ts`, `law-classes.ts`, `specialists.ts`. `law-classes.ts` and `nation-names.ts` are each emitted twice — to `src/lib/generated/` and `cloud/src/generated/` — from the one sidecar, so never hand-mirror them.
 
 These manifest/data modules are committed to git and regenerated by `npm run bake:finalize` (which also runs reconcile and asserts every referenced atlas/sprite file exists). The intermediate JSON sidecars are gitignored under `.bake/` (one per data baker, plus `{atlas,sprite}-manifest.json`). An empty/missing `{atlas,sprite}-manifest.json` throws, but a **missing data sidecar reads as an empty map and finalize happily emits an empty table** — so run the data baker before finalize, or you'll silently blank a table that was fine a minute ago. Hand-editing the generated TS modules will fail the existence check on the next bake; add a new asset by re-running the appropriate baker.
 

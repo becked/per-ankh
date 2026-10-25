@@ -6,7 +6,6 @@
 	// table sorts) belongs to the host, which provides it via context (see
 	// GameTabState), so it outlives the tab.
 	import type { cloudApi } from "$lib/api-cloud";
-	import { formatEnum } from "$lib/utils/formatting";
 	import { hasVictoryPoints, resolveGamePlayers } from "./helpers";
 	import { getGameTabState, type GameTabId } from "./game-tabs.svelte";
 	import { LAZY_TABS, lazyTab } from "./tab-components.svelte";
@@ -81,25 +80,7 @@
 	// playerId + unique label + color. Mirror-match safe (nation alone isn't).
 	const resolvedPlayers = $derived(resolveGamePlayers(game));
 
-	const victoryConditions = $derived(
-		game.game_details.victory_conditions
-			?.split("+")
-			.map((v) => formatEnum(v, "VICTORY_"))
-			.join(", ") ?? "Unknown",
-	);
-
 	const victoryPointsEnabled = $derived(hasVictoryPoints(game.game_details));
-
-	const dlcList = $derived(
-		game.game_details.enabled_dlc
-			?.split("+")
-			.map((dlc) => formatEnum(dlc, "DLC_"))
-			.join(", ") ?? "None",
-	);
-
-	const modsList = $derived(
-		game.game_details.enabled_mods?.split("+").join(", ") ?? "None",
-	);
 </script>
 
 {#if tab === "overview"}
@@ -272,9 +253,8 @@
 	<SettingsTab
 		gameDetails={game.game_details}
 		players={resolvedPlayers}
-		{victoryConditions}
-		{dlcList}
-		{modsList}
+		{characters}
+		gameVersion={game.match_metadata.game_version}
 	/>
 {:else}
 	<!-- A real tab whose chunk hasn't arrived. `tab` is a GameTabId, so the

@@ -319,6 +319,50 @@ export const MAX_DISABLED_IMPROVEMENTS = 1_000;
 //         `Game.writeGameXML` (Game.cs:1203) formats into the attribute.
 //         Value-only, and only for those saves: where the attribute exists it
 //         still wins.
+// 2.28.0 — the whole of a game's setup, which the blob could answer about ten
+//         rows of. game_details + match_metadata gain setup_parameters (every
+//         root setup attribute `GameParameters.writeGameXML`
+//         (GameParameters.cs:536) writes, keyed by the attribute name),
+//         occurrence_levels (`<OccurrenceLevels>` as class → level) and
+//         setup_nations / setup_archetypes / setup_dynasties (the three
+//         positional per-player lists, which hold what the player PICKED where
+//         the player row holds what the game rolled — 40 of 48 corpus player
+//         rows picked RANDOM or NONE and resolved to a concrete nation) and
+//         setup_humans (the player indices `<Humans>` lists — the setup's own
+//         human flags, which is the list the game counts to call a game
+//         multiplayer, `iNumHumans > 1`, Game.cs:11957);
+//         game_details.players[] gains development, the per-player parameter
+//         beside Prosperity, and dynasty, the resolved value the parser has
+//         read since the first cloud blob and never wired — the pair to
+//         setup_dynasties. Counted over `test-data/saves/`: every one of the
+//         16 carries @Advantage, @TribeLevel, @ForceMarch, @Mortality,
+//         @TurnScale, @EventLevel, @SuccessionGender, @SuccessionOrder,
+//         @TeamNation, @TurnStyle, @TurnTimer and @OpponentLevel; 15 carry
+//         @VictoryPointModifier, 13 @HumanDevelopment and the per-player
+//         `<Development>`, 12 a non-empty `<OccurrenceLevels>`, 4
+//         @SimultaneousTurns and 0 @Scenario.
+//
+//         NOT additive on three. `opponent_level` is REMOVED from both
+//         game_details and match_metadata, and `advantage` from
+//         match_metadata: both attributes are now keys in the bag, and a
+//         second way to read one is what the bag exists to prevent.
+//         `cloud/src/games.ts` feeds the unchanged `games.opponent_level`
+//         column from the bag, and the challenge scorer's map-setup snapshot
+//         likewise. A stored blob below 2.28.0 therefore has no AI advantage
+//         for the unit card to price until it is reparsed (#251, #135) — which
+//         is exactly what that card's existing "parsed before the AI advantage
+//         was read… Re-uploading the save fills it in" caveat says, so the
+//         gap is already visible rather than silent. MINOR per §10 because
+//         `PARSER_VERSION`'s major mirrors `FullGameData.version: 2`.
+//
+//         VALUE-CHANGING on map_options, which has been `{}` for everyone:
+//         `parseMapOptions` read `<MapOptionsMulti>`/`<MapOptionsSingle>` and
+//         the game writes `<MapMultiOptions>`/`<MapSingleOptions>`
+//         (GameParameters.cs:807, :814), and it compared the single values
+//         against "true" where the game writes ints (14 `1` and 16 `0` across
+//         the corpus). 16 of 16 corpus saves carry the elements under the
+//         names the game writes and 0 under the names we read, so the Settings
+//         tab's Options row has never rendered for anyone.
 export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.0.0",
 	"2.1.0",
@@ -354,15 +398,36 @@ export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.26.0",
 	"2.27.0",
 	"2.27.1",
+	"2.28.0",
 ]);
 
 // The latest accepted version. Echoed back on stats responses and
 // embedded in stats cache keys so a parser bump (after the matching
 // extraction code lands) naturally orphans every old entry. Bump in
 // lockstep with the `KNOWN_PARSER_VERSIONS` addition above.
-export const CURRENT_PARSER_VERSION = "2.27.1";
+export const CURRENT_PARSER_VERSION = "2.28.0";
 
 // ----- Reusable atoms -----
+
+// One of the three positional per-player setup lists (2.28.0+), indexed by
+// player xml id. An entry is nullable because a save that wrote an empty
+// element must keep its slot — dropping it would shift every later player's
+// value onto the wrong seat. Capped at MAX_PLAYERS like `players` itself.
+const SetupPlayerListSchema = v.optional(
+	v.nullable(v.pipe(v.array(v.nullable(v.string())), v.maxLength(MAX_PLAYERS))),
+);
+
+// The player indices `<Humans>` lists (2.28.0+) — one entry per HUMAN seat
+// rather than per seat, so the array is a set of player xml ids. Capped at
+// MAX_PLAYERS like `players` itself.
+const SetupHumansSchema = v.optional(
+	v.nullable(
+		v.pipe(
+			v.array(v.pipe(v.number(), v.integer(), v.minValue(0))),
+			v.maxLength(MAX_PLAYERS),
+		),
+	),
+);
 
 const PlayerRosterEntrySchema = v.object({
 	player_index: v.pipe(v.number(), v.integer(), v.minValue(0)),
@@ -383,6 +448,10 @@ const PlayerInfoSchema = v.object({
 	player_id: v.optional(v.number()),
 	player_name: v.string(),
 	nation: v.nullable(v.string()),
+	// Added in PARSER_VERSION 2.28.0 — the dynasty the game resolved, the pair
+	// to game_details.setup_dynasties. `v.optional` for the same deploy-gap
+	// reason as the fields below.
+	dynasty: v.optional(v.nullable(v.string())),
 	is_human: v.boolean(),
 	legitimacy: v.nullable(v.number()),
 	state_religion: v.nullable(v.string()),
@@ -391,6 +460,10 @@ const PlayerInfoSchema = v.object({
 	// still emits ≤2.4.1 blobs, and keeps older R2 blobs passing if they're
 	// ever re-validated.
 	difficulty: v.optional(v.nullable(v.string())),
+	// Added in PARSER_VERSION 2.28.0 — the player's starting development, the
+	// per-player setup parameter that sits beside Prosperity. `v.optional` for
+	// the same deploy-gap reason as the fields around it.
+	development: v.optional(v.nullable(v.string())),
 	// Added in PARSER_VERSION 2.11.0 — the player's reigning leader, joined to
 	// characters[].xml_id to price their court science. `v.optional` for the
 	// same deploy-gap reason as the fields above.
@@ -436,7 +509,17 @@ const GameDetailsSchema = v.object({
 	),
 	game_mode: v.nullable(v.string()),
 	difficulty: v.nullable(v.string()),
-	opponent_level: v.nullable(v.string()),
+	// The whole of a game's setup (2.28.0+), which replaces `opponent_level`:
+	// every root setup attribute keyed by its own name, the calamity levels,
+	// and the setup side of the three per-player parameters. `optional` for the
+	// same deploy-gap reason as the fields above; absent or null means the
+	// setup is UNKNOWN, where an empty bag is a save that set none.
+	setup_parameters: v.optional(v.nullable(v.record(v.string(), v.string()))),
+	occurrence_levels: v.optional(v.nullable(v.record(v.string(), v.string()))),
+	setup_nations: SetupPlayerListSchema,
+	setup_archetypes: SetupPlayerListSchema,
+	setup_dynasties: SetupPlayerListSchema,
+	setup_humans: SetupHumansSchema,
 	winner_player_id: v.nullable(v.number()),
 	winner_name: v.nullable(v.string()),
 	winner_civilization: v.nullable(v.string()),
@@ -488,13 +571,15 @@ const MatchMetadataSchema = v.object({
 	),
 	game_mode: v.nullable(v.string()),
 	difficulty: v.nullable(v.string()),
-	opponent_level: v.nullable(v.string()),
-	// The game's AI-advantage setting (2.25.0+); `optional` for the same
-	// deploy-gap reason as in GameDetailsSchema above. Absent means "unknown"
-	// — an older blob — rather than ADVANTAGE_NONE, which is what null says.
-	// Only here: `deriveGameDetails` does not copy it, so there is no
-	// game_details.advantage for a schema entry to guard.
-	advantage: v.optional(v.nullable(v.string())),
+	// The setup bag (2.28.0+), which replaces both `opponent_level` and the
+	// 2.25.0 `advantage` field — those two attributes are now keys in here.
+	// `optional` for the same deploy-gap reason as in GameDetailsSchema above.
+	setup_parameters: v.optional(v.nullable(v.record(v.string(), v.string()))),
+	occurrence_levels: v.optional(v.nullable(v.record(v.string(), v.string()))),
+	setup_nations: SetupPlayerListSchema,
+	setup_archetypes: SetupPlayerListSchema,
+	setup_dynasties: SetupPlayerListSchema,
+	setup_humans: SetupHumansSchema,
 	victory_conditions: v.nullable(v.string()),
 	enabled_mods: v.nullable(v.string()),
 	enabled_dlc: v.nullable(v.string()),
