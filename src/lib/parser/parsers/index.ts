@@ -43,6 +43,7 @@ import {
 	parseTechChoices,
 	techChoiceToRow,
 } from "./player-data.js";
+import { parsePings, pingToRow } from "./pings.js";
 import { parsePlayers } from "./players.js";
 import { parseReligions } from "./religions.js";
 import {
@@ -106,6 +107,7 @@ import {
 	type FamilyOpinionEntry,
 	type FullGameData,
 	type MemoryInfo,
+	type PingInfo,
 	type PlayerCouncilInfo,
 	type PlayerGoalInfo,
 	type PlayerNationEntry,
@@ -168,6 +170,7 @@ export function extractAllGameData(
 	const unitEffects = parseUnitEffects(root);
 	const unitFamilies = parseUnitFamilies(root);
 	const playerUnitsProduced = parsePlayerUnitsProduced(root);
+	const pings = parsePings(root);
 
 	// 2. Match metadata (depends on parsed players for winner resolution).
 	const matchMetadata = parseMatchMetadata(root, players, entryName);
@@ -305,6 +308,9 @@ export function extractAllGameData(
 	const tileOwnershipWire: TileOwnershipEntry[] = tileOwnership.map(
 		(o) => tileOwnershipToRow(o) as unknown as TileOwnershipEntry,
 	);
+	const pingsWire: PingInfo[] = pings.map(
+		(p) => pingToRow(p) as unknown as PingInfo,
+	);
 	const playerNations: PlayerNationEntry[] = players.map((p) => ({
 		player_xml_id: p.xmlId,
 		nation: p.nation,
@@ -363,5 +369,6 @@ export function extractAllGameData(
 		memory_data: memoryDataWire,
 		yield_price_history: yieldPriceWire,
 		tile_visibility: tileVisibilityWire,
+		pings: pingsWire,
 	};
 }
