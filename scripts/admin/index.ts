@@ -16,6 +16,7 @@ import * as tournament from "./commands/tournament";
 import * as cache from "./commands/cache";
 import * as duelEventTitles from "./commands/duel-event-titles";
 import * as reparse from "./commands/reparse";
+import * as saves from "./commands/saves";
 import * as devLogin from "./commands/dev-login";
 
 function printHelp(): void {
@@ -61,6 +62,17 @@ function printHelp(): void {
 			"  duel-event-titles [--csv] [--out FILE] [--concurrency N] [--cache-dir DIR]",
 			"                                   Event stories that have fired in a two-player",
 			"                                   multiplayer duel, with per-event counts",
+			"  saves pull [--sample N] [--seed S] [--out DIR] [--dry-run]",
+			"             [--concurrency N] [--cache-dir DIR]",
+			"                                   Draw a stratified sample of games — a coverage",
+			"                                   floor over every game_mode × map_size ×",
+			"                                   victory_type cell and every map_class, turn band",
+			"                                   and parser_version, then proportional for what's",
+			"                                   left — and write their original save ZIPs into",
+			"                                   test-data/saves/ with a manifest. Parses each one",
+			"                                   afterwards to report the build and mod spread,",
+			"                                   which no column can select on. --dry-run prints",
+			"                                   the allocation without downloading.",
 			"",
 			"Security:",
 			"  nuke-user <user_id> [reason]     Delete user, their games, and R2 blobs",
@@ -169,6 +181,8 @@ export async function main(argv: string[]): Promise<void> {
 			return reparse.run(subArgs, opts);
 		case "duel-event-titles":
 			return duelEventTitles.run(subArgs, opts);
+		case "saves":
+			return saves.run(subArgs, opts);
 		case "nuke-user":
 			return security.runNukeUser(subArgs, opts);
 		case "tournament":

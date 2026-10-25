@@ -6,9 +6,15 @@ It exists because the repo's expensive bugs have been claims about the data that
 
 ## Getting saves
 
+### From the cloud, if you are the operator
+
+`./per-ankh admin saves pull` draws a stratified sample of games out of D1 and writes their original ZIPs here, which is the only way to reach a stored save locally — `./per-ankh backup` is D1 only (`restore` prints `R2 / KV: untouched`), so a snapshot gives metadata rows and no archive. It reads remote R2, so it is gated like every other `./per-ankh admin` command; `--dry-run` prints the allocation without downloading. The draw is a coverage floor over every `game_mode` × `map_size` × `victory_type` cell and every `map_class`, turn band and `parser_version`, then proportional for what is left, because the rare cells are the half of the corpus that has actually caught defects. Each file is named for its shape (`network-smallest-conquest-t72-<game_id>.zip`) and `pull-manifest.json` records what was picked and why, plus the realized build-version and mod spread — the version spread this README asks for can only be reported after the fact, since the build is in the save's Root `Version` attribute and not in any column. The **`admin-cli` skill** has the rest.
+
+### By hand
+
 Copy them out of your **user data** folder, not the game install — `~/.local/share/OldWorld/Saves/` on Linux, `~/Library/Application Support/OldWorld/Saves/` on macOS (`docs/cloud-rewrite-spec.md` records the macOS path; Windows differs again). Completed games are in that folder's `Completed/` subdirectory, which is the only kind worth taking: `validateCompletedGame` rejects a save without `<Game><GameOver/>`, so an in-progress save fails the upload with `NOT_COMPLETED` (a game that ended without a recorded winner is fine — those pre-date v1.0.62443 and import with the winner and victory-type cards both showing `-`). Age is otherwise no obstacle, and old saves are the point: `docs/save-file-format.md` documents per-event-type retention and temporal fidelity measured across a corpus spanning v1.0.62443 to v1.0.83591.
 
-Git ignores everything here except this README, `.gitkeep`, and `sample.xml` (`.gitignore:71-74`), so saves — which carry other players' names and Steam ids — cannot be committed by accident. Nothing reads `sample.xml`; don't give a real save that name.
+Git ignores everything here except this README, `.gitkeep`, and `sample.xml` (`.gitignore:71-74`), so saves — which carry other players' names and Steam ids — cannot be committed by accident, and nor can `pull-manifest.json`. Nothing reads `sample.xml`; don't give a real save that name.
 
 ## What a save is
 

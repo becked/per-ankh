@@ -1,7 +1,7 @@
-// One game's save ZIP off R2, cached on disk — the read both corpus sweeps in
-// ./commands/ begin with.
+// One game's save ZIP off R2, cached on disk — the read every corpus sweep in
+// ./commands/ begins with.
 //
-// Shared for the reason mapLimit is (../lib/map-limit.ts): the two sweeps want
+// Shared for the reason mapLimit is (../lib/map-limit.ts): the sweeps want
 // identical behaviour out of this step. A wrangler spawn per save dominates
 // the wall clock, so a download is kept on disk and reused across runs; an
 // interrupted run can leave a zero-byte file behind, which would fail the
@@ -32,8 +32,23 @@ export interface CachedSave {
 	entryName: string;
 }
 
-// Null means R2 holds no object for this game — a miss, which both sweeps
-// report as such. Anything else (a wrangler failure, a corrupt archive)
+// An archive already on disk, wherever it came from. Separate from the
+// download below because `saves pull` keeps its corpus under names that carry
+// each game's shape rather than its id, so it re-reads its own output on a
+// resume and must do the buffer slice the same way.
+export async function readSaveFile(path: string): Promise<CachedSave> {
+	const zip = await readFile(path);
+	const { xml, entryName } = extractXmlFromZip(
+		zip.buffer.slice(
+			zip.byteOffset,
+			zip.byteOffset + zip.byteLength,
+		) as ArrayBuffer,
+	);
+	return { zip, xml, entryName };
+}
+
+// Null means R2 holds no object for this game — a miss, which every sweep
+// reports as such. Anything else (a wrangler failure, a corrupt archive)
 // throws.
 export async function readCachedSave(
 	gameId: string,
@@ -43,12 +58,5 @@ export async function readCachedSave(
 	// Only a non-empty cache entry counts (see above).
 	const cached = existsSync(dest) && (await stat(dest)).size > 0;
 	if (!cached && !(await r2Get(`saves/${gameId}.zip`, dest))) return null;
-	const zip = await readFile(dest);
-	const { xml, entryName } = extractXmlFromZip(
-		zip.buffer.slice(
-			zip.byteOffset,
-			zip.byteOffset + zip.byteLength,
-		) as ArrayBuffer,
-	);
-	return { zip, xml, entryName };
+	return readSaveFile(dest);
 }
