@@ -31,9 +31,10 @@
 		type TileCoord,
 		type UnitMarker,
 	} from "$lib/game-detail/map-chrome";
+	import { pinsAtTurn, resolveMapPins } from "$lib/game-detail/map-pins";
 	import {
 		reconstructMapTiles,
-		tileXmlId,
+		tilesByXmlId,
 	} from "$lib/game-detail/reconstruct-map-tiles";
 	import SpriteMap from "$lib/SpriteMap.svelte";
 
@@ -73,6 +74,10 @@
 	// On by default: the map opens at the final turn, the only turn units are
 	// recorded at, so the ending armies are part of the first read.
 	let showUnits = $state(true);
+	// Likewise: a pinned tile is something its owner meant to be read, and the
+	// final turn carries every pin that survived. The checkbox is disabled
+	// outright on a blob that can't answer (see `mapPins`).
+	let showPins = $state(true);
 
 	// ─── Locked tile panels ───────────────────────────────────────────
 	// Right-clicking a tile leaves a copy of its hover panel glued to its hex,
@@ -154,11 +159,7 @@
 		const mapWidth = game.game_details.map_width;
 		// Without map_width there is no (x, y) → tile_xml_id key, so no join.
 		if (mapWidth == null) return [];
-		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- locally-scoped Map, not reactive state
-		const tileById = new Map<number, MapTile>();
-		for (const t of game.map_tiles) {
-			tileById.set(tileXmlId(t.x, t.y, mapWidth), t);
-		}
+		const tileById = tilesByXmlId(game.map_tiles, mapWidth);
 		// `units` isn't required by the Worker's blob schema, so a blob parsed
 		// before it existed doesn't carry it — the same default CityPopover
 		// applies.
@@ -185,6 +186,25 @@
 		}
 		return out;
 	});
+
+	// ─── Map pins ─────────────────────────────────────────────────────
+	// The pins the game's players dropped on tiles, resolved once off the blob
+	// and cut to the selected turn below. Null when the blob can't answer — a
+	// blob parsed before 2.29.0, or one with no `map_width` — which is what
+	// disables the layer's checkbox rather than leaving a switch that can only
+	// ever show nothing.
+	//
+	// A non-owner's blob carries the uploader's own seat only; the Worker
+	// drops the rest (`stripForeignPings`, cloud/src/games.ts), because a note
+	// is text another human typed for their own team to read.
+	const mapPins = $derived(resolveMapPins(game, players));
+	// Unlike the unit markers these DO follow the slider: a pin carries the
+	// turn it was placed, so there is a per-turn answer to draw. It is a floor
+	// — the save never records a removal — which is the caveat the checkbox
+	// and the tile panel's rows both carry.
+	const visibleMapPins = $derived(
+		mapPins ? pinsAtTurn(mapPins, selectedMapTurn) : [],
+	);
 
 	// ─── The map's two cards ──────────────────────────────────────────
 	// A city's, opened from its banner, and a unit's, opened from its marker.
@@ -321,8 +341,10 @@
 				cities={game.city_statistics.cities}
 				playerNations={game.player_nations}
 				units={unitMarkers}
+				pins={visibleMapPins}
 				{showPolitical}
 				{showUnits}
+				{showPins}
 				{isFinalTurn}
 				{lockedTiles}
 				onToggleLock={toggleTileLock}
@@ -346,6 +368,8 @@
 				onOpenTab={openLightbox}
 				bind:showPolitical
 				bind:showUnits
+				bind:showPins
+				pinsAvailable={mapPins !== null}
 			/>
 		</div>
 	{/if}

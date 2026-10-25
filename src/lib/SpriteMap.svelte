@@ -33,6 +33,8 @@
 		bannerFoot,
 		type CityBanner,
 	} from "$lib/MapCityBanners.svelte";
+	import MapPinMarkers from "$lib/MapPinMarkers.svelte";
+	import { pinsOnTile, type MapPin } from "$lib/game-detail/map-pins";
 	import {
 		projectToCanvas,
 		type TileCoord,
@@ -323,8 +325,10 @@
 		cities = [],
 		playerNations = [],
 		units = [],
+		pins = [],
 		showPolitical = true,
 		showUnits = true,
+		showPins = true,
 		isFinalTurn,
 		lockedTiles,
 		onToggleLock,
@@ -353,9 +357,16 @@
 		// so there is no per-turn arm to draw — the layer is gated on
 		// `isFinalTurn` below. Empty is fine: the layer draws nothing.
 		units?: UnitMarker[];
+		// The map pins standing at the represented turn, already resolved and
+		// filtered by the map page (see `resolveMapPins` / `pinsAtTurn`). Unlike
+		// `units` these DO follow the turn slider: a pin carries the turn it was
+		// placed, so there is a per-turn answer to draw. Empty is fine — the
+		// layer draws nothing.
+		pins?: MapPin[];
 		// Layer visibility. The toggles live in the map view's chrome.
 		showPolitical?: boolean;
 		showUnits?: boolean;
+		showPins?: boolean;
 		// Whether `tiles` is the final turn. CityInfo.citizens is an
 		// end-of-game count, so the banners carry it only then — and it is what
 		// gates the units layer, which has no other turn to stand at.
@@ -632,6 +643,18 @@
 	// the card's anchor — takes it too, so a marker that isn't drawn can't
 	// still be hovered after a toggle or a scrub off the final turn.
 	const unitsVisible = $derived(showUnits && isFinalTurn);
+
+	// The pins on screen. No turn gate beside the toggle, where the units layer
+	// needs one: the page has already cut `pins` to the selected turn. The tile
+	// panel's rows read this too, so switching the layer off takes the pin off
+	// the hex and out of the hex's panel together.
+	const visiblePins = $derived(showPins ? pins : []);
+
+	// Those of them the map can actually place. A pin on no tile (`Tile="-1"`)
+	// has no hex to hang from; the Map Pins tab lists it, the overlay skips it.
+	const placedPins = $derived(
+		visiblePins.filter((p) => p.x !== null && p.y !== null),
+	);
 
 	// The marker the pointer is on, or null. Read by the cursor below and by
 	// the card's anchor; `getCursor` is re-evaluated every frame, so a plain
@@ -2461,6 +2484,7 @@
 		capture={panel.tile.owner_city
 			? (captureByCity.get(panel.tile.owner_city) ?? null)
 			: null}
+		pins={pinsOnTile(visiblePins, panel.tile.x, panel.tile.y)}
 		screenX={panel.x}
 		screenY={panel.y}
 		canvasWidth={deckWidth}
@@ -2487,6 +2511,13 @@
 			onBannerHover={onCityHover}
 			onBannerLeave={onCityLeave}
 			onBannerToggleLock={onCityToggleLock}
+		/>
+		<MapPinMarkers
+			pins={placedPins}
+			{hexToPixel}
+			viewState={currentViewState}
+			canvasWidth={deckWidth}
+			canvasHeight={deckHeight}
 		/>
 	{/if}
 

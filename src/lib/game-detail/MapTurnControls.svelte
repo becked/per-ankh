@@ -1,8 +1,10 @@
 <script lang="ts">
-	// The map view's turn and layer controls, in the chrome: the Political and
-	// Units layer toggles, and the turn slider with play and fast-forward. The
-	// map page owns the turn and the layers; SpriteMap only draws them.
+	// The map view's turn and layer controls, in the chrome: the Political,
+	// Units and Pins layer toggles, and the turn slider with play and
+	// fast-forward. The map page owns the turn and the layers; SpriteMap only
+	// draws them.
 	import Checkbox from "$lib/ui/Checkbox.svelte";
+	import { PIN_REMOVAL_NOTE } from "./map-pins";
 
 	let {
 		totalTurns,
@@ -10,6 +12,8 @@
 		onTurnChange,
 		showPolitical = $bindable(true),
 		showUnits = $bindable(true),
+		showPins = $bindable(true),
+		pinsAvailable = false,
 	}: {
 		totalTurns: number;
 		selectedTurn: number;
@@ -17,6 +21,12 @@
 		onTurnChange: (turn: number) => Promise<void> | void;
 		showPolitical?: boolean;
 		showUnits?: boolean;
+		showPins?: boolean;
+		// Whether this game can answer about pins at all. False on a blob
+		// parsed before the parser read `<Pings>`, which is a different claim
+		// from a game whose players dropped none — so the checkbox says which
+		// rather than offering a switch that can only ever show nothing.
+		pinsAvailable?: boolean;
 	} = $props();
 
 	// Units draw at the final turn only — `UnitInfo` is a snapshot of
@@ -108,6 +118,19 @@
 					? undefined
 					: `Units are recorded only at turn ${totalTurns}, the end of the game.`}
 				>Units</span
+			>
+		</Checkbox>
+		<Checkbox
+			bind:checked={showPins}
+			disabled={!pinsAvailable}
+			labelClass="gap-1.5"
+		>
+			<span
+				class="select-none text-tan"
+				title={pinsAvailable
+					? PIN_REMOVAL_NOTE
+					: "This game was parsed before map pins were read. Re-uploading the save fills them in."}
+				>Pins</span
 			>
 		</Checkbox>
 	</div>

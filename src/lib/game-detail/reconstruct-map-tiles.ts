@@ -22,6 +22,22 @@ export function tileXmlId(x: number, y: number, mapWidth: number): number {
 	return y * mapWidth + x;
 }
 
+/**
+ * The snapshot indexed by save id — the join every blob field that names a
+ * tile by its `<Tile>` id has to go through to reach a grid position. The
+ * unit markers and the map pins both do; one index rather than two keeps the
+ * `tileXmlId` call in a single place, and `has`/`get` is also the only check
+ * either has that the id names a tile this map actually carries.
+ */
+export function tilesByXmlId(
+	tiles: MapTile[],
+	mapWidth: number,
+): Map<number, MapTile> {
+	const byId = new Map<number, MapTile>();
+	for (const t of tiles) byId.set(tileXmlId(t.x, t.y, mapWidth), t);
+	return byId;
+}
+
 export function reconstructMapTiles(
 	data: FullGameData,
 	turn: number,

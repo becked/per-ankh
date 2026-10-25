@@ -47,6 +47,8 @@
 		onOpenTab,
 		showPolitical = $bindable(true),
 		showUnits = $bindable(true),
+		showPins = $bindable(true),
+		pinsAvailable = false,
 	}: {
 		game: Awaited<ReturnType<typeof cloudApi.getGame>>;
 		players: DetailPlayer[];
@@ -59,6 +61,10 @@
 		onOpenTab: (tab: GameTabId, openAtYield?: string | null) => void;
 		showPolitical?: boolean;
 		showUnits?: boolean;
+		showPins?: boolean;
+		// Whether the blob can answer about map pins at all — see
+		// MapTurnControls, which is the only thing that reads it.
+		pinsAvailable?: boolean;
 	} = $props();
 
 	const finalTurn = $derived(game.game_details.total_turns);
@@ -449,6 +455,8 @@
 				{onTurnChange}
 				bind:showPolitical
 				bind:showUnits
+				bind:showPins
+				{pinsAvailable}
 			/>
 		</div>
 	</div>

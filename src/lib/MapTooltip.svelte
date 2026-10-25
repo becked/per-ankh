@@ -6,12 +6,14 @@
 	import { improvementDisplayName } from "$lib/game-detail/helpers";
 	import { specialistName } from "$lib/game-detail/specialists";
 	import { CHROME_PANEL_CLASS } from "$lib/game-detail/map-chrome";
+	import { PIN_REMOVAL_NOTE, type MapPin } from "$lib/game-detail/map-pins";
 
 	let {
 		tile,
 		cityFamily = null,
 		civilizationCrestKey = null,
 		capture = null,
+		pins = [],
 		screenX,
 		screenY,
 		canvasWidth,
@@ -34,6 +36,10 @@
 		// tribe doing the capturing, which has no nation. The row is omitted
 		// for both, because the state already reads from the border.
 		capture?: { nation: string | null } | null;
+		// The map pins standing on this tile, already filtered to the selected
+		// turn. Empty for every tile nobody pinned, and for every tile at all
+		// when the Pins layer is off or the blob predates the field.
+		pins?: MapPin[];
 		screenX: number;
 		screenY: number;
 		// The deck canvas the panel sits over, in CSS pixels — the box it
@@ -106,9 +112,11 @@
 
 	// Conservative size estimate for edge-flip clamping. Exact CSS size depends on
 	// content; over-estimating just biases toward flipping at the canvas edges.
-	// The height carries the hint row below the rows as well as the header.
+	// The height carries the hint row below the rows as well as the header, and
+	// a line per pin — a note runs to several, so this is a floor on a pinned
+	// tile rather than an estimate of it.
 	const ESTIMATED_W = 200;
-	const ESTIMATED_H = 130;
+	const ESTIMATED_H = $derived(130 + pins.length * 16);
 	const OFFSET = 12;
 
 	const positionStyle = $derived.by(() => {
@@ -177,6 +185,29 @@
 			<dd style="color: {captorColor};">{nationName(captorNation)}</dd>
 		{/if}
 	</dl>
+
+	<!-- The pins on this hex, as the game's own tile tooltip writes them:
+	     "<player>: <text>", the name in that seat's colour
+	     (`buildTileTooltipPingText`, HelpText.Game.cs:5325). Outside the
+	     definition list because a note is free text with its own newlines —
+	     `white-space: pre-line` keeps them — where every row above is one
+	     short value. The turn carries the placement caveat as its title,
+	     beside the value rather than as a footnote. -->
+	{#if pins.length > 0}
+		<ul class="pins">
+			{#each pins as pin (pin.key)}
+				<li>
+					<span class="pin-owner" style="color: {pin.ownerColor};"
+						>{pin.ownerLabel}:</span
+					>
+					<span class="pin-text" class:fallback={pin.isFallback}
+						>{pin.text}</span
+					>
+					<span class="pin-turn" title={PIN_REMOVAL_NOTE}>T{pin.turn}+</span>
+				</li>
+			{/each}
+		</ul>
+	{/if}
 
 	<!-- Nothing on the map affords a right-click, so the transient panel says
 	     what one does (#256). The locked copy says the reverse, with the ✕ in
@@ -249,6 +280,33 @@
 		margin-right: 4px;
 		opacity: 0.85;
 		font-size: 10px;
+	}
+	.pins {
+		margin-top: 6px;
+		padding-top: 4px;
+		border-top: 1px solid rgb(var(--color-border-tooltip));
+		display: flex;
+		flex-direction: column;
+		gap: 3px;
+	}
+	.pin-owner {
+		font-weight: 600;
+	}
+	.pin-text {
+		/* A note is multi-line in the save (1 of 12 in the corpus carries a
+		   newline); render the breaks rather than running the lines together. */
+		white-space: pre-line;
+	}
+	/* The game's own line for a pin whose author typed nothing — "Planning
+	   Pasture", "I dropped a note." It is our words standing in for theirs,
+	   so it reads as the label it is rather than as quoted text. */
+	.pin-text.fallback {
+		font-style: italic;
+		color: rgb(var(--color-muted));
+	}
+	.pin-turn {
+		color: rgb(var(--color-muted));
+		font-variant-numeric: tabular-nums;
 	}
 	.lock-hint {
 		margin: 6px 0 0;
