@@ -12,9 +12,10 @@
 	// pill lands on the right item in the SSR'd first paint instead of sliding
 	// into place on hydration.
 	//
-	// Not for the in-page switches that toggle a view of the same route (the
-	// science and empire switches, the tournament overview's toggles): those
-	// are buttons carrying aria-pressed, or a bits-ui ToggleGroup.
+	// Not for the in-page switches that toggle a view of the same route — those
+	// are SegmentedSwitch, the same shape built from buttons carrying
+	// aria-pressed. The tournament overview's toggles are neither: they are a
+	// bits-ui Tabs.List that also owns the panel below it.
 	import type { ResolvedPathname } from "$app/types";
 
 	let {

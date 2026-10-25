@@ -4,6 +4,7 @@
 	import type { PlayedGamesRow } from "$lib/api-cloud";
 	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
 	import ProfileLink from "$lib/ProfileLink.svelte";
+	import SegmentedSwitch from "$lib/ui/SegmentedSwitch.svelte";
 	import { cognomenName } from "$lib/utils/formatting";
 	import { profileHref } from "$lib/utils/profile-href";
 	import { cognomenOf, RUNGS } from "./ladder";
@@ -171,9 +172,10 @@
 		{ key: "season", label: "Season" },
 		{ key: "all", label: "All time" },
 	] as const satisfies readonly { key: Board; label: string }[];
-	const boardIndex = $derived(BOARDS.findIndex((b) => b.key === data.board));
-	// Segmented-control tokens, matching the tournament stats page's status
-	// switch and the matches page's view switch.
+	// The season stepper's own tokens — the ‹ › buttons beside the board
+	// switch, which are a stepper rather than segments and so are not
+	// SegmentedSwitch's. Same shape, including the inert styling the stepper
+	// needs on the career board.
 	const triggerClass =
 		"relative z-10 cursor-pointer whitespace-nowrap px-3 py-1.5 text-center text-xs font-bold text-tan transition-colors disabled:cursor-default disabled:opacity-50";
 
@@ -410,32 +412,14 @@
 						>›</button
 					>
 				</div>
-				<!-- Board switch: the season board or the career board, the lit
-				     segment sliding across (the tournament stats page's status
-				     switch, in the same construct). -->
-				<div
-					class="relative grid w-fit overflow-hidden rounded-lg border-2 border-surface"
-					style="background-color: rgb(var(--color-surface)); grid-template-columns: repeat({BOARDS.length}, minmax(0, 1fr));"
-					role="group"
-					aria-label="Board"
-				>
-					<div
-						class="pointer-events-none absolute inset-y-0 left-0 transition-transform duration-200 ease-out"
-						style:width="{100 / BOARDS.length}%"
-						style:background-color="rgb(var(--color-surface-raised))"
-						style:transform="translateX({boardIndex * 100}%)"
-					></div>
-					{#each BOARDS as b (b.key)}
-						<button
-							type="button"
-							class={triggerClass}
-							aria-pressed={data.board === b.key}
-							onclick={() => select(b.key, live.selected.slug)}
-						>
-							{b.label}
-						</button>
-					{/each}
-				</div>
+				<!-- Board switch: the season board or the career board. -->
+				<SegmentedSwitch
+					items={BOARDS.map((b) => ({ key: b.key, label: b.label }))}
+					value={data.board}
+					onChange={(key) => select(key as Board, live.selected.slug)}
+					ariaLabel="Board"
+					class="w-fit"
+				/>
 			</div>
 		</div>
 
