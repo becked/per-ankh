@@ -2305,9 +2305,11 @@ export async function handleGameUpload(
 
 	// Auto-link the picked human's OnlineID. Observer uploads (uploaderIndex
 	// null) capture nothing — they shouldn't pollute the user's known-id set.
+	// A seat carrying an empty id is captureOnlineIds' own guard, so the test
+	// here is just the roster column's `string | null` narrowing.
 	if (uploaderIndex !== null) {
 		const pickedOnlineId = humansByIndex.get(uploaderIndex)?.online_id;
-		if (typeof pickedOnlineId === "string" && pickedOnlineId !== "") {
+		if (typeof pickedOnlineId === "string") {
 			try {
 				await captureOnlineIds(env, userId, [pickedOnlineId]);
 			} catch (e) {

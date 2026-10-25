@@ -195,6 +195,13 @@ export interface UploadFixtureOpts {
 	// games.save_date, which the calendar heatmap and favorite_day_of_week read.
 	// Defaults to DEFAULT_SAVE_DATE, so a fixture wanting two weekdays asks.
 	readonly saveDate?: string;
+	// Human seats the save records with an empty `OnlineID`.
+	// `Player.writeGameXML` writes the attribute unconditionally
+	// (Player.cs:27523), so a seat that has no id carries `""` rather than
+	// omitting it — a LAN or hotseat seat, 4 of them on human seats in
+	// production. The id is what links a seat to an account, so an empty one
+	// must link nothing (captureOnlineIds, cloud/src/online-ids.ts).
+	readonly emptyOnlineIdSeats?: readonly number[];
 	// Append a non-human player after the humans (index 2 in the default
 	// two-human shape). The wonder stats count only human builders, so an AI
 	// build has to be visible to the eligibility gate — a wonder it finished is
@@ -262,6 +269,7 @@ function buildMinimalGameBlob(
 		index: i,
 		isHuman: true,
 	})).concat(opts.aiPlayer ? [{ index: humans, isHuman: false }] : []);
+	const emptyOnlineId = new Set(opts.emptyOnlineIdSeats ?? []);
 	const players = seats.map((s) => ({
 		player_name: `Player ${s.index}`,
 		nation: NATIONS[s.index],
@@ -274,10 +282,13 @@ function buildMinimalGameBlob(
 		player_name: `Player ${s.index}`,
 		nation: NATIONS[s.index],
 		is_human: s.isHuman,
-		// Only humans carry an OnlineID; the worker links the uploader's.
-		online_id: s.isHuman
-			? `steam:${String(s.index + 1).padStart(15, "0")}`
-			: null,
+		// Only humans carry an OnlineID; the worker links the uploader's. An
+		// empty string is what a human seat without one carries.
+		online_id: !s.isHuman
+			? null
+			: emptyOnlineId.has(s.index)
+				? ""
+				: `steam:${String(s.index + 1).padStart(15, "0")}`,
 	}));
 	// yield_history / player_history — the indexer pivots these back into one
 	// game_player_turn row per (player, turn).
