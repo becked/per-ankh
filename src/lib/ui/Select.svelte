@@ -29,6 +29,7 @@
 		resetAfterSelect = false,
 		icon,
 		matchTriggerWidth = false,
+		compact = false,
 	}: {
 		value: string;
 		// eslint-disable-next-line no-unused-vars -- parameter in callback signature
@@ -50,6 +51,13 @@
 		// label longer than the trigger still widens the list rather than
 		// truncating in it.
 		matchTriggerWidth?: boolean;
+		// The tighter trigger the map chrome's panels are built at, against
+		// the form-sized default. A named size rather than padding passed
+		// through `class`, because two padding utilities in one class
+		// attribute are decided by Tailwind's emission order and not by the
+		// order they are written in — `px-2` is emitted after `px-1.5`, so a
+		// caller's override loses to the default it meant to replace.
+		compact?: boolean;
 	} = $props();
 
 	// Writable derived: tracks the parent's `value`, but stays reassignable so
@@ -86,7 +94,9 @@
 >
 	<Select.Trigger
 		aria-label={ariaLabel}
-		class="flex cursor-pointer items-center justify-between gap-2 rounded border border-black bg-surface-raised px-2 py-1.5 text-xs text-tan disabled:opacity-50 {klass}"
+		class="flex cursor-pointer items-center justify-between gap-2 rounded border border-black bg-surface-raised text-tan disabled:opacity-50 {compact
+			? 'px-1.5 py-0.5 text-[11px]'
+			: 'px-2 py-1.5 text-xs'} {klass}"
 	>
 		<span
 			class="flex min-w-0 items-center gap-1.5 {isPlaceholder

@@ -114,8 +114,9 @@
 	// The portrait at its native size: every one of the 663 baked portraits is
 	// 128x128, so anything else resamples it. The art ships for most but not
 	// all rulers — 147 of the 149 reigning rulers across test-data/saves/ —
-	// so the frame hangs on rulerPortrait, which is null for the rest, rather
-	// than on the id, or it would draw an empty box.
+	// so the glyph hangs on rulerPortrait, which is null for the rest, rather
+	// than on the id, or it would draw a broken image. Its cell is reserved
+	// either way (see the frame below).
 	const PORTRAIT_SIZE = 128;
 	const portrait = $derived(ruler ? rulerPortrait(ruler) : null);
 
@@ -176,18 +177,25 @@
 	});
 
 	// The four rail slots share one plate and one glyph size, so the pair on
-	// the left lines up with the pair on the right. Recessed against the
-	// panel's own frame, with its trim — the step below the panel's surface.
-	// The plate's width is cut to what it carries rather than squared off its
-	// height, which sat a 20px glyph in a box more than twice its width. It is
-	// still cut for the widest value the corpus holds: legitimacy reaches 270
-	// and the orders rate 81 across test-data/saves/, so three digits, and the
-	// slot doesn't resize under the pointer as playback runs. The size on its
-	// own dresses a slot that is reserved rather than filled, which is how the
-	// left rail keeps both its positions (see below).
-	const RAIL_SLOT_SIZE_CLASS = "h-11 w-8 flex-none";
-	const RAIL_SLOT_CLASS = `flex ${RAIL_SLOT_SIZE_CLASS} flex-col items-center justify-center gap-0.5 rounded border border-tan/50 bg-surface-deep/80`;
-	const RAIL_ICON_SIZE = 20;
+	// the left lines up with the pair on the right. A plate is a cell of its
+	// rail rather than a fixed box: `flex-1` splits the rail over the
+	// portrait's full height, which is how the game's own panel stacks them —
+	// flush against the art, pinned top and bottom, with a hairline between.
+	// Width is fixed rather than fit to content, so a slot doesn't resize
+	// under the pointer as playback runs. 36px holds the widest value the
+	// corpus has at the value's own size: legitimacy reaches 270 and the
+	// orders rate 81 across test-data/saves/, so three digits.
+	const RAIL_CLASS = "flex w-9 flex-none flex-col divide-y divide-tan/20";
+	const RAIL_SLOT_CLASS =
+		"flex flex-1 flex-col items-center justify-center gap-0.5 bg-surface-deep/80";
+	// The chrome's panel-glyph size, the one the research panel reads at: the
+	// glyph-over-value pair sits in the cell — a rail cell is half the
+	// portrait's 128px — rather than filling it.
+	const RAIL_ICON_SIZE = 22;
+	// The value a right-rail slot carries: the loudest thing on the rail, a
+	// step above the 12px ratings row under the frame.
+	const RAIL_VALUE_CLASS =
+		"text-sm font-bold leading-none tabular-nums text-bright";
 
 	const value = (n: number | null | undefined): string =>
 		n == null ? "—" : n.toLocaleString("en-US");
@@ -277,14 +285,12 @@
 			<!-- Leader (bottom-left): the ruler and the realm's standing at the
 			     selected turn, laid out as the game's own leader panel is — who the
 			     ruler is on the left rail, what the realm holds on the right, the
-			     name above the portrait and the ratings below it. The rails sit in
-			     the portrait's own row so they stay beside the art rather than at
-			     the edges of the name above it. The block is one target for the
-			     Leaders tab; nothing inside the panel links anywhere else. The
-			     switcher sits on top, because everything under it is that
+			     name above the portrait and the ratings below it. The block is one
+			     target for the Leaders tab; nothing inside the panel links anywhere
+			     else. The switcher sits on top, because everything under it is that
 			     player's. -->
 			<div
-				class="pointer-events-auto absolute bottom-0 left-0 flex w-max flex-col items-center gap-2 p-2 {CHROME_PANEL_CLASS}"
+				class="pointer-events-auto absolute bottom-0 left-0 flex w-max flex-col items-center gap-1.5 p-1.5 {CHROME_PANEL_CLASS}"
 			>
 				<Select
 					value={String(player.playerId)}
@@ -293,7 +299,8 @@
 					}}
 					options={playerOptions}
 					ariaLabel="Player"
-					class="w-full px-1.5 py-0.5 text-[11px]"
+					class="w-full"
+					compact
 					icon={nationCrest}
 					matchTriggerWidth
 				/>
@@ -302,108 +309,131 @@
 					<button
 						type="button"
 						onclick={() => onOpenTab("leaders")}
-						class="flex cursor-pointer flex-col items-center gap-1.5 text-center transition-colors hover:text-bright"
+						class="flex cursor-pointer flex-col items-center gap-1 text-center transition-colors hover:text-bright"
 						title="Leaders"
 					>
 						<span class="block text-sm font-bold leading-tight text-bright">
 							{rulerLabel}
 						</span>
 
-						<span class="flex items-stretch gap-2">
-							<!-- Left rail: who the ruler is — the archetype above, the
-							     family crest below. Both are optional, and 75 of the 149
-							     rulers across test-data/saves/ carry exactly one, so each
-							     position keeps its box whether or not anything draws in
-							     it: a rail that renders only what resolves centres its
-							     lone slot against the two opposite, and the archetype
-							     stops reading beside Orders. Reserved rather than plated,
-							     because an empty frame would read as a standing the ruler
-							     doesn't have. Archetype glyphs come
-							     from traits-trimmed, the squared copy that fills its box
-							     like the plated icons beside it (#85) — the untrimmed tile
-							     reads a size smaller at the same px. -->
-							<span class="flex flex-col justify-center gap-4">
-								{#if archetype}
-									<span class={RAIL_SLOT_CLASS} title={archetype.label}>
-										<SpriteIcon
-											category="traits-trimmed"
-											value={archetype.key}
-											size={RAIL_ICON_SIZE}
-											alt={archetype.label}
-										/>
+						<!-- One frame over three columns, the way the game builds its
+						     own: the rails sit flush against the art instead of
+						     floating beside it, and the ratings run as a band under
+						     all three. Cells are divided the way the yield strip
+						     divides its slots (`divide-tan/20`, MapYieldStrip), so the
+						     hairline between them is the frame's trim rather than a
+						     border per plate. -->
+						<span
+							class="flex flex-col divide-y divide-tan/20 overflow-hidden rounded border border-tan/50"
+						>
+							<span class="flex items-stretch divide-x divide-tan/20">
+								<!-- Left rail: who the ruler is — the archetype above, the
+								     family crest below. Both are optional, and 75 of the 149
+								     rulers across test-data/saves/ carry exactly one, so the
+								     rail renders only what resolves and a lone slot takes
+								     the whole column: nothing the frame is measured from
+								     hangs on a rail cell — unlike the portrait cell, which
+								     is reserved — so holding one open would leave a hole in
+								     the frame the three columns share. The rails need not
+								     match each other — the game's own left rail carries three
+								     slots against the right's two. Archetype glyphs come from
+								     traits-trimmed, the squared copy that fills its box like
+								     the plated icons beside it (#85) — the untrimmed tile
+								     reads a size smaller at the same px. -->
+								{#if archetype || family}
+									<span class={RAIL_CLASS}>
+										{#if archetype}
+											<span class={RAIL_SLOT_CLASS} title={archetype.label}>
+												<SpriteIcon
+													category="traits-trimmed"
+													value={archetype.key}
+													size={RAIL_ICON_SIZE}
+													alt={archetype.label}
+												/>
+											</span>
+										{/if}
+										{#if family}
+											<span class={RAIL_SLOT_CLASS} title={family.label}>
+												<SpriteIcon
+													category="crests"
+													value={family.crest}
+													size={RAIL_ICON_SIZE}
+													alt={family.label}
+												/>
+											</span>
+										{/if}
 									</span>
-								{:else}
-									<span class={RAIL_SLOT_SIZE_CLASS}></span>
 								{/if}
-								{#if family}
-									<span class={RAIL_SLOT_CLASS} title={family.label}>
+
+								<!-- The frame's spine, reserved at PORTRAIT_SIZE whether or
+								     not the art resolves (the StatListInset idiom): it is the
+								     only cell the frame is measured from — the rails split its
+								     height and the ratings band runs under its width. Left to
+								     the glyph, a ruler whose portrait the manifest hasn't got
+								     would collapse the rails and leave the row narrower than
+								     the band below it, baring the frame beside them.
+								     Sized from the constant rather than a matching Tailwind
+								     class so the two can't drift, and content-box because the
+								     divider rides on this cell's own border: under the app's
+								     border-box default that 1px comes off the inside and
+								     resamples the art to 127px wide. -->
+								<span
+									class="box-content flex flex-none items-center justify-center bg-surface-deep/80"
+									style="width: {PORTRAIT_SIZE}px; height: {PORTRAIT_SIZE}px;"
+								>
+									{#if portrait}
 										<SpriteIcon
-											category="crests"
-											value={family.crest}
-											size={RAIL_ICON_SIZE}
-											alt={family.label}
+											category="portraits"
+											value={portrait}
+											size={PORTRAIT_SIZE}
+											alt={rulerLabel ?? ""}
 										/>
+									{/if}
+								</span>
+
+								<!-- Right rail: what the realm holds at this turn. -->
+								<span class={RAIL_CLASS}>
+									<span class={RAIL_SLOT_CLASS} title="Orders">
+										<SpriteIcon
+											category="yields"
+											value="YIELD_ORDERS"
+											size={RAIL_ICON_SIZE}
+											alt="Orders"
+										/>
+										<span class={RAIL_VALUE_CLASS}>{value(orders)}</span>
 									</span>
-								{:else}
-									<span class={RAIL_SLOT_SIZE_CLASS}></span>
-								{/if}
+									<span class={RAIL_SLOT_CLASS} title="Legitimacy">
+										<SpriteIcon
+											category="yields"
+											value="YIELD_LEGITIMACY"
+											size={RAIL_ICON_SIZE}
+											alt="Legitimacy"
+										/>
+										<span class={RAIL_VALUE_CLASS}>
+											{value(standing?.legitimacy)}
+										</span>
+									</span>
+								</span>
 							</span>
 
-							{#if portrait}
+							{#if ratings.length > 0}
 								<span
-									class="block overflow-hidden rounded border border-tan/50"
+									class="flex items-center justify-center gap-2 bg-surface-deep/80 py-0.5 text-xs tabular-nums"
 								>
-									<SpriteIcon
-										category="portraits"
-										value={portrait}
-										size={PORTRAIT_SIZE}
-										alt={rulerLabel ?? ""}
-									/>
+									{#each ratings as rating (rating.label)}
+										<span class="flex items-center gap-1" title={rating.label}>
+											<SpriteIcon
+												category="icons"
+												value={rating.icon}
+												size={14}
+												alt={rating.label}
+											/>
+											{rating.value}
+										</span>
+									{/each}
 								</span>
 							{/if}
-
-							<!-- Right rail: what the realm holds at this turn. -->
-							<span class="flex flex-col justify-center gap-4">
-								<span class={RAIL_SLOT_CLASS} title="Orders">
-									<SpriteIcon
-										category="yields"
-										value="YIELD_ORDERS"
-										size={RAIL_ICON_SIZE}
-										alt="Orders"
-									/>
-									<span class="text-xs font-bold tabular-nums text-bright">
-										{value(orders)}
-									</span>
-								</span>
-								<span class={RAIL_SLOT_CLASS} title="Legitimacy">
-									<SpriteIcon
-										category="yields"
-										value="YIELD_LEGITIMACY"
-										size={RAIL_ICON_SIZE}
-										alt="Legitimacy"
-									/>
-									<span class="text-xs font-bold tabular-nums text-bright">
-										{value(standing?.legitimacy)}
-									</span>
-								</span>
-							</span>
 						</span>
-
-						{#if ratings.length > 0}
-							<span class="flex items-center gap-2 text-xs tabular-nums">
-								{#each ratings as rating (rating.label)}
-									<span class="flex items-center gap-1" title={rating.label}>
-										<SpriteIcon
-											category="icons"
-											value={rating.icon}
-											size={14}
-											alt={rating.label}
-										/>
-										{rating.value}
-									</span>
-								{/each}
-							</span>
-						{/if}
 					</button>
 				{/if}
 			</div>
