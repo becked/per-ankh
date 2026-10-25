@@ -298,7 +298,6 @@ interface GameOptionEntry {
 	zName?: string;
 	zHelp?: string;
 	Category?: string;
-	zSubTypeOf?: string;
 }
 interface OccurrencePair {
 	zIndex?: string;
@@ -354,10 +353,8 @@ interface GameOptionInfo {
 	label: string;
 	help: string;
 	section: string;
-	subOption: boolean;
 }
 interface DifficultyMode {
-	zType: string;
 	label: string;
 	difficulty: string;
 	development: string;
@@ -490,13 +487,6 @@ function emitSections(data: {
 		"\treadonly help: string;",
 		"\t/** The SETUP_SECTIONS key its <Category> names. */",
 		"\treadonly section: string;",
-		"\t/**",
-		"\t * True for an option declared <zSubTypeOf> another. A save never writes",
-		"\t * one (`GameParameters.writeGameXML`, GameParameters.cs:773), so one can",
-		"\t * never appear in a game's game_options — it is here because the table is",
-		"\t * a plain zType lookup, not a list of what a save can hold.",
-		"\t */",
-		"\treadonly subOption: boolean;",
 		"}",
 		"",
 		"export const GAME_OPTIONS: Readonly<Record<string, GameOptionInfo>> = {",
@@ -519,7 +509,6 @@ function emitSections(data: {
 		"];",
 		"",
 		"export interface DifficultyMode {",
-		"\treadonly zType: string;",
 		'\t/** The preset\'s name, e.g. "The Great". */',
 		"\treadonly label: string;",
 		"\t/** The Prosperity tier the preset sets — per-player in a save. */",
@@ -541,9 +530,10 @@ function emitSections(data: {
 		"];",
 		"",
 		"// The victory types a game can switch on or off (<bToggle>), in info-list",
-		"// order \u2014 the ones the game draws an Enabled/Disabled line for",
-		"// (HelpText.Game.cs:3731). Conquest is absent because it is always on, so",
-		"// it has no line of its own.",
+		"// order \u2014 the ones the game draws a line for when they are ON",
+		"// (HelpText.Game.cs:3731), and the ones the Settings tab marks Enabled",
+		"// or Disabled. Conquest is absent because it is always on, so it has no",
+		"// line of its own.",
 		"export const VICTORY_TOGGLES: readonly string[] = [",
 	);
 	for (const v of data.victoryToggles) push(`\t${json(v)},`);
@@ -663,7 +653,6 @@ async function main(): Promise<void> {
 			label: requireText(o.zName ?? "", `game option ${zType}`),
 			help: requireText(o.zHelp ?? "", `game option ${zType} help`),
 			section: category,
-			subOption: typeof o.zSubTypeOf === "string" && o.zSubTypeOf.length > 0,
 		};
 	}
 	if (Object.keys(gameOptions).length === 0) {
@@ -696,7 +685,6 @@ async function main(): Promise<void> {
 				occurrenceLevels[pair.zIndex] = pair.zValue;
 		}
 		difficultyModes.push({
-			zType,
 			label: requireText(m.Name ?? "", `difficulty mode ${zType}`),
 			difficulty: m.Difficulty ?? "",
 			development: m.Development ?? "",

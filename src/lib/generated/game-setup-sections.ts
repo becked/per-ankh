@@ -159,13 +159,6 @@ export interface GameOptionInfo {
 	readonly help: string;
 	/** The SETUP_SECTIONS key its <Category> names. */
 	readonly section: string;
-	/**
-	 * True for an option declared <zSubTypeOf> another. A save never writes
-	 * one (`GameParameters.writeGameXML`, GameParameters.cs:773), so one can
-	 * never appear in a game's game_options — it is here because the table is
-	 * a plain zType lookup, not a list of what a save can hold.
-	 */
-	readonly subOption: boolean;
 }
 
 export const GAME_OPTIONS: Readonly<Record<string, GameOptionInfo>> = {
@@ -173,217 +166,181 @@ export const GAME_OPTIONS: Readonly<Record<string, GameOptionInfo>> = {
 		label: "Allow Negative Cognomens",
 		help: "Allow Cognomen with negative Legitimacy.",
 		section: "CHARACTERS",
-		subOption: false,
 	},
 	GAMEOPTION_ALLOW_CITY_RAZING: {
 		label: "Allow City Razing",
 		help: "Players have the option of razing captured Cities.",
 		section: "RULES",
-		subOption: false,
 	},
 	GAMEOPTION_ALLOW_OBSERVE: {
 		label: "Allow Observers",
 		help: "Players can join the game as observers.",
 		section: "RULES",
-		subOption: false,
 	},
 	GAMEOPTION_BARBARIANS_ONLY: {
 		label: "Barbarians Only",
 		help: "All Tribes on the map are Barbarians.",
 		section: "OPPONENTS",
-		subOption: false,
 	},
 	GAMEOPTION_COMPETITIVE_CITY_GIFTING: {
 		label: "Competitive Mode City Gifting",
 		help: "Cities can be gifted only to a teammate or to the original owner.",
 		section: "RULES",
-		subOption: true,
 	},
 	GAMEOPTION_COMPETITIVE_EVENTS: {
 		label: "Competitive Events",
 		help: "No Events that have a significant impact on the game.",
 		section: "RULES",
-		subOption: true,
 	},
 	GAMEOPTION_COMPETITIVE_MODE: {
 		label: "Competitive Mode",
 		help: "A collection of options intended to improve multiplayer balance:",
 		section: "RULES",
-		subOption: false,
 	},
 	GAMEOPTION_CRITICAL_HIT_PREVIEW: {
 		label: "Show Pending Critical Hits",
 		help: "Indicate any units that will score a critical hit if used to attack.",
 		section: "RULES",
-		subOption: false,
 	},
 	GAMEOPTION_CUSTOM_LEADER: {
 		label: "Allow Customized Leaders",
 		help: "Allows players with the Archetype 'Pick Later' option to fully customize their initial Leader.",
 		section: "PLAYER",
-		subOption: false,
 	},
 	GAMEOPTION_DEFAULT_OPPONENT_DYNASTIES: {
 		label: "Default AI Dynasties",
 		help: "AI opponents will have the default Dynasty of their Nation instead of a random one",
 		section: "OPPONENTS",
-		subOption: false,
 	},
 	GAMEOPTION_FREE_LAW_PREREQS: {
 		label: "Free Laws Requires Techs",
 		help: "Free Laws from Events must be unlocked via Technology.",
 		section: "RULES",
-		subOption: true,
 	},
 	GAMEOPTION_IGNORE_NATION_STARTS: {
 		label: "Ignore Map Nation Starts",
 		help: "Any Nation starting locations assigned by the map can be claimed by any Nation.",
 		section: "MAP",
-		subOption: false,
 	},
 	GAMEOPTION_LOCKED_SAVE: {
 		label: "Lock Save",
 		help: "The save file is checked against a hash to prevent modification using an outside editor. The in-game editor is disabled. In Play-by-Cloud mode, game reloads are tracked.",
 		section: "RULES",
-		subOption: false,
 	},
 	GAMEOPTION_LOCK_PLAYER_OPTIONS: {
 		label: "Lock Player Options",
 		help: "Cannot change gameplay player options after the game has started.",
 		section: "RULES",
-		subOption: false,
 	},
 	GAMEOPTION_LOWER_CHARACTER_YIELDS: {
 		label: "Lower Character Yields",
 		help: "High Rating values have a less dramatic effect on a Character's resulting ability.",
 		section: "CHARACTERS",
-		subOption: true,
 	},
 	GAMEOPTION_MP_JOIN_AS_ANY_PLAYER: {
 		label: "Join as Any Player",
 		help: "Allow players to join a multiplayer game even if a slot has already been claimed.",
 		section: "RULES",
-		subOption: false,
 	},
 	GAMEOPTION_NEW_SEED_ON_RELOAD: {
 		label: "Reset Random Seed on Reload",
 		help: "It is possible to receive different random outcomes by reloading a previously saved game and taking the same actions",
 		section: "RULES",
-		subOption: false,
 	},
 	GAMEOPTION_NO_BONUS_IMPROVEMENTS: {
 		label: "No Ancient Ruins",
 		help: "Ancient Ruins that provide bonuses are absent",
 		section: "MAP",
-		subOption: false,
 	},
 	GAMEOPTION_NO_CHARACTERS: {
 		label: "No Characters",
 		help: "Characters and Families are removed from the game.",
 		section: "CHARACTERS",
-		subOption: false,
 	},
 	GAMEOPTION_NO_CITY_GIFTING: {
 		label: "No City Gifting",
 		help: "Players cannot gift Cities to other players, although they can return captured Cities to their founding players.",
 		section: "RULES",
-		subOption: false,
 	},
 	GAMEOPTION_NO_DISTANT_RAIDS: {
 		label: "No Distant Raids",
 		help: "No Tribe Raid from the edge of the map.",
 		section: "RULES",
-		subOption: true,
 	},
 	GAMEOPTION_NO_EVENTS: {
 		label: "No Events",
 		help: "No events will occur except those necessary for game progression or to activate a leader's unique ability.\n\t\t\nYou choose an education path only for the heir, and only the leader will receive marriage proposals. You may still initiate marriage for eligible descendants with missions such as Family Marriage.\n\t\t\nRecommended for players who want to speed up the game and minimize the impact of luck by removing event-driven interactions, while still preserving the family and character mechanics.",
 		section: "CHARACTERS",
-		subOption: false,
 	},
 	GAMEOPTION_NO_FOG_OF_WAR: {
 		label: "No Fog of War",
 		help: "Map starts fully revealed and stays visible.",
 		section: "MAP",
-		subOption: false,
 	},
 	GAMEOPTION_NO_ORGANIZED_TRIBES: {
 		label: "Disable Organized Tribes (Huns)",
 		help: "Do not use Tribes that start with Organized AI enabled",
 		section: "OPPONENTS",
-		subOption: false,
 	},
 	GAMEOPTION_NO_STARTING_TECHS: {
 		label: "No Starting Techs",
 		help: "No Starting Technologies but a higher base Science rate.",
 		section: "RULES",
-		subOption: false,
 	},
 	GAMEOPTION_NO_TEAM_MOVEMENT: {
 		label: "No Team Movement",
 		help: "Players cannot move their Teammates' Units.",
 		section: "RULES",
-		subOption: false,
 	},
 	GAMEOPTION_NO_UNDO: {
 		label: "No Undo",
 		help: "The Player is not allowed to undo a move after it has been made.",
 		section: "RULES",
-		subOption: false,
 	},
 	GAMEOPTION_NO_UNIT_GIFTING: {
 		label: "No Unit Gifting",
 		help: "Players cannot gift Units to other players.",
 		section: "RULES",
-		subOption: false,
 	},
 	GAMEOPTION_ONE_CITY_CHALLENGE: {
 		label: "One City Challenge",
 		help: "Human players are not allowed to control more than one City.",
 		section: "RULES",
-		subOption: false,
 	},
 	GAMEOPTION_PLAY_TO_WIN: {
 		label: "Ruthless AI",
 		help: "AI Nations try to stop you from winning. The closer you get to victory, the more aggressive their efforts to stop you will become.",
 		section: "OPPONENTS",
-		subOption: false,
 	},
 	GAMEOPTION_RANDOMIZE_FAMILIES: {
 		label: "Randomize Families",
 		help: "Randomize the class of each Family (Sage, Artisan, Champion, etc).",
 		section: "RULES",
-		subOption: false,
 	},
 	GAMEOPTION_RANDOMIZE_IMPROVEMENTS: {
 		label: "Random Improvements",
 		help: "Randomize the unique Improvements for each Nation.",
 		section: "RULES",
-		subOption: false,
 	},
 	GAMEOPTION_RANDOMIZE_TECHS: {
 		label: "Random Tech Tree",
 		help: "Randomize the prerequisites for each technology.",
 		section: "RULES",
-		subOption: false,
 	},
 	GAMEOPTION_REVEALED_MAP: {
 		label: "Revealed Map",
 		help: "Map starts with revealed terrain but the regular visibility rules apply",
 		section: "MAP",
-		subOption: false,
 	},
 	GAMEOPTION_ROLE_PLAYING: {
 		label: "Role Playing",
 		help: "No popup help when making narrative choices for events.",
 		section: "CHARACTERS",
-		subOption: false,
 	},
 	GAMEOPTION_TRIBES_ONLY: {
 		label: "Tribes Only",
 		help: "No Barbarians are on the map.",
 		section: "OPPONENTS",
-		subOption: false,
 	},
 };
 
@@ -397,7 +354,6 @@ export const OCCURRENCE_CLASSES: readonly string[] = [
 ];
 
 export interface DifficultyMode {
-	readonly zType: string;
 	/** The preset's name, e.g. "The Great". */
 	readonly label: string;
 	/** The Prosperity tier the preset sets — per-player in a save. */
@@ -414,7 +370,6 @@ export interface DifficultyMode {
 // scans, so the first match wins there too.
 export const DIFFICULTY_MODES: readonly DifficultyMode[] = [
 	{
-		zType: "DIFFICULTYMODE_NEW",
 		label: "The New",
 		difficulty: "DIFFICULTY_ABLE",
 		development: "DEVELOPMENT_NONE",
@@ -426,7 +381,6 @@ export const DIFFICULTY_MODES: readonly DifficultyMode[] = [
 		},
 	},
 	{
-		zType: "DIFFICULTYMODE_ABLE",
 		label: "The Able",
 		difficulty: "DIFFICULTY_ABLE",
 		development: "DEVELOPMENT_NONE",
@@ -438,7 +392,6 @@ export const DIFFICULTY_MODES: readonly DifficultyMode[] = [
 		},
 	},
 	{
-		zType: "DIFFICULTYMODE_JUST",
 		label: "The Just",
 		difficulty: "DIFFICULTY_GOOD",
 		development: "DEVELOPMENT_NONE",
@@ -450,7 +403,6 @@ export const DIFFICULTY_MODES: readonly DifficultyMode[] = [
 		},
 	},
 	{
-		zType: "DIFFICULTYMODE_GOOD",
 		label: "The Good",
 		difficulty: "DIFFICULTY_GOOD",
 		development: "DEVELOPMENT_FLEDGLING",
@@ -462,7 +414,6 @@ export const DIFFICULTY_MODES: readonly DifficultyMode[] = [
 		},
 	},
 	{
-		zType: "DIFFICULTYMODE_STRONG",
 		label: "The Strong",
 		difficulty: "DIFFICULTY_STRONG",
 		development: "DEVELOPMENT_FLEDGLING",
@@ -474,7 +425,6 @@ export const DIFFICULTY_MODES: readonly DifficultyMode[] = [
 		},
 	},
 	{
-		zType: "DIFFICULTYMODE_NOBLE",
 		label: "The Noble",
 		difficulty: "DIFFICULTY_NOBLE",
 		development: "DEVELOPMENT_ESTABLISHED",
@@ -486,7 +436,6 @@ export const DIFFICULTY_MODES: readonly DifficultyMode[] = [
 		},
 	},
 	{
-		zType: "DIFFICULTYMODE_GLORIOUS",
 		label: "The Glorious",
 		difficulty: "DIFFICULTY_GLORIOUS",
 		development: "DEVELOPMENT_ESTABLISHED",
@@ -498,7 +447,6 @@ export const DIFFICULTY_MODES: readonly DifficultyMode[] = [
 		},
 	},
 	{
-		zType: "DIFFICULTYMODE_MAGNIFICENT",
 		label: "The Magnificent",
 		difficulty: "DIFFICULTY_MAGNIFICENT",
 		development: "DEVELOPMENT_ADVANCED",
@@ -510,7 +458,6 @@ export const DIFFICULTY_MODES: readonly DifficultyMode[] = [
 		},
 	},
 	{
-		zType: "DIFFICULTYMODE_GREAT",
 		label: "The Great",
 		difficulty: "DIFFICULTY_GREAT",
 		development: "DEVELOPMENT_ADVANCED",
@@ -524,9 +471,10 @@ export const DIFFICULTY_MODES: readonly DifficultyMode[] = [
 ];
 
 // The victory types a game can switch on or off (<bToggle>), in info-list
-// order — the ones the game draws an Enabled/Disabled line for
-// (HelpText.Game.cs:3731). Conquest is absent because it is always on, so
-// it has no line of its own.
+// order — the ones the game draws a line for when they are ON
+// (HelpText.Game.cs:3731), and the ones the Settings tab marks Enabled
+// or Disabled. Conquest is absent because it is always on, so it has no
+// line of its own.
 export const VICTORY_TOGGLES: readonly string[] = [
 	"VICTORY_POINTS",
 	"VICTORY_DOUBLE",

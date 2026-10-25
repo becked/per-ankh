@@ -498,13 +498,15 @@ interface UnitPlayerLike {
  * tests — and the advantage gate reads the original flag, not the current one.
  *
  * `advantage` is `undefined` on a blob whose setup bag is missing — one from
- * before PARSER_VERSION 2.28.0, where that half is simply unknown — and null
- * on a save that left the setting at NONE; `combatGaps` is what reports the
- * first case.
+ * before PARSER_VERSION 2.28.0, where that half is simply unknown — and
+ * `combatGaps` is what reports that case. A save that set no handicap carries
+ * the real `ADVANTAGE_NONE` zType, which pays no effect player; the bag holds
+ * no empty value at all, because `parseSetupParameters` keeps only the
+ * attributes it saw with a value.
  */
 export function unitEffectPlayers(
 	player: UnitPlayerLike | undefined,
-	advantage: string | null | undefined,
+	advantage: string | undefined,
 	leaderTraits: readonly string[],
 ): string[] {
 	const out: string[] = [];

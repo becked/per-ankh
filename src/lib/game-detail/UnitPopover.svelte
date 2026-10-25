@@ -227,8 +227,9 @@
 
 	// The game-wide AI handicap, from the setup bag that replaced the
 	// `advantage` field in PARSER_VERSION 2.28.0. `undefined` on a blob below
-	// it — which is what `advantageKnown` below reports — and null on a bag
-	// from a save that left the setting at NONE.
+	// it — which is what `advantageKnown` below reports. A save that set no
+	// handicap says so with the ADVANTAGE_NONE zType, so the bag answers that
+	// case with a value rather than with an absence.
 	const advantage = $derived(game.match_metadata.setup_parameters?.Advantage);
 	const advantageKnown = $derived(game.match_metadata.setup_parameters != null);
 

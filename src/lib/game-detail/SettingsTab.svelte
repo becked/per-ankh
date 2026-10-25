@@ -53,21 +53,21 @@
 	const scenario = $derived(gameDetails.setup_parameters?.Scenario ?? null);
 
 	// The setup side of each player's Nation / Archetype / Dynasty, indexed by
-	// player xml id — NOT by position in `players`, which is name-sorted.
-	// `undefined` on a blob below PARSER_VERSION 2.28.0, which is what hides the
-	// parentheticals until the game is reparsed.
+	// player xml id — the lists are positional, NOT by position in `players`,
+	// which is name-sorted. The id is `playerId`, the one `resolvePlayers`
+	// resolved and the one `resolvedArchetypes` below and the sibling tabs key
+	// on, rather than the raw `player_id` the blob may not carry: the two agree
+	// wherever the blob has an id, a roster-recovered id is the same xml id
+	// (`player_roster.player_index`), and a row that resolves to neither gets a
+	// negative synthetic, which no positional list can answer. `undefined` on a
+	// blob below PARSER_VERSION 2.28.0, which is what hides the parentheticals
+	// until the game is reparsed.
 	const setupNation = (player: DetailPlayer): string | null =>
-		player.player_id == null
-			? null
-			: (gameDetails.setup_nations?.[player.player_id] ?? null);
+		gameDetails.setup_nations?.[player.playerId] ?? null;
 	const setupArchetype = (player: DetailPlayer): string | null =>
-		player.player_id == null
-			? null
-			: (gameDetails.setup_archetypes?.[player.player_id] ?? null);
+		gameDetails.setup_archetypes?.[player.playerId] ?? null;
 	const setupDynasty = (player: DetailPlayer): string | null =>
-		player.player_id == null
-			? null
-			: (gameDetails.setup_dynasties?.[player.player_id] ?? null);
+		gameDetails.setup_dynasties?.[player.playerId] ?? null;
 
 	// The game rolled something different from what the player picked. `NONE` is
 	// the save's "not set" sentinel, not a choice, so it is no divergence; an

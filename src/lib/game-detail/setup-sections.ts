@@ -255,7 +255,6 @@ export function gameSetupSections(details: GameDetails): SetupSectionRows[] {
 	// `IsGameOption` decides this in the game; a blob with no game_options at
 	// all cannot say, and an unknown gate is not a reason to hide five rows.
 	const noCharacters = details.game_options?.[NO_CHARACTERS_OPTION] === true;
-	const enabledVictories = new Set(details.victory_conditions?.split("+"));
 	// The game's `isPointsVictory` — an enabled victory type worth victory
 	// points, which is the same question the VP charts gate on, so both read
 	// the one predicate.
@@ -300,17 +299,29 @@ export function gameSetupSections(details: GameDetails): SetupSectionRows[] {
 		});
 	}
 
-	// Victory conditions: every toggleable type with the word the game uses for
-	// it. Conquest has no <bToggle> and so no row, as in the game. Ahead of the
-	// parameter loop because Points to Win is the threshold those types are
-	// measured against, and reads under them.
-	for (const victory of VICTORY_TOGGLES) {
-		add("VICTORY", {
-			kind: "parameter",
-			key: victory,
-			label: formatEnum(victory, "VICTORY_"),
-			value: enabledVictories.has(victory) ? "Enabled" : "Disabled",
-		});
+	// Victory conditions: every toggleable type with the word the game uses
+	// for it, each marked Enabled or Disabled. The game's own hover prints a
+	// line only for the types that are ON (HelpText.Game.cs:3731); a panel has
+	// room to name the ones the game could not be won by. Conquest has no
+	// <bToggle> and so no row, as in the game. Ahead of the parameter loop
+	// because Points to Win is the threshold those types are measured against,
+	// and reads under them.
+	//
+	// A null `victory_conditions` is a blob that does not carry them. It is not
+	// a game with none enabled: the game writes `<VictoryEnabled>` with at
+	// least VICTORY_CONQUEST in it, present in all 16 saves in
+	// `test-data/saves/`. So the section is dropped, rather than calling five
+	// types Disabled on a game whose rules the blob cannot answer for.
+	if (details.victory_conditions != null) {
+		const enabledVictories = new Set(details.victory_conditions.split("+"));
+		for (const victory of VICTORY_TOGGLES) {
+			add("VICTORY", {
+				kind: "parameter",
+				key: victory,
+				label: formatEnum(victory, "VICTORY_"),
+				value: enabledVictories.has(victory) ? "Enabled" : "Disabled",
+			});
+		}
 	}
 
 	for (const p of SETUP_PARAMETERS) {
