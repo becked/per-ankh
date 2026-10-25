@@ -42,15 +42,19 @@
 	// (StatsView, GamesTable, ScopeRow, the tournament and profile pages), and
 	// reloading the document on every filter change would discard focus and
 	// scroll — the thing those options exist to preserve. The exemption does
-	// let a same-route render reach the gap: a game's tabs import on demand
-	// (game-detail/tab-components.svelte.ts), so staying on a route can import
-	// a node for the first time and ask for a chunk that is gone.
+	// let a same-route render reach the gap: a game's tabs
+	// (game-detail/tab-components.svelte.ts) and the charting library
+	// (echarts-deferred.svelte.ts) import on demand, so staying on a route can
+	// import a module for the first time and ask for a chunk that is gone.
 	//
-	// Opening a tab does not reach this guard, because it is not a navigation.
-	// The analyst view syncs the hash with the native history.replaceState
-	// (GameDetailView) and the map view's lightbox only sets state, so neither
-	// fires beforeNavigate. GameTab covers that path itself: a tab whose chunk
-	// never arrives renders a failure state offering a reload.
+	// Neither of those paths reaches this guard. Opening a tab is not a
+	// navigation at all: the analyst view syncs the hash with the native
+	// history.replaceState (GameDetailView) and the map view's lightbox only
+	// sets state, so neither fires beforeNavigate. A chart's library is asked
+	// for when a Chart mounts, which a same-route `goto` can do on a page
+	// whose first render had no chart on it. Both cover themselves: a chunk
+	// that never arrives renders a failure state offering a reload
+	// (ui/ChunkFallback.svelte).
 	beforeNavigate((nav) => {
 		if (!updated.current || nav.willUnload || !nav.to) return;
 		if (nav.to.route.id === nav.from?.route.id) return;

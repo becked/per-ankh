@@ -6,6 +6,7 @@
 	// table sorts) belongs to the host, which provides it via context (see
 	// GameTabState), so it outlives the tab.
 	import type { cloudApi } from "$lib/api-cloud";
+	import ChunkFallback from "$lib/ui/ChunkFallback.svelte";
 	import {
 		hasVictoryPoints,
 		leadPlayerId,
@@ -37,19 +38,19 @@
 	// is undefined until the one being rendered has loaded — the `&&` in every
 	// branch below. Reading them one tab at a time, rather than through a single
 	// shared component type, is what keeps each branch's props type-checked.
-	const EventsTab = $derived(LAZY_TABS.events.component);
-	const LeadersTab = $derived(LAZY_TABS.leaders.component);
-	const LawsTab = $derived(LAZY_TABS.laws.component);
-	const TechsTab = $derived(LAZY_TABS.techs.component);
-	const OrdersTab = $derived(LAZY_TABS.orders.component);
-	const YieldsTab = $derived(LAZY_TABS.economics.component);
-	const MilitaryTab = $derived(LAZY_TABS.military.component);
-	const CitiesTab = $derived(LAZY_TABS.cities.component);
-	const EconomyTab = $derived(LAZY_TABS.economy.component);
-	const WondersTab = $derived(LAZY_TABS.wonders.component);
-	const FamiliesTab = $derived(LAZY_TABS.families.component);
-	const SpecialistsTab = $derived(LAZY_TABS.specialists.component);
-	const SettingsTab = $derived(LAZY_TABS.settings.component);
+	const EventsTab = $derived(LAZY_TABS.events.value);
+	const LeadersTab = $derived(LAZY_TABS.leaders.value);
+	const LawsTab = $derived(LAZY_TABS.laws.value);
+	const TechsTab = $derived(LAZY_TABS.techs.value);
+	const OrdersTab = $derived(LAZY_TABS.orders.value);
+	const YieldsTab = $derived(LAZY_TABS.economics.value);
+	const MilitaryTab = $derived(LAZY_TABS.military.value);
+	const CitiesTab = $derived(LAZY_TABS.cities.value);
+	const EconomyTab = $derived(LAZY_TABS.economy.value);
+	const WondersTab = $derived(LAZY_TABS.wonders.value);
+	const FamiliesTab = $derived(LAZY_TABS.families.value);
+	const SpecialistsTab = $derived(LAZY_TABS.specialists.value);
+	const SettingsTab = $derived(LAZY_TABS.settings.value);
 
 	// Fetch the open tab's chunk. In an effect rather than at render so SSR,
 	// which only ever renders Overview, starts no download of its own.
@@ -291,19 +292,9 @@
 	     view's pane is already floored at 400px (GameDetailView) and the map
 	     view's lightbox fills its dialog, so nothing here moves what follows. -->
 	<div class="flex min-h-[200px] items-center justify-center">
-		{#if slot?.failed}
-			<div class="flex flex-col items-center gap-3">
-				<p class="text-sm text-gray-400">This tab didn't load.</p>
-				<button
-					type="button"
-					onclick={() => location.reload()}
-					class="rounded border border-brown px-3 py-1.5 text-xs font-semibold text-tan transition-colors hover:bg-brown"
-				>
-					Reload the page
-				</button>
-			</div>
-		{:else}
-			<p class="text-sm text-gray-400">Loading…</p>
-		{/if}
+		<ChunkFallback
+			failed={slot?.failed ?? false}
+			message="This tab didn't load."
+		/>
 	</div>
 {/if}
