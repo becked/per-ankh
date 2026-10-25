@@ -58,11 +58,15 @@ export function nationName(nation: string | null | undefined): string {
  * How a human seat is labelled in a player picker: the in-game leader name,
  * falling back to the nation for a save that recorded none.
  *
- * Shared by the picker that asks the question at upload (BulkUploadModal) and
- * the one that corrects the answer afterwards (GameActions) — they label the
- * same seats of the same save, so they can't drift. Takes the roster shape
- * structurally (`PlayerRosterEntry`, and the picker's `PlayerChoice` superset
- * of it) rather than importing it, since this module is the display layer.
+ * Shared by the picker that asks the question at upload (BulkUploadModal), the
+ * one that corrects the answer afterwards (GameActions), and the profile Games
+ * table's opponent cell — they label the same seats of the same save, so they
+ * can't drift. The table's AI seats land on the nation branch by the same rule
+ * rather than a separate one: 121 of the 122 AI seats across the 116 saves in
+ * test-data/saves/ carry no name, and all 122 carry a nation. Takes the roster
+ * shape structurally (`PlayerRosterEntry`, the picker's `PlayerChoice` superset
+ * of it, and the list row's `GameListPlayer`) rather than importing it, since
+ * this module is the display layer.
  *
  * No further fallback: `nationName` already resolves a null nation to
  * "Unknown", so a seat with neither name nor nation gets that rather than a
@@ -764,6 +768,37 @@ export function stripMarkup(text: string | null | undefined): string {
 	);
 }
 
+/**
+ * The name a save actually carries, or null when it was never named.
+ *
+ * Two sources, in order: the owner's rename always wins — even when it happens
+ * to match the auto-generated "GameN" pattern, because the user chose it — and
+ * otherwise the game's own name unless that IS the auto-generated pattern,
+ * which names nothing a player would recognize.
+ *
+ * Split out of formatGameTitle (its first two branches) for the surfaces that
+ * want the name only, and nothing derived in its place: the profile Games
+ * table shows it as subtext under the matchup, where formatGameTitle's
+ * "{Nation} - {N} turns" fallback would restate the row's own nation and turn
+ * columns.
+ */
+export function savedGameName(game: {
+	display_name?: string | null;
+	game_name: string | null;
+}): string | null {
+	if (game.display_name != null && game.display_name.trim() !== "") {
+		return game.display_name;
+	}
+	if (
+		game.game_name != null &&
+		game.game_name !== "" &&
+		!game.game_name.match(/^Game\d+$/)
+	) {
+		return game.game_name;
+	}
+	return null;
+}
+
 export function formatGameTitle(game: {
 	display_name?: string | null;
 	game_name: string | null;
@@ -771,21 +806,8 @@ export function formatGameTitle(game: {
 	total_turns: number | null;
 	match_id: number;
 }): string {
-	// Owner-set rename always wins, even if it happens to match the
-	// auto-generated "GameN" pattern — the user explicitly chose this.
-	if (game.display_name != null && game.display_name.trim() !== "") {
-		return game.display_name;
-	}
-
-	// Check if game_name is a real name (not auto-generated "Game{number}")
-	const isRealName =
-		game.game_name != null &&
-		game.game_name !== "" &&
-		!game.game_name.match(/^Game\d+$/);
-
-	if (isRealName) {
-		return game.game_name!;
-	}
+	const named = savedGameName(game);
+	if (named !== null) return named;
 
 	// Fall back to the nation's in-game name plus the turn count
 	const formattedNation = game.save_owner_nation
