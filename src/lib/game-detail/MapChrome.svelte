@@ -293,7 +293,8 @@
 					}}
 					options={playerOptions}
 					ariaLabel="Player"
-					class="w-full px-1.5 py-0.5 text-[11px]"
+					class="w-full"
+					compact
 					icon={nationCrest}
 					matchTriggerWidth
 				/>
