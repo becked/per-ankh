@@ -42,6 +42,7 @@ import { sessionFromRequest } from "./session";
 import {
 	buildAdminGameFilterWhere,
 	buildUserScopeWhere,
+	loadUploaderSeat,
 	noChallengeRunsSql,
 	parseAdminGameFilter,
 	parseNationParam,
@@ -2059,19 +2060,10 @@ export async function handleGameUpload(
 		// `existing.user_nation`, which is derived from it:
 		// `deriveUploaderColumns` takes the nation off the claimed roster entry
 		// (`uploader?.nation ?? null`) and `Nation` is written only
-		// `if (hasNation())` (Player.cs:27529), so a claimed seat with no nation
+		// `if (hasNation())` (Player.cs:2453), so a claimed seat with no nation
 		// stores NULL there beside a live `is_uploader` row — a claimed game the
-		// guard below would read as unclaimed. Spelled out rather than through
-		// uploaderPlayerIndexSql for the same reason handleAdminReindex is: it
-		// binds one game_id instead of correlating against a games alias.
-		const claimedSeat =
-			(
-				await env.SHARE_DB.prepare(
-					"SELECT player_index FROM player_summaries WHERE game_id = ? AND is_uploader = 1",
-				)
-					.bind(gameId)
-					.first<{ player_index: number }>()
-			)?.player_index ?? null;
+		// guard below would read as unclaimed.
+		const claimedSeat = await loadUploaderSeat(env.SHARE_DB, gameId);
 
 		// A re-import that posts no seat on a game that records one is not an
 		// observer upload — it is the claim going missing. Every reparse
@@ -4060,12 +4052,7 @@ export async function handleAdminReindex(
 	// Recover the uploader's player_index from the existing summaries so the
 	// rebuilt is_uploader flags match the original upload. Observer uploads
 	// have no is_uploader row → uploaderIndex stays null.
-	const uploaderRow = await env.SHARE_DB.prepare(
-		"SELECT player_index FROM player_summaries WHERE game_id = ? AND is_uploader = 1",
-	)
-		.bind(gameId)
-		.first<{ player_index: number }>();
-	const uploaderIndex = uploaderRow?.player_index ?? null;
+	const uploaderIndex = await loadUploaderSeat(env.SHARE_DB, gameId);
 
 	// Read + decompress the parsed blob. Uncached, like the owner branch of the
 	// detail endpoint — a rebuild has to read the bytes R2 holds now.

@@ -307,7 +307,7 @@ describe("PATCH /v1/games/:id uploader_player_index", () => {
 
 // The one rule both writers of user_online_ids answer to: an empty `OnlineID`
 // links nothing. `Player.writeGameXML` writes the attribute unconditionally
-// (Player.cs:27523), so a seat with no id carries `""` rather than omitting
+// (Player.cs:2446), so a seat with no id carries `""` rather than omitting
 // it, and UNAMBIGUOUS_ONLINE_ID_OWNERS_SQL (cloud/src/online-ids.ts) resolves
 // an id exactly one account linked to that account — so one `('')` row would
 // credit its owner with every public game holding an empty-id human seat.

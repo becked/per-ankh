@@ -55,7 +55,7 @@ export async function getUserOnlineIds(
 // existing rows; sets first_seen_at on new ones via the column default.
 //
 // An empty id is dropped rather than linked. `Player.writeGameXML` writes
-// `OnlineID` unconditionally (Player.cs:27523), so a seat that has none
+// `OnlineID` unconditionally (Player.cs:2446), so a seat that has none
 // carries `""` instead of omitting the attribute — 406 of the 2,541
 // player_summaries.online_id values in the 2026-10-23 production snapshot are
 // `''` and none are NULL, 4 of them on human seats. `""` names nobody, and

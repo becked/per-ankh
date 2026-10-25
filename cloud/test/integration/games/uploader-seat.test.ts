@@ -197,7 +197,7 @@ describe("the claim a re-import has to re-send", () => {
 
 		// The pair the guard has to tell apart: a live claim whose derived
 		// nation is NULL. `Nation` is written only `if (hasNation())`
-		// (Player.cs:27529), so a guard reading `games.user_nation` sees an
+		// (Player.cs:2453), so a guard reading `games.user_nation` sees an
 		// unclaimed game here and lets the re-import drop the claim.
 		expect(
 			await env.SHARE_DB.prepare(

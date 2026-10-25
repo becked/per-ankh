@@ -197,13 +197,13 @@ export interface UploadFixtureOpts {
 	readonly saveDate?: string;
 	// Human seats the save records with an empty `OnlineID`.
 	// `Player.writeGameXML` writes the attribute unconditionally
-	// (Player.cs:27523), so a seat that has no id carries `""` rather than
+	// (Player.cs:2446), so a seat that has no id carries `""` rather than
 	// omitting it — a LAN or hotseat seat, 4 of them on human seats in
 	// production. The id is what links a seat to an account, so an empty one
 	// must link nothing (captureOnlineIds, cloud/src/online-ids.ts).
 	readonly emptyOnlineIdSeats?: readonly number[];
 	// Human seats the save records with no `Nation` attribute at all — the game
-	// writes it only `if (hasNation())` (Player.cs:27529). A claimed one stores
+	// writes it only `if (hasNation())` (Player.cs:2453). A claimed one stores
 	// a NULL `games.user_nation` beside a live `is_uploader` row, which is the
 	// pair the re-import claim guard has to tell apart.
 	readonly nationlessSeats?: readonly number[];
