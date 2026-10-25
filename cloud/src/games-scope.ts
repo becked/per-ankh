@@ -31,11 +31,13 @@
 // (handlePublicRecentGames), the played-games board (stats/handlers.ts) and the
 // profile header (users.ts), none of which narrows by game type otherwise.
 //
-// uploaderPlayerIndexSql, at the foot of the file, is here for that same
-// reason, and is a projection rather than a predicate: five readers across two
-// trees, and `scripts/` can import this module where it cannot import
-// games.ts.
+// The uploader's seat, at the foot of the file, is here for that same reason,
+// and is a projection rather than a predicate: five readers across two trees
+// take it as correlated SQL (uploaderPlayerIndexSql) and two more read it for
+// one game_id (loadUploaderSeat), and `scripts/` can import this module where
+// it cannot import games.ts.
 
+import type { QueryableD1 } from "./d1";
 import type { GlobalPeriod, GlobalSlice, UserScope } from "./stats/types";
 
 export interface UserScopeOpts {
@@ -435,14 +437,35 @@ export function buildAdminGameFilterWhere(filter: AdminGameFilter): {
  * `scripts/ux-review/discover.ts` imports `screenshots/scope.ts`. A
  * divergence between any two of them is a reparse that changes whose game it
  * is. It lives here rather than in games.ts because a `tsx` script can import
- * this module — its only import is a type — where importing games.ts would
- * drag in the valibot schemas, `./session` and the generated tables.
+ * this module — its imports are types — where importing games.ts would drag
+ * in the valibot schemas, `./session` and the generated tables.
  *
- * One reader still spells the predicate out: `handleAdminReindex` binds a
- * single `game_id` as a parameter rather than correlating against a games
- * alias, so it asks the question in a different shape.
+ * Two more readers bind a single `game_id` instead of correlating against a
+ * games alias, which is the same question in a different shape, so it is
+ * `loadUploaderSeat` below rather than a second spelling in each of them.
  */
 export function uploaderPlayerIndexSql(gamesAlias: string): string {
 	return `(SELECT ps.player_index FROM player_summaries ps
 	   WHERE ps.game_id = ${gamesAlias}.game_id AND ps.is_uploader = 1)`;
+}
+
+/**
+ * The same seat for one game_id, or null when the upload was an observer.
+ *
+ * Two readers ask it in this shape: the re-import claim guard, which has a
+ * game_id and no games alias to correlate against (`handleGameUpload`), and
+ * the admin reindex, which rebuilds the `is_uploader` flags from the seat the
+ * original upload recorded (`handleAdminReindex`).
+ */
+export async function loadUploaderSeat(
+	db: QueryableD1,
+	gameId: string,
+): Promise<number | null> {
+	const row = await db
+		.prepare(
+			"SELECT player_index FROM player_summaries WHERE game_id = ? AND is_uploader = 1",
+		)
+		.bind(gameId)
+		.first<{ player_index: number }>();
+	return row?.player_index ?? null;
 }

@@ -53,18 +53,32 @@ export async function getUserOnlineIds(
 
 // Upsert one or more (user_id, online_id) pairs. Bumps last_seen_at on
 // existing rows; sets first_seen_at on new ones via the column default.
+//
+// An empty id is dropped rather than linked. `Player.writeGameXML` writes
+// `OnlineID` unconditionally (Player.cs:2446), so a seat that has none
+// carries `""` instead of omitting the attribute — 406 of the 2,541
+// player_summaries.online_id values in the 2026-10-23 production snapshot are
+// `''` and none are NULL, 4 of them on human seats. `""` names nobody, and
+// UNAMBIGUOUS_ONLINE_ID_OWNERS_SQL above resolves an id linked by exactly one
+// account to that account, so a single `('')` row would credit its owner with
+// every public game holding an empty-id human seat.
+//
+// Filtered here, not at the call sites: this is the field's one write path,
+// and its two callers disagreed before — the upload path tested the id and
+// handleGamePatch's correction did not.
 export async function captureOnlineIds(
 	env: Pick<OnlineIdsEnv, "SHARE_DB">,
 	userId: string,
 	onlineIds: string[],
 ): Promise<void> {
-	if (onlineIds.length === 0) return;
+	const ids = onlineIds.filter((id) => id !== "");
+	if (ids.length === 0) return;
 	const stmt = env.SHARE_DB.prepare(
 		`INSERT INTO user_online_ids (user_id, online_id)
 		 VALUES (?, ?)
 		 ON CONFLICT(user_id, online_id) DO UPDATE SET last_seen_at = datetime('now')`,
 	);
-	const batch = onlineIds.map((id) => stmt.bind(userId, id));
+	const batch = ids.map((id) => stmt.bind(userId, id));
 	await env.SHARE_DB.batch(batch);
 }
 

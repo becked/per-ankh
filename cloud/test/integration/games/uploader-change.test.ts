@@ -304,3 +304,68 @@ describe("PATCH /v1/games/:id uploader_player_index", () => {
 		expect(await loadUploaderSeat(gameId)).toBe(0);
 	});
 });
+
+// The one rule both writers of user_online_ids answer to: an empty `OnlineID`
+// links nothing. `Player.writeGameXML` writes the attribute unconditionally
+// (Player.cs:2446), so a seat with no id carries `""` rather than omitting
+// it, and UNAMBIGUOUS_ONLINE_ID_OWNERS_SQL (cloud/src/online-ids.ts) resolves
+// an id exactly one account linked to that account — so one `('')` row would
+// credit its owner with every public game holding an empty-id human seat.
+// Both callers of captureOnlineIds are asserted, because the guard is in the
+// callee: a third caller that reproduced the old inline test would pass this
+// file while re-breaking the rule.
+describe("an empty OnlineID links nothing", () => {
+	it("captures nothing when the upload claims an empty-id seat", async () => {
+		const owner = await makeUser({ discordUsername: "heidi-uploader" });
+		const { game_id } = await expectOk<{ game_id: string }>(
+			await postMultipart({
+				path: "/v1/games",
+				form: await buildUploadFormData({
+					winnerIndex: 0,
+					uploaderIndex: 1,
+					emptyOnlineIdSeats: [1],
+				}),
+				as: owner,
+			}),
+		);
+
+		// The claim lands — the seat is a legitimate pick, it just names no
+		// account for the leaderboard to credit.
+		expect(await loadUploaderSeat(game_id)).toBe(1);
+		expect(await loadOnlineIds(owner.userId)).toEqual([]);
+	});
+
+	it("captures nothing when a correction moves onto an empty-id seat", async () => {
+		const owner = await makeUser({ discordUsername: "ivan-uploader" });
+		const { game_id } = await expectOk<{ game_id: string }>(
+			await postMultipart({
+				path: "/v1/games",
+				form: await buildUploadFormData({
+					winnerIndex: 0,
+					uploaderIndex: 0,
+					emptyOnlineIdSeats: [1],
+				}),
+				as: owner,
+			}),
+		);
+		expect(await loadOnlineIds(owner.userId)).toEqual([
+			"steam:000000000000001",
+		]);
+
+		await expectStatus(
+			await request.patch({
+				path: `/v1/games/${game_id}`,
+				as: owner,
+				body: { uploader_player_index: 1 },
+			}),
+			200,
+		);
+
+		// The correction moved, and the id set is still what the first pick
+		// learned rather than that plus `''`.
+		expect(await loadUploaderSeat(game_id)).toBe(1);
+		expect(await loadOnlineIds(owner.userId)).toEqual([
+			"steam:000000000000001",
+		]);
+	});
+});

@@ -42,6 +42,7 @@ import { sessionFromRequest } from "./session";
 import {
 	buildAdminGameFilterWhere,
 	buildUserScopeWhere,
+	loadUploaderSeat,
 	noChallengeRunsSql,
 	parseAdminGameFilter,
 	parseNationParam,
@@ -2055,6 +2056,15 @@ export async function handleGameUpload(
 		existingSubmission = await loadSubmissionForGame(env.SHARE_DB, gameId);
 		existingScreenshots = await loadScreenshotsForGame(env.SHARE_DB, gameId);
 
+		// The claim itself, read back from the flag that records it. Not
+		// `existing.user_nation`, which is derived from it:
+		// `deriveUploaderColumns` takes the nation off the claimed roster entry
+		// (`uploader?.nation ?? null`) and `Nation` is written only
+		// `if (hasNation())` (Player.cs:2453), so a claimed seat with no nation
+		// stores NULL there beside a live `is_uploader` row — a claimed game the
+		// guard below would read as unclaimed.
+		const claimedSeat = await loadUploaderSeat(env.SHARE_DB, gameId);
+
 		// A re-import that posts no seat on a game that records one is not an
 		// observer upload — it is the claim going missing. Every reparse
 		// surface reads the stored seat back out of `is_uploader` and posts it
@@ -2072,7 +2082,7 @@ export async function handleGameUpload(
 		// three from the stored blob without a reparse. The tournament lock
 		// below is the narrower case of the same rule — it refuses a seat
 		// *changed* to a different nation, which this doesn't speak to.
-		if (existing.user_nation !== null && uploaderIndex === null) {
+		if (claimedSeat !== null && uploaderIndex === null) {
 			return errorResponse(
 				"This game records which player the uploader was. A reparse re-sends that seat; to upload it as an observer, change the player on the game page first.",
 				409,
@@ -2305,9 +2315,11 @@ export async function handleGameUpload(
 
 	// Auto-link the picked human's OnlineID. Observer uploads (uploaderIndex
 	// null) capture nothing — they shouldn't pollute the user's known-id set.
+	// A seat carrying an empty id is captureOnlineIds' own guard, so the test
+	// here is just the roster column's `string | null` narrowing.
 	if (uploaderIndex !== null) {
 		const pickedOnlineId = humansByIndex.get(uploaderIndex)?.online_id;
-		if (typeof pickedOnlineId === "string" && pickedOnlineId !== "") {
+		if (typeof pickedOnlineId === "string") {
 			try {
 				await captureOnlineIds(env, userId, [pickedOnlineId]);
 			} catch (e) {
@@ -4040,12 +4052,7 @@ export async function handleAdminReindex(
 	// Recover the uploader's player_index from the existing summaries so the
 	// rebuilt is_uploader flags match the original upload. Observer uploads
 	// have no is_uploader row → uploaderIndex stays null.
-	const uploaderRow = await env.SHARE_DB.prepare(
-		"SELECT player_index FROM player_summaries WHERE game_id = ? AND is_uploader = 1",
-	)
-		.bind(gameId)
-		.first<{ player_index: number }>();
-	const uploaderIndex = uploaderRow?.player_index ?? null;
+	const uploaderIndex = await loadUploaderSeat(env.SHARE_DB, gameId);
 
 	// Read + decompress the parsed blob. Uncached, like the owner branch of the
 	// detail endpoint — a rebuild has to read the bytes R2 holds now.
