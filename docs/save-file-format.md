@@ -1112,19 +1112,22 @@ These three siblings each carry per-player children in the `<P.X>` form:
 Join across all three by `P.X` key to assemble one enemy-agent record per
 hostile player.
 
-#### `<TeamCulture>` and `<TeamHappinessLevel>` — per-team state
+#### `<TeamCulture>`, `<TeamCultureStep>` and `<TeamHappinessLevel>` — per-team state
 
-Both use the `T.X` keyed form (team-level, not player-level):
+All three use the `T.X` keyed form (team-level, not player-level):
 
 ```xml
 <TeamCulture><T.0>CULTURE_LEGENDARY</T.0></TeamCulture>
+<TeamCultureStep><T.0>2</T.0></TeamCultureStep>
 <TeamHappinessLevel><T.0>-8</T.0></TeamHappinessLevel>
 ```
 
 Older saves (2022) expose `<TeamDiscontentLevel>` instead of
 `<TeamHappinessLevel>` — fall back to it when the newer name is missing.
 
-The `T.X` key here is a **team index**, not a turn, and neither element has a
+`<TeamCultureStep>` is how much a city has grown **past** the top tier: `City.growCulture` (City.cs:6861) increments it once `getNextCulture` has nothing left to promote to, and each step is a victory point the tier itself no longer pays (`Player.countCultureStepVPs`, Player.cs:18556). It is written only for a non-zero value (City.cs:1355), so an absent team is a city that can still promote. 60 of 2769 city rows across `test-data/saves/` carry one, in 21 of the 116 saves, every one of them 1 or 2.
+
+The `T.X` key here is a **team index**, not a turn, and none of the three has a
 history form — see [`T{n}` is not always a turn](#tn-is-not-always-a-turn--it-is-sometimes-a-team).
 
 #### `<Religion>` — religions present in the city

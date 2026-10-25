@@ -363,6 +363,19 @@ export const MAX_DISABLED_IMPROVEMENTS = 1_000;
 //         the corpus). 16 of 16 corpus saves carry the elements under the
 //         names the game writes and 0 under the names we read, so the Settings
 //         tab's Options row has never rendered for anyone.
+// 2.29.0 — city_statistics.cities[].culture_step, the `<TeamCultureStep>` the
+//         save has always written (City.cs:1355) and nothing read. It is the
+//         third term of `Player.countVP` (Player.cs:19230): a city past the
+//         top culture tier keeps growing, and each growth past it is a
+//         victory point the tier itself no longer pays
+//         (`City.growCulture`, City.cs:6861 → `Player.countCultureStepVPs`,
+//         Player.cs:18556). Read from the same team slot as culture_level.
+//         Across test-data/saves: 60 of 2769 city rows carry a non-zero step,
+//         in 21 of the 116 saves, every one of them 1 or 2; 32 of the 314
+//         seats holding a recorded point own one, and on 17 of those the step
+//         is what makes the recomputed total match the game's own number.
+//         Purely additive — a blob below 2.29.0 reads 0 and its recomputed
+//         total comes out short for exactly those seats.
 export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.0.0",
 	"2.1.0",
@@ -399,13 +412,14 @@ export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.27.0",
 	"2.27.1",
 	"2.28.0",
+	"2.29.0",
 ]);
 
 // The latest accepted version. Echoed back on stats responses and
 // embedded in stats cache keys so a parser bump (after the matching
 // extraction code lands) naturally orphans every old entry. Bump in
 // lockstep with the `KNOWN_PARSER_VERSIONS` addition above.
-export const CURRENT_PARSER_VERSION = "2.28.0";
+export const CURRENT_PARSER_VERSION = "2.29.0";
 
 // ----- Reusable atoms -----
 
