@@ -6,6 +6,11 @@
  * including the landing page. This module registers only the pieces we use and
  * is the one place that imports ECharts for its runtime.
  *
+ * Nothing imports it statically: it arrives as its own chunk when a chart
+ * mounts, through the slot in `echarts-deferred.svelte.ts` that `Chart.svelte`
+ * reads. Importing a value from here anywhere else puts the library back in
+ * that importer's route chunk — `import type` is what the other consumers use.
+ *
  * `ChartOption` is composed from exactly the registered set. Build options
  * against it, never `EChartsOption` from the `echarts` barrel: the barrel type
  * describes every series ECharts ships, so it accepts what this build can't
@@ -19,7 +24,7 @@
  *
  * Adding a chart type means adding it in both lists below, together.
  */
-import { use } from "echarts/core";
+import { registerTheme, use } from "echarts/core";
 import { BarChart, CustomChart, LineChart, PieChart } from "echarts/charts";
 import {
 	AxisPointerComponent,
@@ -68,7 +73,23 @@ use([
 	CanvasRenderer,
 ]);
 
-export { init, registerTheme } from "echarts/core";
+// ECharts' default axis-label color is a grey that's hard to read on our dark
+// background, so default every axis's labels to white. The rest of the styling
+// comes from CHART_THEME spread into each option.
+//
+// Registered here, beside the `use` above, rather than in Chart.svelte: the
+// theme has to be registered before the first `init`, and the two calls are on
+// opposite sides of the deferred-chunk boundary if Chart.svelte owns this one
+// — a chart would paint unthemed on the first mount of a page.
+const AXIS_LABEL = { axisLabel: { color: "#FFFFFF" } };
+registerTheme("perankh", {
+	categoryAxis: AXIS_LABEL,
+	valueAxis: AXIS_LABEL,
+	logAxis: AXIS_LABEL,
+	timeAxis: AXIS_LABEL,
+});
+
+export { init } from "echarts/core";
 export type { ECharts, ECElementEvent } from "echarts/core";
 export type { LineSeriesOption } from "echarts/charts";
 
