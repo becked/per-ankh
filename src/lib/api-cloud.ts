@@ -220,6 +220,21 @@ export interface UserMe {
 	screenshot_terms_accepted_at: string | null;
 }
 
+// One seat of a save's roster on a games-list row. Present only when the
+// caller asks for it (`listGames({ players: true })`) — the Games tab's "vs"
+// cell is the one surface that names who a game was against.
+export interface GameListPlayer {
+	player_index: number;
+	player_name: string;
+	nation: string | null;
+	is_human: boolean;
+	// The account whose online_id claims this seat, when exactly one does;
+	// null otherwise, including for every AI seat. Hand it to ProfileLink,
+	// which renders its children bare on a null id.
+	user_id: string | null;
+	slug: string | null;
+}
+
 export interface GameListItem {
 	game_id: string;
 	game_name: string | null;
@@ -242,6 +257,11 @@ export interface GameListItem {
 	collection_id: number | null;
 	created_at: string;
 	parser_version: string;
+	// The save's full roster, humans and AI, in player order — absent unless
+	// the caller passed `players: true`. Absent and empty are different
+	// things: the first says nobody asked, the second that the row has no
+	// seat rows at all.
+	players?: GameListPlayer[];
 }
 
 export interface CollectionInfo {
@@ -705,6 +725,10 @@ export interface ListGamesOpts extends CallOpts {
 	date?: string;
 	// Games-tab sort key, e.g. "date_desc", "turns_asc", "name_asc".
 	sort?: string;
+	// Ask for each row's roster (GameListItem.players). Costs the Worker one
+	// extra query per page, so only the Games tab — which names opponents —
+	// turns it on.
+	players?: boolean;
 }
 
 async function request(
@@ -992,6 +1016,7 @@ export const cloudApi = {
 		if (opts?.result) params.set("result", opts.result);
 		if (opts?.date) params.set("date", opts.date);
 		if (opts?.sort) params.set("sort", opts.sort);
+		if (opts?.players) params.set("players", "1");
 		const qs = params.toString();
 		const res = await request(`/games${qs ? `?${qs}` : ""}`, {
 			fetch: opts?.fetch,

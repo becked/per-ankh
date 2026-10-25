@@ -273,8 +273,8 @@ Upload (or re-import) a parsed save.
 List a user's games (search + filters + scope).
 
 - **Auth:** Public (owner extras). With `?user_id`, session is optional and a non-owner/anonymous viewer is restricted to `is_public=1`. Without `?user_id`, a session is required (lists the caller's own library).
-- **Query:** `user_id` (21-char), `limit` (default 50, max 500), `offset` (default 0), `scope` (`all`|`public`|`vs_ai`|`mp`|`tournament`|`<collection_id>`), `q` (free-text), `nation`, `date` (`YYYY-MM-DD`), `result` (`win`|`loss`), `sort` (default `date_desc`).
-- **Response 200:** `GameListResponse` — `{ games: GameListItem[], total: number }`. Every `GameListItem` carries `uploader_player_index` — the seat the uploader claimed, null for an observer upload — which a reparse posts back unchanged so the same player is re-claimed.
+- **Query:** `user_id` (21-char), `limit` (default 50, max 500), `offset` (default 0), `scope` (`all`|`public`|`vs_ai`|`mp`|`tournament`|`<collection_id>`), `q` (free-text), `nation`, `date` (`YYYY-MM-DD`), `result` (`win`|`loss`), `sort` (default `date_desc`), `players` (`1` opts each row's roster in — one extra query per page, so only the profile's Games tab asks).
+- **Response 200:** `GameListResponse` — `{ games: GameListItem[], total: number }`. Every `GameListItem` carries `uploader_player_index` — the seat the uploader claimed, null for an observer upload — which a reparse posts back unchanged so the same player is re-claimed. Under `?players=1` a row also carries `players: GameListPlayer[]` — the save's whole roster in `player_index` order, humans and AI, each `{ player_index, player_name, nation, is_human, user_id, slug }`. `user_id`/`slug` name the account a human seat's `online_id` resolves to under the rule the played-games board credits seats by (an id linked by exactly one account); null for an unlinked or ambiguous id and for every AI seat. The `online_id` itself never crosses the wire. Absent and empty differ: no `players` key means nobody asked, `[]` means the game has no `player_summaries` rows.
 - **Errors:** `400 INVALID_USER_ID`, `401 UNAUTHORIZED`.
 
 ### `GET /v1/games/public-recent`
