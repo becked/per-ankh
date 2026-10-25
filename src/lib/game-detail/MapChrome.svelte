@@ -181,21 +181,21 @@
 	// rail rather than a fixed box: `flex-1` splits the rail over the
 	// portrait's full height, which is how the game's own panel stacks them —
 	// flush against the art, pinned top and bottom, with a hairline between.
-	// Width is cut for the widest value the corpus holds: legitimacy reaches
-	// 270 and the orders rate 81 across test-data/saves/, so three digits at
-	// the value's own size, and the slot doesn't resize under the pointer as
-	// playback runs.
-	const RAIL_CLASS = "flex w-11 flex-none flex-col divide-y divide-tan/20";
+	// Width is fixed rather than fit to content, so a slot doesn't resize
+	// under the pointer as playback runs. 36px holds the widest value the
+	// corpus has at the value's own size: legitimacy reaches 270 and the
+	// orders rate 81 across test-data/saves/, so three digits.
+	const RAIL_CLASS = "flex w-9 flex-none flex-col divide-y divide-tan/20";
 	const RAIL_SLOT_CLASS =
 		"flex flex-1 flex-col items-center justify-center gap-0.5 bg-surface-deep/80";
-	// Sized against the cell rather than against the other chrome glyphs: a
-	// rail cell is half the portrait's 128px, and the glyph-over-value pair
-	// has to read as one plate's worth of content in it.
-	const RAIL_ICON_SIZE = 28;
-	// The value a right-rail slot carries, sized as the game sizes it: the
-	// loudest thing on the rail, against the 12px ratings row under the frame.
+	// The chrome's panel-glyph size, the one the research panel reads at: the
+	// glyph-over-value pair sits in the cell — a rail cell is half the
+	// portrait's 128px — rather than filling it.
+	const RAIL_ICON_SIZE = 22;
+	// The value a right-rail slot carries: the loudest thing on the rail, a
+	// step above the 12px ratings row under the frame.
 	const RAIL_VALUE_CLASS =
-		"text-base font-bold leading-none tabular-nums text-bright";
+		"text-sm font-bold leading-none tabular-nums text-bright";
 
 	const value = (n: number | null | undefined): string =>
 		n == null ? "—" : n.toLocaleString("en-US");
