@@ -114,8 +114,9 @@
 	// The portrait at its native size: every one of the 663 baked portraits is
 	// 128x128, so anything else resamples it. The art ships for most but not
 	// all rulers — 147 of the 149 reigning rulers across test-data/saves/ —
-	// so the frame hangs on rulerPortrait, which is null for the rest, rather
-	// than on the id, or it would draw an empty box.
+	// so the glyph hangs on rulerPortrait, which is null for the rest, rather
+	// than on the id, or it would draw a broken image. Its cell is reserved
+	// either way (see the frame below).
 	const PORTRAIT_SIZE = 128;
 	const portrait = $derived(ruler ? rulerPortrait(ruler) : null);
 
@@ -184,7 +185,7 @@
 	// 270 and the orders rate 81 across test-data/saves/, so three digits at
 	// the value's own size, and the slot doesn't resize under the pointer as
 	// playback runs.
-	const RAIL_WIDTH_CLASS = "w-11 flex-none";
+	const RAIL_CLASS = "flex w-11 flex-none flex-col divide-y divide-tan/20";
 	const RAIL_SLOT_CLASS =
 		"flex flex-1 flex-col items-center justify-center gap-0.5 bg-surface-deep/80";
 	// Sized against the cell rather than against the other chrome glyphs: a
@@ -318,28 +319,29 @@
 						<!-- One frame over three columns, the way the game builds its
 						     own: the rails sit flush against the art instead of
 						     floating beside it, and the ratings run as a band under
-						     all three. The frame's fill is what shows through the 1px
-						     cell gaps, so the hairlines between the cells are its trim
-						     rather than a border per plate — tan/20, the weight the
-						     yield strip already divides its slots at. -->
+						     all three. Cells are divided the way the yield strip
+						     divides its slots (`divide-tan/20`, MapYieldStrip), so the
+						     hairline between them is the frame's trim rather than a
+						     border per plate. -->
 						<span
-							class="flex flex-col gap-px overflow-hidden rounded border border-tan/50 bg-tan/20"
+							class="flex flex-col divide-y divide-tan/20 overflow-hidden rounded border border-tan/50"
 						>
-							<span class="flex items-stretch gap-px">
+							<span class="flex items-stretch divide-x divide-tan/20">
 								<!-- Left rail: who the ruler is — the archetype above, the
 								     family crest below. Both are optional, and 75 of the 149
 								     rulers across test-data/saves/ carry exactly one, so the
 								     rail renders only what resolves and a lone slot takes
-								     the whole column: a cell held open for something the
-								     ruler hasn't got would leave a hole in the frame the
-								     three columns share. The rails need not match each
-								     other — the game's own left rail carries three slots
-								     against the right's two. Archetype glyphs come from
+								     the whole column: nothing the frame is measured from
+								     hangs on a rail cell — unlike the portrait cell, which
+								     is reserved — so holding one open would leave a hole in
+								     the frame the three columns share. The rails need not
+								     match each other — the game's own left rail carries three
+								     slots against the right's two. Archetype glyphs come from
 								     traits-trimmed, the squared copy that fills its box like
 								     the plated icons beside it (#85) — the untrimmed tile
 								     reads a size smaller at the same px. -->
 								{#if archetype || family}
-									<span class="flex flex-col gap-px {RAIL_WIDTH_CLASS}">
+									<span class={RAIL_CLASS}>
 										{#if archetype}
 											<span class={RAIL_SLOT_CLASS} title={archetype.label}>
 												<SpriteIcon
@@ -363,19 +365,34 @@
 									</span>
 								{/if}
 
-								{#if portrait}
-									<span class="flex flex-none">
+								<!-- The frame's spine, reserved at PORTRAIT_SIZE whether or
+								     not the art resolves (the StatListInset idiom): it is the
+								     only cell the frame is measured from — the rails split its
+								     height and the ratings band runs under its width. Left to
+								     the glyph, a ruler whose portrait the manifest hasn't got
+								     would collapse the rails and leave the row narrower than
+								     the band below it, baring the frame beside them.
+								     Sized from the constant rather than a matching Tailwind
+								     class so the two can't drift, and content-box because the
+								     divider rides on this cell's own border: under the app's
+								     border-box default that 1px comes off the inside and
+								     resamples the art to 127px wide. -->
+								<span
+									class="box-content flex flex-none items-center justify-center bg-surface-deep/80"
+									style="width: {PORTRAIT_SIZE}px; height: {PORTRAIT_SIZE}px;"
+								>
+									{#if portrait}
 										<SpriteIcon
 											category="portraits"
 											value={portrait}
 											size={PORTRAIT_SIZE}
 											alt={rulerLabel ?? ""}
 										/>
-									</span>
-								{/if}
+									{/if}
+								</span>
 
 								<!-- Right rail: what the realm holds at this turn. -->
-								<span class="flex flex-col gap-px {RAIL_WIDTH_CLASS}">
+								<span class={RAIL_CLASS}>
 									<span class={RAIL_SLOT_CLASS} title="Orders">
 										<SpriteIcon
 											category="yields"
