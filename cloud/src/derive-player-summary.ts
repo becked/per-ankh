@@ -19,6 +19,12 @@
 // src/lib/parser/types.ts (referenced in comments below).
 
 import { cultureRank } from "./generated/wonders";
+// Reaching across the package boundary, same rule as the gdp-basket import in
+// games.ts: victory-points.ts is deliberately dependency-free (one relative
+// import of its generated table, no $lib aliases) so the Worker bundle holds
+// the one definition of countVP rather than a mirror of it that drifts from
+// the game page's.
+import { victoryPointsByPlayer } from "../../src/lib/game-detail/victory-points";
 import type { FullGameData, PlayerRosterEntry } from "./schemas/game";
 
 // ---------- Wire-shape mirrors (kept in sync with src/lib/parser/types.ts
@@ -44,8 +50,22 @@ interface CityRow {
 	player_families?: Array<{ player_xml_id: number }>;
 	founded_turn: number;
 	culture_level: string | null;
+	// Culture growths past the top tier (parser 2.29.0+) and per-city project
+	// completions (2.15.0+) — the two city-side terms of countVP; absent on
+	// older blobs, where each reads as nothing granted.
+	culture_step?: number;
+	project_counts?: Array<{ project: string; count: number }>;
 	is_capital: boolean;
 	family_class: string | null;
+}
+
+// `map_tiles[]`, narrowed to the improvement term of countVP.
+interface MapTileRow {
+	owner_player_xml_id?: number | null;
+	owner_city: string | null;
+	improvement: string | null;
+	improvement_pillaged: boolean;
+	improvement_turns_left?: number | null;
 }
 
 interface FamilyRow {
@@ -70,6 +90,7 @@ interface CharacterTraitRow {
 
 interface CompletedTechRow {
 	player_id: number;
+	tech: string;
 }
 
 interface LawAdoptionEntry {
@@ -89,9 +110,29 @@ export interface SummaryGameContext {
 export function buildSummaryGameContext(
 	blob: FullGameData,
 ): SummaryGameContext {
-	const finalPointsByIndex = new Map<number, number>();
 	const playerHistory = blob.player_history as PlayerHistoryEntry[];
+	const cityStats = blob.city_statistics as { cities: CityRow[] };
+
+	// Victory points as the game's own victory screen computes them, not as
+	// its turn-start series records them — the recomputation is the number,
+	// and the series is the fallback for a blob too old to answer (#340).
+	// `vp_margin` below reads the same map, so a seat's margin can never be
+	// measured against a total nobody is shown.
+	const recomputed = victoryPointsByPlayer({
+		parserVersion: blob.parser_version,
+		playerHistory,
+		cities: cityStats.cities,
+		mapTiles: blob.map_tiles as MapTileRow[],
+		completedTechs: blob.completed_techs as CompletedTechRow[],
+	});
+
+	const finalPointsByIndex = new Map<number, number>();
 	for (const ph of playerHistory) {
+		const fromBlob = recomputed?.get(ph.player_id);
+		if (fromBlob !== undefined) {
+			finalPointsByIndex.set(ph.player_id, fromBlob);
+			continue;
+		}
 		const last = ph.history[ph.history.length - 1];
 		if (last && last.points != null) {
 			finalPointsByIndex.set(ph.player_id, last.points);
@@ -202,11 +243,15 @@ export function derivePlayerSummary(
 		}
 	}
 
-	// Per-turn series — last entry of this player's history.
+	// Per-turn series — last entry of this player's history. Military power and
+	// legitimacy are the recorded value; points are not, because the series
+	// samples them at the top of the seat's own turn (see victory-points.ts) —
+	// `ctx.finalPointsByIndex` holds the end-state recomputation, with the
+	// recorded value as its fallback.
 	const playerHistory = blob.player_history as PlayerHistoryEntry[];
 	const ownHistory = playerHistory.find((h) => h.player_id === idx);
 	const lastPoint = ownHistory?.history[ownHistory.history.length - 1] ?? null;
-	const final_points = lastPoint?.points ?? null;
+	const final_points = ctx.finalPointsByIndex.get(idx) ?? null;
 	const final_military_power = lastPoint?.military_power ?? null;
 	const final_legitimacy = lastPoint?.legitimacy ?? null;
 

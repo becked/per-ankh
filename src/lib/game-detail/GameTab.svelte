@@ -123,6 +123,8 @@
 		currentLaws={game.current_laws}
 		unitsProduced={game.units_produced}
 		cityStatistics={game.city_statistics}
+		mapTiles={game.map_tiles}
+		parserVersion={game.parser_version}
 		{victoryPointsEnabled}
 		improvementData={game.improvement_data}
 		gameReligions={game.game_religions}

@@ -477,7 +477,7 @@ Several elements track turn-by-turn history (typically one entry per turn):
 </MilitaryPowerHistory>
 ```
 
-**PointsHistory** - Victory points per turn:
+**PointsHistory** - Victory points, sampled at the **top of each seat's own turn**:
 
 ```xml
 <PointsHistory>
@@ -488,6 +488,8 @@ Several elements track turn-by-turn history (typically one entry per turn):
   <T69>157</T69>
 </PointsHistory>
 ```
+
+Not the save's victory-point total. `Player.updateHistoryRates` (Player.cs:17065) stores `countVP()` against the current turn, and `Player.doTurn` (Player.cs:17017) calls it as its **first** statement, before `processTurn` — so the value keyed to turn T is that seat's total the instant its turn T began, before that turn's culture growth, wonder completions, captures and losses. `Player.setTurnPoints` (Player.cs:11378) then writes only on a change, so the series is sparse and a seat's last entry can predate the save by many turns; a dead seat's freezes at elimination. The game's own stats graph reads this series and agrees with it, but its victory screen does not: `CompletedGame.Init` (CompletedGame.cs:95) takes `player.countVP()` live. For the end-state total, recompute — `src/lib/game-detail/victory-points.ts` is that recomputation, and across `test-data/saves/` it differs from the last recorded entry on 99 of 315 seats.
 
 **YieldRateHistory** - Production rates per turn by yield type:
 

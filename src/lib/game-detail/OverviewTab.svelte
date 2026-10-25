@@ -7,10 +7,12 @@
 	import type { PlayerUnitProduced } from "$lib/types/PlayerUnitProduced";
 	import type { CityStatistics } from "$lib/types/CityStatistics";
 	import type { ImprovementData } from "$lib/types/ImprovementData";
+	import type { MapTile } from "$lib/types/MapTile";
 	import type { GameReligion } from "$lib/types/GameReligion";
 	import type { PlayerWonder } from "$lib/types/PlayerWonder";
 	import type { EventLog } from "$lib/types/EventLog";
 	import { momentumCurve, type MomentumCurve } from "./momentum";
+	import { victoryPointsByPlayer } from "./victory-points";
 	import MomentumPanel from "./MomentumPanel.svelte";
 	import { formatEnum, nationName } from "$lib/utils/formatting";
 	import {
@@ -35,6 +37,8 @@
 		currentLaws,
 		unitsProduced,
 		cityStatistics,
+		mapTiles,
+		parserVersion,
 		victoryPointsEnabled,
 		improvementData,
 		gameReligions,
@@ -52,6 +56,10 @@
 		currentLaws: PlayerLaw[];
 		unitsProduced: PlayerUnitProduced[];
 		cityStatistics: CityStatistics;
+		// The end-state board and the blob's own version — the two the Victory
+		// Points bar recomputes `countVP` from (victory-points.ts).
+		mapTiles: MapTile[];
+		parserVersion: string;
 		victoryPointsEnabled: boolean;
 		improvementData: ImprovementData;
 		gameReligions: GameReligion[];
@@ -77,6 +85,21 @@
 		Siege: "Siege",
 		Water: "Water",
 	};
+
+	// Victory points as the game's victory screen computes them — the save's
+	// `<PointsHistory>` samples them at the top of each seat's own turn, so its
+	// last entry misses everything that turn did (#340). Null on a blob too old
+	// to recompute from, or a game that records no points at all; the metric
+	// bar falls back to the recorded series there.
+	const victoryPoints = $derived(
+		victoryPointsByPlayer({
+			parserVersion,
+			playerHistory,
+			cities: cityStatistics.cities,
+			mapTiles,
+			completedTechs,
+		}),
+	);
 
 	// ─── Player summaries with army composition ──────────────────────
 	type ArmySlice = { unitClass: UnitClass; count: number; pct: number };
@@ -164,7 +187,6 @@
 					isWinner:
 						gameDetails.winner_player_id != null &&
 						p.playerId === gameDetails.winner_player_id,
-					finalVP: lastPoint?.points ?? null,
 					finalMilitary: lastPoint?.military_power ?? null,
 					cityCount: ownedByPlayer(
 						cityStatistics.cities,
@@ -265,6 +287,8 @@
 					buildMetric(
 						"Victory Points",
 						(player) => {
+							const recomputed = victoryPoints?.get(player.playerId);
+							if (recomputed !== undefined) return recomputed;
 							const ph = findByPlayer(
 								playerHistory,
 								player,

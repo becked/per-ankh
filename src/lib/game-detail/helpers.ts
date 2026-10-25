@@ -826,7 +826,6 @@ export type PlayerSummary = {
 	isHuman: boolean;
 	isUploader: boolean;
 	isWinner: boolean;
-	finalVP: number | null;
 	finalMilitary: number | null;
 	cityCount: number;
 	techCount: number;
