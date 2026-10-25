@@ -1,6 +1,6 @@
 // Bounded-concurrency map for the corpus sweeps in scripts/admin/commands/.
 //
-// Shared because both sweeps want the same ceiling for the same two reasons:
+// Shared because the sweeps want the same ceiling for the same two reasons:
 // wrangler spawns dominate the wall clock, and each decompressed save is held
 // in memory while it is worked on. A chunked `Promise.all` would idle the pool
 // on every slow save in a chunk; this keeps `limit` in flight continuously.
