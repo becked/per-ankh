@@ -654,14 +654,26 @@ Measured 2026-10-13 across all 13 saves in `test-data/saves`: 38 `<LastSeenUnits
 </PopupList>
 ```
 
-**Pings** - Map pings:
+**Pings** - Map pins. The game calls the system **Map Pins** (`TEXT_UI_PLACE_MAP_PIN`, `Reference/XML/Infos/text-ui.xml:4499`); the two kinds that reach a save are a **Note**, which carries text its author typed, and an **Improvement pin**, which names what they meant to build there. `Player.writeGameXML` (`Player.cs:3567-3599`) writes each as ATTRIBUTES on a self-closing element — there are no children.
 
 ```xml
 <Pings>
-  <Ping>...</Ping>
-  <Ping>...</Ping>
+  <Ping PingType="5" Turn="83" RemindTurn="0" Tile="329" Text="hold this ridge" />
+  <Ping PingType="6" Turn="73" RemindTurn="0" Tile="406" Text="" Improvement="IMPROVEMENT_WATERMILL" />
 </Pings>
 ```
+
+**`PingType` is an integer, not a zType.** The writer emits `ping.meType.ToString()`, so the value is an index into `Reference/XML/Infos/ping.xml`'s entry order with the leading template `<Entry>` dropped: 0 `PING_GENERIC`, 1 `PING_ATTACK`, 2 `PING_RETREAT`, 3 `PING_USE`, 4 `PING_FOUND`, 5 `PING_NOTE`, 6 `PING_IMPROVEMENT`. `src/lib/generated/ping-types.ts` is that table, baked.
+
+**Retention is per kind, and more than two kinds survive.** `updatePings` clears a pin once `iPingTurnDuration > 0 && turn - placedTurn >= duration` (`Player.cs:22136-22137`). `PING_NOTE` and `PING_IMPROVEMENT` declare no duration at all and never expire. `PING_FOUND` declares `<iMPTurnDuration>0</iMPTurnDuration>` and goes only when its tile gains city territory (`bFound`, `Player.cs:22135`). `PING_GENERIC`, `PING_ATTACK` and `PING_RETREAT` declare `<iMPTurnDuration>2</iMPTurnDuration>` and `PING_USE` `1`, with no `<iSPTurnDuration>` beside them — so those four expire in multiplayer and never outside it.
+
+**There is no history.** `<Pings>` is the set alive at the save turn. `addPing` calls `removePing(tileID)` first (`Player.cs:21998-22000`), so a player holds at most one pin per tile and an overwritten or deleted pin leaves nothing behind. The log is no help either: `GameLogType.PING` is not one of the types `isPermanentGameLog` keeps (`Player.cs:15613-15643`), and `clearTurnLogData` drops the turn log each turn (`Player.cs:15702`). Each pin's `Turn` is therefore a floor on when it was on the map, not a window.
+
+`Tile="-1"` is a pin on no tile, which `canPingTile` permits (`Player.cs:22114`). `Improvement` is an improvement zType except for the sentinels the writer spells out by name — `GENERIC`, `ROAD`, `URBAN`, which are indices past the end of the improvement array (`InfoHelpers.cs:2923-2937`) — and older builds wrote at least one more. Note text is escaped XML: named entities and numeric character references alike.
+
+Measured 2026-10-25 across all 116 saves in `test-data/saves`: 1,403 pins in 61 of them, 140 at the most in one save. 981 `PING_IMPROVEMENT`, 419 `PING_NOTE`, 2 `PING_FOUND`, 1 `PING_GENERIC` (placed on turn 62 of a NETWORK game saved at turn 62, inside its two-turn life rather than outliving it), and none of the other three. 88 distinct improvement targets, 3 of them sentinels — 32 `ROAD`, 16 `GENERIC`, 1 `RESOURCE`, which no branch in the current `writeGameXML` produces; no `URBAN`. 25 of the 419 notes carry empty text. Note text runs to 126 characters at the longest and 3 of the 394 non-empty ones carry `&#xA;`, so notes are multi-line. `RemindTurn` is `0` on 1,400 of the 1,403 and is not read by the parser. One pin carries `Tile="-1"`.
+
+Parsed since `PARSER_VERSION` 2.29.0 (`src/lib/parser/parsers/pings.ts`) as the blob's `pings`. A pin names a seat rather than a viewer, and the save writes every seat's — including seats that did not write the file — so a non-owner's read keeps the uploader's own seat and drops the rest (`stripForeignPings`, `cloud/src/games.ts`); in game, `buildTileTooltipPingText` (`HelpText.Game.cs:5325-5332`) already shows a tile's pins only to the active team.
 
 **ChatLogList** - In-game chat messages:
 
