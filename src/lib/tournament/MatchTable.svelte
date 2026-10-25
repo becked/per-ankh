@@ -45,14 +45,16 @@
 		rowCanSchedule,
 		rowIsCastableByViewer,
 		rowIsPendingSitting,
-		MATCH_TABLE_FRAME_CLASS,
-		MATCH_TABLE_ROW_CLASS,
-		MATCH_TABLE_TD_CLASS,
-		MATCH_TABLE_TH_CLASS,
 		type MatchColumn,
 		type MatchRow,
 		type MatchTableTournament,
 	} from "$lib/tournament/matches-table";
+	import {
+		FRAMED_TABLE_ROW,
+		FRAMED_TABLE_TD,
+		FRAMED_TABLE_TH,
+		FRAMED_TABLE_WRAPPER,
+	} from "$lib/ui/classes";
 	import type { ScheduleZone } from "$lib/tournament/schedule";
 	import { clockFaceIs12Hour } from "$lib/stores/clock-face.svelte";
 	import {
@@ -155,15 +157,15 @@
 			: row.match.match_id;
 	}
 
-	// The shared framed-box treatment (documented in matches-table.ts) plus this
-	// component's two modifiers: a sticky header for the full-page mount, and the
-	// clickable affordance on a sortable column.
+	// The shared framed-box treatment ($lib/ui/classes) plus this component's
+	// two modifiers: a sticky header for the full-page mount, and the clickable
+	// affordance on a sortable column.
 	function thClass(sortable: boolean): string {
 		const sticky = stickyHeader ? "sticky -top-4 z-10 " : "";
 		const s = sortable
 			? "cursor-pointer transition-colors hover:text-orange "
 			: "";
-		return `${sticky}${s}${MATCH_TABLE_TH_CLASS}`;
+		return `${sticky}${s}${FRAMED_TABLE_TH}`;
 	}
 </script>
 
@@ -266,7 +268,7 @@
 	<!-- eslint-enable svelte/no-navigation-without-resolve -->
 {/snippet}
 
-<div class={MATCH_TABLE_FRAME_CLASS}>
+<div class={FRAMED_TABLE_WRAPPER}>
 	<table class="w-full border-collapse text-sm">
 		<thead>
 			<tr>
@@ -292,11 +294,11 @@
 			{#each rows as row (rowKey(row))}
 				{@const m = row.match}
 				<tr
-					class="{onRowClick ? 'cursor-pointer ' : ''}{MATCH_TABLE_ROW_CLASS}"
+					class="{onRowClick ? 'cursor-pointer ' : ''}{FRAMED_TABLE_ROW}"
 					onclick={onRowClick ? (e) => onRowClick(m, e) : undefined}
 				>
 					{#each columns as column (column.key)}
-						<td class={MATCH_TABLE_TD_CLASS}>
+						<td class={FRAMED_TABLE_TD}>
 							{#if column.key === "number"}
 								{#if m.match_number != null}
 									<span class="opacity-75"
