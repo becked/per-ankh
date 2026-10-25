@@ -302,6 +302,51 @@ function stripOnlineIdsDeep(node: unknown): unknown {
 	return node;
 }
 
+// Map pins carry text one human typed for their own team to read. In game
+// that is exactly who sees them: `buildTileTooltipPingText`
+// (HelpText.Game.cs:5325-5332) skips every player whose `getTeam()` differs
+// from the active team. The save does not honour that — `writeGameXML` emits
+// every seat's `<Pings>`, including seats that did not write the file, and
+// three saves in `test-data/saves/` carry pins on a seat other than the
+// active player's. So a public share would publish another player's private
+// notes along with the uploader's own.
+//
+// The answer is the same shape as `stripOnlineIds` and sits beside it: a
+// non-owner read keeps only the uploader's own seat. An observer upload
+// (`uploader_player_index === null`) claims no seat and so keeps none, which
+// is the same stance the player picker already takes for that upload.
+//
+// Targeted rather than a deep walk, unlike `stripOnlineIds`: `pings` is a
+// named, bounded array in FullGameDataSchema rather than an `unknown` subtree,
+// so there is one place for the field to be, and the walk's reason — a future
+// parser landing the field somewhere else — doesn't apply. The input array is
+// preserved by reference when nothing is dropped.
+export function stripForeignPings(
+	blob: unknown,
+	uploaderPlayerIndex: number | null,
+): unknown {
+	if (blob === null || typeof blob !== "object" || Array.isArray(blob)) {
+		return blob;
+	}
+	const obj = blob as Record<string, unknown>;
+	// Absent on every blob below parser_version 2.29.0.
+	const pings = obj.pings;
+	if (!Array.isArray(pings)) return blob;
+
+	const kept =
+		uploaderPlayerIndex === null
+			? []
+			: pings.filter(
+					(p) =>
+						p !== null &&
+						typeof p === "object" &&
+						(p as Record<string, unknown>).player_xml_id ===
+							uploaderPlayerIndex,
+				);
+	if (kept.length === pings.length) return blob;
+	return { ...obj, pings: kept };
+}
+
 // ---------- Save-download filename helpers ----------
 
 // Sanitize a user-supplied game_name into a filesystem-safe filename for
@@ -2998,8 +3043,9 @@ export async function handleGameDetail(
 
 	// Parse, transform, re-serialize. Owner gets an `is_public` flag
 	// injected for the visibility toggle's initial state; anonymous viewers
-	// get the blob with online_id stripped (PII protection — see
-	// stripOnlineIds). Everyone gets the uploader's identity
+	// get the blob with online_id stripped and every map pin but the
+	// uploader's own dropped (PII protection — see stripOnlineIds and
+	// stripForeignPings). Everyone gets the uploader's identity
 	// (user_id, user_nation, user_won, user_display_name) so the detail view
 	// can surface "becked won as Tamil" even when the save's winner_name is
 	// the empty string (Old World writes "" for solo games where the
@@ -3012,7 +3058,10 @@ export async function handleGameDetail(
 	const parsed = JSON.parse(new TextDecoder().decode(decompressed)) as unknown;
 	const baseBlob = isOwner
 		? { ...(parsed as Record<string, unknown>), is_public: isPublic }
-		: (stripOnlineIds(parsed) as Record<string, unknown>);
+		: (stripForeignPings(
+				stripOnlineIds(parsed),
+				row.uploader_player_index,
+			) as Record<string, unknown>);
 	const transformed = {
 		...baseBlob,
 		user_id: row.user_id,

@@ -30,6 +30,13 @@ export const MAX_TILE_OWNERSHIP_ENTRIES = 200_000;
 // 200-wide cap and a mod that adds improvements would blow it — rejecting the
 // entire upload over a field only the wonder charts read.
 export const MAX_DISABLED_IMPROVEMENTS = 1_000;
+// Map pins. `addPing` removes any pin already on the tile before adding one
+// (Player.cs:21998), so a player holds at most one pin per tile and the true
+// ceiling is tiles x players. That product is 1,000,000 here, which bounds
+// nothing; this cap is MAX_MAP_TILES, one whole map's worth of pins — 357x the
+// 140 the most-pinned save in `test-data/saves/` carries, and well under what
+// MAX_BLOB_DECOMPRESSED would pass anyway.
+export const MAX_PINGS = 50_000;
 
 // Versions accepted by /v1/games. Update before releasing a frontend that
 // produces a new PARSER_VERSION (Worker first, frontend second — see
@@ -379,6 +386,16 @@ export const MAX_DISABLED_IMPROVEMENTS = 1_000;
 //         drops along with the rest of that slot.)
 //         Purely additive — a blob below 2.29.0 reads 0 and its recomputed
 //         total comes out short for exactly those seats.
+// 2.29.0 — `pings`: the map pins a player drops on a tile, which the save has
+//         always written as `<Player>/<Pings>` and we have never read. A
+//         Note carries the author's own text; an Improvement pin names what
+//         they meant to build. Additive and OPTIONAL, because absent (a blob
+//         below 2.29.0) and empty (a fresh parse of a game nobody pinned, 55
+//         of the 116 saves in `test-data/saves/`) are different claims. Note
+//         text is player-authored free text, so it is capped at 500
+//         characters at parse time and the array at MAX_PINGS here; the
+//         non-owner read also drops every seat but the uploader's, beside
+//         `stripOnlineIds` (see `stripForeignPings`, cloud/src/games.ts).
 export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.0.0",
 	"2.1.0",
@@ -657,6 +674,11 @@ export const FullGameDataSchema = v.looseObject({
 		v.array(PlayerRosterEntrySchema),
 		v.maxLength(MAX_PLAYERS),
 	),
+	// Map pins (2.29.0+). Bounded here rather than left to looseObject
+	// because it is the one array carrying unbounded player-authored text.
+	// `optional`, not `nullable`: absent is "this blob predates the field",
+	// which an empty array would not say.
+	pings: v.optional(v.pipe(v.array(v.unknown()), v.maxLength(MAX_PINGS))),
 
 	// The remaining new entity arrays (characters, families, units, etc.)
 	// are accepted via looseObject without per-field bounds. They're only

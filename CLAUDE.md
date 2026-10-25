@@ -8,7 +8,7 @@ Domain-specific detail lives in **nested `CLAUDE.md` files** (loaded automatical
 
 - **Never touch prod or staging by default.** Never run any `prod`, `staging`, or `--remote` command — or any direct `wrangler`/`npx wrangler` call against a live Worker/D1/R2/KV, including read-only ones like `preflight`, `status`, and `smoke` — unless the user's current message explicitly names that exact command. Anything touching `prod`, `staging`, or `--remote` is off-limits by default; ask first. These authenticate against the user's Cloudflare account (a 1Password prompt on this machine) and can hit live resources even when nominally read-only. Local (`--local`, `.wrangler` state) is fine.
 - **Never deploy unprompted.** Deploys happen only on a specific ask. The `deploy` skill covers the runbook.
-- **PII never leaves its lane.** `online_id` is stripped from the share blob for anonymous viewers; `discord_id`/`username` live only in D1 metadata, never in the blob. Details in `cloud/src/CLAUDE.md`.
+- **PII never leaves its lane.** `online_id` is stripped from the share blob for anonymous viewers, and map pins (`pings`) are narrowed to the uploader's own seat — their text is another player's words; `discord_id`/`username` live only in D1 metadata, never in the blob. Details in `cloud/src/CLAUDE.md`.
 
 ## Project Overview
 
