@@ -39,7 +39,7 @@
 		comparisonRowKeys,
 		ownedByPlayer,
 		findByPlayer,
-		orderPlayersUploaderFirst,
+		orderPlayersLeadFirst,
 		toggleSort,
 		classifyUnit,
 		getSpritePath,
@@ -62,7 +62,7 @@
 		characters = [],
 		lawAdoptionHistory = [],
 		techDiscoveryHistory = [],
-		userNation = null,
+		leadPlayerId = null,
 		chartFilter = $bindable<Record<string, boolean>>({}),
 		tableState = $bindable<TableState>({
 			search: "",
@@ -78,7 +78,8 @@
 		characters?: CharacterInfo[];
 		lawAdoptionHistory?: LawAdoptionHistory[];
 		techDiscoveryHistory?: TechDiscoveryHistory[];
-		userNation?: string | null;
+		// The seat to lead with — resolved by `leadPlayerId` (helpers.ts).
+		leadPlayerId?: number | null;
 		chartFilter?: Record<string, boolean>;
 		tableState?: TableState;
 	} = $props();
@@ -87,11 +88,9 @@
 	// player id that every per-player array carries. Mirror-match safe.
 	const playerById = $derived(new Map(players.map((p) => [p.playerId, p])));
 
-	// Canonical player order: uploader first, used everywhere this tab lists
+	// Canonical player order: lead seat first, used everywhere this tab lists
 	// the two sides (event bars + H2H blocks) so the ordering is consistent.
-	const orderedPlayers = $derived(
-		orderPlayersUploaderFirst(players, userNation),
-	);
+	const orderedPlayers = $derived(orderPlayersLeadFirst(players, leadPlayerId));
 
 	// ─── Head-to-head build comparison ────────────────────────────────
 	// owglick's Army blocks: Ending Army / Military Built / Civilian Built as

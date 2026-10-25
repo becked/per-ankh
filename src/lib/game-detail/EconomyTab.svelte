@@ -65,7 +65,7 @@
 		filledLineStyle,
 		getSpritePath,
 		improvementDisplayName,
-		orderPlayersUploaderFirst,
+		orderPlayersLeadFirst,
 		projectDisplayName,
 	} from "./helpers";
 
@@ -83,7 +83,7 @@
 		units = [],
 		tileOwnershipHistory = [],
 		totalTurns,
-		userNation = null,
+		leadPlayerId = null,
 		tableState = $bindable<TableState>({
 			search: "",
 			sortColumn: "improvement",
@@ -115,14 +115,13 @@
 		// viewer), which drops the Territory view rather than the tab.
 		tileOwnershipHistory?: TileOwnershipEntry[];
 		totalTurns: number;
-		userNation?: string | null;
+		// The seat to lead with — resolved by `leadPlayerId` (helpers.ts).
+		leadPlayerId?: number | null;
 		tableState?: TableState;
 	} = $props();
 
 	type ImprovementInfoRow = ImprovementData["improvements"][number];
-	const orderedPlayers = $derived(
-		orderPlayersUploaderFirst(players, userNation),
-	);
+	const orderedPlayers = $derived(orderPlayersLeadFirst(players, leadPlayerId));
 
 	const economies = $derived(
 		playerEconomies(

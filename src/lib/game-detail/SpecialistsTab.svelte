@@ -18,7 +18,7 @@
 		TABLE_HEADER_TH_CLASS,
 		TABLE_CELL_TD_CLASS,
 		comparisonRowKeys,
-		orderPlayersUploaderFirst,
+		orderPlayersLeadFirst,
 		ownedByPlayer,
 		toggleSort,
 	} from "./helpers";
@@ -38,7 +38,7 @@
 	let {
 		players,
 		improvementData,
-		userNation = null,
+		leadPlayerId = null,
 		tableState = $bindable<TableState>({
 			search: "",
 			sortColumn: "specialist",
@@ -48,7 +48,8 @@
 	}: {
 		players: DetailPlayer[];
 		improvementData: ImprovementData;
-		userNation?: string | null;
+		// The seat to lead with — resolved by `leadPlayerId` (helpers.ts).
+		leadPlayerId?: number | null;
 		tableState?: TableState;
 	} = $props();
 
@@ -279,7 +280,7 @@
 	// no matchup and hides the comparison rather than showing two sides the
 	// cards above no longer list.
 	const orderedPlayers = $derived(
-		orderPlayersUploaderFirst(displayedPlayers, userNation),
+		orderPlayersLeadFirst(displayedPlayers, leadPlayerId),
 	);
 	const matchup = $derived(orderedPlayers.length === 2 ? orderedPlayers : null);
 
