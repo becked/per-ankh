@@ -46,6 +46,7 @@
 	const WondersTab = $derived(LAZY_TABS.wonders.value);
 	const FamiliesTab = $derived(LAZY_TABS.families.value);
 	const SpecialistsTab = $derived(LAZY_TABS.specialists.value);
+	const MapPinsTab = $derived(LAZY_TABS.pins.value);
 	const SettingsTab = $derived(LAZY_TABS.settings.value);
 
 	// Fetch the open tab's chunk. In an effect rather than at render so SSR,
@@ -298,6 +299,8 @@
 		leadPlayerId={leadId}
 		bind:tableState={tabState.tables.specialists}
 	/>
+{:else if tab === "pins" && MapPinsTab}
+	<MapPinsTab {game} players={resolvedPlayers} />
 {:else if tab === "settings" && SettingsTab}
 	<SettingsTab
 		gameDetails={game.game_details}

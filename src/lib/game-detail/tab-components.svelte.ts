@@ -42,6 +42,7 @@ export const LAZY_TABS = {
 	wonders: deferredTab(() => import("./WondersTab.svelte")),
 	families: deferredTab(() => import("./FamiliesTab.svelte")),
 	specialists: deferredTab(() => import("./SpecialistsTab.svelte")),
+	pins: deferredTab(() => import("./MapPinsTab.svelte")),
 	settings: deferredTab(() => import("./SettingsTab.svelte")),
 } satisfies Record<LazyTabId, Deferred<unknown>>;
 
