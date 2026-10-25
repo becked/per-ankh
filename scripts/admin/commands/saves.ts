@@ -52,7 +52,7 @@
 // ids and shape columns only — no uploader, no game name.
 
 import { existsSync } from "node:fs";
-import { mkdir, readdir, stat, writeFile } from "node:fs/promises";
+import { mkdir, readdir, rename, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -83,6 +83,7 @@ import {
 	parseSaveXml,
 } from "../../../src/lib/parser/parse-xml";
 import { extractAllGameData } from "../../../src/lib/parser/parsers/index";
+import { slugify } from "../../../src/lib/utils/slug";
 
 const REPO_ROOT = resolve(
 	dirname(fileURLToPath(import.meta.url)),
@@ -343,10 +344,7 @@ function slug(value: string | null): string {
 	for (const prefix of FILE_NAME_PREFIXES) {
 		if (raw.startsWith(prefix)) raw = raw.slice(prefix.length);
 	}
-	const cleaned = raw
-		.toLowerCase()
-		.replace(/[^a-z0-9]+/g, "-")
-		.replace(/^-+|-+$/g, "");
+	const cleaned = slugify(raw);
 	return cleaned === "" ? UNKNOWN_SLUG : cleaned;
 }
 
@@ -402,17 +400,38 @@ async function pullOne(
 
 	// The destination is its own resume marker: a name is a function of the
 	// game's D1 columns, so the same game always lands under the same name, and
-	// a re-run after the download cache was cleaned still costs nothing. An
-	// interrupted write can leave a zero-byte file, which must not count as a
-	// hit — the same guard `readCachedSave` applies to its cache.
-	let save: CachedSave;
+	// a re-run after the download cache was cleaned still costs nothing.
+	//
+	// Written to a temp file and renamed, the way `writeSidecar` does it
+	// (scripts/lib/atlas-bake.ts): the rename is atomic, so a run killed
+	// mid-write leaves a `.tmp` beside the corpus rather than a truncated ZIP
+	// under the name the next run trusts. The suffix carries the pid for the
+	// same reason it does there.
+	//
+	// A file already on disk is read before it is trusted. Non-empty is the
+	// same cheap guard `readCachedSave` applies to its cache, but it cannot
+	// tell a whole archive from a truncated one — and a corpus written by a
+	// pre-rename run may hold either — so an unreadable file falls through to
+	// the download instead of failing this pick on every future run.
+	let save: CachedSave | null = null;
 	if (existsSync(dest) && (await stat(dest)).size > 0) {
-		save = await readSaveFile(dest);
-		result.status = "present";
-	} else {
+		try {
+			save = await readSaveFile(dest);
+			result.status = "present";
+		} catch (e) {
+			warn(
+				`${name}: unreadable on disk (${
+					e instanceof Error ? e.message : String(e)
+				}) — re-downloading`,
+			);
+		}
+	}
+	if (save === null) {
 		const fetched = await readCachedSave(pick.game.game_id, cacheDir);
 		if (!fetched) return { ...result, status: "missing", file: null };
-		await writeFile(dest, fetched.zip);
+		const tmp = `${dest}.tmp.${process.pid}`;
+		await writeFile(tmp, fetched.zip);
+		await rename(tmp, dest);
 		save = fetched;
 	}
 	result.bytes = save.zip.byteLength;
