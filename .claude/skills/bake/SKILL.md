@@ -100,6 +100,14 @@ npm run bake:trait-names       # trait-names.ts (TRAIT_NAMES override table — 
                                # resolves a link() against another info table, since
                                # TRAIT_ENVOY_TO_THE_HUNS names a tribe)
 npm run bake:wonders           # wonders.ts (src/ AND cloud/src/)
+npm run bake:victory-points    # victory-points.ts (every term of `Player.countVP` —
+                               # culture tier, and the improvements/techs/projects
+                               # that carry a VP-bearing <EffectPlayer>). Frontend
+                               # only, unlike the dual-emits around it: the Worker
+                               # reads the table through the shared helper
+                               # src/lib/game-detail/victory-points.ts, which it
+                               # imports across the package boundary the way
+                               # games.ts imports gdp-basket.ts
 npm run bake:dynasty-traits    # dynasty-traits.ts (src/ AND cloud/src/; the traits the game
                                # ties to a historical ruler) + leader-traits.ts (frontend only)
 npm run bake:theology-tiers    # theology-tiers.ts (src/ AND cloud/src/; each theology's tier)
@@ -118,7 +126,7 @@ npm run bake:finalize          # Emits committed manifest TS modules + reconcile
 npm run bake:all               # Every baker above except owtt + momentum, then finalize
 ```
 
-`bake:all` runs 37 of the 39 bakers above, then `finalize`. The fences above group them by route, not by run order — which lives only in the `bake:all` chain in `package.json`, where a new baker goes at the position it needs to run. It deliberately omits `bake:owtt` and `bake:momentum` — rerun those by hand when their sources change. Membership doesn't follow from what a baker reads: `bake:atlas-pool` needs an owtournamentatlas checkout and is in `bake:all`, while `bake:owtt` needs one of its own and isn't — so a new baker records its choice here either way. Separately, `bake:favicon` / `bake:og` generate site icons and OG images, and the UX-review bundle under `docs/ux-review/` is captured by `./per-ankh ux-review` (a CLI command, not an npm script).
+`bake:all` runs 38 of the 40 bakers above, then `finalize`. The fences above group them by route, not by run order — which lives only in the `bake:all` chain in `package.json`, where a new baker goes at the position it needs to run. It deliberately omits `bake:owtt` and `bake:momentum` — rerun those by hand when their sources change. Membership doesn't follow from what a baker reads: `bake:atlas-pool` needs an owtournamentatlas checkout and is in `bake:all`, while `bake:owtt` needs one of its own and isn't — so a new baker records its choice here either way. Separately, `bake:favicon` / `bake:og` generate site icons and OG images, and the UX-review bundle under `docs/ux-review/` is captured by `./per-ankh ux-review` (a CLI command, not an npm script).
 
 ## Adding a name-override table
 
