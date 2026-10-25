@@ -1,7 +1,7 @@
-// Integration tests for GET /v1/games — pagination, search, and
-// cross-filter (nation/date). Seeds games via direct INSERT so the suite
-// stays focused on the list handler's query construction and doesn't
-// re-exercise the upload pipeline.
+// Integration tests for GET /v1/games — pagination, search,
+// cross-filter (nation/date), and the ?players=1 roster opt-in. Seeds games
+// via direct INSERT so the suite stays focused on the list handler's query
+// construction and doesn't re-exercise the upload pipeline.
 
 import { applyD1Migrations, env, SELF } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -65,13 +65,62 @@ async function seedCollection(user: TestUser, name: string): Promise<number> {
 	return res.collection_id;
 }
 
+interface ListedPlayer {
+	player_index: number;
+	player_name: string;
+	nation: string | null;
+	is_human: boolean;
+	user_id: string | null;
+	slug: string | null;
+	avatar_url: string | null;
+}
+
 interface GamesListResponse {
 	games: {
 		game_id: string;
 		game_name: string | null;
 		display_name: string | null;
+		players?: ListedPlayer[];
 	}[];
 	total: number;
+}
+
+interface SeedSeat {
+	readonly index: number;
+	readonly name: string;
+	readonly nation?: string | null;
+	readonly human?: boolean;
+	readonly uploader?: boolean;
+	readonly onlineId?: string | null;
+}
+
+async function seedSeats(gameId: string, seats: SeedSeat[]): Promise<void> {
+	for (const seat of seats) {
+		await env.SHARE_DB.prepare(
+			`INSERT INTO player_summaries (
+				game_id, player_index, player_name, nation, is_human, is_uploader,
+				online_id
+			) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		)
+			.bind(
+				gameId,
+				seat.index,
+				seat.name,
+				seat.nation ?? null,
+				(seat.human ?? true) ? 1 : 0,
+				(seat.uploader ?? false) ? 1 : 0,
+				seat.onlineId ?? null,
+			)
+			.run();
+	}
+}
+
+async function linkOnlineId(user: TestUser, onlineId: string): Promise<void> {
+	await env.SHARE_DB.prepare(
+		`INSERT INTO user_online_ids (user_id, online_id) VALUES (?, ?)`,
+	)
+		.bind(user.userId, onlineId)
+		.run();
 }
 
 describe("GET /v1/games", () => {
@@ -297,5 +346,111 @@ describe("GET /v1/games", () => {
 		const body = await expectOk<GamesListResponse>(res);
 		// Malformed nation = no filter applied = full result set.
 		expect(body.total).toBe(1);
+	});
+
+	it("omits players unless ?players=1 asks for them", async () => {
+		const user = await makeUser({ discordUsername: "list-no-players" });
+		const gameId = await seedGame(user, { gameName: "unasked" });
+		await seedSeats(gameId, [
+			{ index: 0, name: "Uploader", nation: "NATION_ASSYRIA", uploader: true },
+			{ index: 1, name: "Rival", nation: "NATION_HITTITE" },
+		]);
+
+		const body = await expectOk<GamesListResponse>(
+			await request.get({ path: "/v1/games", as: user }),
+		);
+		// Absent, not empty: the two say different things to the client, and
+		// the Games table's player cell reads the difference.
+		expect(body.games[0].players).toBeUndefined();
+	});
+
+	it("?players=1 returns the whole roster, humans and AI, in player order", async () => {
+		const user = await makeUser({ discordUsername: "list-roster" });
+		const gameId = await seedGame(user, { gameName: "roster" });
+		await seedSeats(gameId, [
+			{ index: 2, name: "", nation: "NATION_GREECE", human: false },
+			{ index: 0, name: "Uploader", nation: "NATION_ASSYRIA", uploader: true },
+			{ index: 1, name: "Rival", nation: "NATION_HITTITE" },
+		]);
+
+		const body = await expectOk<GamesListResponse>(
+			await request.get({ path: "/v1/games?players=1", as: user }),
+		);
+		const players = body.games[0].players ?? [];
+		expect(players.map((p) => p.player_index)).toEqual([0, 1, 2]);
+		expect(players.map((p) => p.is_human)).toEqual([true, true, false]);
+		expect(players[1].player_name).toBe("Rival");
+		// The AI seat keeps its nation and carries no account at all — the
+		// cell names it by nation and shows no avatar.
+		expect(players[2].nation).toBe("NATION_GREECE");
+		expect(players[2].user_id).toBeNull();
+		expect(players[2].avatar_url).toBeNull();
+	});
+
+	it("resolves a human seat to the account its online_id names, and nobody else", async () => {
+		const user = await makeUser({ discordUsername: "list-resolve" });
+		const rival = await makeUser({
+			discordUsername: "list-rival",
+			slug: "rival",
+		});
+		// An id two accounts claim names neither of them —
+		// UNAMBIGUOUS_ONLINE_ID_OWNERS_SQL, the same rule the played-games
+		// board credits seats by.
+		const ambiguousA = await makeUser({ discordUsername: "list-amb-a" });
+		const ambiguousB = await makeUser({ discordUsername: "list-amb-b" });
+		await linkOnlineId(rival, "STEAM_RIVAL");
+		await linkOnlineId(ambiguousA, "STEAM_SHARED");
+		await linkOnlineId(ambiguousB, "STEAM_SHARED");
+
+		const gameId = await seedGame(user, { gameName: "resolve" });
+		await seedSeats(gameId, [
+			{ index: 0, name: "Uploader", nation: "NATION_ASSYRIA", uploader: true },
+			{
+				index: 1,
+				name: "Rival",
+				nation: "NATION_HITTITE",
+				onlineId: "STEAM_RIVAL",
+			},
+			{
+				index: 2,
+				name: "Shared",
+				nation: "NATION_EGYPT",
+				onlineId: "STEAM_SHARED",
+			},
+			{ index: 3, name: "Unlinked", nation: "NATION_BABYLONIA" },
+		]);
+
+		const body = await expectOk<GamesListResponse>(
+			await request.get({ path: "/v1/games?players=1", as: user }),
+		);
+		const players = body.games[0].players ?? [];
+		expect(players[1].user_id).toBe(rival.userId);
+		expect(players[1].slug).toBe("rival");
+		// Resolved → an avatar to show. The seeded account carries no
+		// avatar_hash, so this is Discord's default-avatar URL.
+		expect(players[1].avatar_url).toMatch(/^https:\/\/cdn\.discordapp\.com\//);
+		expect(players[2].user_id).toBeNull();
+		expect(players[3].user_id).toBeNull();
+		expect(players[3].avatar_url).toBeNull();
+	});
+
+	it("?players=1 survives a page wider than D1's bound-parameter cap", async () => {
+		const user = await makeUser({ discordUsername: "list-chunked" });
+		// 60 games > CHUNK_SIZE (50), so the IN-list goes out in two batches.
+		for (let i = 0; i < 60; i++) {
+			const gameId = await seedGame(user, {
+				gameName: `chunked-${i}`,
+				saveDate: "2025-06-01",
+			});
+			await seedSeats(gameId, [
+				{ index: 0, name: `Up ${i}`, nation: "NATION_ASSYRIA", uploader: true },
+			]);
+		}
+
+		const body = await expectOk<GamesListResponse>(
+			await request.get({ path: "/v1/games?limit=60&players=1", as: user }),
+		);
+		expect(body.games.length).toBe(60);
+		expect(body.games.every((g) => (g.players ?? []).length === 1)).toBe(true);
 	});
 });

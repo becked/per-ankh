@@ -54,7 +54,10 @@ import type { SessionData, SessionEnv } from "./session";
 import { isSiteAdmin, siteAdminFromCliToken } from "./admin";
 import { buildAvatarUrl } from "./auth";
 import { displayNameSql } from "./identity";
-import { captureOnlineIds } from "./online-ids";
+import {
+	captureOnlineIds,
+	UNAMBIGUOUS_ONLINE_ID_OWNERS_SQL,
+} from "./online-ids";
 import { momentumCurve } from "./momentum";
 import { MOMENTUM_MODEL_VERSION } from "./generated/momentum";
 import { beginR2Op, logError, logWarn, setLogField } from "./log";
@@ -76,6 +79,7 @@ import {
 	derivePlayerSummary,
 } from "./derive-player-summary";
 import { invalidateStatsCache } from "./stats/cache";
+import { chunk, CHUNK_SIZE } from "./stats/aggregate";
 import { getBlobCached, invalidateBlob, readBlob } from "./blob-cache";
 import {
 	challengeSubmissionInsert,
@@ -2471,6 +2475,94 @@ function resolveGameListOrder(raw: string | null): string {
 	return (raw && GAME_LIST_ORDER[raw]) || GAME_LIST_ORDER.date_desc;
 }
 
+// One seat of a save's roster, as the games list serves it under ?players=1.
+// Humans and AI both: the Games tab names an AI opponent by its nation, and
+// 121 of the 122 AI seats across the 116 saves in test-data/saves/ carry no
+// name at all, so dropping them would leave a single-player row with nothing
+// opposite the uploader's own nation.
+interface GameListPlayer {
+	player_index: number;
+	player_name: string;
+	nation: string | null;
+	is_human: boolean;
+	// The account this seat belongs to, when its online_id names exactly one
+	// — the rule the played-games board and the duel extractor already credit
+	// seats by. null for an unlinked, ambiguous or absent id (so for every AI
+	// seat), which is the case ProfileLink renders as bare text.
+	//
+	// The id itself stays in the Worker (migration 0044); what crosses the
+	// wire is the account it resolves to, which /stats' played board already
+	// publishes per public game.
+	user_id: string | null;
+	slug: string | null;
+	// Discord avatar of that account, for the row's player cell — the same
+	// pairing (ProfileLink + PlayerAvatar) every tournament surface names a
+	// player with. null exactly when user_id is: an unresolved seat has no
+	// avatar to show, which is the case PlayerAvatar fills with its
+	// unclaimed-slot sprite. discord_id is read to address the CDN and is
+	// never itself emitted.
+	avatar_url: string | null;
+}
+
+// The rosters for one page of the games list, keyed by game_id.
+//
+// Chunked because handleGameList allows limit=500 and D1 caps bound
+// parameters at 100 — the same IN-list loader shape the stats aggregates and
+// the tournament seat batch use.
+async function loadGameListPlayers(
+	db: QueryableD1,
+	gameIds: string[],
+): Promise<Map<string, GameListPlayer[]>> {
+	const byGame = new Map<string, GameListPlayer[]>();
+	for (const ids of chunk(gameIds, CHUNK_SIZE)) {
+		const rows = await db
+			.prepare(
+				`SELECT ps.game_id, ps.player_index, ps.player_name, ps.nation,
+				        ps.is_human, uo.user_id, u.slug, u.discord_id, u.avatar_hash
+				 FROM player_summaries ps
+				 LEFT JOIN (${UNAMBIGUOUS_ONLINE_ID_OWNERS_SQL}) uo
+				   ON ps.is_human = 1 AND ps.online_id IS NOT NULL
+				      AND uo.online_id = ps.online_id
+				 LEFT JOIN users u ON u.user_id = uo.user_id
+				 WHERE ps.game_id IN (${ids.map(() => "?").join(", ")})
+				 ORDER BY ps.game_id, ps.player_index`,
+			)
+			.bind(...ids)
+			.all<{
+				game_id: string;
+				player_index: number;
+				player_name: string;
+				nation: string | null;
+				is_human: number;
+				user_id: string | null;
+				slug: string | null;
+				discord_id: string | null;
+				avatar_hash: string | null;
+			}>();
+		for (const r of rows.results ?? []) {
+			let seats = byGame.get(r.game_id);
+			if (!seats) {
+				seats = [];
+				byGame.set(r.game_id, seats);
+			}
+			seats.push({
+				player_index: r.player_index,
+				player_name: r.player_name,
+				nation: r.nation,
+				is_human: coerceD1Bool(r.is_human) ?? false,
+				user_id: r.user_id,
+				slug: r.slug,
+				// discord_id comes from the same users row as user_id, so it is
+				// non-null whenever the seat resolved (NOT NULL on the column).
+				avatar_url: r.discord_id
+					? buildAvatarUrl(r.discord_id, r.avatar_hash)
+					: null,
+			});
+		}
+	}
+	return byGame;
+}
+
 export async function handleGameList(
 	request: Request,
 	env: GamesEnv,
@@ -2524,6 +2616,11 @@ export async function handleGameList(
 	const date = dateRaw && /^\d{4}-\d{2}-\d{2}$/.test(dateRaw) ? dateRaw : null;
 	const resultRaw = url.searchParams.get("result");
 	const result = resultRaw === "win" || resultRaw === "loss" ? resultRaw : null;
+
+	// Roster opt-in, for the Games tab's player cell. One extra query per
+	// page; the callers that don't name opponents — /account's 500-row
+	// maintenance list and the header search — don't ask and don't pay for it.
+	const wantPlayers = url.searchParams.get("players") === "1";
 
 	const scope = buildUserScopeWhere({
 		scope: scopeSelection,
@@ -2595,7 +2692,8 @@ export async function handleGameList(
 		        )) AS user_nation,
 		        ${uploaderPlayerIndexSql("games")} AS uploader_player_index,
 		        user_won, winner_nation, victory_type,
-		        map_size, is_public, collection_id, created_at, parser_version
+		        map_size, map_class, is_public, collection_id, created_at,
+		        parser_version
 		 FROM games WHERE ${where}
 		 ORDER BY ${orderBy}
 		 LIMIT ? OFFSET ?`,
@@ -2611,6 +2709,15 @@ export async function handleGameList(
 	const games = (rows.results ?? []).map((r) =>
 		normalizeGameListRow(r as Record<string, unknown>),
 	);
+	if (wantPlayers && games.length > 0) {
+		const byGame = await loadGameListPlayers(
+			env.SHARE_DB,
+			games.map((g) => g.game_id as string),
+		);
+		for (const g of games) {
+			g.players = byGame.get(g.game_id as string) ?? [];
+		}
+	}
 	return jsonResponse({ games, total: total?.count ?? 0 }, 200, cors);
 }
 
