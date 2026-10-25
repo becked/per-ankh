@@ -18,7 +18,7 @@
 		TABLE_HEADER_TH_CLASS,
 		TABLE_CELL_TD_CLASS,
 		comparisonRowKeys,
-		orderPlayersUploaderFirst,
+		orderPlayersLeadFirst,
 		ownedByPlayer,
 		toggleSort,
 	} from "./helpers";
@@ -280,7 +280,7 @@
 	// no matchup and hides the comparison rather than showing two sides the
 	// cards above no longer list.
 	const orderedPlayers = $derived(
-		orderPlayersUploaderFirst(displayedPlayers, leadPlayerId),
+		orderPlayersLeadFirst(displayedPlayers, leadPlayerId),
 	);
 	const matchup = $derived(orderedPlayers.length === 2 ? orderedPlayers : null);
 

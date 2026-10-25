@@ -30,7 +30,7 @@
 	import {
 		type DetailPlayer,
 		getSpritePath,
-		orderPlayersUploaderFirst,
+		orderPlayersLeadFirst,
 	} from "./helpers";
 
 	let {
@@ -57,9 +57,7 @@
 		leadPlayerId?: number | null;
 	} = $props();
 
-	const orderedPlayers = $derived(
-		orderPlayersUploaderFirst(players, leadPlayerId),
-	);
+	const orderedPlayers = $derived(orderPlayersLeadFirst(players, leadPlayerId));
 
 	const opinions = $derived(
 		familyOpinionSeries(familyOpinionHistory, orderedPlayers, totalTurns),

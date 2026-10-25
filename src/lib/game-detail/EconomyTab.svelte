@@ -65,7 +65,7 @@
 		filledLineStyle,
 		getSpritePath,
 		improvementDisplayName,
-		orderPlayersUploaderFirst,
+		orderPlayersLeadFirst,
 		projectDisplayName,
 	} from "./helpers";
 
@@ -121,9 +121,7 @@
 	} = $props();
 
 	type ImprovementInfoRow = ImprovementData["improvements"][number];
-	const orderedPlayers = $derived(
-		orderPlayersUploaderFirst(players, leadPlayerId),
-	);
+	const orderedPlayers = $derived(orderPlayersLeadFirst(players, leadPlayerId));
 
 	const economies = $derived(
 		playerEconomies(

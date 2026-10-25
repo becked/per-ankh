@@ -44,7 +44,7 @@
 		type SpriteCategory,
 		ownedByPlayer,
 		findByPlayer,
-		orderPlayersUploaderFirst,
+		orderPlayersLeadFirst,
 		filledLineStyle,
 		getSpritePath,
 		ratingChipsRowHtml,
@@ -140,9 +140,7 @@
 	const playerById = $derived(new Map(players.map((p) => [p.playerId, p])));
 
 	// Canonical player order: lead seat first (shared rule with MilitaryTab).
-	const orderedPlayers = $derived(
-		orderPlayersUploaderFirst(players, leadPlayerId),
-	);
+	const orderedPlayers = $derived(orderPlayersLeadFirst(players, leadPlayerId));
 
 	// Side-by-side (Techs by Turn | Science Sources) only for ≤4-nation games;
 	// wider FFA tables would each be cramped at half width, so they stack.

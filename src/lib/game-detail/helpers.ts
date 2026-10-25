@@ -1113,7 +1113,7 @@ export function leadPlayerId(
  * leads with ({@link leadPlayerId}) first, then the rest in their existing
  * order.
  */
-export function orderPlayersUploaderFirst(
+export function orderPlayersLeadFirst(
 	players: DetailPlayer[],
 	leadId: number | null,
 ): DetailPlayer[] {

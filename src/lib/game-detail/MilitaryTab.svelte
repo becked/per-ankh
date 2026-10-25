@@ -39,7 +39,7 @@
 		comparisonRowKeys,
 		ownedByPlayer,
 		findByPlayer,
-		orderPlayersUploaderFirst,
+		orderPlayersLeadFirst,
 		toggleSort,
 		classifyUnit,
 		getSpritePath,
@@ -90,9 +90,7 @@
 
 	// Canonical player order: lead seat first, used everywhere this tab lists
 	// the two sides (event bars + H2H blocks) so the ordering is consistent.
-	const orderedPlayers = $derived(
-		orderPlayersUploaderFirst(players, leadPlayerId),
-	);
+	const orderedPlayers = $derived(orderPlayersLeadFirst(players, leadPlayerId));
 
 	// ─── Head-to-head build comparison ────────────────────────────────
 	// owglick's Army blocks: Ending Army / Military Built / Civilian Built as
