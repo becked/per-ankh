@@ -1,5 +1,63 @@
 # Changelog
 
+## [2026-10-25-bb6edd9] - 2026-10-25
+
+### Features
+
+- (cloud) the reparse endpoint takes a bearer token for a sessionless admin — [d97b498](https://github.com/becked/per-ankh/commit/d97b4987b81077a68625759f1d9848eafd248396)
+- (scripts) ./per-ankh admin reparse-all sweeps the corpus headless — [4f3ffe6](https://github.com/becked/per-ankh/commit/4f3ffe63e01a6e4ed0bb76750ae388174013a937)
+- (games) let the owner correct which player they were — [f715a00](https://github.com/becked/per-ankh/commit/f715a00a10f0b295a08a7a5c934e82c4cc03bf98)
+- (upload) the save already names its player, so the picker suggests it — 2.27.0 — [83732d2](https://github.com/becked/per-ankh/commit/83732d2d2a5d5db10fc1a9d7112bf3025f07b172)
+- (parser) read every setup parameter the save carries — [cb65802](https://github.com/becked/per-ankh/commit/cb65802cc0b2e5e2786048757625f21e1380c9da)
+- (game-detail) show a game's setup in Old World's own seven sections — [b0d39e7](https://github.com/becked/per-ankh/commit/b0d39e729b2a67963c607c5cf11d4c773f03471d)
+- (parser) read the setup's own human flag list — [39b286f](https://github.com/becked/per-ankh/commit/39b286f732ed9aa92bf1a8516ef543575b3df365)
+- (admin) pull a stratified save corpus out of the cloud — [dbd516b](https://github.com/becked/per-ankh/commit/dbd516bde53cbe12b8a36784ea607c6a9e427a25)
+
+### Fixes
+
+- (map) a city under capture renders as the game draws it — [010b71e](https://github.com/becked/per-ankh/commit/010b71e2d0eb5d23a0d95d811e9903d896247af6)
+- (scripts) the reparse sweep's version flag names a cohort, not a target — [364fc2e](https://github.com/becked/per-ankh/commit/364fc2e7acf2ed5d5a86f737e8f4bab686d6d926)
+- (games) lock a challenge run's seat, and share the picker's label — [5b84c68](https://github.com/becked/per-ankh/commit/5b84c6825a51f66c514e7a3b8d72e82ce9ffc2ab)
+- (upload) the uploader's own id outranks the file's perspective — [fe0d437](https://github.com/becked/per-ankh/commit/fe0d4371e0026a378b1b1b524b7efb368e8d6055)
+- (parser) read the save date from the file name when the save has none — [cb91f69](https://github.com/becked/per-ankh/commit/cb91f69dfc2bc7e7cc61ce4bd5ab182d7839b2be)
+- (games) the map's yield strip opens the Yields tab at the yield clicked — [b2d712d](https://github.com/becked/per-ankh/commit/b2d712def9371a7dd5ea980330fd28c4a429f9bb)
+- (games) name the action on the reparse and reindex buttons — [b47efdf](https://github.com/becked/per-ankh/commit/b47efdfeeaa16a210a3541a9aed5fcf14b91bdb0)
+- (games) a reparse re-claims the uploader by seat, not by nation — [43ac1fb](https://github.com/becked/per-ankh/commit/43ac1fb549f3f0fd2db99c6665d1dcfeda72c76d)
+- (games) hold the uploader's claim through a reparse, and enforce one claimed seat — [fb5a2a9](https://github.com/becked/per-ankh/commit/fb5a2a928a764bfff1c98437bff609ecf3492447)
+- (game-detail) take the setup gates from the save's own human flags — [bf5f85c](https://github.com/becked/per-ankh/commit/bf5f85c515a226693ba86a2bdd0bfd4bc455a220)
+- (game-detail) drop the victory rows a blob cannot answer for — [092184f](https://github.com/becked/per-ankh/commit/092184fe1ab959b6bbaa9f9b34d7a66a8aa22089)
+- (game-detail) identify the uploader by the seat they claimed — [1e9587b](https://github.com/becked/per-ankh/commit/1e9587b305bbd8776977b71923005fa875664619)
+- (admin) write a pulled save atomically, reuse slugify — [bd6f513](https://github.com/becked/per-ankh/commit/bd6f5136cc11f9f0c9a6c72a345ced696d3f965b)
+- (ui) give Select a compact size the map chrome can actually get — [bef272d](https://github.com/becked/per-ankh/commit/bef272ded99973711772d7f4a2b111a3d6bee5bb)
+- (game-detail) reserve the leader frame's portrait cell — [be80357](https://github.com/becked/per-ankh/commit/be80357db81e7bf42a8517723f39b259058b7843)
+- (online-ids) an empty OnlineID links no account — [516aaf4](https://github.com/becked/per-ankh/commit/516aaf4646598d9e29ded8d836bff4864f314f83)
+- (games) the re-import claim guard reads the seat, not the nation — [8dfed4f](https://github.com/becked/per-ankh/commit/8dfed4ff6139fd7c312a2f57005d29c5eaa128d5)
+- (games) cite Reference/Source, and one helper for the uploader seat — [6f7a509](https://github.com/becked/per-ankh/commit/6f7a509e0de41588ea14361961f1d9692fe941d8)
+- (deps) clear the three high advisories blocking the deploy gate — [bb6edd9](https://github.com/becked/per-ankh/commit/bb6edd93b8c8f0a6ec7124985ecf888f012ba247)
+
+### Performance
+
+- (game-detail) load the tabs on demand, one chunk each — [0a33297](https://github.com/becked/per-ankh/commit/0a3329713d6dd851c7befbd40ad029277d61c7ed)
+- (game-detail) bake the setup tables in two, split by chunk — [6aab037](https://github.com/becked/per-ankh/commit/6aab03766eb23cf76409b9a06ddfe64da543f41c)
+- (charts) load ECharts when a chart mounts — [b684c02](https://github.com/becked/per-ankh/commit/b684c028b95281fb21127b809fd254009b10e181)
+
+### Other
+
+- (map) name the unowned-city border and crest for what they do — [492b4bf](https://github.com/becked/per-ankh/commit/492b4bfe32c4d69a2f82a50dbb71b6b76b519db2)
+- (map) the city crest slot is a civilization's, not a nation's — [116c578](https://github.com/becked/per-ankh/commit/116c5787b22ddcb94c81b0b8de6992bce278bd7d)
+- share the reparse uploader-seat recovery — [7df457e](https://github.com/becked/per-ankh/commit/7df457efb480e972561cd8ffadb3c99e4af4b8cb)
+- (scripts) share mapLimit between the corpus sweeps — [1465ce8](https://github.com/becked/per-ankh/commit/1465ce881e82d26b5c79d1e7f8db174cc794db1f)
+- (games) one reparse path for the detail-page banner — [6e278f6](https://github.com/becked/per-ankh/commit/6e278f6156d6db50b650f27d7c73d0d6f4a9c60b)
+- (game-detail) name the uploader's seat after the uploader — [2e745e8](https://github.com/becked/per-ankh/commit/2e745e8821c42b865e53e4666369cb4ef1879346)
+- (games) one name and one spelling for the Yields tab's deep link — [01a66c5](https://github.com/becked/per-ankh/commit/01a66c5ec59045bf19faf85f76c4ed5721e199b7)
+- (layout) the deploy guard's same-route exemption can reach the gap — [f04b823](https://github.com/becked/per-ankh/commit/f04b82351f4d2e4f8e80a3f112ba6a5aa86838d9)
+- (games) correct the uploader-seat references the rebase left stale — [c521e25](https://github.com/becked/per-ankh/commit/c521e25f519b779f66f811797d59072ca4e330fa)
+- reformat the two files format:check flags — [c6152ec](https://github.com/becked/per-ankh/commit/c6152ec42045b91e39f35619911f45b9da524192)
+- (game-detail) name the ordering helper after the lead seat — [aebf6a7](https://github.com/becked/per-ankh/commit/aebf6a7cf2fb6bce49766f05c5790543639e69ef)
+- (game-detail) build the map leader panel as one frame — [acaab41](https://github.com/becked/per-ankh/commit/acaab415f06dd1de3ae41fe636c6ebf9205115fa)
+- (game-detail) tighten the map leader panel's rails — [10cbff8](https://github.com/becked/per-ankh/commit/10cbff8e6d2f54c6cf30452904c771a0858aac2d)
+- share the deferred-chunk slot and its fallback — [173f417](https://github.com/becked/per-ankh/commit/173f4171dbd7346e0475788438800ec2a963f56e)
+
 ## [2026-10-20-2bb219f] - 2026-10-20
 
 ### Features
