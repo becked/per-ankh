@@ -1,23 +1,35 @@
 <script lang="ts">
-	// Games tab — the user's library as a table of rows (Nation · Victory ·
-	// Map · Turns · Result · Date), driven by the lighter GameListItem
-	// shape. Server pagination via infinite scroll, month dividers (date
-	// sorts only). Filter + sort state lives in the URL; load() passes the
-	// first page in via initialGames and the resolved filter props. Rename
-	// / move-to-collection live on the game-detail page, not here.
+	// Games tab — the user's library as a table of rows (Nation · vs ·
+	// Victory · Map · Turns · Result · Date), driven by the lighter
+	// GameListItem shape. Server pagination via infinite scroll, month
+	// dividers (date sorts only). Filter + sort state lives in the URL;
+	// load() passes the first page in via initialGames and the resolved
+	// filter props. Rename / move-to-collection live on the game-detail
+	// page, not here.
 
 	import { untrack } from "svelte";
 	import { goto } from "$app/navigation";
 	import { page } from "$app/state";
 	import { resolve } from "$app/paths";
-	import { cloudApi, ApiError, type GameListItem } from "$lib/api-cloud";
+	import {
+		cloudApi,
+		ApiError,
+		type GameListItem,
+		type GameListPlayer,
+	} from "$lib/api-cloud";
 	import SearchInput from "$lib/SearchInput.svelte";
 	import DateFilter from "./DateFilter.svelte";
 	import Select from "$lib/ui/Select.svelte";
 	import type { SelectOption } from "$lib/ui/types";
+	import ProfileLink from "$lib/ProfileLink.svelte";
 	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
 	import { getCivilizationColor } from "$lib/config";
-	import { formatDate, formatEnum, nationName } from "$lib/utils/formatting";
+	import {
+		formatDate,
+		formatEnum,
+		formatGameTitle,
+		nationName,
+	} from "$lib/utils/formatting";
 	import { mapSizeLabel } from "$lib/map-settings";
 
 	// Nation accent color for the name cell (falls back to inheriting the
@@ -28,9 +40,14 @@
 	}
 
 	// Shared grid template for the header row and each game row, so columns
-	// line up: Nation · Victory · Map · Turns · Result · Date · chevron.
+	// line up: Nation · vs · Victory · Map · Turns · Result · Date.
+	//
+	// The "vs" column is paid for by the chevron this row used to end with
+	// (1.5rem plus its gap) and by narrowing Victory and Map, which were 1fr
+	// each and truncate already. It is the widest flexible track because it
+	// is the only one carrying free text — a player's in-game name.
 	const GRID_COLS =
-		"grid grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)_3.5rem_4.5rem_5.5rem_1.5rem] items-center gap-3";
+		"grid grid-cols-[minmax(0,1.4fr)_minmax(0,1.6fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_3.5rem_4.5rem_5.5rem] items-center gap-3";
 
 	interface Props {
 		userId: string;
@@ -165,6 +182,9 @@
 					resultRaw === "win" || resultRaw === "loss" ? resultRaw : undefined,
 				date: params.get("date") ?? undefined,
 				sort: params.get("sort") ?? undefined,
+				// The same payload load() asked for — without it the rows past the
+				// first page would lose their "vs" cell.
+				players: true,
 				signal,
 			});
 			if (signal.aborted) return;
@@ -226,8 +246,34 @@
 		return groups;
 	});
 
-	async function navigateToGame(gameId: string) {
-		await goto(resolve("/games/[id]", { id: gameId }));
+	// --- Opponents ("vs" column) --------------------------------------
+	// The seat the Nation cell names: the one the uploader claimed, and
+	// otherwise the first human in player order — the same fallback the list
+	// query's COALESCE(user_nation, …) applies when a save was uploaded in
+	// observer mode. Everyone else on the roster is who the game was against.
+	function selfPlayerIndex(game: GameListItem): number | null {
+		if (game.uploader_player_index != null) return game.uploader_player_index;
+		return game.players?.find((p) => p.is_human)?.player_index ?? null;
+	}
+
+	function opponentsOf(game: GameListItem): GameListPlayer[] {
+		const self = selfPlayerIndex(game);
+		return (game.players ?? []).filter((p) => p.player_index !== self);
+	}
+
+	// How many opponents a row names before the rest collapse into "+N".
+	// 72 of the 78 multiplayer saves in test-data/saves/ are duels, so the cap
+	// only bites on an FFA — where eight names would not fit the column
+	// anyway, and the game page is one click away.
+	const MAX_OPPONENTS_SHOWN = 2;
+
+	// A human seat is the person who played it; an AI seat is its nation.
+	// Single-player saves leave Player.Name empty — 121 of the 122 AI seats
+	// across test-data/saves/ carry no name at all, and 30 of the 38
+	// single-human saves leave their one human seat unnamed too.
+	function opponentLabel(p: GameListPlayer): string {
+		if (p.is_human && p.player_name.trim() !== "") return p.player_name;
+		return p.nation ? nationName(p.nation) : "—";
 	}
 </script>
 
@@ -286,12 +332,12 @@
 				class="{GRID_COLS} sticky top-0 z-10 bg-blue-gray px-3 pb-2 pt-1 text-[10px] font-bold uppercase tracking-wide text-gray-100"
 			>
 				<span>Nation</span>
+				<span>vs</span>
 				<span>Victory</span>
 				<span>Map</span>
 				<span class="text-right">Turns</span>
 				<span>Result</span>
 				<span class="text-right">Date</span>
-				<span></span>
 			</div>
 
 			{#each groupedGames as group, gi (group.monthKey)}
@@ -309,18 +355,29 @@
 					</div>
 				{/if}
 				{#each group.games as game (game.game_id)}
+					{@const opponents = opponentsOf(game)}
 					<div
-						class="{GRID_COLS} group mb-1.5 cursor-pointer rounded-lg bg-surface px-3 py-3 transition-colors hover:bg-surface-hover"
-						role="button"
-						tabindex="0"
-						onclick={() => navigateToGame(game.game_id)}
-						onkeydown={(e) => {
-							if (e.key === "Enter" || e.key === " ") {
-								e.preventDefault();
-								navigateToGame(game.game_id);
-							}
-						}}
+						class="{GRID_COLS} group relative mb-1.5 rounded-lg bg-surface px-3 py-3 transition-colors hover:bg-surface-hover"
 					>
+						<!-- Stretched-link overlay, the idiom RecentSaveCard uses: one
+						     real anchor covers the row, so middle-click and
+						     open-in-new-tab work, and the opponent links above it (z-20)
+						     still win their own clicks. It replaces the role="button"
+						     div this row was, which the trailing chevron advertised as a
+						     disclosure it never had. -->
+						<a
+							href={resolve("/games/[id]", { id: game.game_id })}
+							class="absolute inset-0 z-10 rounded-lg"
+							aria-label={formatGameTitle({
+								display_name: game.display_name,
+								game_name: game.game_name,
+								save_owner_nation: game.user_nation,
+								total_turns: game.total_turns,
+								// Only consulted when name, nation and turns are all
+								// missing — a degenerate save. Mirrors RecentSaveCard.
+								match_id: 0,
+							})}
+						></a>
 						<span class="flex min-w-0 items-center gap-2">
 							{#if game.user_nation}
 								<SpriteIcon
@@ -338,6 +395,48 @@
 							>
 								{game.user_nation ? nationName(game.user_nation) : "—"}
 							</span>
+						</span>
+						<!-- text-tan/80, not opacity-80 like its neighbours: element
+						     opacity opens a stacking context, which would trap the
+						     opponent links' z-20 below the row overlay and hand their
+						     clicks to the game page. -->
+						<span class="flex min-w-0 items-center gap-2 text-tan/80">
+							{#each opponents.slice(0, MAX_OPPONENTS_SHOWN) as opp (opp.player_index)}
+								<span class="flex min-w-0 items-center gap-1">
+									<!-- Fixed-size wrapper: SpriteIcon renders nothing when
+									     the crest has no sprite, and the names would
+									     unalign without the reserved cell. -->
+									<span class="flex w-3.5 flex-none">
+										{#if opp.nation}
+											<SpriteIcon
+												category="crests"
+												value={opp.nation}
+												size={14}
+												alt={nationName(opp.nation)}
+											/>
+										{/if}
+									</span>
+									<!-- truncate sits on the wrapper, not on ProfileLink:
+									     its class styles the anchor only, and an
+									     unresolved seat renders its children bare. -->
+									<span class="truncate">
+										<ProfileLink
+											userId={opp.user_id}
+											slug={opp.slug}
+											class="relative z-20 hover:underline"
+										>
+											{opponentLabel(opp)}
+										</ProfileLink>
+									</span>
+								</span>
+							{:else}
+								<span class="opacity-60">—</span>
+							{/each}
+							{#if opponents.length > MAX_OPPONENTS_SHOWN}
+								<span class="flex-none opacity-60"
+									>+{opponents.length - MAX_OPPONENTS_SHOWN}</span
+								>
+							{/if}
 						</span>
 						<span class="truncate text-tan opacity-80">
 							{game.victory_type
@@ -368,7 +467,6 @@
 						<span class="whitespace-nowrap text-right text-tan opacity-70">
 							{formatDate(game.save_date)}
 						</span>
-						<span class="flex justify-end text-tan opacity-40">›</span>
 					</div>
 				{/each}
 			{/each}

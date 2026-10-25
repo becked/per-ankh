@@ -166,6 +166,7 @@ export async function buildProfilePage(args: {
 					result: result ?? undefined,
 					date: date ?? undefined,
 					sort,
+					players: true,
 				})
 			: null;
 
