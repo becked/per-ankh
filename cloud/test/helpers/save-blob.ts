@@ -202,6 +202,11 @@ export interface UploadFixtureOpts {
 	// production. The id is what links a seat to an account, so an empty one
 	// must link nothing (captureOnlineIds, cloud/src/online-ids.ts).
 	readonly emptyOnlineIdSeats?: readonly number[];
+	// Human seats the save records with no `Nation` attribute at all — the game
+	// writes it only `if (hasNation())` (Player.cs:27529). A claimed one stores
+	// a NULL `games.user_nation` beside a live `is_uploader` row, which is the
+	// pair the re-import claim guard has to tell apart.
+	readonly nationlessSeats?: readonly number[];
 	// Append a non-human player after the humans (index 2 in the default
 	// two-human shape). The wonder stats count only human builders, so an AI
 	// build has to be visible to the eligibility gate — a wonder it finished is
@@ -269,10 +274,15 @@ function buildMinimalGameBlob(
 		index: i,
 		isHuman: true,
 	})).concat(opts.aiPlayer ? [{ index: humans, isHuman: false }] : []);
+	// Both seat lists come off the same `<Player>` node in a real save, so a
+	// missing `Nation` is missing from both.
+	const nationless = new Set(opts.nationlessSeats ?? []);
 	const emptyOnlineId = new Set(opts.emptyOnlineIdSeats ?? []);
+	const nationOf = (index: number): string | null =>
+		nationless.has(index) ? null : NATIONS[index];
 	const players = seats.map((s) => ({
 		player_name: `Player ${s.index}`,
-		nation: NATIONS[s.index],
+		nation: nationOf(s.index),
 		is_human: s.isHuman,
 		legitimacy: 50,
 		state_religion: null,
@@ -280,7 +290,7 @@ function buildMinimalGameBlob(
 	const playerRoster = seats.map((s) => ({
 		player_index: s.index,
 		player_name: `Player ${s.index}`,
-		nation: NATIONS[s.index],
+		nation: nationOf(s.index),
 		is_human: s.isHuman,
 		// Only humans carry an OnlineID; the worker links the uploader's. An
 		// empty string is what a human seat without one carries.

@@ -2055,6 +2055,24 @@ export async function handleGameUpload(
 		existingSubmission = await loadSubmissionForGame(env.SHARE_DB, gameId);
 		existingScreenshots = await loadScreenshotsForGame(env.SHARE_DB, gameId);
 
+		// The claim itself, read back from the flag that records it. Not
+		// `existing.user_nation`, which is derived from it:
+		// `deriveUploaderColumns` takes the nation off the claimed roster entry
+		// (`uploader?.nation ?? null`) and `Nation` is written only
+		// `if (hasNation())` (Player.cs:27529), so a claimed seat with no nation
+		// stores NULL there beside a live `is_uploader` row — a claimed game the
+		// guard below would read as unclaimed. Spelled out rather than through
+		// uploaderPlayerIndexSql for the same reason handleAdminReindex is: it
+		// binds one game_id instead of correlating against a games alias.
+		const claimedSeat =
+			(
+				await env.SHARE_DB.prepare(
+					"SELECT player_index FROM player_summaries WHERE game_id = ? AND is_uploader = 1",
+				)
+					.bind(gameId)
+					.first<{ player_index: number }>()
+			)?.player_index ?? null;
+
 		// A re-import that posts no seat on a game that records one is not an
 		// observer upload — it is the claim going missing. Every reparse
 		// surface reads the stored seat back out of `is_uploader` and posts it
@@ -2072,7 +2090,7 @@ export async function handleGameUpload(
 		// three from the stored blob without a reparse. The tournament lock
 		// below is the narrower case of the same rule — it refuses a seat
 		// *changed* to a different nation, which this doesn't speak to.
-		if (existing.user_nation !== null && uploaderIndex === null) {
+		if (claimedSeat !== null && uploaderIndex === null) {
 			return errorResponse(
 				"This game records which player the uploader was. A reparse re-sends that seat; to upload it as an observer, change the player on the game page first.",
 				409,

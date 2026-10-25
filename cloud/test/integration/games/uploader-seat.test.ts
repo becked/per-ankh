@@ -179,6 +179,64 @@ describe("the claim a re-import has to re-send", () => {
 		});
 	});
 
+	it("refuses it when the claimed seat carries no nation", async () => {
+		const owner = await makeUser({ discordUsername: "seat-no-nation" });
+		const nonce = "reimport-drops-a-nationless-claim";
+		const first = await expectOk<{ game_id: string }>(
+			await postMultipart({
+				path: "/v1/games",
+				form: await buildUploadFormData({
+					winnerIndex: 0,
+					uploaderIndex: 1,
+					nationlessSeats: [1],
+					nonce,
+				}),
+				as: owner,
+			}),
+		);
+
+		// The pair the guard has to tell apart: a live claim whose derived
+		// nation is NULL. `Nation` is written only `if (hasNation())`
+		// (Player.cs:27529), so a guard reading `games.user_nation` sees an
+		// unclaimed game here and lets the re-import drop the claim.
+		expect(
+			await env.SHARE_DB.prepare(
+				`SELECT user_nation FROM games WHERE game_id = ?`,
+			)
+				.bind(first.game_id)
+				.first(),
+		).toEqual({ user_nation: null });
+
+		await expectErrorCode(
+			await postMultipart({
+				path: "/v1/games",
+				form: await buildUploadFormData({
+					winnerIndex: 0,
+					uploaderIndex: null,
+					nationlessSeats: [1],
+					nonce,
+					parserVersion: "2.4.1",
+				}),
+				as: owner,
+			}),
+			{ status: 409, code: "UPLOADER_CLAIM_DROPPED" },
+		);
+
+		const row = await env.SHARE_DB.prepare(
+			`SELECT g.parser_version,
+			        (SELECT ps.player_index FROM player_summaries ps
+			          WHERE ps.game_id = g.game_id AND ps.is_uploader = 1)
+			          AS uploader_player_index
+			   FROM games g WHERE g.game_id = ?`,
+		)
+			.bind(first.game_id)
+			.first();
+		expect(row).toMatchObject({
+			parser_version: "2.4.0",
+			uploader_player_index: 1,
+		});
+	});
+
 	it("refuses a second claimed seat on one game", async () => {
 		const owner = await makeUser({ discordUsername: "seat-cardinality" });
 		const gameId = await seedGame(owner, {
