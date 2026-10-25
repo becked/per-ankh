@@ -6,11 +6,6 @@
 
 import type { ChartSpec, StatsCategory } from "../types";
 import { barChartHeight } from "./helpers";
-import {
-	ARCHETYPE_EMPTY_MESSAGE,
-	TRAIT_EMPTY_MESSAGE,
-	visibleTraitRowCount,
-} from "./leaders";
 import { WONDER_EMPTY_MESSAGE } from "./wonders";
 
 export const CATEGORIES: Array<{ id: StatsCategory; label: string }> = [
@@ -45,24 +40,21 @@ export const CHART_SPECS: ChartSpec[] = [
 		hasData: (b) => b.nationAvgPoints.length > 0,
 		height: (b) => barChartHeight(b.nationAvgPoints.length),
 	},
-	// Leaders — the starting leader's roll: their archetype, and the traits
-	// they began the game with. Both bars carry games (length) and wins
-	// (split), so each answers distribution and outcome at once.
+	// Leaders — category anchor only; rendered by LeadersStatsPanel (the
+	// starting leader's archetype and traits, plus the banded throne-time chart
+	// and the turn-band switch that drives it). A panel rather than three specs
+	// because the band switch has nowhere to live in the generic spec loop —
+	// the same reason Laws is a panel.
 	{
-		id: "starting-archetype-winloss",
+		id: "leaders",
 		category: "leaders",
-		title: "Starting archetype",
+		title: "Leaders",
+		// Required by ChartSpec but never evaluated: StatsView calls hasData only
+		// inside its generic spec loop, which this category — like the other
+		// panel-rendered anchors — never reaches. LeadersStatsPanel carries a
+		// per-chart empty state instead, which it has to anyway: its three
+		// charts read three different sources and go empty independently.
 		hasData: (b) => b.startingArchetypeWinRate.length > 0,
-		emptyMessage: () => ARCHETYPE_EMPTY_MESSAGE,
-		height: (b) => barChartHeight(b.startingArchetypeWinRate.length),
-	},
-	{
-		id: "starting-trait-winloss",
-		category: "leaders",
-		title: "Starting leader traits",
-		hasData: (b) => b.startingTraitWinRate.length > 0,
-		emptyMessage: () => TRAIT_EMPTY_MESSAGE,
-		height: (b) => barChartHeight(visibleTraitRowCount(b)),
 	},
 	// Wonders — one row per wonder on a turn axis: when it lands, how its
 	// builders' games ended, and how often the players who could build it did.

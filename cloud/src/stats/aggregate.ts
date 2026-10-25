@@ -17,6 +17,7 @@
 import { LAW_CLASSES } from "../generated/law-classes";
 import { WONDER_CULTURE_PREREQ, cultureRank } from "../generated/wonders";
 import { buildFamilyKeeps } from "./family-keeps";
+import { buildArchetypeThroneTime } from "./leader-reigns";
 import type { StatsCorpus } from "./resolve";
 import { TURN_LENGTH_BUCKET } from "./types";
 import type {
@@ -1006,6 +1007,43 @@ async function loadFamilyCities(
 	return out;
 }
 
+interface LeaderReignRow {
+	game_id: string;
+	player_index: number;
+	archetype: string | null;
+	start_turn: number;
+	end_turn: number;
+}
+
+// Every reign of every human seat in the corpus — the succession chain behind
+// the archetype band charts. One row per leader who held a throne, so a seat
+// contributes as many rows as it had leaders (0 to 11 across the local corpus,
+// median 3).
+//
+// is_human on the join, matching loadFamilyCities: the table carries AI seats
+// too and no chart reads them.
+async function loadLeaderReigns(
+	env: AggregateEnv,
+	gameIds: string[],
+): Promise<LeaderReignRow[]> {
+	const out: LeaderReignRow[] = [];
+	for (const ids of chunk(gameIds, CHUNK_SIZE)) {
+		const res = await env.SHARE_DB.prepare(
+			`SELECT lr.game_id, lr.player_index, lr.archetype,
+			        lr.start_turn, lr.end_turn
+			 FROM leader_reigns lr
+			 JOIN player_summaries ps ON ps.game_id = lr.game_id
+			                          AND ps.player_index = lr.player_index
+			 WHERE ps.is_human = 1
+			   AND lr.game_id IN (${placeholders(ids.length)})`,
+		)
+			.bind(...ids)
+			.all<LeaderReignRow>();
+		out.push(...((res.results ?? []) as LeaderReignRow[]));
+	}
+	return out;
+}
+
 interface SaveDateRow {
 	date: string;
 	nation: string | null;
@@ -1027,8 +1065,8 @@ interface SaveDateRow {
 //
 // Called only on the uploader focal path: save_dates is a ChartBundle field,
 // not a ChartBundleCore one, so an all-humans corpus has nowhere to put the
-// result and skipping the call is what makes that bundle cost eight chunked
-// query loops instead of nine.
+// result and skipping the call is what makes that bundle cost nine chunked
+// query loops instead of ten.
 async function loadSaveDates(
 	env: AggregateEnv,
 	gameIds: string[],
@@ -1180,6 +1218,7 @@ export async function buildChartBundle(
 		wonderEvents,
 		wonderPool,
 		familyCityRows,
+		leaderReignRows,
 		saveDateRows,
 	] = await Promise.all([
 		loadBaseRows(env, corpus.gameIds),
@@ -1189,6 +1228,7 @@ export async function buildChartBundle(
 		loadWonderEvents(env, corpus.gameIds),
 		loadWonderPool(env, corpus.gameIds),
 		loadFamilyCities(env, corpus.gameIds),
+		loadLeaderReigns(env, corpus.gameIds),
 		focal === "uploader"
 			? loadSaveDates(env, corpus.gameIds)
 			: Promise.resolve<SaveDateRow[]>([]),
@@ -1354,6 +1394,26 @@ export async function buildChartBundle(
 			wins,
 			rate: games > 0 ? wins / games : 0,
 		}),
+	);
+
+	// --- Every reign, cut by turn band -------------------------------
+	// The two charts above read one leader per seat. This reads them all, which
+	// over the local corpus is 3.5x as many reigns and twice the throne-time.
+	// Weighted by leader-turns and banded; stats/leader-reigns.ts carries the
+	// reasoning and the game-rules citations.
+	//
+	// selfRows, not baseRows: the band distribution answers for the same focal
+	// set every other per-player aggregate does — the owner on a profile, every
+	// human on a tournament — so a 1v1 contributes one seat or two by the same
+	// rule as the starting-archetype bar beside it.
+	const archetypeThroneTime = buildArchetypeThroneTime(
+		leaderReignRows,
+		selfRows.map((r) => ({
+			game_id: r.game_id,
+			player_index: r.player_index,
+			is_winner: r.is_winner === 1,
+			total_turns: r.total_turns,
+		})),
 	);
 
 	// --- Wonders ------------------------------------------------------
@@ -1801,6 +1861,7 @@ export async function buildChartBundle(
 		nationAvgPoints,
 		startingArchetypeWinRate,
 		startingTraitWinRate,
+		archetypeThroneTime,
 		wonderStats,
 		capitalFamilyWinRate,
 		familyByNation,
@@ -1893,6 +1954,10 @@ function emptyCore(parserVersion: string): ChartBundleCore {
 		nationAvgPoints: [],
 		startingArchetypeWinRate: [],
 		startingTraitWinRate: [],
+		// Built from the empty corpus for the reason familyKeeps is: the three
+		// bands are part of the shape, and hand-writing them here is how they
+		// drift from the ones the real path cuts.
+		archetypeThroneTime: buildArchetypeThroneTime([], []),
 		wonderStats: [],
 		capitalFamilyWinRate: [],
 		familyByNation: [],

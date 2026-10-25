@@ -92,6 +92,23 @@ function bundle(over: Partial<ChartBundleCore> = {}): ChartBundleCore {
 		startingTraitWinRate: [
 			{ trait: "TRAIT_INTELLIGENT", games: 90, wins: 50, rate: 0.556 },
 		],
+		archetypeThroneTime: [
+			{
+				from: 1,
+				to: 40,
+				games: 603,
+				turns: 24000,
+				unattributed_turns: 3400,
+				rows: [
+					{
+						archetype: "TRAIT_TACTICIAN_ARCHETYPE",
+						turns: 4000,
+						win_turns: 2100,
+						rate: 0.525,
+					},
+				],
+			},
+		],
 		wonderStats: [
 			{
 				wonder: "IMPROVEMENT_PYRAMIDS",

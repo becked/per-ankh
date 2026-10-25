@@ -35,6 +35,36 @@ export interface YieldCohort {
 	>;
 }
 
+// One turn band of the throne-time distribution. Magnitudes are LEADER-TURNS,
+// not games — a band is not single-valued per seat, so reigns cannot be counted
+// equally without reintroducing the distortion the chart exists to remove.
+export interface ArchetypeThroneTimeBand {
+	// Inclusive turn bounds. `to` is null on the open-ended last band.
+	from: number;
+	to: Nullable<number>;
+	// Distinct corpus games whose length reaches `from`. The last band's
+	// denominator is the point: a corpus where half the games end before turn
+	// 71 describes that band from the half that ran long, and the panel prints
+	// this beside the chart rather than in a subtitle.
+	games: number;
+	// Leader-turns inside the band across every focal seat, archetype or not.
+	turns: number;
+	// Of `turns`, those held by a leader carrying no archetype — a child ruler,
+	// or any leader in a save too old for <TraitTurn>. `turns -
+	// unattributed_turns` is what the rows below sum to, so a share has to
+	// divide by that rather than by `turns`.
+	unattributed_turns: number;
+	rows: Array<{
+		archetype: string;
+		// Leader-turns this archetype held inside the band.
+		turns: number;
+		// Of those, the ones held by a seat that went on to win the game. The
+		// wins/losses split of the bar, in the same unit as its length.
+		win_turns: number;
+		rate: number;
+	}>;
+}
+
 import type { FamilyKeeps } from "./family-keeps";
 
 export interface ChartBundleMeta {
@@ -173,6 +203,14 @@ export interface ChartBundleCore {
 		wins: number;
 		rate: number;
 	}>;
+
+	// Throne-time by archetype, cut into three turn bands — every reign the
+	// focal seats had, not just the starting one. The reasoning, the weighting
+	// and the band edges are in stats/leader-reigns.ts; this is its wire shape.
+	//
+	// Always three entries, in turn order, even over a corpus that reaches none
+	// of them: an absent band and an empty one make the same claim.
+	archetypeThroneTime: ArchetypeThroneTimeBand[];
 
 	// --- Wonders -----------------------------------------------------
 	// Per wonder: how often the focal players built it, out of how many were

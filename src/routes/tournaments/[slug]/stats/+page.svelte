@@ -30,6 +30,8 @@
 	import { MATCH_STATUS_LABEL } from "$lib/tournament/parts";
 	import { buildSlotMaps } from "$lib/tournament/slot-identity";
 	import { getZoneClock } from "$lib/tournament/zone-context.svelte";
+	import SegmentedSwitch from "$lib/ui/SegmentedSwitch.svelte";
+	import ArchetypeThroneTimePanel from "$lib/stats/ArchetypeThroneTimePanel.svelte";
 	import FamilyKeepsPanel from "$lib/stats/FamilyKeepsPanel.svelte";
 	import FamilyStatsPanel from "$lib/stats/FamilyStatsPanel.svelte";
 	import GameLengthPanel from "$lib/stats/GameLengthPanel.svelte";
@@ -104,9 +106,6 @@
 		{ key: "scheduled", label: MATCH_STATUS_LABEL.scheduled },
 		{ key: "unscheduled", label: "Unscheduled" },
 	];
-	// Segmented-control tokens, matching the matches page's view switch.
-	const statusTriggerClass =
-		"relative z-10 cursor-pointer whitespace-nowrap px-3 py-1.5 text-center text-xs font-bold text-tan transition-colors";
 	// The lit segment reads back out of filters rather than shadowing it in a
 	// second state field, so the control can never disagree with the table.
 	const activeStatus = $derived<MatchStatusSegment>(
@@ -256,38 +255,19 @@
 		<Tabs.Content value="matches">
 			<section class="mb-8">
 				<h2 class="mb-3 text-base font-bold text-tan">Matches</h2>
-				<!-- Status switch: one bucket at a time with its count, the lit
-				     segment sliding across (the matches page's view switch, and the
-				     game detail tabs', in the same construct). All comes first so
-				     widening back out is one click from anywhere. -->
-				<div
-					class="relative mb-3 grid w-fit overflow-hidden rounded-lg border-2 border-surface"
-					style="background-color: rgb(var(--color-surface)); grid-template-columns: repeat({STATUS_SEGMENTS.length}, minmax(0, 1fr));"
-					role="group"
-					aria-label="Match status"
-				>
-					<div
-						class="pointer-events-none absolute inset-y-0 left-0 transition-transform duration-200 ease-out"
-						style:width="{100 / STATUS_SEGMENTS.length}%"
-						style:background-color="rgb(var(--color-surface-raised))"
-						style:transform="translateX({STATUS_SEGMENTS.findIndex(
-							(s) => s.key === activeStatus,
-						) * 100}%)"
-					></div>
-					{#each STATUS_SEGMENTS as segment (segment.key)}
-						<button
-							type="button"
-							class={statusTriggerClass}
-							aria-pressed={activeStatus === segment.key}
-							onclick={() => selectStatus(segment.key)}
-						>
-							{segment.label}
-							<span class="ml-1 opacity-60"
-								>{statusCounts[segment.key] ?? 0}</span
-							>
-						</button>
-					{/each}
-				</div>
+				<!-- Status switch: one bucket at a time with its count. All comes
+				     first so widening back out is one click from anywhere. -->
+				<SegmentedSwitch
+					items={STATUS_SEGMENTS.map((seg) => ({
+						key: seg.key,
+						label: seg.label,
+						count: statusCounts[seg.key] ?? 0,
+					}))}
+					value={activeStatus}
+					onChange={(key) => selectStatus(key as MatchStatusSegment)}
+					ariaLabel="Match status"
+					class="mb-3 w-fit"
+				/>
 				<MatchTable
 					columns={matchColumns}
 					rows={matchRows}
@@ -361,7 +341,10 @@
 
 		<!-- Leaders — the starting leader each player was dealt (Plane B1):
 		     archetype and the traits they began with, each as games played
-		     split by outcome. -->
+		     split by outcome; then every reign the field actually had, banded by
+		     turn. The band section is the same component the stats catalog's
+		     Leaders panel renders, so the two pages can't drift on what a band
+		     means or on which caveats it carries. -->
 		<Tabs.Content value="leaders">
 			<section class="mb-8">
 				<h2 class="mb-3 text-base font-bold text-tan">Starting archetype</h2>
@@ -376,6 +359,13 @@
 						{ARCHETYPE_EMPTY_MESSAGE}
 					</p>
 				{/if}
+			</section>
+
+			<!-- The starting bar above covers one leader per seat, who holds
+			     under half the throne-time; this is the rest of it. -->
+			<section class="mb-8">
+				<h2 class="mb-3 text-base font-bold text-tan">Archetype throne-time</h2>
+				<ArchetypeThroneTimePanel bundle={data.games} />
 			</section>
 
 			<section class="mb-8">
