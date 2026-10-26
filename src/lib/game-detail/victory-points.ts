@@ -27,16 +27,14 @@
 // dependency-free — the two generated tables and the semver compare — with no
 // `$lib` aliases and nothing from the parser's type tree.
 //
-// What it CANNOT answer: `countVP` is `virtual`, so a scenario is free to
-// score its own way. A save names the scenario and mods that were in force
-// (`setup_parameters.Scenario`, `enabled_mods`) but says nothing about whether
-// either replaced the scoring. The Hill is the corpus's one such save — a
-// king-of-the-hill scenario whose Rome recorded 1207 points on turn 15,
-// against a base-game rule that computes 0 — and its mod source does not ship
-// with `Reference/`, so there is nothing to read the override from. The cost
-// is a wrong answer rather than a missing one, and a conspicuous one: that
-// seat won the game on points, and the base-game rule ranks it LAST, behind
-// two Assyrian seats it pays 9 each. 1 of the 116 saves in `test-data/saves/`.
+// What it CANNOT answer: a mod's own victory points. `countVP`'s third term is
+// `getEffectPlayerCount(e) * effectPlayer.miVP` summed over every effect
+// player, and that counter is not in the save — `Player.writeGameXML` writes
+// no element for it, and the game rebuilds it on load from each thing that
+// granted one. So the term has to be reconstructed from the tables that grant
+// one, which is what the bake inverts, and a mod's own table is invisible to
+// it. `MODS_WITH_UNBAKED_VICTORY_POINTS` below names the mod that has one, and
+// the recomputation declines to answer for a game that was played with it.
 
 import { isNewer } from "../utils/semver";
 import { VICTORY_POINT_VICTORIES } from "../generated/game-setup";
@@ -67,6 +65,38 @@ import {
  * fall back to the game's own recorded series.
  */
 const VICTORY_POINT_MIN_PARSER_VERSION = "2.17.0";
+
+/**
+ * Mods whose own content grants a victory point this cannot price, under the
+ * names the save's `Version` attribute carries.
+ *
+ * The Hill is the one here. It adds a concept of its own, `playerProject`, and
+ * feeds that project's effect player straight into the per-player counter
+ * `countVP` sums (`TheHillPlayer.setPlayerProjectCount` →
+ * `Player.changeEffectPlayerCount`), so its points arrive through the base
+ * game's own third term rather than an override — nothing overrides `countVP`.
+ * The grant and its `<iVP>` live in the mod's XML, and The Hill is the one
+ * name in `ModPath.reservedInternalModNames` whose directory
+ * `Reference/XML/Mods/` does not ship: 27 directories against 28 names, so
+ * `loadMergedEntries` reads every internal mod's overlay but that one.
+ * (`setPlayerProjectCount` and `reservedInternalModNames` are both in the
+ * decompiled app assemblies, `Assembly-CSharp/TheHill/` and
+ * `Assembly-CSharp/ModPath.cs`, not in `Reference/Source`.)
+ *
+ * Read off `enabled_mods` and not `setup_parameters.Scenario`, which says
+ * `SCENARIO_THE_HILL` on the same save: the setup bag arrived in
+ * PARSER_VERSION 2.28.0, well above this floor, so a stored blob between the
+ * two names the scenario nowhere. `enabled_mods` comes off the root `Version`
+ * attribute, which every blob carries.
+ *
+ * Per mod rather than "any mod at all": 32 of the 116 saves in
+ * `test-data/saves/` name one, nearly all of them UI and map mods that grant
+ * no points, and gating on the presence of a mod would throw those answers
+ * away. The cost of that choice is that a mod nobody has looked at is scored
+ * as if it granted nothing, which is the same wrong answer this list exists to
+ * remove for The Hill.
+ */
+const MODS_WITH_UNBAKED_VICTORY_POINTS: readonly string[] = ["TheHill"];
 
 /** `city_statistics.cities[]`, narrowed to what `countVP` reads. */
 interface VictoryPointCityLike {
@@ -105,6 +135,12 @@ export interface VictoryPointSources {
 	 * (`derive/game-details.ts` writes both from one source).
 	 */
 	victoryConditions: string | null;
+	/**
+	 * `enabled_mods`, the `+`-joined mod names the save's `Version` attribute
+	 * carries — `match_metadata`'s copy in the Worker, `game_details`' on the
+	 * page (`derive/game-details.ts` writes both from one source).
+	 */
+	enabledMods: string | null;
 	playerHistory: readonly VictoryPointHistoryLike[];
 	cities: readonly VictoryPointCityLike[];
 	mapTiles: readonly VictoryPointTileLike[];
@@ -134,16 +170,24 @@ export function hasVictoryPoints(victoryConditions: string | null): boolean {
 	return VICTORY_POINT_VICTORIES.some((v) => enabled.has(v));
 }
 
+/** Whether any mod in {@link MODS_WITH_UNBAKED_VICTORY_POINTS} was in force. */
+function hasUnbakedVictoryPoints(enabledMods: string | null): boolean {
+	const enabled = new Set(enabledMods?.split("+"));
+	return MODS_WITH_UNBAKED_VICTORY_POINTS.some((m) => enabled.has(m));
+}
+
 /**
  * Every seat's `countVP()` over the save's end state, keyed by player xml id —
  * or `null` when this blob cannot answer, which is the caller's signal to fall
  * back to the recorded series rather than to show a number that is short.
  *
- * `null` covers two cases:
+ * `null` covers three cases:
  *   - the blob predates {@link VICTORY_POINT_MIN_PARSER_VERSION};
  *   - the game cannot be won on points, {@link hasVictoryPoints}. Recomputing
  *     there would print a victory-point total for a game that was never played
  *     for them.
+ *   - a mod in {@link MODS_WITH_UNBAKED_VICTORY_POINTS} was in force, so the
+ *     recomputation would come out short by whatever that mod granted.
  *
  * Deliberately NOT gated on whether the save recorded a points series: an
  * empty `<PointsHistory>` is an old build or a game too short to have written
@@ -162,6 +206,7 @@ export function victoryPointsByPlayer(
 ): Map<number, number> | null {
 	if (isNewer(VICTORY_POINT_MIN_PARSER_VERSION, src.parserVersion)) return null;
 	if (!hasVictoryPoints(src.victoryConditions)) return null;
+	if (hasUnbakedVictoryPoints(src.enabledMods)) return null;
 
 	const totals = new Map<number, number>();
 	for (const p of src.playerHistory) totals.set(p.player_id, 0);

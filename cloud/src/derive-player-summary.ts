@@ -110,15 +110,16 @@ export function buildSummaryGameContext(
 
 	// Victory points as the game's own victory screen computes them, not as
 	// its turn-start series records them — the recomputation is the number,
-	// and the series is the fallback for a blob too old to answer (#340).
+	// and the series is the fallback wherever it returns null (#340).
 	// `vp_margin` below reads the same map, so a seat's margin can never be
 	// measured against a total nobody is shown.
 	const recomputed = victoryPointsByPlayer({
 		parserVersion: blob.parser_version,
 		// `match_metadata` is where the Worker's blob schema carries the victory
-		// settings; `game_details.victory_conditions`, which the game page
-		// reads, is the same string (derive/game-details.ts writes both).
+		// settings and the mod list; `game_details`' copies, which the game page
+		// reads, are the same strings (derive/game-details.ts writes both).
 		victoryConditions: blob.match_metadata.victory_conditions,
+		enabledMods: blob.match_metadata.enabled_mods,
 		playerHistory,
 		cities: cityStats.cities,
 		mapTiles: blob.map_tiles as VictoryPointTileLike[],

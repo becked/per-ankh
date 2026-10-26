@@ -489,7 +489,7 @@ Several elements track turn-by-turn history (typically one entry per turn):
 </PointsHistory>
 ```
 
-Not the save's victory-point total. `Player.updateHistoryRates` (Player.cs:17065) stores `countVP()` against the current turn, and `Player.doTurn` (Player.cs:17017) calls it as its **first** statement, before `processTurn` — so the value keyed to turn T is that seat's total the instant its turn T began, before that turn's culture growth, wonder completions, captures and losses. `Player.setTurnPoints` (Player.cs:11378) then writes only on a change, so the series is sparse and a seat's last entry can predate the save by many turns; a dead seat's freezes at elimination. The game's own stats graph reads this series and agrees with it, but its victory screen does not: `CompletedGame.Init` (CompletedGame.cs:95) takes `player.countVP()` live. For the end-state total, recompute — `src/lib/game-detail/victory-points.ts` is that recomputation, and across `test-data/saves/` it differs from the last recorded entry on 98 of the 314 seats that hold one.
+Not the save's victory-point total. `Player.updateHistoryRates` (Player.cs:17065) stores `countVP()` against the current turn, and `Player.doTurn` (Player.cs:17017) calls it as its **first** statement, before `processTurn` — so the value keyed to turn T is that seat's total the instant its turn T began, before that turn's culture growth, wonder completions, captures and losses. `Player.setTurnPoints` (Player.cs:11378) then writes only on a change, so the series is sparse and a seat's last entry can predate the save by many turns; a dead seat's freezes at elimination. The game's own stats graph reads this series and agrees with it, but its victory screen does not: `CompletedGame.Init` (CompletedGame.cs:95) takes `player.countVP()` live. For the end-state total, recompute — `src/lib/game-detail/victory-points.ts` is that recomputation, and across `test-data/saves/` it differs from the last recorded entry on 96 of the 312 seats that hold one in a game it answers for.
 
 **YieldRateHistory** - Production rates per turn by yield type:
 
@@ -1567,9 +1567,29 @@ These are encoded in two different places:
 
 A `Version`-string-only DLC parser will report zero DLCs on every save.
 
+The mod token is also the only thing a save says about a mod. There is no flag saying what a mod changed, so a reader that depends on a mod's content has to key on the name: `MODS_WITH_UNBAKED_VICTORY_POINTS` (`src/lib/game-detail/victory-points.ts`) is one, and `TheHill` is the name in it. 32 of the 116 saves in `test-data/saves/` carry at least one token, nearly all of them UI and map mods.
+
+### A mod writes its own elements
+
+A mod that extends a game object writes its own element beside the base one, not inside it. The Hill writes one per player, a sibling of `<Player>` under the same parent, keyed by the same `ID`:
+
+```xml
+<Player ID="2" Nation="NATION_ROME">...</Player>
+<TheHillPlayer ID="2">
+  <PlayerProjectCount>
+    <PLAYERPROJECT_KILLED_OPPONENT_UNIT>7</PLAYERPROJECT_KILLED_OPPONENT_UNIT>
+    <PLAYERPROJECT_HILL_CITY_CAPTURED>13</PLAYERPROJECT_HILL_CITY_CAPTURED>
+  </PlayerProjectCount>
+</TheHillPlayer>
+```
+
+`TheHillPlayer.writeGameXML` calls the base writer first and then opens its own element; `readGameXML` finds it again through `pNode.ParentNode.SelectSingleNode("TheHillPlayer[@ID='…']")` and throws on a save written without the mod. The element is written for every seat, empty (`<PlayerProjectCount />`) for a seat with no counts — all 3 seats of the one corpus save that carries it.
+
+A `playerProject` is a victory-point source: `setPlayerProjectCount` feeds the project's effect player into `Player.changeEffectPlayerCount`, which is what `Player.countVP` (Player.cs:19230) sums as its third term. The counts are here, but the `<iVP>` that prices them is in the mod's XML, which `Reference/XML/Mods/` does not ship — so a save's own numbers are not enough to reproduce a Hill total, and the mod is in `MODS_WITH_UNBAKED_VICTORY_POINTS` for that reason. (Both methods are in the decompiled mod assembly, `Assembly-CSharp/TheHill/`, not in `Reference/Source`.)
+
 ### Culture level is a string enum
 
-`<CultureLevel>` stores a string constant, not an integer:
+A city's culture level is a string constant, not an integer:
 
 | Value                | Rank | `<iVP>` |
 | -------------------- | ---- | ------- |
@@ -1579,6 +1599,8 @@ A `Version`-string-only DLC parser will report zero DLCs on every save.
 | `CULTURE_LEGENDARY`  | 3    | 4       |
 
 Four tiers, and `culture.xml` names no others. The rank is their order there, which is what `cultureRank` (`src/lib/generated/wonders.ts`) resolves a level against; the `<iVP>` is what a city at that tier pays its owner in victory points (`Player.countCultureCities`, Player.cs:18540).
+
+The element is `<TeamCulture>`, per team, documented with `<TeamCultureStep>` above — `City.writeGameXML` writes it at City.cs:1454. There is no `<CultureLevel>`: no writer in the game's source emits that name, and 0 of the 116 saves in `test-data/saves/` carry it.
 
 Schema columns must be VARCHAR; integer parsing throws.
 

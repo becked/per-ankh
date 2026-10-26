@@ -20,6 +20,7 @@ function sources(over: Partial<VictoryPointSources> = {}): VictoryPointSources {
 	return {
 		parserVersion: CURRENT,
 		victoryConditions: "VICTORY_POINTS+VICTORY_AMBITION",
+		enabledMods: null,
 		playerHistory: HISTORY,
 		cities: [],
 		mapTiles: [],
@@ -212,6 +213,24 @@ describe("victoryPointsByPlayer — when the blob cannot answer", () => {
 					playerHistory: [{ player_id: 0, history: [{ points: null }] }],
 					mapTiles: [TILE],
 				}),
+			)?.get(0),
+		).toBe(2);
+	});
+
+	it("returns null for a game played with The Hill", () => {
+		// The mod grants points from its own XML, which the bake never read, so
+		// the recomputation would come out short by whatever it granted.
+		expect(
+			victoryPointsByPlayer(
+				sources({ enabledMods: "TheHill", mapTiles: [TILE] }),
+			),
+		).toBeNull();
+	});
+
+	it("answers for a mod that grants no points of its own", () => {
+		expect(
+			victoryPointsByPlayer(
+				sources({ enabledMods: "Zoom More+Map Search", mapTiles: [TILE] }),
 			)?.get(0),
 		).toBe(2);
 	});

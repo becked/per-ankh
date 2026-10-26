@@ -89,12 +89,14 @@
 	// Victory points as the game's victory screen computes them — the save's
 	// `<PointsHistory>` samples them at the top of each seat's own turn, so its
 	// last entry misses everything that turn did (#340). Null on a blob too old
-	// to recompute from, or a game that cannot be won on points; the metric bar
-	// falls back to the recorded series there.
+	// to recompute from, a game that cannot be won on points, or a mod that
+	// grants points of its own; the metric bar falls back to the recorded
+	// series there.
 	const victoryPoints = $derived(
 		victoryPointsByPlayer({
 			parserVersion,
 			victoryConditions: gameDetails.victory_conditions,
+			enabledMods: gameDetails.enabled_mods,
 			playerHistory,
 			cities: cityStatistics.cities,
 			mapTiles,
