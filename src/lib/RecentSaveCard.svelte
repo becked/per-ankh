@@ -13,6 +13,7 @@
 		escapeHtml,
 		nationName,
 	} from "$lib/utils/formatting";
+	import { withEndStateTotal } from "$lib/utils/victory-point-series";
 	import {
 		mapScriptLabel,
 		mapSizeLabel,
@@ -213,7 +214,14 @@
 			smooth: true,
 			sampling: "lttb",
 			lineStyle: { width: 1.5, color: playerColor(p.nation, i) },
-			data: p.vp_series.map((pt) => [pt.turn, pt.vp ?? 0]),
+			// `final_points` is this seat's end-state total, written at upload
+			// (derive-player-summary.ts). The card has no blob to recompute from,
+			// so a game uploaded before that recomputation shipped keeps the
+			// recorded sample here until an operator reparse.
+			data: withEndStateTotal(
+				p.vp_series.map((pt): [number, number | null] => [pt.turn, pt.vp ?? 0]),
+				p.final_points,
+			),
 		})),
 	});
 

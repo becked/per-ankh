@@ -17,6 +17,7 @@
 	import { PUBLIC_ORIGIN } from "$lib/page-meta";
 	import Chart from "$lib/Chart.svelte";
 	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
+	import { victoryPointsByPlayer } from "$lib/game-detail/victory-points";
 	import ProfileLink from "$lib/ProfileLink.svelte";
 	import PlayerAvatar from "$lib/tournament/PlayerAvatar.svelte";
 	import { padMatchNumber } from "$lib/tournament/match-numbers";
@@ -42,6 +43,7 @@
 		escapeHtml,
 		nationName,
 	} from "$lib/utils/formatting";
+	import { withEndStateTotal } from "$lib/utils/victory-point-series";
 	import {
 		isMatchParticipant,
 		matchSlotArchetype,
@@ -586,9 +588,28 @@
 		(gameData?.player_history ?? []).some((p) => p.history.length > 0),
 	);
 
+	// Every seat's victory points over the save's end state — the number the
+	// game page's Victory Points bar shows. Null where this blob cannot
+	// answer (game-detail/victory-points.ts), which leaves the sparkline
+	// wholly on the recorded series.
+	const victoryPoints = $derived(
+		gameData
+			? victoryPointsByPlayer({
+					parserVersion: gameData.parser_version,
+					victoryConditions: gameData.game_details.victory_conditions,
+					enabledMods: gameData.game_details.enabled_mods,
+					playerHistory: gameData.player_history,
+					cities: gameData.city_statistics.cities,
+					mapTiles: gameData.map_tiles,
+					completedTechs: gameData.completed_techs,
+				})
+			: null,
+	);
+
 	// Per-turn victory-points series per player — mirrors the home-page
 	// RecentSaveCard sparkline. Sourced directly from the blob's
-	// player_history (which carries `points`), so no reindex is needed here.
+	// player_history (which carries `points`), so no reindex is needed here;
+	// its last point is the end-state total above.
 	const sparklineOption = $derived<ChartOption>({
 		animation: false,
 		backgroundColor: "transparent",
@@ -627,7 +648,13 @@
 			smooth: true,
 			sampling: "lttb",
 			lineStyle: { width: 1.5, color: playerColor(p.nation, i) },
-			data: p.history.map((pt) => [pt.turn, pt.points ?? 0]),
+			data: withEndStateTotal(
+				p.history.map((pt): [number, number | null] => [
+					pt.turn,
+					pt.points ?? 0,
+				]),
+				victoryPoints?.get(p.player_id),
+			),
 		})),
 	});
 

@@ -8,7 +8,7 @@
 	import type { cloudApi } from "$lib/api-cloud";
 	import ChunkFallback from "$lib/ui/ChunkFallback.svelte";
 	import { leadPlayerId, resolveGamePlayers, uploaderPlayer } from "./helpers";
-	import { hasVictoryPoints } from "./victory-points";
+	import { hasVictoryPoints, victoryPointsByPlayer } from "./victory-points";
 	import { getGameTabState, type GameTabId } from "./game-tabs.svelte";
 	import { LAZY_TABS, lazyTab } from "./tab-components.svelte";
 	import OverviewTab from "./OverviewTab.svelte";
@@ -108,6 +108,25 @@
 	const victoryPointsEnabled = $derived(
 		hasVictoryPoints(game.game_details.victory_conditions),
 	);
+
+	// Every seat's victory points as the game's victory screen computes them,
+	// recomputed over the save's end state because the recorded series samples
+	// at each seat's turn start (victory-points.ts). Null where this blob
+	// cannot answer. Here rather than in either tab because both show it —
+	// the Overview tab's metric bar and the Events tab's chart — and a seat's
+	// bar and line cannot disagree if they read one map. `$derived` is lazy,
+	// so a tab that takes neither prop never computes it.
+	const victoryPoints = $derived(
+		victoryPointsByPlayer({
+			parserVersion: game.parser_version,
+			victoryConditions: game.game_details.victory_conditions,
+			enabledMods: game.game_details.enabled_mods,
+			playerHistory: game.player_history,
+			cities: game.city_statistics.cities,
+			mapTiles: game.map_tiles,
+			completedTechs: game.completed_techs,
+		}),
+	);
 </script>
 
 {#if tab === "overview"}
@@ -121,8 +140,7 @@
 		currentLaws={game.current_laws}
 		unitsProduced={game.units_produced}
 		cityStatistics={game.city_statistics}
-		mapTiles={game.map_tiles}
-		parserVersion={game.parser_version}
+		{victoryPoints}
 		{victoryPointsEnabled}
 		improvementData={game.improvement_data}
 		gameReligions={game.game_religions}
@@ -154,6 +172,7 @@
 		playerHistory={game.player_history}
 		players={resolvedPlayers}
 		{victoryPointsEnabled}
+		{victoryPoints}
 		bind:chartFilter={tabState.chartFilters.points}
 		bind:tableState={tabState.tables.events}
 	/>
