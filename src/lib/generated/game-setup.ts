@@ -3,8 +3,9 @@
 //
 // The VOCABULARY of a game's setup: the display name of every value a setup
 // parameter takes, and the victory types that carry victory points. Read by
-// `$lib/map-settings` and by `hasVictoryPoints` ($lib/game-detail/helpers),
-// both of which the home page's save cards reach.
+// `$lib/map-settings` and by `hasVictoryPoints`
+// ($lib/game-detail/victory-points), both of which the home page's save
+// cards reach.
 //
 // Separate from game-setup-sections.ts because rollup places a whole module
 // in a chunk: one table holding both halves put the Settings tab's row model

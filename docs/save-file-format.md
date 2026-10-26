@@ -489,7 +489,7 @@ Several elements track turn-by-turn history (typically one entry per turn):
 </PointsHistory>
 ```
 
-Not the save's victory-point total. `Player.updateHistoryRates` (Player.cs:17065) stores `countVP()` against the current turn, and `Player.doTurn` (Player.cs:17017) calls it as its **first** statement, before `processTurn` — so the value keyed to turn T is that seat's total the instant its turn T began, before that turn's culture growth, wonder completions, captures and losses. `Player.setTurnPoints` (Player.cs:11378) then writes only on a change, so the series is sparse and a seat's last entry can predate the save by many turns; a dead seat's freezes at elimination. The game's own stats graph reads this series and agrees with it, but its victory screen does not: `CompletedGame.Init` (CompletedGame.cs:95) takes `player.countVP()` live. For the end-state total, recompute — `src/lib/game-detail/victory-points.ts` is that recomputation, and across `test-data/saves/` it differs from the last recorded entry on 99 of 315 seats.
+Not the save's victory-point total. `Player.updateHistoryRates` (Player.cs:17065) stores `countVP()` against the current turn, and `Player.doTurn` (Player.cs:17017) calls it as its **first** statement, before `processTurn` — so the value keyed to turn T is that seat's total the instant its turn T began, before that turn's culture growth, wonder completions, captures and losses. `Player.setTurnPoints` (Player.cs:11378) then writes only on a change, so the series is sparse and a seat's last entry can predate the save by many turns; a dead seat's freezes at elimination. The game's own stats graph reads this series and agrees with it, but its victory screen does not: `CompletedGame.Init` (CompletedGame.cs:95) takes `player.countVP()` live. For the end-state total, recompute — `src/lib/game-detail/victory-points.ts` is that recomputation, and across `test-data/saves/` it differs from the last recorded entry on 98 of the 314 seats that hold one.
 
 **YieldRateHistory** - Production rates per turn by yield type:
 
@@ -1127,7 +1127,7 @@ All three use the `T.X` keyed form (team-level, not player-level):
 Older saves (2022) expose `<TeamDiscontentLevel>` instead of
 `<TeamHappinessLevel>` — fall back to it when the newer name is missing.
 
-`<TeamCultureStep>` is how much a city has grown **past** the top tier: `City.growCulture` (City.cs:6861) increments it once `getNextCulture` has nothing left to promote to, and each step is a victory point the tier itself no longer pays (`Player.countCultureStepVPs`, Player.cs:18556). It is written only for a non-zero value (City.cs:1355), so an absent team is a city that can still promote. 60 of 2769 city rows across `test-data/saves/` carry one, in 21 of the 116 saves, every one of them 1 or 2.
+`<TeamCultureStep>` is how much a city has grown **past** the top tier: `City.growCulture` (City.cs:6861) increments it once `getNextCulture` has nothing left to promote to, and each step is a victory point the tier itself no longer pays (`Player.countCultureStepVPs`, Player.cs:18556). It is written only for a non-zero value (City.cs:1355), so an absent team is a city that can still promote. 60 of the 9745 `(city, team)` rows across `test-data/saves/` carry one, in 21 of the 116 saves, every one of them 1 or 2; 56 of the 60 sit in the owner team's slot, which is the one `city_statistics.cities[].culture_step` reads (20 saves, 56 of 2769 city rows).
 
 The `T.X` key here is a **team index**, not a turn, and none of the three has a
 history form — see [`T{n}` is not always a turn](#tn-is-not-always-a-turn--it-is-sometimes-a-team).
@@ -1571,13 +1571,14 @@ A `Version`-string-only DLC parser will report zero DLCs on every save.
 
 `<CultureLevel>` stores a string constant, not an integer:
 
-| Value                 | Tier |
-| --------------------- | ---- |
-| `CULTURE_WEAK`        | 0    |
-| `CULTURE_DEVELOPING`  | 1    |
-| `CULTURE_STRONG`      | 2    |
-| `CULTURE_ESTABLISHED` | 3    |
-| `CULTURE_LEGENDARY`   | 4    |
+| Value                | Rank | `<iVP>` |
+| -------------------- | ---- | ------- |
+| `CULTURE_WEAK`       | 0    | 1       |
+| `CULTURE_DEVELOPING` | 1    | 2       |
+| `CULTURE_STRONG`     | 2    | 3       |
+| `CULTURE_LEGENDARY`  | 3    | 4       |
+
+Four tiers, and `culture.xml` names no others. The rank is their order there, which is what `cultureRank` (`src/lib/generated/wonders.ts`) resolves a level against; the `<iVP>` is what a city at that tier pays its owner in victory points (`Player.countCultureCities`, Player.cs:18540).
 
 Schema columns must be VARCHAR; integer parsing throws.
 

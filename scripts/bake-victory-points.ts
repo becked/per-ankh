@@ -1,4 +1,4 @@
-// Bake everything that grants a victory point, so `countVictoryPoints`
+// Bake everything that grants a victory point, so `victoryPointsByPlayer`
 // (src/lib/game-detail/victory-points.ts) can recompute `Player.countVP`
 // (Player.cs:19230) over a save's end state instead of reading the game's
 // turn-start sample.
@@ -199,8 +199,11 @@ async function main(): Promise<void> {
 			"TECH_VP",
 			[
 				"A completed tech, worth this much for as long as the player has it",
-				"(`Player.setTechCount`, Player.cs:8452) — which outlives their last",
-				"city, since the save writes <TechCount> for a dead seat too.",
+				"(`Player.setTechCount`, Player.cs:8452) — nothing takes the grant",
+				"back, so it outlives the seat's last city. Keyed on the blob's",
+				"`completed_techs`, which derives from TECH_DISCOVERED event logs",
+				"rather than from <TechCount>; across test-data/saves the two name",
+				"the same 60 VP-tech holdings, with 0 seats disagreeing.",
 			],
 			granted.get("tech") as Map<string, number>,
 		) +

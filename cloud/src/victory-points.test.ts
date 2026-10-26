@@ -10,7 +10,7 @@ import {
 
 const CURRENT = "2.29.0";
 
-/** Two seats, each with one recorded point, so the game counts as a points game. */
+/** The seat list — `countVP` is summed for the seats the history names. */
 const HISTORY = [
 	{ player_id: 0, history: [{ points: 3 }] },
 	{ player_id: 1, history: [{ points: 0 }] },
@@ -19,6 +19,7 @@ const HISTORY = [
 function sources(over: Partial<VictoryPointSources> = {}): VictoryPointSources {
 	return {
 		parserVersion: CURRENT,
+		victoryConditions: "VICTORY_POINTS+VICTORY_AMBITION",
 		playerHistory: HISTORY,
 		cities: [],
 		mapTiles: [],
@@ -180,18 +181,42 @@ describe("victoryPointsByPlayer — when the blob cannot answer", () => {
 		).toBe(2);
 	});
 
-	it("returns null for a game that records no points at all", () => {
+	it("returns null for a game that cannot be won on points", () => {
 		expect(
 			victoryPointsByPlayer(
 				sources({
-					playerHistory: [{ player_id: 0, history: [{ points: null }] }],
+					victoryConditions: "VICTORY_AMBITION+VICTORY_CONQUEST",
 					mapTiles: [TILE],
 				}),
 			),
 		).toBeNull();
 	});
 
-	it("gives every seat a number once any of them records one", () => {
+	it("answers on Double alone, which carries a points threshold", () => {
+		expect(
+			victoryPointsByPlayer(
+				sources({
+					victoryConditions: "VICTORY_DOUBLE+VICTORY_CONQUEST",
+					mapTiles: [TILE],
+				}),
+			)?.get(0),
+		).toBe(2);
+	});
+
+	it("answers a points game whose series recorded nothing", () => {
+		// An empty `<PointsHistory>` is an old build or a game too short to
+		// have written one, not a victory setting.
+		expect(
+			victoryPointsByPlayer(
+				sources({
+					playerHistory: [{ player_id: 0, history: [{ points: null }] }],
+					mapTiles: [TILE],
+				}),
+			)?.get(0),
+		).toBe(2);
+	});
+
+	it("gives every seat a number, one that scored nothing included", () => {
 		const vp = victoryPointsByPlayer(sources());
 		expect([...(vp?.keys() ?? [])]).toEqual([0, 1]);
 		expect(vp?.get(1)).toBe(0);

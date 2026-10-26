@@ -11,23 +11,35 @@
 // `CompletedGame.Init` (CompletedGame.cs:95) takes `player.countVP()` live.
 //
 // So this module recomputes `Player.countVP` (Player.cs:19230) over the blob's
-// end state. Two callers must never disagree about the answer — the game
-// page's Victory Points metric bar, and the Worker's `derivePlayerSummary`,
-// which persists it as `player_summaries.final_points` for the stats corpus —
-// so the definition lives here. Like `gdp-basket.ts`, the module is reachable
-// from `cloud/` across the package boundary, which means its only import is a
-// RELATIVE one of the generated table: no `$lib` aliases, nothing from the
-// parser's type tree.
+// end state, and holds the predicate for whether a game's points mean anything
+// at all. Two surfaces read it — the game page's Victory Points metric bar and
+// the Worker's `derivePlayerSummary`, which persists the answer as
+// `player_summaries.final_points` for the stats corpus — so the definition
+// lives here rather than once in each. What that does NOT buy is agreement
+// about an already-stored game: the bar recomputes on every render, while
+// `final_points` was written at upload and nothing rewrites it, so a game
+// uploaded before this shipped keeps its old number in the corpus (and in
+// `RecentSaveCard` and the per-nation average, which read the stored row)
+// until an operator runs `./per-ankh admin reparse-all`.
+//
+// Like `gdp-basket.ts`, the module is reachable from `cloud/` across the
+// package boundary, which means every import here is RELATIVE and itself
+// dependency-free — the two generated tables and the semver compare — with no
+// `$lib` aliases and nothing from the parser's type tree.
 //
 // What it CANNOT answer: `countVP` is `virtual`, so a scenario is free to
-// score its own way, and a save carries no flag saying whether one did. The
-// Hill is the corpus's one such save — a king-of-the-hill scenario whose Rome
-// recorded 1207 points on turn 15, against a base-game rule that computes 0 —
-// and its mod source does not ship with `Reference/`, so there is nothing to
-// read the override from. 1 of the 116 saves in `test-data/saves/`; a
-// scenario like it gets the base game's answer, which is wrong for it.
+// score its own way. A save names the scenario and mods that were in force
+// (`setup_parameters.Scenario`, `enabled_mods`) but says nothing about whether
+// either replaced the scoring. The Hill is the corpus's one such save — a
+// king-of-the-hill scenario whose Rome recorded 1207 points on turn 15,
+// against a base-game rule that computes 0 — and its mod source does not ship
+// with `Reference/`, so there is nothing to read the override from. The cost
+// is a wrong answer rather than a missing one, and a conspicuous one: that
+// seat won the game on points, and the base-game rule ranks it LAST, behind
+// two Assyrian seats it pays 9 each. 1 of the 116 saves in `test-data/saves/`.
 
 import { isNewer } from "../utils/semver";
+import { VICTORY_POINT_VICTORIES } from "../generated/game-setup";
 import {
 	CULTURE_VP,
 	IMPROVEMENT_VP,
@@ -54,10 +66,10 @@ import {
  * Below the floor there is no partial answer worth showing, so the callers
  * fall back to the game's own recorded series.
  */
-export const VICTORY_POINT_MIN_PARSER_VERSION = "2.17.0";
+const VICTORY_POINT_MIN_PARSER_VERSION = "2.17.0";
 
 /** `city_statistics.cities[]`, narrowed to what `countVP` reads. */
-export interface VictoryPointCityLike {
+interface VictoryPointCityLike {
 	owner_player_xml_id?: number | null;
 	culture_level: string | null;
 	culture_step?: number;
@@ -74,23 +86,52 @@ export interface VictoryPointTileLike {
 }
 
 /** `completed_techs[]`, narrowed to what `countVP` reads. */
-export interface VictoryPointTechLike {
+interface VictoryPointTechLike {
 	player_id: number;
 	tech: string;
 }
 
-/** `player_history[]`, narrowed to the seat list and the relevance test. */
-export interface VictoryPointHistoryLike {
+/** `player_history[]`, narrowed to the seat list. */
+interface VictoryPointHistoryLike {
 	player_id: number;
 	history: Array<{ points: number | null }>;
 }
 
 export interface VictoryPointSources {
 	parserVersion: string;
+	/**
+	 * `victory_conditions`, the `+`-joined victory types the game enabled —
+	 * `match_metadata`'s copy in the Worker, `game_details`' on the page
+	 * (`derive/game-details.ts` writes both from one source).
+	 */
+	victoryConditions: string | null;
 	playerHistory: readonly VictoryPointHistoryLike[];
 	cities: readonly VictoryPointCityLike[];
 	mapTiles: readonly VictoryPointTileLike[];
 	completedTechs: readonly VictoryPointTechLike[];
+}
+
+/**
+ * Whether the game can be won on victory points, so points mean something —
+ * the game's own `isPointsVictory` (`buildGameParametersDesc`,
+ * HelpText.Game.cs:3726): an ENABLED victory type whose `<iPercentVP>` is
+ * non-zero, which `VICTORY_POINT_VICTORIES` is the baked set of.
+ *
+ * Not the same question as whether `VICTORY_POINTS` itself is on: Double
+ * carries `iPercentVP` 50, so a game with only Double enabled still has a
+ * points threshold. 0 of the 116 saves in `test-data/saves/` enable Double
+ * without Points, so the corpus cannot tell the two answers apart — which is
+ * why it is the game's rule here rather than the simpler test, and why the
+ * Settings tab's Points to Win row and the victory-point charts read this one
+ * predicate instead of two.
+ *
+ * A blob carrying no `victory_conditions` at all answers false — 1 of those
+ * 116 saves. It cannot say, and it records no points either, so nothing is
+ * lost by reading it as a game that was not played for them.
+ */
+export function hasVictoryPoints(victoryConditions: string | null): boolean {
+	const enabled = new Set(victoryConditions?.split("+"));
+	return VICTORY_POINT_VICTORIES.some((v) => enabled.has(v));
 }
 
 /**
@@ -100,23 +141,27 @@ export interface VictoryPointSources {
  *
  * `null` covers two cases:
  *   - the blob predates {@link VICTORY_POINT_MIN_PARSER_VERSION};
- *   - the game records no points at all, which is `Game.areVictoryPointsRelevant`
- *     (Game.cs:14171) having been false for the whole game — the gate
- *     `updateHistoryRates` gives the series. Recomputing there would print a
- *     victory-point total for a game that was never played for them.
+ *   - the game cannot be won on points, {@link hasVictoryPoints}. Recomputing
+ *     there would print a victory-point total for a game that was never played
+ *     for them.
  *
- * Within a game that does record them, every seat gets a number, including a
- * seat that never scored and one that was conquered out: `Player.getTurnPoints`
- * (Player.cs:11369) answers 0 for both, and so does `countVP()`.
+ * Deliberately NOT gated on whether the save recorded a points series: an
+ * empty `<PointsHistory>` is an old build or a game too short to have written
+ * one, not a victory setting. Across `test-data/saves/`, 4 saves record no
+ * points with a points victory enabled — three of them 2022 builds, one a
+ * turn-1 save — and 0 record points with none enabled, so the victory settings
+ * answer the question the series only approximates.
+ *
+ * Within a game that can be won on points, every seat gets a number,
+ * including a seat that never scored and one that was conquered out:
+ * `Player.getTurnPoints` (Player.cs:11369) answers 0 for both, and so does
+ * `countVP()`.
  */
 export function victoryPointsByPlayer(
 	src: VictoryPointSources,
 ): Map<number, number> | null {
 	if (isNewer(VICTORY_POINT_MIN_PARSER_VERSION, src.parserVersion)) return null;
-	const recordsPoints = src.playerHistory.some((p) =>
-		p.history.some((h) => h.points != null),
-	);
-	if (!recordsPoints) return null;
+	if (!hasVictoryPoints(src.victoryConditions)) return null;
 
 	const totals = new Map<number, number>();
 	for (const p of src.playerHistory) totals.set(p.player_id, 0);

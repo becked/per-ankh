@@ -366,7 +366,10 @@ function buildMinimalGameBlob(
 			game_mode: "GAMEMODE_NORMAL",
 			difficulty: "LEVEL_THE_GREAT",
 			setup_parameters: { OpponentLevel: "LEVEL_THE_GREAT" },
-			victory_conditions: null,
+			// A points victory is enabled, which is what makes the fixture's
+			// points series mean something: `final_points` is `countVP` over the
+			// end state, and only a game that can be won on points gets one.
+			victory_conditions: "VICTORY_POINTS+VICTORY_AMBITION",
 			enabled_mods: null,
 			enabled_dlc: null,
 			game_over: gameOver,

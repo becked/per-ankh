@@ -98,7 +98,7 @@ tribe?: string | null,
  */
 capture_player_xml_id?: number | null, capture_tribe?: string | null,
 /**
- * Culture level as string enum (CULTURE_WEAK, CULTURE_DEVELOPING, CULTURE_STRONG, CULTURE_ESTABLISHED, CULTURE_LEGENDARY)
+ * Culture level as string enum (CULTURE_WEAK, CULTURE_DEVELOPING, CULTURE_STRONG, CULTURE_LEGENDARY)
  */
 culture_level: string | null,
 /**

@@ -20,11 +20,15 @@
 
 import { cultureRank } from "./generated/wonders";
 // Reaching across the package boundary, same rule as the gdp-basket import in
-// games.ts: victory-points.ts is deliberately dependency-free (one relative
-// import of its generated table, no $lib aliases) so the Worker bundle holds
-// the one definition of countVP rather than a mirror of it that drifts from
-// the game page's.
-import { victoryPointsByPlayer } from "../../src/lib/game-detail/victory-points";
+// games.ts: victory-points.ts is deliberately dependency-free (relative
+// imports of its generated tables and the semver compare, no $lib aliases) so
+// the Worker bundle holds the one definition of countVP, and the one predicate
+// for whether a game's points mean anything, rather than mirrors of them that
+// drift from the game page's.
+import {
+	victoryPointsByPlayer,
+	type VictoryPointTileLike,
+} from "../../src/lib/game-detail/victory-points";
 import type { FullGameData, PlayerRosterEntry } from "./schemas/game";
 
 // ---------- Wire-shape mirrors (kept in sync with src/lib/parser/types.ts
@@ -57,15 +61,6 @@ interface CityRow {
 	project_counts?: Array<{ project: string; count: number }>;
 	is_capital: boolean;
 	family_class: string | null;
-}
-
-// `map_tiles[]`, narrowed to the improvement term of countVP.
-interface MapTileRow {
-	owner_player_xml_id?: number | null;
-	owner_city: string | null;
-	improvement: string | null;
-	improvement_pillaged: boolean;
-	improvement_turns_left?: number | null;
 }
 
 interface FamilyRow {
@@ -120,9 +115,13 @@ export function buildSummaryGameContext(
 	// measured against a total nobody is shown.
 	const recomputed = victoryPointsByPlayer({
 		parserVersion: blob.parser_version,
+		// `match_metadata` is where the Worker's blob schema carries the victory
+		// settings; `game_details.victory_conditions`, which the game page
+		// reads, is the same string (derive/game-details.ts writes both).
+		victoryConditions: blob.match_metadata.victory_conditions,
 		playerHistory,
 		cities: cityStats.cities,
-		mapTiles: blob.map_tiles as MapTileRow[],
+		mapTiles: blob.map_tiles as VictoryPointTileLike[],
 		completedTechs: blob.completed_techs as CompletedTechRow[],
 	});
 
@@ -351,8 +350,11 @@ export function derivePlayerSummary(
 	}
 
 	// vp_margin — winners get distance to second place (positive), everyone
-	// else gets distance to first place (negative). NULL when this player
-	// has no points or there's only one ranked player (no margin to compute).
+	// else gets distance to first place (negative). NULL when the game has no
+	// points to rank at all — it cannot be won on them, or the blob is too old
+	// to recompute and this seat's series recorded nothing — or when only one
+	// player is ranked (no margin to compute). Inside a game that can be won
+	// on points, every seat is ranked, a seat that scored 0 included.
 	let vp_margin: number | null = null;
 	const ownFinal = ctx.finalPointsByIndex.get(idx);
 	if (ownFinal != null && ctx.firstPlace != null) {

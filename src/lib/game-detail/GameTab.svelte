@@ -7,12 +7,8 @@
 	// GameTabState), so it outlives the tab.
 	import type { cloudApi } from "$lib/api-cloud";
 	import ChunkFallback from "$lib/ui/ChunkFallback.svelte";
-	import {
-		hasVictoryPoints,
-		leadPlayerId,
-		resolveGamePlayers,
-		uploaderPlayer,
-	} from "./helpers";
+	import { leadPlayerId, resolveGamePlayers, uploaderPlayer } from "./helpers";
+	import { hasVictoryPoints } from "./victory-points";
 	import { getGameTabState, type GameTabId } from "./game-tabs.svelte";
 	import { LAZY_TABS, lazyTab } from "./tab-components.svelte";
 	import OverviewTab from "./OverviewTab.svelte";
@@ -109,7 +105,9 @@
 		leadPlayerId(resolvedPlayers, uploaderPlayerId, saveOwnerPlayerId),
 	);
 
-	const victoryPointsEnabled = $derived(hasVictoryPoints(game.game_details));
+	const victoryPointsEnabled = $derived(
+		hasVictoryPoints(game.game_details.victory_conditions),
+	);
 </script>
 
 {#if tab === "overview"}

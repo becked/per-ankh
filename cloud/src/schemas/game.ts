@@ -370,10 +370,13 @@ export const MAX_DISABLED_IMPROVEMENTS = 1_000;
 //         victory point the tier itself no longer pays
 //         (`City.growCulture`, City.cs:6861 → `Player.countCultureStepVPs`,
 //         Player.cs:18556). Read from the same team slot as culture_level.
-//         Across test-data/saves: 60 of 2769 city rows carry a non-zero step,
-//         in 21 of the 116 saves, every one of them 1 or 2; 32 of the 314
+//         Across test-data/saves: 56 of 2769 city rows carry a non-zero step,
+//         in 20 of the 116 saves, every one of them 1 or 2; 32 of the 314
 //         seats holding a recorded point own one, and on 17 of those the step
 //         is what makes the recomputed total match the game's own number.
+//         (The save writes 60 across 21 saves — the other 4 sit in a team
+//         slot that is not the city's owner, which deriveCityStatistics
+//         drops along with the rest of that slot.)
 //         Purely additive — a blob below 2.29.0 reads 0 and its recomputed
 //         total comes out short for exactly those seats.
 export const KNOWN_PARSER_VERSIONS = new Set([

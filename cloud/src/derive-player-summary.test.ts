@@ -15,10 +15,15 @@ function blobWith(over: {
 	player_history?: Array<Record<string, unknown>>;
 	map_tiles?: Array<Record<string, unknown>>;
 	completed_techs?: Array<Record<string, unknown>>;
+	match_metadata?: Record<string, unknown>;
 }): FullGameData {
 	return {
 		parser_version: "2.29.0",
-		match_metadata: { total_turns: 60 },
+		// A game that can be won on points, which is what gates `final_points`.
+		match_metadata: {
+			total_turns: 60,
+			victory_conditions: "VICTORY_POINTS+VICTORY_AMBITION",
+		},
 		player_history: [],
 		city_statistics: { cities: [] },
 		map_tiles: [],
@@ -332,15 +337,36 @@ describe("derivePlayerSummary — final points", () => {
 		expect(summary.final_points).toBe(3);
 	});
 
-	it("stays null for a game that records no points", () => {
+	it("does not recompute for a game that cannot be won on points", () => {
+		// Same fallback as a blob below the floor: the recorded series, which on
+		// a real save of this shape is empty — 0 of the 116 saves in
+		// test-data/saves record points with no points victory enabled — so the
+		// stored value is NULL there rather than the 3 this fixture carries.
+		const summary = derive(
+			blobWith({
+				player_history: history,
+				city_statistics: { cities: [city("CULTURE_LEGENDARY")] },
+				match_metadata: {
+					total_turns: 60,
+					victory_conditions: "VICTORY_AMBITION+VICTORY_CONQUEST",
+				},
+			}),
+		);
+		expect(summary.final_points).toBe(3);
+	});
+
+	it("answers a points game whose series recorded nothing", () => {
+		// An empty `<PointsHistory>` is an old build or a game too short to
+		// have written one, so the victory settings decide, not the series.
 		const summary = derive(
 			blobWith({
 				player_history: [
 					{ player_id: 0, history: [{ turn: 60, points: null }] },
+					{ player_id: 1, history: [{ turn: 60, points: null }] },
 				],
 				city_statistics: { cities: [city("CULTURE_LEGENDARY")] },
 			}),
 		);
-		expect(summary.final_points).toBeNull();
+		expect(summary.final_points).toBe(4);
 	});
 });

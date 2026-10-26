@@ -62,8 +62,11 @@ export const IMPROVEMENT_VP: Readonly<Record<string, number>> = {
 };
 
 // A completed tech, worth this much for as long as the player has it
-// (`Player.setTechCount`, Player.cs:8452) — which outlives their last
-// city, since the save writes <TechCount> for a dead seat too.
+// (`Player.setTechCount`, Player.cs:8452) — nothing takes the grant
+// back, so it outlives the seat's last city. Keyed on the blob's
+// `completed_techs`, which derives from TECH_DISCOVERED event logs
+// rather than from <TechCount>; across test-data/saves the two name
+// the same 60 VP-tech holdings, with 0 seats disagreeing.
 export const TECH_VP: Readonly<Record<string, number>> = {
 	TECH_ECONOMIC_REFORM: 1,
 	TECH_INDUSTRIAL_PROGRESS: 1,

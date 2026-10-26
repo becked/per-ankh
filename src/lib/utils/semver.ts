@@ -1,10 +1,13 @@
 // Strict numeric semver compare for PARSER_VERSION strings ("X.Y.Z").
 // No pre-release/build suffix support — the parser version never carries one.
-// Mirrors the `compareSemver` helper in cloud/src/games.ts; intentionally
-// not shared via a common module since the two code paths run in different
-// runtimes (Worker / browser) and the helper is three lines.
+//
+// The one comparator for both runtimes. The Worker reaches it the way it
+// reaches gdp-basket.ts and victory-points.ts — a relative import of a module
+// that drags nothing with it — rather than keeping a three-line mirror that
+// can drift from this one.
 
-function compare(a: string, b: string): number {
+/** -1, 0 or 1 for a < b, a == b, a > b. Non-numeric segments compare as 0. */
+export function compareSemver(a: string, b: string): number {
 	// `|| 0` (not `?? 0`) on purpose: parseInt returns NaN for a non-numeric
 	// segment, and NaN is falsy — `?? 0` would let NaN through and poison the
 	// comparison.
@@ -20,5 +23,5 @@ function compare(a: string, b: string): number {
 }
 
 export function isNewer(a: string, b: string): boolean {
-	return compare(a, b) > 0;
+	return compareSemver(a, b) > 0;
 }
