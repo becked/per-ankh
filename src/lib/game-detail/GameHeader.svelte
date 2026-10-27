@@ -149,45 +149,48 @@
 	});
 </script>
 
-<!-- Trail on the left, the view toggle centred, the actions and save date on
-     the right. On lg+ the side columns are equal fractions, so the auto middle
-     column sits on the page's centre line — the tournament header's
-     2fr/auto/1fr (tournaments/[slug]/+layout.svelte) buys its longer names
-     room on the left instead and lands the toggle right of centre. Either way
-     the toggle keeps its place whatever the title's length; below lg it wraps
-     as a flex row. -->
-<div
-	class="mb-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 lg:grid lg:grid-cols-[1fr_auto_1fr]"
->
-	<Breadcrumb {crumbs} class="min-w-0" />
+<!-- Two rows: the trail and the action cluster share the top one, the view
+     toggle sits centred on a row of its own beneath. The trail has the full
+     width of its row less the cluster, so a long game name doesn't wrap. (The
+     tournament header keeps its toggle inline, in the centre column of a
+     three-column grid — tournaments/[slug]/+layout.svelte.) -->
+<div class="mb-4 flex flex-col gap-2">
+	<div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+		<Breadcrumb {crumbs} class="min-w-0" />
 
-	<SegmentedNav
-		items={viewTabs}
-		activeIndex={activeViewIndex}
-		ariaLabel="Game views"
-	/>
+		<div class="flex flex-shrink-0 items-center gap-4">
+			<!--
+				currentCollectionId is omitted: with the sidebar gone we no
+				longer load the games list here, so the "already in this
+				collection" checkmark is unavailable. The move action still
+				works; the Games-tab row menu shows the indicator instead.
+			-->
+			<GameActions
+				{gameId}
+				{isOwner}
+				bind:isPublic={visibility.isPublic}
+				{screenshots}
+				{collections}
+				displayName={game.display_name ?? null}
+				gameName={game.game_details.game_name ?? null}
+				players={game.player_roster}
+				uploaderPlayerIndex={game.uploader_player_index ?? null}
+			/>
+			<p class="text-sm text-gray-200">
+				{formatDate(game.game_details.save_date)}
+			</p>
+		</div>
+	</div>
 
-	<div class="flex flex-shrink-0 items-center gap-4 lg:justify-self-end">
-		<!--
-			currentCollectionId is omitted: with the sidebar gone we no
-			longer load the games list here, so the "already in this
-			collection" checkmark is unavailable. The move action still
-			works; the Games-tab row menu shows the indicator instead.
-		-->
-		<GameActions
-			{gameId}
-			{isOwner}
-			bind:isPublic={visibility.isPublic}
-			{screenshots}
-			{collections}
-			displayName={game.display_name ?? null}
-			gameName={game.game_details.game_name ?? null}
-			players={game.player_roster}
-			uploaderPlayerIndex={game.uploader_player_index ?? null}
+	<!-- SegmentedNav is a grid of equal columns, so on its own row it would
+	     stretch the full width; the wrapper holds it to its labels and centres
+	     it on the page's centre line, where the three-column grid had it. -->
+	<div class="mx-auto w-fit">
+		<SegmentedNav
+			items={viewTabs}
+			activeIndex={activeViewIndex}
+			ariaLabel="Game views"
 		/>
-		<p class="text-sm text-gray-200">
-			{formatDate(game.game_details.save_date)}
-		</p>
 	</div>
 </div>
 
