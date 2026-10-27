@@ -386,11 +386,11 @@ export const MAX_PINGS = 50_000;
 //         drops along with the rest of that slot.)
 //         Purely additive — a blob below 2.29.0 reads 0 and its recomputed
 //         total comes out short for exactly those seats.
-// 2.29.0 — `pings`: the map pins a player drops on a tile, which the save has
+// 2.30.0 — `pings`: the map pins a player drops on a tile, which the save has
 //         always written as `<Player>/<Pings>` and we have never read. A
 //         Note carries the author's own text; an Improvement pin names what
 //         they meant to build. Additive and OPTIONAL, because absent (a blob
-//         below 2.29.0) and empty (a fresh parse of a game nobody pinned, 55
+//         below 2.30.0) and empty (a fresh parse of a game nobody pinned, 55
 //         of the 116 saves in `test-data/saves/`) are different claims. Note
 //         text is player-authored free text, so it is capped at 500
 //         characters at parse time and the array at MAX_PINGS here; the
@@ -433,13 +433,14 @@ export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.27.1",
 	"2.28.0",
 	"2.29.0",
+	"2.30.0",
 ]);
 
 // The latest accepted version. Echoed back on stats responses and
 // embedded in stats cache keys so a parser bump (after the matching
 // extraction code lands) naturally orphans every old entry. Bump in
 // lockstep with the `KNOWN_PARSER_VERSIONS` addition above.
-export const CURRENT_PARSER_VERSION = "2.29.0";
+export const CURRENT_PARSER_VERSION = "2.30.0";
 
 // ----- Reusable atoms -----
 
@@ -674,7 +675,7 @@ export const FullGameDataSchema = v.looseObject({
 		v.array(PlayerRosterEntrySchema),
 		v.maxLength(MAX_PLAYERS),
 	),
-	// Map pins (2.29.0+). Bounded here rather than left to looseObject
+	// Map pins (2.30.0+). Bounded here rather than left to looseObject
 	// because it is the one array carrying unbounded player-authored text.
 	// `optional`, not `nullable`: absent is "this blob predates the field",
 	// which an empty array would not say.

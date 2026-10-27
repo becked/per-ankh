@@ -4,10 +4,14 @@
 	// its author typed, an Improvement pin names what they meant to build.
 	//
 	// A gated tab: `GAME_TABS` hides it on a game with no pins to list, the way
-	// Leaders is hidden on a game with no rulers. So this component never
-	// renders an empty table — the one empty state it does carry is a seat
-	// whose pins the viewer isn't shown, which a non-owner read of someone
-	// else's game produces (`stripForeignPings`, cloud/src/games.ts).
+	// Leaders is hidden on a game with no rulers. The gate reads the blob the
+	// viewer was SERVED, so a non-owner whose read `stripForeignPings` left
+	// empty never reaches this component at all. What it does not cover is a
+	// blob whose pins nothing can place: `resolveMapPins` answers null without
+	// `map_width`, and drops a pin whose tile the snapshot has no row for — so
+	// pins plus no usable map leaves the list empty, which is the one empty
+	// state below. Both arms are rare (all 116 saves in `test-data/saves/`
+	// carry root `@_MapWidth`), and neither is a seat the viewer isn't shown.
 	//
 	// The whole game, never the map's selected turn: both views render a tab
 	// the same way (#269), and the analyst view has no turn to read.
@@ -24,8 +28,8 @@
 		players: DetailPlayer[];
 	} = $props();
 
-	// Null only on a blob the tab's own gate would have hidden it for, so the
-	// empty array here is unreachable in practice rather than a second state.
+	// Null on the blob the header describes — pins the grid can't place. The
+	// empty array it becomes is what the `{:else}` below renders.
 	const pins = $derived<MapPin[]>(resolveMapPins(game, players) ?? []);
 
 	// One group per seat, in roster order, so a pin's author is a heading
@@ -56,11 +60,6 @@
 </script>
 
 <div class="flex flex-col gap-4">
-	<!-- Beside the values rather than as a chart subtitle, which is
-	     explanatory text that gets removed again: the turn column is the
-	     thing the caveat is about, so it says so in the header. -->
-	<p class="text-xs text-gray-400">{PIN_REMOVAL_NOTE}</p>
-
 	{#each groups as group (group.playerXmlId)}
 		<section class="rounded-lg bg-surface p-3">
 			<h2 class="mb-3 text-base font-bold" style="color: {group.color};">
@@ -109,7 +108,7 @@
 		</section>
 	{:else}
 		<p class="italic text-tan">
-			This game's map pins belong to other players, so they aren't shown.
+			No map data available for this game, so its pins can't be placed.
 		</p>
 	{/each}
 </div>

@@ -8,14 +8,17 @@
 // Three surfaces read it and must agree: the tile panel's rows, the map's
 // marker layer, and the Map Pins tab. So the copy rule lives here once.
 
-import { getSeriesColor } from "$lib/config";
 import {
 	PING_IMPROVEMENT_SENTINEL_NAMES,
 	PING_IMPROVEMENT_SPECIFIC_LOG,
 	PING_TYPES,
 } from "$lib/generated/ping-types";
 import type { FullGameData, MapTile, PingInfo } from "$lib/parser/types";
-import { improvementDisplayName, type DetailPlayer } from "./helpers";
+import {
+	improvementDisplayName,
+	unitOwner,
+	type DetailPlayer,
+} from "./helpers";
 import { tilesByXmlId } from "./reconstruct-map-tiles";
 
 /** One pin, ready to render. */
@@ -91,7 +94,7 @@ export function pinText(ping: PingInfo): { text: string; isFallback: boolean } {
  * Every pin in the blob, placed on the grid and coloured by its seat.
  *
  * Returns null — not an empty array — for a blob that cannot answer: one
- * parsed before 2.29.0, which carries no `pings` at all, or one with no
+ * parsed before 2.30.0, which carries no `pings` at all, or one with no
  * `map_width`, without which a `<Tile>` id names no position. Both are
  * different claims from "this game has no pins", and the layer toggle reads
  * the difference rather than offering a switch that can only ever show
@@ -119,18 +122,23 @@ export function resolveMapPins(
 			tile = byId.get(ping.tile_xml_id);
 			if (!tile) continue;
 		}
-		const player = players.find((p) => p.playerId === ping.player_xml_id);
+		// The resolver the unit markers run, for the reason it documents: a
+		// mirror matchup seats two players on one nation, and the nation's
+		// colour would give them the same plate. `tribe` is null because a pin
+		// only ever names a seat, which leaves the roster's own label and
+		// colour and the `getSeriesColor(i)` arm for a seat the roster has no
+		// row for.
+		const owner = unitOwner(
+			{ player_xml_id: ping.player_xml_id, tribe: null },
+			players,
+			i,
+		);
 		const { text, isFallback } = pinText(ping);
 		out.push({
 			key: String(i),
 			playerXmlId: ping.player_xml_id,
-			// The roster's own label and colour, for the reason `unitOwner`
-			// resolves a marker's the same way: a mirror matchup seats two
-			// players on one nation, and the nation's colour would give them
-			// the same plate. A seat the roster has no row for keeps the
-			// `getSeriesColor` arm that helper ends on.
-			ownerLabel: player?.label ?? `Player ${ping.player_xml_id}`,
-			ownerColor: player?.color ?? getSeriesColor(i),
+			ownerLabel: owner.label,
+			ownerColor: owner.color,
 			pingType: ping.ping_type,
 			kindName:
 				PING_TYPES.find((t) => t.type === ping.ping_type)?.name ??

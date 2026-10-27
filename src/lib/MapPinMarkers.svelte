@@ -1,3 +1,20 @@
+<script module lang="ts">
+	import type { MapPin } from "$lib/game-detail/map-pins";
+
+	/**
+	 * One pin the map can place: the pin itself, and the centre of the hex it
+	 * hangs from in WORLD units. Derived in SpriteMap beside `cityBanners`, for
+	 * the reason a `CityBanner` carries its own `worldX`/`worldY` — the hex
+	 * geometry is that component's, and a second copy of it on this side would
+	 * drift off the tiles it marks.
+	 */
+	export interface PlacedPin {
+		pin: MapPin;
+		worldX: number;
+		worldY: number;
+	}
+</script>
+
 <script lang="ts">
 	// Map-pin markers: a DOM overlay inside SpriteMap, one teardrop per pin,
 	// following the camera the way the city banners do.
@@ -17,33 +34,26 @@
 	// it empty — so the two kinds line up on the hex instead of sitting at
 	// different heights.
 	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
-	import type { MapPin } from "$lib/game-detail/map-pins";
 	import { projectToCanvas, type ViewState } from "$lib/game-detail/map-chrome";
 
 	let {
 		pins,
-		hexToPixel,
 		viewState,
 		canvasWidth,
 		canvasHeight,
 	}: {
-		// Already filtered to the selected turn by the map page. A pin with no
-		// tile is not in here — `resolveMapPins` leaves its position null and
-		// the list shows it instead.
-		pins: MapPin[];
-		// SpriteMap's own grid → world transform. Passed in rather than
-		// re-derived: the hex geometry is that component's, and a second copy
-		// of it would drift off the tiles it marks.
-		// eslint-disable-next-line no-unused-vars -- parameter in callback signature
-		hexToPixel: (x: number, y: number) => [number, number];
+		// Already cut to the selected turn and to the pins the grid can place.
+		// A pin on no tile is not in here — `resolveMapPins` leaves its
+		// position null and the Map Pins tab lists it instead.
+		pins: PlacedPin[];
 		viewState: ViewState;
 		canvasWidth: number;
 		canvasHeight: number;
 	} = $props();
 
-	function footOf(pin: MapPin): [number, number] {
+	function footOf(placed: PlacedPin): [number, number] {
 		return projectToCanvas(
-			hexToPixel(pin.x as number, pin.y as number),
+			[placed.worldX, placed.worldY],
 			viewState,
 			canvasWidth,
 			canvasHeight,
@@ -51,18 +61,18 @@
 	}
 </script>
 
-{#each pins as pin (pin.key)}
-	{@const [left, top] = footOf(pin)}
+{#each pins as placed (placed.pin.key)}
+	{@const [left, top] = footOf(placed)}
 	<div
 		class="map-pin"
-		style="left: {left}px; top: {top}px; --pin-color: {pin.ownerColor};"
+		style="left: {left}px; top: {top}px; --pin-color: {placed.pin.ownerColor};"
 		aria-hidden="true"
 	>
 		<span class="pin-head">
-			{#if pin.improvementSprite}
+			{#if placed.pin.improvementSprite}
 				<SpriteIcon
 					category="improvements"
-					value={pin.improvementSprite}
+					value={placed.pin.improvementSprite}
 					size={12}
 				/>
 			{/if}

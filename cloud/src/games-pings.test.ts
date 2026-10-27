@@ -15,7 +15,7 @@ const pin = (playerXmlId: number, text: string | null) => ({
 
 const blobWith = (pings: unknown[]) => ({
 	version: 2 as const,
-	parser_version: "2.29.0",
+	parser_version: "2.30.0",
 	pings,
 });
 
@@ -46,8 +46,8 @@ describe("stripForeignPings", () => {
 		expect(stripForeignPings(blob, 2)).toBe(blob);
 	});
 
-	it("passes a blob below 2.29.0 through untouched", () => {
-		const blob = { version: 2 as const, parser_version: "2.28.0" };
+	it("passes a blob below 2.30.0 through untouched", () => {
+		const blob = { version: 2 as const, parser_version: "2.29.0" };
 		expect(stripForeignPings(blob, 0)).toBe(blob);
 	});
 
@@ -61,6 +61,6 @@ describe("stripForeignPings", () => {
 		const blob = { ...blobWith([pin(1, "theirs")]), map_tiles: [1, 2, 3] };
 		const out = stripForeignPings(blob, 0) as Record<string, unknown>;
 		expect(out.map_tiles).toBe(blob.map_tiles);
-		expect(out.parser_version).toBe("2.29.0");
+		expect(out.parser_version).toBe("2.30.0");
 	});
 });

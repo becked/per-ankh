@@ -64,7 +64,7 @@ import {
  * note is truncated rather than dropped, because the first 500 characters of
  * a note still say what the pin is for.
  */
-export const MAX_PING_TEXT = 500;
+const MAX_PING_TEXT = 500;
 
 /**
  * Decode the numeric character references the save writes and
@@ -80,6 +80,14 @@ export const MAX_PING_TEXT = 500;
  * Pin text is the only free-text attribute the parser reads, so the decode
  * lives here rather than in `parse-xml.ts`: every other attribute is a zType,
  * an integer or a name the game never escapes.
+ *
+ * fast-xml-parser's own `htmlEntities: true` resolves these natively, and the
+ * targeted decode is chosen over it deliberately. The flag resolves in ONE
+ * pass, so a note whose author typed the literal text `&#xA;` — written
+ * `&amp;#xA;`, handed back as `&#xA;` — keeps it, where the decode below turns
+ * it into a newline. 0 of the 1,403 corpus pins carry an escaped ampersand, so
+ * nothing measured tells the two apart. The deciding difference is reach: the
+ * flag would change every attribute the parser reads, and this changes one.
  */
 function decodeCharRefs(text: string): string {
 	return text.replace(/&#(x[0-9a-fA-F]+|\d+);/g, (whole, digits: string) => {

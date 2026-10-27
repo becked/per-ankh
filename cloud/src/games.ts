@@ -329,7 +329,7 @@ export function stripForeignPings(
 		return blob;
 	}
 	const obj = blob as Record<string, unknown>;
-	// Absent on every blob below parser_version 2.29.0.
+	// Absent on every blob below parser_version 2.30.0.
 	const pings = obj.pings;
 	if (!Array.isArray(pings)) return blob;
 

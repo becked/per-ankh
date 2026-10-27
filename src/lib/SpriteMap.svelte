@@ -33,7 +33,7 @@
 		bannerFoot,
 		type CityBanner,
 	} from "$lib/MapCityBanners.svelte";
-	import MapPinMarkers from "$lib/MapPinMarkers.svelte";
+	import MapPinMarkers, { type PlacedPin } from "$lib/MapPinMarkers.svelte";
 	import { pinsOnTile, type MapPin } from "$lib/game-detail/map-pins";
 	import {
 		projectToCanvas,
@@ -650,12 +650,6 @@
 	// the hex and out of the hex's panel together.
 	const visiblePins = $derived(showPins ? pins : []);
 
-	// Those of them the map can actually place. A pin on no tile (`Tile="-1"`)
-	// has no hex to hang from; the Map Pins tab lists it, the overlay skips it.
-	const placedPins = $derived(
-		visiblePins.filter((p) => p.x !== null && p.y !== null),
-	);
-
 	// The marker the pointer is on, or null. Read by the cursor below and by
 	// the card's anchor; `getCursor` is re-evaluated every frame, so a plain
 	// read of this is enough to turn the hand into a pointer.
@@ -880,6 +874,21 @@
 					? (byName.get(t.owner_city)?.citizens ?? null)
 					: null,
 			});
+		}
+		return out;
+	});
+
+	// Those of the visible pins the map can actually place, each on its hex
+	// centre in world units — derived here beside `cityBanners` because the hex
+	// geometry is this component's, and the overlay takes the position rather
+	// than the transform. A pin on no tile (`Tile="-1"`) has no hex to hang
+	// from; the Map Pins tab lists it, the overlay skips it.
+	const placedPins = $derived.by(() => {
+		const out: PlacedPin[] = [];
+		for (const pin of visiblePins) {
+			if (pin.x === null || pin.y === null) continue;
+			const [worldX, worldY] = hexToPixel(pin.x, pin.y);
+			out.push({ pin, worldX, worldY });
 		}
 		return out;
 	});
@@ -2514,7 +2523,6 @@
 		/>
 		<MapPinMarkers
 			pins={placedPins}
-			{hexToPixel}
 			viewState={currentViewState}
 			canvasWidth={deckWidth}
 			canvasHeight={deckHeight}

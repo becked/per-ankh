@@ -346,7 +346,7 @@ export interface UnitFamilyInfo {
  * (`TEXT_UI_PLACE_MAP_PIN`). Written per player as `<Pings>/<Ping>`, with the
  * kind as an integer index into ping.xml that the parser resolves to a zType.
  * The save holds only the pins alive at its final turn, one per tile per
- * player, each carrying the turn it was placed. PARSER_VERSION 2.29.0+;
+ * player, each carrying the turn it was placed. PARSER_VERSION 2.30.0+;
  * absent on older blobs. See parsers/pings.ts for the rest.
  */
 export interface PingInfo {
@@ -600,7 +600,7 @@ export interface FullGameData {
 	yield_price_history: YieldPriceEntry[];
 	tile_visibility: TileVisibilityInfo[];
 	// Optional on the same grounds as `unit_effects` above, and the same two
-	// states: absent on a blob parsed before 2.29.0, empty on a fresh parse of
+	// states: absent on a blob parsed before 2.30.0, empty on a fresh parse of
 	// a save whose players dropped no pins — 55 of the 116 saves in
 	// test-data/saves/. The map's Pins layer gates on the difference, since a
 	// blob that can't answer is not a game with nothing to show.
@@ -612,4 +612,4 @@ export interface FullGameData {
  * fixes, MINOR for additive fields, MAJOR for breaking schema changes.
  * Initial value `2.0.0` mirrors `FullGameData.version: 2`.
  */
-export const PARSER_VERSION = "2.29.0";
+export const PARSER_VERSION = "2.30.0";

@@ -129,7 +129,7 @@
 				class="select-none text-tan"
 				title={pinsAvailable
 					? PIN_REMOVAL_NOTE
-					: "This game was parsed before map pins were read. Re-uploading the save fills them in."}
+					: "No map pins to show: this game was parsed before pins were read — re-uploading the save fills them in — or its save records no map dimensions."}
 				>Pins</span
 			>
 		</Checkbox>

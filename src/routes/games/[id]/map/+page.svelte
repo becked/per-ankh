@@ -190,7 +190,7 @@
 	// ─── Map pins ─────────────────────────────────────────────────────
 	// The pins the game's players dropped on tiles, resolved once off the blob
 	// and cut to the selected turn below. Null when the blob can't answer — a
-	// blob parsed before 2.29.0, or one with no `map_width` — which is what
+	// blob parsed before 2.30.0, or one with no `map_width` — which is what
 	// disables the layer's checkbox rather than leaving a switch that can only
 	// ever show nothing.
 	//

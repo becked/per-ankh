@@ -293,8 +293,9 @@
 		font-weight: 600;
 	}
 	.pin-text {
-		/* A note is multi-line in the save (1 of 12 in the corpus carries a
-		   newline); render the breaks rather than running the lines together. */
+		/* A note is multi-line in the save (3 of the 394 non-empty note texts
+		   across test-data/saves/ carry a newline); render the breaks rather
+		   than running the lines together. */
 		white-space: pre-line;
 	}
 	/* The game's own line for a pin whose author typed nothing — "Planning

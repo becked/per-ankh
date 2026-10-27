@@ -48,7 +48,7 @@ function hasLeaders(game: FullGameData): boolean {
 }
 
 // Map Pins appears only for a game that has some. Three ways not to: a blob
-// parsed before 2.29.0 carries no `pings` at all, a game nobody pinned
+// parsed before 2.30.0 carries no `pings` at all, a game nobody pinned
 // carries an empty one (55 of the 116 saves in `test-data/saves/`), and a
 // non-owner read of someone else's game can be left with none once the
 // Worker drops every seat but the uploader's (`stripForeignPings`). The gate
