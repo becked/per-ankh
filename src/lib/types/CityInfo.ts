@@ -98,6 +98,15 @@ tribe?: string | null,
  */
 capture_player_xml_id?: number | null, capture_tribe?: string | null,
 /**
- * Culture level as string enum (CULTURE_WEAK, CULTURE_DEVELOPING, CULTURE_STRONG, CULTURE_ESTABLISHED, CULTURE_LEGENDARY)
+ * Culture level as string enum (CULTURE_WEAK, CULTURE_DEVELOPING, CULTURE_STRONG, CULTURE_LEGENDARY)
  */
-culture_level: string | null, growth_count: number, unit_production_count: number, specialist_count: number, buy_tile_count: number, hurry_civics_count: number, hurry_money_count: number, hurry_training_count: number, hurry_population_count: number, };
+culture_level: string | null,
+/**
+ * Culture growths past the top tier (<TeamCultureStep>), read from the same
+ * team slot as `culture_level`. Each is worth a victory point the tier
+ * itself no longer pays (`Player.countCultureStepVPs`, Player.cs:18556). 0
+ * for a city that can still promote. Optional: absent on blobs parsed
+ * before PARSER_VERSION 2.29.0, where a Legendary city that kept growing
+ * reads as 0 and its player's recomputed total comes out short.
+ */
+culture_step?: number, growth_count: number, unit_production_count: number, specialist_count: number, buy_tile_count: number, hurry_civics_count: number, hurry_money_count: number, hurry_training_count: number, hurry_population_count: number, };

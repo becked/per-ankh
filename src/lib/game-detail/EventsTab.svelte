@@ -18,12 +18,14 @@
 		toggleSort,
 		filledLineStyle,
 	} from "./helpers";
+	import { withEndStateTotal } from "$lib/utils/victory-point-series";
 
 	let {
 		eventLogs,
 		playerHistory,
 		players,
 		victoryPointsEnabled,
+		victoryPoints,
 		chartFilter = $bindable<Record<string, boolean>>({}),
 		tableState = $bindable<TableState>({
 			search: "",
@@ -36,6 +38,10 @@
 		playerHistory: PlayerHistory[];
 		players: DetailPlayer[];
 		victoryPointsEnabled: boolean;
+		// Each seat's end-state victory-point total, keyed by player id, or null
+		// where the blob cannot answer (victory-points.ts) — the chart's last
+		// point, which the recorded series samples at the seat's turn START.
+		victoryPoints: Map<number, number> | null;
 		chartFilter?: Record<string, boolean>;
 		tableState?: TableState;
 	} = $props();
@@ -94,7 +100,13 @@
 				return {
 					name: rp?.label ?? nationName(player.nation),
 					type: "line",
-					data: player.history.map((h) => [h.turn, h.points]),
+					data: withEndStateTotal(
+						player.history.map((h): [number, number | null] => [
+							h.turn,
+							h.points,
+						]),
+						victoryPoints?.get(player.player_id),
+					),
 					itemStyle: { color },
 					...filledLineStyle(color),
 				};

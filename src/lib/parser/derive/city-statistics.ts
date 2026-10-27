@@ -95,6 +95,10 @@ export function deriveCityStatistics(
 			governor_name: governor?.firstName ?? null,
 			governor_xml_id: c.governorXmlId,
 			religions: religionsByCity.get(c.xmlId) ?? [],
+			// Culture growths past the top tier, from the same team slot as
+			// culture_level above — each one a victory point the tier itself
+			// no longer pays.
+			culture_step: culture?.cultureStep ?? 0,
 			project_counts: c.projectCounts,
 			// The owner team's happiness level (same team resolution as
 			// culture above); negative = discontent. Null for unowned cities,

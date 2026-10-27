@@ -135,6 +135,11 @@ export interface CityCulture {
 	cityXmlId: number;
 	teamId: number;
 	cultureLevel: string | null;
+	/** Culture growths past the top tier. `City.growCulture` (City.cs:6861)
+	 * increments it once `getNextCulture` has nothing left to promote to, and
+	 * each step is worth a victory point (`Player.countCultureStepVPs`,
+	 * Player.cs:18556). 0 for every city that can still promote. */
+	cultureStep: number;
 	happinessLevel: number;
 }
 
@@ -440,6 +445,13 @@ export function parseCityCulture(root: Record<string, unknown>): CityCulture[] {
 			}
 		}
 
+		// TeamCultureStep: <T.X>2</T.X>, written only for a non-zero step
+		// (City.cs:1355), so an absent team is a city that can still promote.
+		const teamCultureStep = parsePrefixedKeyedIntMap(
+			node.TeamCultureStep,
+			"T.",
+		);
+
 		// Happiness: prefer <TeamHappinessLevel> (newer), fall back to
 		// <TeamDiscontentLevel> (legacy 2022 saves).
 		const happinessRaw =
@@ -448,6 +460,7 @@ export function parseCityCulture(root: Record<string, unknown>): CityCulture[] {
 
 		const teams = new Set<number>([
 			...teamCulture.keys(),
+			...teamCultureStep.keys(),
 			...teamHappiness.keys(),
 		]);
 
@@ -456,6 +469,7 @@ export function parseCityCulture(root: Record<string, unknown>): CityCulture[] {
 				cityXmlId,
 				teamId,
 				cultureLevel: teamCulture.get(teamId) ?? null,
+				cultureStep: teamCultureStep.get(teamId) ?? 0,
 				happinessLevel: teamHappiness.get(teamId) ?? 0,
 			});
 		}

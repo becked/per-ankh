@@ -36,6 +36,7 @@ import {
 	type PricePoint,
 	pricesByTurn,
 } from "../../src/lib/game-detail/gdp-basket";
+import { compareSemver } from "../../src/lib/utils/semver";
 import { NATION_NAMES } from "./generated/nation-names";
 import { WONDER_CULTURE_PREREQ } from "./generated/wonders";
 import { sessionFromRequest } from "./session";
@@ -356,23 +357,6 @@ function buildMultiRowInsert(
 	const placeholders = `(${columns.map(() => "?").join(",")})`;
 	const valuesClause = Array(rowCount).fill(placeholders).join(", ");
 	return `INSERT INTO ${table} (${columns.join(",")}) VALUES ${valuesClause}`;
-}
-
-// ---------- Semver helper ----------
-
-// Strict numeric semver compare. Returns -1, 0, or 1 for a < b, a == b, a > b.
-// Three-segment "X.Y.Z" only — no pre-release/build suffix support, since
-// PARSER_VERSION never carries one. Non-numeric segments compare as 0.
-export function compareSemver(a: string, b: string): number {
-	const pa = a.split(".").map((s) => parseInt(s, 10) || 0);
-	const pb = b.split(".").map((s) => parseInt(s, 10) || 0);
-	for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-		const da = pa[i] ?? 0;
-		const db = pb[i] ?? 0;
-		if (da < db) return -1;
-		if (da > db) return 1;
-	}
-	return 0;
 }
 
 // The audit row for a dedup hit that still did something — relinked a

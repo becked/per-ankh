@@ -35,6 +35,7 @@
 		currentLaws,
 		unitsProduced,
 		cityStatistics,
+		victoryPoints,
 		victoryPointsEnabled,
 		improvementData,
 		gameReligions,
@@ -52,6 +53,12 @@
 		currentLaws: PlayerLaw[];
 		unitsProduced: PlayerUnitProduced[];
 		cityStatistics: CityStatistics;
+		// Each seat's end-state victory-point total, keyed by player id — what
+		// the Victory Points bar below reads. Null where the blob cannot answer
+		// (victory-points.ts), which falls the bar back to the recorded series.
+		// Computed by GameTab, which hands the same map to the Events tab's
+		// Victory Points chart.
+		victoryPoints: Map<number, number> | null;
 		victoryPointsEnabled: boolean;
 		improvementData: ImprovementData;
 		gameReligions: GameReligion[];
@@ -164,7 +171,6 @@
 					isWinner:
 						gameDetails.winner_player_id != null &&
 						p.playerId === gameDetails.winner_player_id,
-					finalVP: lastPoint?.points ?? null,
 					finalMilitary: lastPoint?.military_power ?? null,
 					cityCount: ownedByPlayer(
 						cityStatistics.cities,
@@ -265,6 +271,8 @@
 					buildMetric(
 						"Victory Points",
 						(player) => {
+							const recomputed = victoryPoints?.get(player.playerId);
+							if (recomputed !== undefined) return recomputed;
 							const ph = findByPlayer(
 								playerHistory,
 								player,

@@ -49,8 +49,9 @@
 // them, because rollup places a whole module in a chunk and the Settings tab
 // is lazy (0a332971 "load the tabs on demand, one chunk each") —
 //   game-setup.ts          — SETUP_VALUE_NAMES and VICTORY_POINT_VICTORIES,
-//     the setup vocabulary $lib/map-settings and `hasVictoryPoints` read, both
-//     of which the home page's save cards reach eagerly.
+//     the setup vocabulary $lib/map-settings and `hasVictoryPoints`
+//     ($lib/game-detail/victory-points) read, both of which the home page's
+//     save cards reach eagerly.
 //   game-setup-sections.ts — the sections, parameters, game options, presets,
 //     occurrence classes and victory toggles that make up the Settings tab's
 //     row model, read only by $lib/game-detail/setup-sections.
@@ -381,8 +382,9 @@ function emitVocabulary(data: {
 		"//",
 		"// The VOCABULARY of a game's setup: the display name of every value a setup",
 		"// parameter takes, and the victory types that carry victory points. Read by",
-		"// `$lib/map-settings` and by `hasVictoryPoints` ($lib/game-detail/helpers),",
-		"// both of which the home page's save cards reach.",
+		"// `$lib/map-settings` and by `hasVictoryPoints`",
+		"// ($lib/game-detail/victory-points), both of which the home page's save",
+		"// cards reach.",
 		"//",
 		"// Separate from game-setup-sections.ts because rollup places a whole module",
 		"// in a chunk: one table holding both halves put the Settings tab's row model",

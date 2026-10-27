@@ -31,7 +31,7 @@ import {
 } from "$lib/map-settings";
 import type { GameDetails } from "$lib/types/GameDetails";
 import { formatEnum } from "$lib/utils/formatting";
-import { hasVictoryPoints } from "./helpers";
+import { hasVictoryPoints } from "./victory-points";
 
 // ─── Game options ─────────────────────────────────────────────────────────
 
@@ -258,7 +258,7 @@ export function gameSetupSections(details: GameDetails): SetupSectionRows[] {
 	// The game's `isPointsVictory` — an enabled victory type worth victory
 	// points, which is the same question the VP charts gate on, so both read
 	// the one predicate.
-	const pointsVictory = hasVictoryPoints(details);
+	const pointsVictory = hasVictoryPoints(details.victory_conditions);
 
 	// Three of the map rows are dedicated GameDetails fields rather than bag
 	// entries — they were parsed long before the bag existed and a second way

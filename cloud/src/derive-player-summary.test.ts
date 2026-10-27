@@ -12,11 +12,21 @@ function blobWith(over: {
 	characters?: Array<Record<string, unknown>>;
 	character_traits?: Array<Record<string, unknown>>;
 	city_statistics?: { cities: Array<Record<string, unknown>> };
+	player_history?: Array<Record<string, unknown>>;
+	map_tiles?: Array<Record<string, unknown>>;
+	completed_techs?: Array<Record<string, unknown>>;
+	match_metadata?: Record<string, unknown>;
 }): FullGameData {
 	return {
-		match_metadata: { total_turns: 60 },
+		parser_version: "2.29.0",
+		// A game that can be won on points, which is what gates `final_points`.
+		match_metadata: {
+			total_turns: 60,
+			victory_conditions: "VICTORY_POINTS+VICTORY_AMBITION",
+		},
 		player_history: [],
 		city_statistics: { cities: [] },
+		map_tiles: [],
 		families: [],
 		characters: [],
 		character_traits: [],
@@ -271,5 +281,92 @@ describe("derivePlayerSummary — capital family class", () => {
 			derive(blobWith({ city_statistics: { cities: [capital(0, null)] } }))
 				.capital_family_class,
 		).toBeNull();
+	});
+});
+
+// `final_points` is `Player.countVP` over the save's end state, not the last
+// entry of `<PointsHistory>` — which the game samples at the top of each
+// seat's own turn, so it misses everything that turn did (#340).
+describe("derivePlayerSummary — final points", () => {
+	// Two seats, each with a recorded point, so the game counts as one played
+	// for points at all.
+	const history = [
+		{ player_id: 0, history: [{ turn: 60, points: 3 }] },
+		{ player_id: 1, history: [{ turn: 60, points: 9 }] },
+	];
+
+	it("recomputes past the recorded value, and measures the margin against it", () => {
+		const summary = derive(
+			blobWith({
+				player_history: history,
+				city_statistics: {
+					cities: [city("CULTURE_LEGENDARY"), city("CULTURE_STRONG")],
+				},
+			}),
+		);
+		// 4 + 3 against a series that stopped at 3, and a second seat the same
+		// recomputation drops to 0 — so the leader's margin is the whole 7.
+		expect(summary.final_points).toBe(7);
+		expect(summary.vp_margin).toBe(7);
+	});
+
+	it("drops a conquered seat to what its techs still pay", () => {
+		const summary = derive(
+			blobWith({
+				player_history: history,
+				// Every city is player 1's; player 0 holds one VP tech.
+				city_statistics: { cities: [city("CULTURE_STRONG", 1)] },
+				completed_techs: [{ player_id: 0, tech: "TECH_MILITARY_PRESTIGE" }],
+			}),
+		);
+		expect(summary.final_points).toBe(1);
+	});
+
+	it("keeps the recorded value on a blob too old to recompute from", () => {
+		const blob = blobWith({
+			player_history: history,
+			city_statistics: {
+				cities: [city("CULTURE_LEGENDARY"), city("CULTURE_STRONG")],
+			},
+		});
+		const summary = derivePlayerSummary(
+			{ ...blob, parser_version: "2.16.0" },
+			PLAYER,
+			buildSummaryGameContext({ ...blob, parser_version: "2.16.0" }),
+		);
+		expect(summary.final_points).toBe(3);
+	});
+
+	it("does not recompute for a game that cannot be won on points", () => {
+		// Same fallback as a blob below the floor: the recorded series, which on
+		// a real save of this shape is empty — 0 of the 116 saves in
+		// test-data/saves record points with no points victory enabled — so the
+		// stored value is NULL there rather than the 3 this fixture carries.
+		const summary = derive(
+			blobWith({
+				player_history: history,
+				city_statistics: { cities: [city("CULTURE_LEGENDARY")] },
+				match_metadata: {
+					total_turns: 60,
+					victory_conditions: "VICTORY_AMBITION+VICTORY_CONQUEST",
+				},
+			}),
+		);
+		expect(summary.final_points).toBe(3);
+	});
+
+	it("answers a points game whose series recorded nothing", () => {
+		// An empty `<PointsHistory>` is an old build or a game too short to
+		// have written one, so the victory settings decide, not the series.
+		const summary = derive(
+			blobWith({
+				player_history: [
+					{ player_id: 0, history: [{ turn: 60, points: null }] },
+					{ player_id: 1, history: [{ turn: 60, points: null }] },
+				],
+				city_statistics: { cities: [city("CULTURE_LEGENDARY")] },
+			}),
+		);
+		expect(summary.final_points).toBe(4);
 	});
 });

@@ -19,6 +19,16 @@
 // src/lib/parser/types.ts (referenced in comments below).
 
 import { cultureRank } from "./generated/wonders";
+// Reaching across the package boundary, same rule as the gdp-basket import in
+// games.ts: victory-points.ts is deliberately dependency-free (relative
+// imports of its generated tables and the semver compare, no $lib aliases) so
+// the Worker bundle holds the one definition of countVP, and the one predicate
+// for whether a game's points mean anything, rather than mirrors of them that
+// drift from the game page's.
+import {
+	victoryPointsByPlayer,
+	type VictoryPointTileLike,
+} from "../../src/lib/game-detail/victory-points";
 import type { FullGameData, PlayerRosterEntry } from "./schemas/game";
 
 // ---------- Wire-shape mirrors (kept in sync with src/lib/parser/types.ts
@@ -44,6 +54,11 @@ interface CityRow {
 	player_families?: Array<{ player_xml_id: number }>;
 	founded_turn: number;
 	culture_level: string | null;
+	// Culture growths past the top tier (parser 2.29.0+) and per-city project
+	// completions (2.15.0+) — the two city-side terms of countVP; absent on
+	// older blobs, where each reads as nothing granted.
+	culture_step?: number;
+	project_counts?: Array<{ project: string; count: number }>;
 	is_capital: boolean;
 	family_class: string | null;
 }
@@ -70,6 +85,7 @@ interface CharacterTraitRow {
 
 interface CompletedTechRow {
 	player_id: number;
+	tech: string;
 }
 
 interface LawAdoptionEntry {
@@ -89,9 +105,34 @@ export interface SummaryGameContext {
 export function buildSummaryGameContext(
 	blob: FullGameData,
 ): SummaryGameContext {
-	const finalPointsByIndex = new Map<number, number>();
 	const playerHistory = blob.player_history as PlayerHistoryEntry[];
+	const cityStats = blob.city_statistics as { cities: CityRow[] };
+
+	// Victory points as the game's own victory screen computes them, not as
+	// its turn-start series records them — the recomputation is the number,
+	// and the series is the fallback wherever it returns null (#340).
+	// `vp_margin` below reads the same map, so a seat's margin can never be
+	// measured against a total nobody is shown.
+	const recomputed = victoryPointsByPlayer({
+		parserVersion: blob.parser_version,
+		// `match_metadata` is where the Worker's blob schema carries the victory
+		// settings and the mod list; `game_details`' copies, which the game page
+		// reads, are the same strings (derive/game-details.ts writes both).
+		victoryConditions: blob.match_metadata.victory_conditions,
+		enabledMods: blob.match_metadata.enabled_mods,
+		playerHistory,
+		cities: cityStats.cities,
+		mapTiles: blob.map_tiles as VictoryPointTileLike[],
+		completedTechs: blob.completed_techs as CompletedTechRow[],
+	});
+
+	const finalPointsByIndex = new Map<number, number>();
 	for (const ph of playerHistory) {
+		const fromBlob = recomputed?.get(ph.player_id);
+		if (fromBlob !== undefined) {
+			finalPointsByIndex.set(ph.player_id, fromBlob);
+			continue;
+		}
 		const last = ph.history[ph.history.length - 1];
 		if (last && last.points != null) {
 			finalPointsByIndex.set(ph.player_id, last.points);
@@ -202,11 +243,15 @@ export function derivePlayerSummary(
 		}
 	}
 
-	// Per-turn series — last entry of this player's history.
+	// Per-turn series — last entry of this player's history. Military power and
+	// legitimacy are the recorded value; points are not, because the series
+	// samples them at the top of the seat's own turn (see victory-points.ts) —
+	// `ctx.finalPointsByIndex` holds the end-state recomputation, with the
+	// recorded value as its fallback.
 	const playerHistory = blob.player_history as PlayerHistoryEntry[];
 	const ownHistory = playerHistory.find((h) => h.player_id === idx);
 	const lastPoint = ownHistory?.history[ownHistory.history.length - 1] ?? null;
-	const final_points = lastPoint?.points ?? null;
+	const final_points = ctx.finalPointsByIndex.get(idx) ?? null;
 	const final_military_power = lastPoint?.military_power ?? null;
 	const final_legitimacy = lastPoint?.legitimacy ?? null;
 
@@ -306,8 +351,11 @@ export function derivePlayerSummary(
 	}
 
 	// vp_margin — winners get distance to second place (positive), everyone
-	// else gets distance to first place (negative). NULL when this player
-	// has no points or there's only one ranked player (no margin to compute).
+	// else gets distance to first place (negative). NULL when the game has no
+	// points to rank at all — it cannot be won on them, or the blob is too old
+	// to recompute and this seat's series recorded nothing — or when only one
+	// player is ranked (no margin to compute). Inside a game that can be won
+	// on points, every seat is ranked, a seat that scored 0 included.
 	let vp_margin: number | null = null;
 	const ownFinal = ctx.finalPointsByIndex.get(idx);
 	if (ownFinal != null && ctx.firstPlace != null) {

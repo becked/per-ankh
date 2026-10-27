@@ -1277,6 +1277,15 @@ export async function buildChartBundle(
 		};
 		s.games += 1;
 		if (r.is_winner === 1) s.wins += 1;
+		// A 0 counts. Inside a game that can be won on points every seat carries
+		// a `final_points` — `victoryPointsByPlayer` gives a seat that scored
+		// nothing and a seat conquered out the 0 `countVP()` answers for both —
+		// so this is the average over seats, not over seats that scored. The
+		// narrower population it had before was never a choice: `final_points`
+		// was the last `<PointsHistory>` entry, which is sparse, so a seat the
+		// series had not recorded was simply missing. Null now means the game
+		// has no points to rank at all, or the blob cannot be recomputed from
+		// and that seat's series recorded nothing.
 		if (r.final_points != null) {
 			s.totalPoints += r.final_points;
 			s.pointsCount += 1;
