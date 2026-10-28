@@ -39,6 +39,7 @@
 		slotUserIds,
 		slotSlugs,
 		slotAvatars,
+		slotSchedulingZones,
 		user,
 		onSubstitute,
 		onClose,
@@ -53,6 +54,10 @@
 		slotUserIds: Record<string, string | null>;
 		slotSlugs: Record<string, string | null>;
 		slotAvatars: Record<string, string | null>;
+		// Each slot occupant's timezone for the card's "Copy DM" template; see
+		// MatchPopover. Forwarded, not optional — this shell is what the three
+		// non-overview surfaces reach the DM through.
+		slotSchedulingZones: Record<string, string | null>;
 		user: UserMe | null;
 		// Admin substitute, threaded into the match card; undefined for non-admins.
 		onSubstitute?: (
@@ -88,6 +93,7 @@
 				{slotUserIds}
 				{slotSlugs}
 				{slotAvatars}
+				{slotSchedulingZones}
 				{user}
 				{onSubstitute}
 				{onClose}

@@ -741,6 +741,7 @@
 	slotUserIds={slotMaps.userIds}
 	slotSlugs={slotMaps.slugs}
 	slotAvatars={slotMaps.avatars}
+	slotSchedulingZones={slotMaps.schedulingZones}
 	{user}
 	onSubstitute={isAdmin ? substituteSlot : undefined}
 	onClose={() => (detailMatchId = null)}

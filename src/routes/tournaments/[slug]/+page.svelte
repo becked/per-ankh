@@ -176,7 +176,7 @@
 	// championship phase. Consumed by the match popover and slotLabelFor.
 	const slotMaps = $derived(buildSlotMaps(data.standings, data.bracket));
 	// Admin-only signup answers (timezone/availability), for the Copy DM tool.
-	const slotSignupAnswers = $derived(slotMaps.signupAnswers);
+	const slotSchedulingZones = $derived(slotMaps.schedulingZones);
 	const slotLabels = $derived(slotMaps.labels);
 	const slotUserIds = $derived(slotMaps.userIds);
 	const slotSlugs = $derived(slotMaps.slugs);
@@ -993,6 +993,7 @@ for anonymous viewers, non-participants, and once you're out. -->
 	{slotUserIds}
 	{slotSlugs}
 	{slotAvatars}
+	{slotSchedulingZones}
 	{user}
 	{isAdmin}
 	onSubstitute={isAdmin ? substituteSlot : undefined}
@@ -1010,6 +1011,7 @@ setup (no matches) and complete (bracket/standings tell that story). -->
 		{slotUserIds}
 		{slotSlugs}
 		{slotAvatars}
+		{slotSchedulingZones}
 		{user}
 		{isAdmin}
 		onSubstitute={isAdmin ? substituteSlot : undefined}
@@ -1435,7 +1437,7 @@ setup (no matches) and complete (bracket/standings tell that story). -->
 				{slotSlugs}
 				{slotAvatars}
 				{user}
-				{slotSignupAnswers}
+				{slotSchedulingZones}
 				onSubstitute={isAdmin ? substituteSlot : undefined}
 				onClose={closeMatch}
 			/>

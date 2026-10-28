@@ -454,20 +454,73 @@ function calendarDayDiff(from: Date, to: Date, zone: "utc" | "local"): number {
 }
 
 /**
- * The short name of the viewer's local timezone for a given instant, e.g.
- * "PDT" / "EST" — the same abbreviation the scheduled-time helpers append to a
- * local clock. It is DST-dependent, so it resolves for a specific instant
- * (defaulting to now). Returns "" when the environment can't produce one (and
- * on the UTC worker during SSR, where it resolves to "UTC"/"GMT").
+ * The short name of a timezone for a given instant, e.g. "PDT" / "EST" — the
+ * same abbreviation the scheduled-time helpers append to a local clock. It is
+ * DST-dependent, so it resolves for a specific instant (defaulting to now).
+ * Returns "" when the environment can't produce one (and on the UTC worker
+ * during SSR, where the viewer's own zone resolves to "UTC"/"GMT").
  *
  * @param date - the instant to read the zone name for (defaults to now)
+ * @param timeZone - IANA zone id, or undefined for the viewer's local zone
  */
-export function shortTimeZoneName(date: Date = new Date()): string {
+export function shortTimeZoneName(
+	date: Date = new Date(),
+	timeZone?: string,
+): string {
 	return (
-		new Intl.DateTimeFormat(TIME_LOCALE, { timeZoneName: "short" })
+		new Intl.DateTimeFormat(TIME_LOCALE, { timeZone, timeZoneName: "short" })
 			.formatToParts(date)
 			.find((p) => p.type === "timeZoneName")?.value ?? ""
 	);
+}
+
+/**
+ * Writes an IANA zone id for a human, e.g. "America/New_York (EDT, GMT-4)" —
+ * the id, its abbreviation for the instant, and its offset. Used verbatim by
+ * both surfaces that show a zone: the timezone dropdowns, where the offset is
+ * what tells two same-city entries apart, and the tournament scheduling DM,
+ * where it replaces a typed label that was only right half the year.
+ *
+ * The abbreviation is dropped when the runtime has none to give and answers
+ * with the offset instead ("Asia/Kolkata (GMT+5:30, GMT+5:30)" reads as a bug),
+ * which is what happens for most zones outside the Americas — and when it is
+ * only the offset's own prefix ("Europe/London (GMT, GMT+0)"). Returns the id
+ * unchanged if the runtime can't resolve it at all, so a stored zone that a
+ * later tzdata dropped still renders as itself rather than vanishing.
+ *
+ * @param zone - IANA zone id
+ * @param date - the instant to resolve the abbreviation and offset at
+ */
+export function formatTimeZone(zone: string, date: Date = new Date()): string {
+	const offset = timeZoneOffsetName(date, zone);
+	if (!offset) return zone;
+	const short = shortTimeZoneName(date, zone);
+	return short && !offset.startsWith(short)
+		? `${zone} (${short}, ${offset})`
+		: `${zone} (${offset})`;
+}
+
+/**
+ * A zone's UTC offset for an instant, as the runtime spells it ("GMT-4",
+ * "GMT+5:30"). "" when the zone isn't one the runtime knows — the signal
+ * {@link formatTimeZone} reads to mean "don't decorate this id".
+ *
+ * @param date - the instant to read the offset at
+ * @param timeZone - IANA zone id, or undefined for the viewer's local zone
+ */
+function timeZoneOffsetName(date: Date, timeZone?: string): string {
+	try {
+		return (
+			new Intl.DateTimeFormat(TIME_LOCALE, {
+				timeZone,
+				timeZoneName: "shortOffset",
+			})
+				.formatToParts(date)
+				.find((p) => p.type === "timeZoneName")?.value ?? ""
+		);
+	} catch {
+		return "";
+	}
 }
 
 /**

@@ -41,6 +41,9 @@
 		slotUserIds: Record<string, string | null>;
 		slotSlugs: Record<string, string | null>;
 		slotAvatars: Record<string, string | null>;
+		// Each slot occupant's timezone, threaded to the match card's "Copy DM"
+		// template (see MatchPopover). Not read by the table rows.
+		slotSchedulingZones: Record<string, string | null>;
 		user: UserMe | null;
 		// Passed through to the table's actions column. An admin who is also playing
 		// reaches their own match here like any other player; the flag only widens
@@ -66,6 +69,7 @@
 		slotUserIds,
 		slotSlugs,
 		slotAvatars,
+		slotSchedulingZones,
 		user,
 		isAdmin = false,
 		onSubstitute,
@@ -181,6 +185,7 @@
 	{slotUserIds}
 	{slotSlugs}
 	{slotAvatars}
+	{slotSchedulingZones}
 	{user}
 	{onSubstitute}
 	onClose={() => (detailMatchId = null)}
