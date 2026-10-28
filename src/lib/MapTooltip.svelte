@@ -186,9 +186,12 @@
 		{/if}
 	</dl>
 
-	<!-- The pins on this hex, as the game's own tile tooltip writes them:
-	     "<player>: <text>", the name in that seat's colour
-	     (`buildTileTooltipPingText`, HelpText.Game.cs:5325). Outside the
+	<!-- The pins on this hex: the seat that dropped each one, its turn, and
+	     the line the game itself would show (`buildTileTooltipPingText`,
+	     HelpText.Game.cs:5325). The seat is crested rather than named — a
+	     nation name repeated down a narrow panel crowds out the note it
+	     prefaces — in the reserved slot the map chrome's own crests use, so a
+	     nation we ship no crest for leaves the row aligned. Outside the
 	     definition list because a note is free text with its own newlines —
 	     `white-space: pre-line` keeps them — where every row above is one
 	     short value. The turn carries the placement caveat as its title,
@@ -197,13 +200,20 @@
 		<ul class="pins">
 			{#each pins as pin (pin.key)}
 				<li>
-					<span class="pin-owner" style="color: {pin.ownerColor};"
-						>{pin.ownerLabel}:</span
-					>
+					<span class="pin-crest">
+						{#if pin.ownerNation}
+							<SpriteIcon
+								category="crests"
+								value={pin.ownerNation}
+								size={12}
+								alt={nationName(pin.ownerNation)}
+							/>
+						{/if}
+					</span>
+					<span class="pin-turn" title={PIN_REMOVAL_NOTE}>T{pin.turn}</span>
 					<span class="pin-text" class:fallback={pin.isFallback}
 						>{pin.text}</span
 					>
-					<span class="pin-turn" title={PIN_REMOVAL_NOTE}>T{pin.turn}+</span>
 				</li>
 			{/each}
 		</ul>
@@ -289,8 +299,14 @@
 		flex-direction: column;
 		gap: 3px;
 	}
-	.pin-owner {
-		font-weight: 600;
+	/* Fixed-size slot whether or not the crest resolves: SpriteIcon renders
+	   nothing for a nation we ship no art for, and the line would otherwise
+	   start at a different place on that row (the BuildComparison idiom). */
+	.pin-crest {
+		display: inline-flex;
+		justify-content: center;
+		width: 14px;
+		vertical-align: -2px;
 	}
 	.pin-text {
 		/* A note is multi-line in the save (3 of the 394 non-empty note texts

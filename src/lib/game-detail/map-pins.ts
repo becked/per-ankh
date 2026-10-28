@@ -31,6 +31,12 @@ export interface MapPin {
 	ownerLabel: string;
 	/** That seat's own colour — not its nation's, so a mirror reads apart. */
 	ownerColor: string;
+	/**
+	 * That seat's nation, for a surface that crests a pin rather than naming
+	 * it. Null when the roster has no row for the seat. A pin only ever names
+	 * a seat, so `unitOwner`'s tribe arm cannot reach this field.
+	 */
+	ownerNation: string | null;
 	/** PING_NOTE, PING_IMPROVEMENT, … */
 	pingType: string;
 	/** The game's name for the kind ("Note", "Improvement Reminder"). */
@@ -152,6 +158,7 @@ export function resolveMapPins(
 			playerXmlId: ping.player_xml_id,
 			ownerLabel: owner.label,
 			ownerColor: owner.color,
+			ownerNation: owner.civilization,
 			pingType: ping.ping_type,
 			kindName:
 				PING_TYPES.find((t) => t.type === ping.ping_type)?.name ??

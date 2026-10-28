@@ -274,7 +274,7 @@
 						<tr class="group">
 							<td
 								class="{TABLE_CELL_TD_CLASS} whitespace-nowrap rounded-l-lg tabular-nums"
-								title={PIN_REMOVAL_NOTE}>{pin.turn}+</td
+								title={PIN_REMOVAL_NOTE}>{pin.turn}</td
 							>
 							<td class={TABLE_CELL_TD_CLASS}>
 								<span class="inline-flex items-center gap-2">
