@@ -1,12 +1,14 @@
 <script lang="ts">
 	import type { EventLog } from "$lib/types/EventLog";
 	import type { PlayerHistory } from "$lib/types/PlayerHistory";
+	import type { FullGameData } from "$lib/parser/types";
 	import type { ChartOption } from "$lib/echarts";
 	import ChartContainer from "$lib/ChartContainer.svelte";
 	import { Select } from "bits-ui";
 	import { formatEnum, stripMarkup, nationName } from "$lib/utils/formatting";
 	import { CHART_THEME, getNationChartColor } from "$lib/config";
 	import TableFilterColumn from "./TableFilterColumn.svelte";
+	import MapPinsSection from "./MapPinsSection.svelte";
 	import {
 		type TableState,
 		type DetailPlayer,
@@ -21,6 +23,7 @@
 	import { withEndStateTotal } from "$lib/utils/victory-point-series";
 
 	let {
+		game,
 		eventLogs,
 		playerHistory,
 		players,
@@ -33,7 +36,16 @@
 			sortDirection: "desc",
 			filters: [],
 		}),
+		pinsTableState = $bindable<TableState>({
+			search: "",
+			sortColumn: "turn",
+			sortDirection: "desc",
+			filters: [],
+		}),
 	}: {
+		// What the Map Pins section below reads, which is the only reason this
+		// tab takes the game at all: the pins, and the grid they are placed on.
+		game: Pick<FullGameData, "pings" | "map_tiles" | "game_details">;
 		eventLogs: EventLog[];
 		playerHistory: PlayerHistory[];
 		players: DetailPlayer[];
@@ -44,6 +56,7 @@
 		victoryPoints: Map<number, number> | null;
 		chartFilter?: Record<string, boolean>;
 		tableState?: TableState;
+		pinsTableState?: TableState;
 	} = $props();
 
 	// Resolved identity lookup (stable label + color per player), keyed by the
@@ -250,6 +263,12 @@
 		/>
 	</div>
 {/if}
+
+<!-- Map Pins, above the log and collapsed by default: the same turn-stamped,
+     seat-attributed rows, but kept a section of their own because a pin's turn
+     is a FLOOR on when it was on the map and a log entry's is not. Renders
+     nothing for a game with no pins (MapPinsSection). -->
+<MapPinsSection {game} {players} bind:tableState={pinsTableState} />
 
 <!-- Event Logs Table -->
 {#if annotatedEventLogs.length === 0}

@@ -29,7 +29,6 @@ export type GameTabId =
 	| "wonders"
 	| "families"
 	| "specialists"
-	| "pins"
 	| "settings";
 
 type GameTabEntry = {
@@ -45,16 +44,6 @@ type GameTabEntry = {
 // have none. `characters` is absent from blobs parsed before it existed.
 function hasLeaders(game: FullGameData): boolean {
 	return (game.characters ?? []).some((c) => c.became_leader_turn != null);
-}
-
-// Map Pins appears only for a game that has some. Three ways not to: a blob
-// parsed before 2.30.0 carries no `pings` at all, a game nobody pinned
-// carries an empty one (55 of the 116 saves in `test-data/saves/`), and a
-// non-owner read of someone else's game can be left with none once the
-// Worker drops every seat but the uploader's (`stripForeignPings`). The gate
-// is the same question in all three: is there a pin to list.
-function hasMapPins(game: FullGameData): boolean {
-	return (game.pings ?? []).length > 0;
 }
 
 // In display order.
@@ -126,12 +115,6 @@ const GAME_TABS: GameTabEntry[] = [
 		id: "specialists",
 		label: "Specialists",
 		icon: { category: "specialists", value: "SPECIALIST_PHILOSOPHER" },
-	},
-	{
-		id: "pins",
-		label: "Map Pins",
-		icon: { category: "icons", value: "MAP_OVERVIEW" },
-		gate: hasMapPins,
 	},
 	{
 		id: "settings",

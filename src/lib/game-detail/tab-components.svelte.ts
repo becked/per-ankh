@@ -1,6 +1,6 @@
 // The tab components a game's analysis loads on demand. Imported statically
 // they all land in the /games/[id] route chunk, so every visitor downloaded
-// all fifteen tabs to read the one or two they open (#178) — each entry below
+// all fourteen tabs to read the one or two they open (#178) — each entry below
 // is its own chunk instead, fetched when its tab is first opened.
 //
 // Overview is deliberately absent and stays a static import in GameTab: it is
@@ -15,7 +15,7 @@ type LazyTabId = Exclude<GameTabId, "overview">;
 
 // One tab's chunk and what it resolved to — the component, which is the
 // module's default export. Each slot keeps its own component type, inferred
-// from its own `import()`: one shared component type across the fourteen would
+// from its own `import()`: one shared component type across the thirteen would
 // accept any props at all, and a prop a tab never received is exactly the
 // defect that would hide behind it.
 //
@@ -42,7 +42,6 @@ export const LAZY_TABS = {
 	wonders: deferredTab(() => import("./WondersTab.svelte")),
 	families: deferredTab(() => import("./FamiliesTab.svelte")),
 	specialists: deferredTab(() => import("./SpecialistsTab.svelte")),
-	pins: deferredTab(() => import("./MapPinsTab.svelte")),
 	settings: deferredTab(() => import("./SettingsTab.svelte")),
 } satisfies Record<LazyTabId, Deferred<unknown>>;
 
