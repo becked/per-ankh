@@ -781,7 +781,7 @@ export async function handleMe(
 	// helpers document taking is an ISO instant; isoInstantSql (util.ts) holds
 	// the shape and the full reasoning.
 	const row = await env.SHARE_DB.prepare(
-		`SELECT user_id, discord_id, ${displayNameSql("users")} AS display_name, avatar_hash, slug, default_game_public, stream_url, open_to_matches, ${isoInstantSql("screenshot_terms_accepted_at")} AS screenshot_terms_accepted_at FROM users WHERE user_id = ?`,
+		`SELECT user_id, discord_id, ${displayNameSql("users")} AS display_name, avatar_hash, slug, default_game_public, stream_url, open_to_matches, timezone, ${isoInstantSql("screenshot_terms_accepted_at")} AS screenshot_terms_accepted_at FROM users WHERE user_id = ?`,
 	)
 		.bind(session.data.user_id)
 		.first<
@@ -789,6 +789,7 @@ export async function handleMe(
 				default_game_public: number;
 				stream_url: string | null;
 				open_to_matches: number;
+				timezone: string | null;
 				screenshot_terms_accepted_at: string | null;
 			}
 		>();
@@ -872,6 +873,12 @@ export async function handleMe(
 			// Read by the preferences toggle and by the profile's Suggested tab,
 			// which tells a hidden viewer that the suggesting runs both ways.
 			open_to_matches: row.open_to_matches === 1,
+			// IANA zone id, null until the user saves one in Preferences. The
+			// tournament scheduling DM prefers it over anything stored on the
+			// slot, so it follows the player into a seat they are substituted
+			// into; the account page reads it to decide whether its dropdown is
+			// showing a saved zone or the browser-detected one.
+			timezone: row.timezone,
 			// When this account agreed to the screenshot terms, null if it
 			// never has. Display only: the upload endpoint reads the column
 			// itself (screenshots/handlers.ts) and is the gate, so a client
@@ -909,7 +916,7 @@ export async function handleSettings(
 			"INVALID_BODY",
 		);
 	}
-	const { default_game_public, stream_url, open_to_matches } =
+	const { default_game_public, stream_url, open_to_matches, timezone } =
 		validation.output;
 
 	// Partial update: only the fields the caller sent are written (every schema
@@ -929,6 +936,10 @@ export async function handleSettings(
 		sets.push("open_to_matches = ?");
 		binds.push(open_to_matches ? 1 : 0);
 	}
+	if (timezone !== undefined) {
+		sets.push("timezone = ?");
+		binds.push(timezone);
+	}
 	if (sets.length > 0) {
 		await env.SHARE_DB.prepare(
 			`UPDATE users SET ${sets.join(", ")} WHERE user_id = ?`,
@@ -940,19 +951,21 @@ export async function handleSettings(
 	// Echo the full current settings so the caller can refresh state without a
 	// second round-trip, whichever subset it wrote.
 	const row = await env.SHARE_DB.prepare(
-		"SELECT default_game_public, stream_url, open_to_matches FROM users WHERE user_id = ?",
+		"SELECT default_game_public, stream_url, open_to_matches, timezone FROM users WHERE user_id = ?",
 	)
 		.bind(session.data.user_id)
 		.first<{
 			default_game_public: number;
 			stream_url: string | null;
 			open_to_matches: number;
+			timezone: string | null;
 		}>();
 	return jsonResponse(
 		{
 			default_game_public: row?.default_game_public === 1,
 			stream_url: row?.stream_url ?? null,
 			open_to_matches: row?.open_to_matches === 1,
+			timezone: row?.timezone ?? null,
 		},
 		200,
 		cors,

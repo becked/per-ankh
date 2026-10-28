@@ -190,6 +190,10 @@ export async function handleTournamentSignup(
 	if (!tournament) {
 		return errorResponse("Not found", 404, cors, "TOURNAMENT_NOT_FOUND");
 	}
+	// The per-tournament switch is the gate, not the form: a tournament that
+	// didn't ask for a zone stores none, whatever the body carried.
+	const timezone =
+		tournament.collect_timezone === 1 ? (body.body.timezone ?? null) : null;
 	if (tournament.status !== "setup" || tournament.signups_open !== 1) {
 		return errorResponse(
 			"Signups are not open for this tournament",
@@ -233,8 +237,9 @@ export async function handleTournamentSignup(
 	const result = await env.SHARE_DB.prepare(
 		`INSERT INTO tournament_slots
 		   (slot_id, tournament_id, phase, division, swiss_seed,
-		    discord_username, discord_id, user_id, signup_answer, created_at)
-		 SELECT ?, ?, 'swiss', ?, ?, ?, ?, ?, ?, datetime('now')
+		    discord_username, discord_id, user_id, signup_answer, timezone,
+		    created_at)
+		 SELECT ?, ?, 'swiss', ?, ?, ?, ?, ?, ?, ?, datetime('now')
 		 WHERE NOT EXISTS (
 		   SELECT 1 FROM tournament_slots
 		   WHERE tournament_id = ? AND user_id = ? AND phase = 'swiss'
@@ -249,6 +254,7 @@ export async function handleTournamentSignup(
 			user.discord_id,
 			session.data.user_id,
 			signupAnswer,
+			timezone,
 			tournamentId,
 			session.data.user_id,
 		)

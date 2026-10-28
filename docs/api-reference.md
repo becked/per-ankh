@@ -177,7 +177,7 @@ Exchange the OAuth code for a session.
 Current session's user profile.
 
 - **Auth:** Session.
-- **Response 200:** `{ user_id, discord_id, display_name, discord_username, avatar_url, slug: string|null, is_beta: boolean, is_admin: boolean, default_game_public: boolean, stream_url: string|null, open_to_matches: boolean, screenshot_terms_accepted_at: string|null }`.
+- **Response 200:** `{ user_id, discord_id, display_name, discord_username, avatar_url, slug: string|null, is_beta: boolean, is_admin: boolean, default_game_public: boolean, stream_url: string|null, open_to_matches: boolean, timezone: string|null, screenshot_terms_accepted_at: string|null }`.
 - **Errors:** `401 UNAUTHORIZED` (also if the session points at a deleted user, which clears the cookie).
 - **Notes:** Re-claims pre-linked tournament slots on every call. `slug` is the caller's profile URL, null when they have none — carried here so the account page has it without a second fetch. `is_beta`/`is_admin` are advisory (frontend gating); the server re-checks per endpoint. `screenshot_terms_accepted_at` is an ISO instant (normalised from the column's `datetime('now')` text) or null, read by the account page's terms section; the upload endpoint gates on the column itself, so it is advisory here too.
 
@@ -194,8 +194,8 @@ Local-only login bypass (no Discord).
 Update account settings (partial — only the fields sent are written).
 
 - **Auth:** Session.
-- **Body:** `UserSettingsSchema` — `{ default_game_public?: boolean, stream_url?: string|null, open_to_matches?: boolean }`. `default_game_public` is the default visibility applied to newly uploaded saves. `stream_url` is the casting stream link (YouTube/Twitch allowlist, same as match-part streams), auto-attached when the user takes the streamer slot on a match part; `null` clears it. `open_to_matches` is whether other players may be shown this user as a suggested opponent — `false` removes them from everyone's list without stopping them getting their own.
-- **Response 200:** `{ default_game_public: boolean, stream_url: string|null, open_to_matches: boolean }` (the full current settings, whichever subset was written).
+- **Body:** `UserSettingsSchema` — `{ default_game_public?: boolean, stream_url?: string|null, open_to_matches?: boolean, timezone?: string|null }`. `default_game_public` is the default visibility applied to newly uploaded saves. `stream_url` is the casting stream link (YouTube/Twitch allowlist, same as match-part streams), auto-attached when the user takes the streamer slot on a match part; `null` clears it. `open_to_matches` is whether other players may be shown this user as a suggested opponent — `false` removes them from everyone's list without stopping them getting their own. `timezone` is an IANA zone id (validated against `Intl` and stored canonicalized, so `america/new_york` is stored as `America/New_York`); the tournament scheduling DM reads it through `tournament_slots.user_id`, so it follows the player between seats. `null` clears it.
+- **Response 200:** `{ default_game_public: boolean, stream_url: string|null, open_to_matches: boolean, timezone: string|null }` (the full current settings, whichever subset was written).
 - **Errors:** `401 UNAUTHORIZED`, `400 INVALID_JSON`, `400 INVALID_BODY`.
 
 ### `GET /v1/auth/channels`
@@ -651,22 +651,22 @@ List tournaments.
 Tournament detail.
 
 - **Path:** the tournament id or its slug, like the reads below. The route key keeps the `:slug` spelling it has always had.
-- **Response 200:** `{ tournament_id, slug, name, description, status, division_a_name, division_b_name, swiss_wins_to_advance, swiss_losses_to_eliminate, swiss_max_rounds, map_pool, links, slot_counts: { swiss, championship, swiss_by_division: { A, B } }, signups_open, signup_question, youtube_playlist_url, viewer_slot: { slot_id, division, swiss_seed } | null, is_viewer_admin, is_viewer_creator, owner: { display_name, avatar_url } | null, admins: [...], starts_at, completed_at, created_at, updated_at }`.
+- **Response 200:** `{ tournament_id, slug, name, description, status, division_a_name, division_b_name, swiss_wins_to_advance, swiss_losses_to_eliminate, swiss_max_rounds, map_pool, links, slot_counts: { swiss, championship, swiss_by_division: { A, B } }, signups_open, signup_question, collect_timezone, youtube_playlist_url, viewer_slot: { slot_id, division, swiss_seed } | null, is_viewer_admin, is_viewer_creator, owner: { display_name, avatar_url } | null, admins: [...], starts_at, completed_at, created_at, updated_at }`.
 - **Errors:** `404 TOURNAMENT_NOT_FOUND` (missing, or setup-phase to a non-admin), `429 RATE_LIMIT_TOURNAMENT_VIEW`.
 - **Notes:** `viewer_slot`, `is_viewer_admin`, `is_viewer_creator` require a session (else null/false).
 
 ### `GET /v1/tournaments/:id/standings`
 Swiss standings per division + combined qualifier ranking.
 
-- **Response 200:** `{ tournament_id, divisions: { A: { name, standings: RankedStanding[] }, B: {...} }, combined_qualifier_ranking?: [...] }`. Per-row fields include `slot_id, rank, wins, losses, status, h2h, buchholz_cut1, opponents_buchholz, cumulative, division, display_name, user_id, slug, avatar_url, swiss_seed, withdrawn`; admins additionally see `signup_answer` and `discord_username` (null for public).
+- **Response 200:** `{ tournament_id, divisions: { A: { name, standings: RankedStanding[] }, B: {...} }, combined_qualifier_ranking?: [...] }`. Per-row fields include `slot_id, rank, wins, losses, status, h2h, buchholz_cut1, opponents_buchholz, cumulative, division, display_name, user_id, slug, avatar_url, swiss_seed, withdrawn`; admins additionally see `signup_answer`, `timezone` and `discord_username` (null for public). `timezone` is the occupant's scheduling zone already resolved account-first — `users.timezone` via the slot's `user_id`, else the slot's own column — so a substituted seat reports the player now in it.
 - **Errors:** `404 TOURNAMENT_NOT_FOUND`, `429 RATE_LIMIT_TOURNAMENT_VIEW`.
 
 ### `GET /v1/tournaments/:id/bracket`
 Championship bracket.
 
-- **Response 200:** `{ tournament_id, slots: [{ slot_id, championship_seed, display_name, user_id, slug, avatar_url }], rounds: [{ round_id, round_number, status, matches: [<serializeMatch> & { total_turns }] }] }` (championship-phase only).
+- **Response 200:** `{ tournament_id, slots: [{ slot_id, championship_seed, display_name, user_id, slug, avatar_url, timezone }], rounds: [{ round_id, round_number, status, matches: [<serializeMatch> & { total_turns }] }] }` (championship-phase only).
 - **Errors:** `404 TOURNAMENT_NOT_FOUND`, `429 RATE_LIMIT_TOURNAMENT_VIEW`.
-- **Notes:** Admin-only `slot_*_discord_username` / `slot_*_discord_id` inside matches are null for public viewers.
+- **Notes:** Admin-only `slot_*_discord_username` / `slot_*_discord_id` inside matches are null for public viewers, as is each slot's `timezone`. A championship slot copies neither the Swiss slot's `signup_answer` nor its `timezone`, so its zone resolves from the occupant's account alone.
 
 ### `GET /v1/tournaments/:id/stats`
 Competition stats (standings + caster leaderboard + player picks).
@@ -741,10 +741,10 @@ Edit tournament configuration.
 
 - **Auth:** Tournament admin.
 - **Path:** `id` (21-char).
-- **Body:** `PatchTournamentSchema` (all optional) — `name`, `description`, `division_a_name`/`division_b_name`, `swiss_wins_to_advance`/`swiss_losses_to_eliminate`/`swiss_max_rounds`, `map_pool`, `links` (`LinksSchema`: ≤16 of `{ label, url }`), `signups_open` (boolean), `starts_at` (nullable ISO-8601), `signup_question` (nullable, ≤2000), `youtube_playlist_url` (nullable YouTube playlist URL, ≤500 — validated to a youtube.com host + list id).
+- **Body:** `PatchTournamentSchema` (all optional) — `name`, `description`, `division_a_name`/`division_b_name`, `swiss_wins_to_advance`/`swiss_losses_to_eliminate`/`swiss_max_rounds`, `map_pool`, `links` (`LinksSchema`: ≤16 of `{ label, url }`), `signups_open` (boolean), `starts_at` (nullable ISO-8601), `signup_question` (nullable, ≤2000), `collect_timezone` (boolean — whether the signup form asks for an IANA zone), `youtube_playlist_url` (nullable YouTube playlist URL, ≤500 — validated to a youtube.com host + list id).
 - **Response 200:** `{ tournament }` (the full row).
 - **Errors:** `409 TOURNAMENT_LOCKED` (swiss-config edit when status ≠ setup), `409 INVALID_PHASE` (`signups_open` while locked), `400 INVALID_THRESHOLDS`, `400 MAP_OPTIONS_INVALID`, `409 TOURNAMENT_COMPLETE` / `409 MAP_POOL_LOCKED` (map-pool edits), `500 MAP_CONFIG_INVALID`, plus auth/body codes.
-- **Notes:** Swiss config freezes once status ≠ setup. The map pool is append-only after setup (existing entries frozen; new ones may be added) and fully frozen when complete. `links` / `starts_at` / `signup_question` / `youtube_playlist_url` are never phase-locked.
+- **Notes:** Swiss config freezes once status ≠ setup. The map pool is append-only after setup (existing entries frozen; new ones may be added) and fully frozen when complete. `links` / `starts_at` / `signup_question` / `collect_timezone` / `youtube_playlist_url` are never phase-locked.
 
 ### `DELETE /v1/tournaments/:id`
 Cancel (delete) a tournament.
@@ -932,7 +932,7 @@ All **Session** (anonymous → `401 UNAUTHORIZED`). `me` = the session user.
 Sign yourself up.
 
 - **Path:** `id` (21-char).
-- **Body:** `TournamentSignupSchema` — `{ division: "A"|"B", signup_answer?: string (≤2000) }`.
+- **Body:** `TournamentSignupSchema` — `{ division: "A"|"B", signup_answer?: string (≤2000), timezone?: string (IANA zone id) }`. `timezone` is stored only when the tournament has `collect_timezone` set — the switch is the gate, not the form — and is otherwise dropped.
 - **Response 201:** `{ slot: { slot_id, division, swiss_seed } }`.
 - **Errors:** `409 SIGNUPS_CLOSED` (status ≠ setup or signups closed), `409 ALREADY_SIGNED_UP`, `404 TOURNAMENT_NOT_FOUND`, plus body codes.
 - **Notes:** Identity comes from the session, not the body. One slot per user (race-guarded).

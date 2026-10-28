@@ -59,6 +59,10 @@ export interface TournamentRow {
 	// Optional freeform prompt shown on the signup form. NULL when no question
 	// is configured. Set via the settings form (migration 0023).
 	signup_question: string | null;
+	// 0/1. When 1, the signup form also asks for an IANA timezone and stores it
+	// on the slot (migration 0055). Defaults to 0, so an existing tournament's
+	// form is unchanged until an admin opts in.
+	collect_timezone: number;
 	// Admin-set YouTube playlist (full URL) whose uploads feed the tournament's
 	// Videos tab. NULL when unset — the tab is hidden entirely. Editable in every
 	// phase (like `links`, not frozen). Added in migration 0032.
@@ -89,11 +93,20 @@ export interface SlotRow {
 	// column with no fallback rule, so it gets no slotSlug() sibling to
 	// slotDisplayName()/slotAvatarUrl(); read it directly.
 	user_slug: string | null;
+	// IANA zone of the claiming user, LEFT JOINed the same way. NULL when the
+	// slot is unclaimed OR that user has never saved one. Feeds slotTimezone(),
+	// where it outranks the slot's own column.
+	user_timezone: string | null;
 	claim_banner_dismissed_at: string | null;
 	// The player's answer to the tournament's optional signup_question, captured
 	// at signup (migration 0023). NULL when unanswered or the slot predates the
 	// question. Admin-only display in the roster.
 	signup_answer: string | null;
+	// The registrant's IANA zone, captured at signup when the tournament has
+	// collect_timezone set (migration 0055). NULL when it didn't ask, when the
+	// slot was created by an admin rather than a signup, or when the slot
+	// predates the column. Travels with the occupant on a slot swap.
+	timezone: string | null;
 	// Set (ISO-8601) when an admin withdraws the slot mid-tournament; NULL
 	// otherwise (migration 0027). Drives the `withdrawn` flag on SlotRef, which
 	// excludes the slot from future pairing and from championship qualifiers.
@@ -250,7 +263,7 @@ export async function loadSlots(
 	const res = await env.SHARE_DB.prepare(
 		`SELECT s.*, u.avatar_hash AS user_avatar_hash,
 		        ${displayNameSql("u")} AS user_display_name,
-		        u.slug AS user_slug
+		        u.slug AS user_slug, u.timezone AS user_timezone
 		 FROM tournament_slots s
 		 LEFT JOIN users u ON u.user_id = s.user_id
 		 WHERE s.tournament_id = ?
@@ -420,7 +433,7 @@ export async function loadSlot(
 	return env.SHARE_DB.prepare(
 		`SELECT s.*, u.avatar_hash AS user_avatar_hash,
 		        ${displayNameSql("u")} AS user_display_name,
-		        u.slug AS user_slug
+		        u.slug AS user_slug, u.timezone AS user_timezone
 		 FROM tournament_slots s
 		 LEFT JOIN users u ON u.user_id = s.user_id
 		 WHERE s.slot_id = ?`,
@@ -463,7 +476,7 @@ export async function loadSlotInTournament(
 	return env.SHARE_DB.prepare(
 		`SELECT s.*, u.avatar_hash AS user_avatar_hash,
 		        ${displayNameSql("u")} AS user_display_name,
-		        u.slug AS user_slug
+		        u.slug AS user_slug, u.timezone AS user_timezone
 		 FROM tournament_slots s
 		 LEFT JOIN users u ON u.user_id = s.user_id
 		 WHERE s.slot_id = ? AND s.tournament_id = ?`,
@@ -514,6 +527,23 @@ export function slotDisplayName(
 	row: Pick<SlotRow, "user_display_name" | "discord_username">,
 ): string | null {
 	return row.user_display_name ?? row.discord_username;
+}
+
+// The IANA zone to schedule a slot's occupant in: the account zone of whoever
+// holds the seat now, else the zone the seat's registrant gave at signup.
+//
+// The order is the whole point of the column pair (migration 0055). A zone
+// stored on the slot is a snapshot of whoever signed up, and substituting the
+// occupant (handlePatchSlot) does not touch it — so reading the account zone
+// first is what makes a substituted seat describe the player sitting in it.
+// The slot's own column is what a registrant with no account zone still gets.
+// NULL when neither is known; the DM then falls back to the free-text
+// signup_answer and finally to "(timezone TBD)". Narrow param, same reason as
+// slotAvatarUrl above.
+export function slotTimezone(
+	row: Pick<SlotRow, "user_timezone" | "timezone">,
+): string | null {
+	return row.user_timezone ?? row.timezone;
 }
 
 // Convert D1 rows → in-memory refs used by the pure-function algorithms.

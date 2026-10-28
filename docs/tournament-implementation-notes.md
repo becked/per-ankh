@@ -464,6 +464,22 @@ The Videos tab renders **match → part → angle**: a match is one game, played
 
 **Known gaps, none of which this addresses.** Of the 195 stream links stored across the tournament, 148 are bare channel `/live` URLs that stop resolving once the broadcast ends and only 47 name a video id (local D1 snapshot, 2026-10-04); a scheduled job to rewrite them to the permanent VOD address is designed but not built. Eighteen recordings were never added to the playlist and are invisible to a playlist-based read. Two parts went out on Twitch only.
 
+## Timezone — what the scheduling DM reads, and why it is three columns
+
+The DM an admin pastes into Discord ends with a line per player: "<name> is <their timezone>". Until migration 0055 the only source it had was `tournament_slots.signup_answer` — free text, answering whatever question the admin had configured, which on every tournament run so far has been "What is your timezone?". Two things were wrong with that, and they need different fixes.
+
+**A typed label is right half the year.** "EST" typed in March describes a zone the player leaves in April. Storing an IANA zone id instead lets the DM state the offset the player is actually on at the moment it is written, which is what `formatTimeZone` (`src/lib/utils/formatting.ts`) does — "America/New_York (EDT, GMT-4)".
+
+**An answer stored on the seat describes whoever sat in it first.** `handlePatchSlot` writes `signup_answer` only when the patch carries it, so substituting a slot's occupant leaves the departed player's answer in place and the DM prints it under the new player's name. No amount of validation fixes that, because the value is attached to the wrong thing. `users.timezone`, read through the slot's `user_id`, is attached to the player — and `claimTournamentSlots` runs on every `/v1/auth/me` rather than only on the OAuth callback, so an already-logged-in substitute links their account to the seat on their next app load and the DM corrects itself with no admin action.
+
+So the order is account zone, then slot zone, then signup answer, then "(timezone TBD)". The first two steps are resolved server-side by `slotTimezone` (`cloud/src/tournament/data.ts`) off the `LEFT JOIN users` the slot loaders already perform; the last two are the DM's own, in `schedulingZone` (`src/lib/tournament/slot-identity.ts`). Splitting it there is deliberate: the free-text answer is not a zone and must never be formatted as one, and the placeholder is DM copy rather than data.
+
+The slot column earns its place as the second step, not the first. A registrant with no Per-Ankh account zone still gives one at signup, and that is the only zone their seat will ever have; it travels with the occupant on a slot swap (`handleSwapSlots`), like `signup_answer`, because a swap moves identity rather than reassigning a seat.
+
+One consequence worth recording: a championship slot is a fresh row that copies neither the Swiss slot's `signup_answer` nor its zone, so before 0055 the DM for a championship match always said "(timezone TBD)". The account-level read is what fills it in, and it is the only thing that can.
+
+`signup_question` / `signup_answer` keep working unchanged. The question is used for more than timezone — "what time of day do you want to play" — so removing it would cost admins a prompt they still need.
+
 ## Operational checklist for first tournament
 
 In rough order. Most are documented in [`cloud-deploy-plan.md`](./cloud-deploy-plan.md);

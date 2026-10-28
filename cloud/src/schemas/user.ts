@@ -3,6 +3,7 @@
 
 import * as v from "valibot";
 
+import { TimeZoneSchema } from "./timezone";
 import { StreamUrlSchema } from "./tournament";
 import {
 	normalizeUserSlug,
@@ -22,10 +23,14 @@ import {
 //   - open_to_matches: whether other players may be shown this user as a
 //     suggested opponent (cloud/src/ratings/recommend.ts). Off removes them
 //     from everyone's list; it does not stop them getting their own.
+//   - timezone: IANA zone id (migration 0055). The tournament scheduling DM
+//     reads it through tournament_slots.user_id, so it follows the player
+//     between seats instead of being snapshotted onto one; null clears it.
 export const UserSettingsSchema = v.object({
 	default_game_public: v.optional(v.boolean()),
 	stream_url: v.optional(v.nullable(StreamUrlSchema)),
 	open_to_matches: v.optional(v.boolean()),
+	timezone: v.optional(v.nullable(TimeZoneSchema)),
 });
 
 export type UserSettings = v.InferOutput<typeof UserSettingsSchema>;
