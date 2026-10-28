@@ -21,11 +21,11 @@
 	// The whole game, never the map's selected turn: the analyst and map views
 	// render a tab the same way (#269), and the analyst view has no turn to
 	// read.
-	import { Select } from "bits-ui";
 	import type { FullGameData } from "$lib/parser/types";
 	import { PING_TYPES } from "$lib/generated/ping-types";
 	import SpriteIcon from "./SpriteIcon.svelte";
 	import TableFilterColumn from "./TableFilterColumn.svelte";
+	import TableFilterSelect from "./TableFilterSelect.svelte";
 	import { PIN_REMOVAL_NOTE, resolveMapPins, type MapPin } from "./map-pins";
 	import {
 		type TableState,
@@ -70,6 +70,23 @@
 		PING_TYPES.filter((t) => pinTypes.has(t.type)),
 	);
 
+	const filterGroups = $derived([
+		{
+			heading: "Players",
+			options: filterablePlayers.map((p) => ({
+				value: `player:${p.playerId}`,
+				label: p.label,
+			})),
+		},
+		{
+			heading: "Kinds",
+			options: filterableKinds.map((kind) => ({
+				value: `kind:${kind.type}`,
+				label: kind.name,
+			})),
+		},
+	]);
+
 	const selectedPlayerIds = $derived(
 		tableState.filters
 			.filter((f) => f.startsWith("player:"))
@@ -80,12 +97,6 @@
 			.filter((f) => f.startsWith("kind:"))
 			.map((f) => f.replace("kind:", "")),
 	);
-
-	// Row-major, so a tile sort reads the way the map does. x and y come off
-	// the same tile, so a pin on no tile has neither and sorts last.
-	function tileOrder(pin: MapPin): number | null {
-		return pin.x === null || pin.y === null ? null : pin.y * 1000 + pin.x;
-	}
 
 	const filteredPins = $derived.by(() => {
 		const rows = pins.filter((pin) => {
@@ -110,8 +121,21 @@
 		});
 
 		return [...rows].sort((a, b) => {
-			let aVal: string | number | null;
-			let bVal: string | number | null;
+			// The one column with two keys: y, then x, so the tile sort reads the
+			// way the map does. x and y come off the same tile, so a pin on no tile
+			// has neither and sorts last whichever way the column points.
+			if (tableState.sortColumn === "tile") {
+				const { x: ax, y: ay } = a;
+				const { x: bx, y: by } = b;
+				if (ax === null || ay === null) return bx === null ? 0 : 1;
+				if (bx === null || by === null) return -1;
+				const tileCmp = ay - by || ax - bx;
+				return tableState.sortDirection === "asc" ? tileCmp : -tileCmp;
+			}
+
+			// Every other column is one non-null key off the pin.
+			let aVal: string | number;
+			let bVal: string | number;
 
 			switch (tableState.sortColumn) {
 				case "kind":
@@ -122,10 +146,6 @@
 					aVal = a.ownerLabel;
 					bVal = b.ownerLabel;
 					break;
-				case "tile":
-					aVal = tileOrder(a);
-					bVal = tileOrder(b);
-					break;
 				case "note":
 					aVal = a.text;
 					bVal = b.text;
@@ -135,10 +155,6 @@
 					aVal = a.turn;
 					bVal = b.turn;
 			}
-
-			if (aVal == null && bVal == null) return 0;
-			if (aVal == null) return 1;
-			if (bVal == null) return -1;
 
 			const cmp =
 				typeof aVal === "string" && typeof bVal === "string"
@@ -184,72 +200,10 @@
 			)}
 		>
 			{#snippet filters()}
-				<Select.Root type="multiple" bind:value={tableState.filters}>
-					<Select.Trigger
-						class="flex w-full cursor-pointer items-center justify-between rounded border border-black bg-surface-raised px-2 py-1.5 text-xs text-tan"
-					>
-						<span class="truncate">Filter</span>
-						<span class="ml-2 text-tan opacity-60">▼</span>
-					</Select.Trigger>
-					<Select.Portal>
-						<Select.Content
-							class="z-50 max-h-64 overflow-y-auto rounded bg-surface-sunken shadow-lg"
-						>
-							<Select.Viewport>
-								{#if filterablePlayers.length > 0}
-									<Select.Group>
-										<Select.GroupHeading
-											class="border-b border-surface px-3 py-2 text-xs font-bold uppercase tracking-wide text-tan"
-										>
-											Players
-										</Select.GroupHeading>
-										{#each filterablePlayers as player (player.playerId)}
-											<Select.Item
-												value={`player:${player.playerId}`}
-												label={player.label}
-												class="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-tan hover:bg-surface-raised data-[highlighted]:bg-surface-raised"
-											>
-												{#snippet children({ selected })}
-													{player.label}
-													{#if selected}
-														<span class="font-bold text-orange">✓</span>
-													{/if}
-												{/snippet}
-											</Select.Item>
-										{/each}
-									</Select.Group>
-								{/if}
-
-								{#if filterableKinds.length > 0}
-									<Select.Group>
-										<Select.GroupHeading
-											class="border-b border-surface px-3 py-2 text-xs font-bold uppercase tracking-wide text-tan {filterablePlayers.length >
-											0
-												? 'border-t border-surface'
-												: ''}"
-										>
-											Kinds
-										</Select.GroupHeading>
-										{#each filterableKinds as kind (kind.type)}
-											<Select.Item
-												value={`kind:${kind.type}`}
-												label={kind.name}
-												class="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-tan hover:bg-surface-raised data-[highlighted]:bg-surface-raised"
-											>
-												{#snippet children({ selected })}
-													{kind.name}
-													{#if selected}
-														<span class="font-bold text-orange">✓</span>
-													{/if}
-												{/snippet}
-											</Select.Item>
-										{/each}
-									</Select.Group>
-								{/if}
-							</Select.Viewport>
-						</Select.Content>
-					</Select.Portal>
-				</Select.Root>
+				<TableFilterSelect
+					groups={filterGroups}
+					bind:value={tableState.filters}
+				/>
 			{/snippet}
 		</TableFilterColumn>
 

@@ -33,8 +33,9 @@ export interface MapPin {
 	ownerColor: string;
 	/**
 	 * That seat's nation, for a surface that crests a pin rather than naming
-	 * it. Null when the roster has no row for the seat. A pin only ever names
-	 * a seat, so `unitOwner`'s tribe arm cannot reach this field.
+	 * it. Null two ways: the roster has no row for the seat, or the row it has
+	 * carries no nation — `PlayerInfo.nation` is itself nullable. A pin only
+	 * ever names a seat, so `unitOwner`'s tribe arm cannot reach this field.
 	 */
 	ownerNation: string | null;
 	/** PING_NOTE, PING_IMPROVEMENT, … */

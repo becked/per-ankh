@@ -882,7 +882,7 @@
 	// centre in world units — derived here beside `cityBanners` because the hex
 	// geometry is this component's, and the overlay takes the position rather
 	// than the transform. A pin on no tile (`Tile="-1"`) has no hex to hang
-	// from; the Map Pins tab lists it, the overlay skips it.
+	// from; the Events tab's Map Pins view lists it, the overlay skips it.
 	const placedPins = $derived.by(() => {
 		const out: PlacedPin[] = [];
 		for (const pin of visiblePins) {

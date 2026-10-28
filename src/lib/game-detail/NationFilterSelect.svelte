@@ -1,8 +1,9 @@
 <script lang="ts">
 	// Shared nation multi-select for the data-tab filter columns. Binds the
 	// owning table's `filters` array directly; emits `nation:<NATION_*>` values
-	// and renders matching chips elsewhere. Styled as a games-table dark select.
-	import { Select } from "bits-ui";
+	// and renders matching chips elsewhere. One group over `TableFilterSelect`,
+	// which is the control every filter column's select goes through.
+	import TableFilterSelect from "./TableFilterSelect.svelte";
 	import { nationName } from "$lib/utils/formatting";
 
 	let {
@@ -16,44 +17,16 @@
 		label?: string;
 		heading?: string;
 	} = $props();
+
+	const groups = $derived([
+		{
+			heading,
+			options: nations.map((nation) => ({
+				value: `nation:${nation}`,
+				label: nationName(nation),
+			})),
+		},
+	]);
 </script>
 
-<Select.Root type="multiple" bind:value>
-	<Select.Trigger
-		class="flex w-full cursor-pointer items-center justify-between rounded border border-black bg-surface-raised px-2 py-1.5 text-xs text-tan"
-	>
-		<span class="truncate">{label}</span>
-		<span class="ml-2 text-tan opacity-60">▼</span>
-	</Select.Trigger>
-	<Select.Portal>
-		<Select.Content
-			class="z-50 max-h-64 overflow-y-auto rounded bg-surface-sunken shadow-lg"
-		>
-			<Select.Viewport>
-				{#if nations.length > 0}
-					<Select.Group>
-						<Select.GroupHeading
-							class="border-b border-surface px-3 py-2 text-xs font-bold uppercase tracking-wide text-tan"
-						>
-							{heading}
-						</Select.GroupHeading>
-						{#each nations as nation (nation)}
-							<Select.Item
-								value={`nation:${nation}`}
-								label={nationName(nation)}
-								class="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-tan hover:bg-surface-raised data-[highlighted]:bg-surface-raised"
-							>
-								{#snippet children({ selected })}
-									{nationName(nation)}
-									{#if selected}
-										<span class="font-bold text-orange">✓</span>
-									{/if}
-								{/snippet}
-							</Select.Item>
-						{/each}
-					</Select.Group>
-				{/if}
-			</Select.Viewport>
-		</Select.Content>
-	</Select.Portal>
-</Select.Root>
+<TableFilterSelect {groups} bind:value {label} />

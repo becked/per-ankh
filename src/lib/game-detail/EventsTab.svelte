@@ -5,10 +5,10 @@
 	import type { ChartOption } from "$lib/echarts";
 	import ChartContainer from "$lib/ChartContainer.svelte";
 	import SegmentedSwitch from "$lib/ui/SegmentedSwitch.svelte";
-	import { Select } from "bits-ui";
 	import { formatEnum, stripMarkup, nationName } from "$lib/utils/formatting";
 	import { CHART_THEME, getNationChartColor } from "$lib/config";
 	import TableFilterColumn from "./TableFilterColumn.svelte";
+	import TableFilterSelect from "./TableFilterSelect.svelte";
 	import MapPinsView from "./MapPinsView.svelte";
 	import { hasMapPins } from "./map-pins";
 	import {
@@ -180,6 +180,27 @@
 	);
 	const showPlayerColumn = $derived(filterablePlayers.length > 0);
 
+	// What the filter column offers: the seats that logged something, and the
+	// log types present. The Players group carries the same question
+	// `showPlayerColumn` asks, so where the column is hidden the group has no
+	// options and TableFilterSelect drops its heading with it.
+	const filterGroups = $derived([
+		{
+			heading: "Players",
+			options: filterablePlayers.map((p) => ({
+				value: `player:${p.playerId}`,
+				label: p.label,
+			})),
+		},
+		{
+			heading: "Log Types",
+			options: uniqueLogTypes.map((logType) => ({
+				value: `logtype:${logType}`,
+				label: formatEnum(logType, ""),
+			})),
+		},
+	]);
+
 	// Parse selected filters
 	const selectedLogTypes = $derived(
 		tableState.filters
@@ -289,7 +310,7 @@
 			items={LIST_VIEWS}
 			active={listView}
 			onSelect={(key) => (listView = key)}
-			ariaLabel="Events view"
+			ariaLabel="Events list view"
 		/>
 	</div>
 {/if}
@@ -310,74 +331,10 @@
 			)}
 		>
 			{#snippet filters()}
-				<!-- Combined Log Type and Player Filter -->
-				<Select.Root type="multiple" bind:value={tableState.filters}>
-					<Select.Trigger
-						class="flex w-full cursor-pointer items-center justify-between rounded border border-black bg-surface-raised px-2 py-1.5 text-xs text-tan"
-					>
-						<span class="truncate">Filter</span>
-						<span class="ml-2 text-tan opacity-60">▼</span>
-					</Select.Trigger>
-					<Select.Portal>
-						<Select.Content
-							class="z-50 max-h-64 overflow-y-auto rounded bg-surface-sunken shadow-lg"
-						>
-							<Select.Viewport>
-								<!-- Players Group (only show if player column is visible) -->
-								{#if showPlayerColumn}
-									<Select.Group>
-										<Select.GroupHeading
-											class="border-b border-surface px-3 py-2 text-xs font-bold uppercase tracking-wide text-tan"
-										>
-											Players
-										</Select.GroupHeading>
-										{#each filterablePlayers as player (player.playerId)}
-											<Select.Item
-												value={`player:${player.playerId}`}
-												label={player.label}
-												class="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-tan hover:bg-surface-raised data-[highlighted]:bg-surface-raised"
-											>
-												{#snippet children({ selected })}
-													{player.label}
-													{#if selected}
-														<span class="font-bold text-orange">✓</span>
-													{/if}
-												{/snippet}
-											</Select.Item>
-										{/each}
-									</Select.Group>
-								{/if}
-
-								<!-- Log Types Group -->
-								{#if uniqueLogTypes.length > 0}
-									<Select.Group>
-										<Select.GroupHeading
-											class="border-b border-surface px-3 py-2 text-xs font-bold uppercase tracking-wide text-tan {showPlayerColumn
-												? 'border-t border-surface'
-												: ''}"
-										>
-											Log Types
-										</Select.GroupHeading>
-										{#each uniqueLogTypes as logType (logType)}
-											<Select.Item
-												value={`logtype:${logType}`}
-												label={formatEnum(logType, "")}
-												class="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-tan hover:bg-surface-raised data-[highlighted]:bg-surface-raised"
-											>
-												{#snippet children({ selected })}
-													{formatEnum(logType, "")}
-													{#if selected}
-														<span class="font-bold text-orange">✓</span>
-													{/if}
-												{/snippet}
-											</Select.Item>
-										{/each}
-									</Select.Group>
-								{/if}
-							</Select.Viewport>
-						</Select.Content>
-					</Select.Portal>
-				</Select.Root>
+				<TableFilterSelect
+					groups={filterGroups}
+					bind:value={tableState.filters}
+				/>
 			{/snippet}
 		</TableFilterColumn>
 

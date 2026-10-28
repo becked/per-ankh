@@ -44,7 +44,7 @@
 	}: {
 		// Already cut to the selected turn and to the pins the grid can place.
 		// A pin on no tile is not in here — `resolveMapPins` leaves its
-		// position null and the Map Pins tab lists it instead.
+		// position null and the Events tab's Map Pins view lists it instead.
 		pins: PlacedPin[];
 		viewState: ViewState;
 		canvasWidth: number;
