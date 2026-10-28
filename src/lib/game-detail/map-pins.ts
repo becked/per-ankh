@@ -6,7 +6,8 @@
 // one line the game itself would show.
 //
 // Three surfaces read it and must agree: the tile panel's rows, the map's
-// marker layer, and the Map Pins tab. So the copy rule lives here once.
+// marker layer, and the Events tab's Map Pins view. So the copy rule lives
+// here once.
 
 import {
 	PING_IMPROVEMENT_SENTINEL_NAMES,
@@ -88,6 +89,18 @@ export function pinText(ping: PingInfo): { text: string; isFallback: boolean } {
 	}
 	const kind = PING_TYPES.find((t) => t.type === ping.ping_type);
 	return { text: kind?.logText ?? "", isFallback: true };
+}
+
+/**
+ * Does the blob carry a pin at all — the question a surface asks before
+ * offering a pin view of its own. A different claim from what `resolveMapPins`
+ * answers, which is how many of them can be PLACED: a blob parsed before
+ * 2.30.0 has no `pings` at all, a game nobody pinned has an empty one, and a
+ * non-owner read of someone else's game can be left with none once the Worker
+ * drops every seat but the uploader's (`stripForeignPings`).
+ */
+export function hasMapPins(game: Pick<FullGameData, "pings">): boolean {
+	return (game.pings ?? []).length > 0;
 }
 
 /**

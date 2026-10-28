@@ -4,11 +4,13 @@
 	import type { FullGameData } from "$lib/parser/types";
 	import type { ChartOption } from "$lib/echarts";
 	import ChartContainer from "$lib/ChartContainer.svelte";
+	import SegmentedSwitch from "$lib/ui/SegmentedSwitch.svelte";
 	import { Select } from "bits-ui";
 	import { formatEnum, stripMarkup, nationName } from "$lib/utils/formatting";
 	import { CHART_THEME, getNationChartColor } from "$lib/config";
 	import TableFilterColumn from "./TableFilterColumn.svelte";
-	import MapPinsSection from "./MapPinsSection.svelte";
+	import MapPinsView from "./MapPinsView.svelte";
+	import { hasMapPins } from "./map-pins";
 	import {
 		type TableState,
 		type DetailPlayer,
@@ -43,8 +45,8 @@
 			filters: [],
 		}),
 	}: {
-		// What the Map Pins section below reads, which is the only reason this
-		// tab takes the game at all: the pins, and the grid they are placed on.
+		// What the Map Pins view below reads, which is the only reason this tab
+		// takes the game at all: the pins, and the grid they are placed on.
 		game: Pick<FullGameData, "pings" | "map_tiles" | "game_details">;
 		eventLogs: EventLog[];
 		playerHistory: PlayerHistory[];
@@ -62,6 +64,20 @@
 	// Resolved identity lookup (stable label + color per player), keyed by the
 	// player id every per-player array carries. Mirror-match safe.
 	const playerById = $derived(new Map(players.map((p) => [p.playerId, p])));
+
+	// ─── List view ────────────────────────────────────────────────────
+	// The tab's two lists, switched under the chart: the event log, and the map
+	// pins the save still carried (MapPinsView). The switch shows only where the
+	// blob carries a pin at all, so a game with no pins reads as the log alone
+	// rather than a switch with one segment that can never fill.
+	type ListView = "events" | "pins";
+	const LIST_VIEWS: { key: ListView; label: string }[] = [
+		{ key: "events", label: "Events" },
+		{ key: "pins", label: "Map Pins" },
+	];
+
+	const hasPins = $derived(hasMapPins(game));
+	let listView = $state<ListView>("events");
 
 	// ─── Chart options ────────────────────────────────────────────────
 	const pointsChartOption = $derived.by<ChartOption | null>(() => {
@@ -264,17 +280,25 @@
 	</div>
 {/if}
 
-<!-- Map Pins, above the log and collapsed by default: the same turn-stamped,
-     seat-attributed rows, but kept a section of their own because a pin's turn
-     is a FLOOR on when it was on the map and a log entry's is not. Renders
-     nothing for a game with no pins (MapPinsSection). -->
-<MapPinsSection {game} {players} bind:tableState={pinsTableState} />
+<!-- Map Pins beside the log rather than merged into it: the same turn-stamped,
+     seat-attributed rows, but a pin's turn is a FLOOR on when it was on the map
+     and a log entry's is not, so no one column header could label both. -->
+{#if hasPins}
+	<div class="mb-4">
+		<SegmentedSwitch
+			items={LIST_VIEWS}
+			active={listView}
+			onSelect={(key) => (listView = key)}
+			ariaLabel="Events view"
+		/>
+	</div>
+{/if}
 
-<!-- Event Logs Table -->
-{#if annotatedEventLogs.length === 0}
+{#if listView === "pins"}
+	<MapPinsView {game} {players} bind:tableState={pinsTableState} />
+{:else if annotatedEventLogs.length === 0}
 	<p class="p-8 text-center italic text-tan">No event logs recorded</p>
 {:else}
-	<h3 class="mb-2 mt-0 font-bold text-tan">Event Logs</h3>
 	<div class={TABLE_FRAME_CLASS}>
 		<TableFilterColumn
 			bind:search={tableState.search}
