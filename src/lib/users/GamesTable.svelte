@@ -8,8 +8,9 @@
 	// the victory it was decided by. Played is the save date alone.
 	//
 	// Server pagination via infinite scroll, month dividers (date sorts
-	// only). Filter + sort state lives in the URL — the headers write it, as
-	// does the sort dropdown beside them, so the two can't disagree. load()
+	// only). Filter + sort state lives in the URL, and the column headers are
+	// what write the sort — every order GAME_LIST_ORDER
+	// (cloud/src/games.ts) serves is a click on one of the four. load()
 	// passes the first page in via initialGames and the resolved filter
 	// props. Rename / move-to-collection live on the game-detail page, not
 	// here.
@@ -128,22 +129,6 @@
 	});
 
 	// --- Sort ---------------------------------------------------------
-	// Every order GAME_LIST_ORDER (cloud/src/games.ts) serves, so this
-	// dropdown can name whatever a header click put in the URL — a header
-	// toggles its own column both ways, and a value with no option here would
-	// leave the dropdown reading blank.
-	const SORT_OPTIONS: Array<{ value: string; label: string }> = [
-		{ value: "date_desc", label: "Newest first" },
-		{ value: "date_asc", label: "Oldest first" },
-		{ value: "turns_desc", label: "Most turns" },
-		{ value: "turns_asc", label: "Fewest turns" },
-		{ value: "nation_asc", label: "Nation A–Z" },
-		{ value: "nation_desc", label: "Nation Z–A" },
-		{ value: "name_asc", label: "Name A–Z" },
-		{ value: "name_desc", label: "Name Z–A" },
-		{ value: "result_desc", label: "Wins first" },
-		{ value: "result_asc", label: "Losses first" },
-	];
 	const isDateSort = $derived(sort.startsWith("date"));
 	// Which header carries the arrow, and which way it points.
 	const sortState = $derived(parseGameSort(sort));
@@ -285,9 +270,9 @@
 	}
 </script>
 
-<!-- Same 12-col grid as the / page feed: filters (col-span-2) · games
-     list (col-span-8) · sort (col-span-2), gap-4. One dark background
-     (blue-gray) frames all three columns. -->
+<!-- The / page feed's 12-col grid without its sort column: filters
+     (col-span-2) · games list (col-span-10), gap-4. One dark background
+     (blue-gray) frames both columns. -->
 <div class="grid gap-4 rounded-lg bg-blue-gray p-3 lg:grid-cols-12">
 	<!-- Left: filters, stacked. -->
 	<aside class="lg:col-span-2">
@@ -331,7 +316,7 @@
 	     header can stick to it — a separate inner frame would capture the
 	     scroll and the header would stick to nothing. -->
 	<div
-		class="{FRAMED_TABLE_WRAPPER} max-h-[calc(100vh-220px)] overflow-y-auto lg:col-span-8"
+		class="{FRAMED_TABLE_WRAPPER} max-h-[calc(100vh-220px)] overflow-y-auto lg:col-span-10"
 	>
 		<table class="w-full border-collapse text-sm">
 			<thead>
@@ -558,22 +543,4 @@
 			</div>
 		{/if}
 	</div>
-
-	<!-- Right: sort. -->
-	<aside class="lg:col-span-2">
-		<!-- Spacer matching the table header row (see left aside). -->
-		<div
-			class="pb-2 pt-1 text-[10px] font-bold uppercase tracking-wide"
-			aria-hidden="true"
-		>
-			&nbsp;
-		</div>
-		<Select
-			value={sort}
-			onChange={(v) => setParam("sort", v ?? "date_desc")}
-			options={SORT_OPTIONS}
-			ariaLabel="Sort"
-			class="w-full"
-		/>
-	</aside>
 </div>
