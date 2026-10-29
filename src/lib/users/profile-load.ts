@@ -166,6 +166,8 @@ export async function buildProfilePage(args: {
 					result: result ?? undefined,
 					date: date ?? undefined,
 					sort,
+					// The roster the table's player cell names the opponents from.
+					players: true,
 				})
 			: null;
 
