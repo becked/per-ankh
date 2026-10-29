@@ -2,8 +2,9 @@
 	// The app's segmented view switcher: an equal-column grid of cross-route
 	// links with a raised-surface pill that slides under the active one. Shared
 	// by the tournament views (TournamentViewTabs) and a game's Analysis/Map
-	// toggle (GameHeader) — both sit in the centre of their page's header, so
-	// "which view am I on" reads at a glance in the same shape on both.
+	// toggle (GameHeader) — both centred, the tournament header in its header
+	// row, the game header on a row below the trail, so "which view am I on"
+	// reads at a glance in the same shape on both.
 	//
 	// Links rather than buttons: nav semantics, so aria-current, not
 	// aria-pressed. The pill is the sole active indicator and the text stays

@@ -168,6 +168,7 @@
 	-->
 {:else if tab === "events" && EventsTab}
 	<EventsTab
+		{game}
 		eventLogs={game.event_logs}
 		playerHistory={game.player_history}
 		players={resolvedPlayers}
@@ -175,6 +176,7 @@
 		{victoryPoints}
 		bind:chartFilter={tabState.chartFilters.points}
 		bind:tableState={tabState.tables.events}
+		bind:pinsTableState={tabState.tables.pins}
 	/>
 {:else if tab === "leaders" && LeadersTab}
 	<LeadersTab

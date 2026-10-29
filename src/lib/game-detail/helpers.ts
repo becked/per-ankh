@@ -73,7 +73,13 @@ export type TableState = {
 };
 
 export type TableName =
-	"events" | "cities" | "improvements" | "specialists" | "laws" | "units";
+	| "events"
+	| "pins"
+	| "cities"
+	| "improvements"
+	| "specialists"
+	| "laws"
+	| "units";
 
 // The display row for the cities table: a CityInfo augmented with the resolved
 // founding nation (see resolveCityRows). founder_nation is derived from the
@@ -416,6 +422,13 @@ export function createDefaultChartFilters(): Record<
 export function createDefaultTableStates(): Record<TableName, TableState> {
 	return {
 		events: {
+			search: "",
+			sortColumn: "turn",
+			sortDirection: "desc",
+			filters: [],
+		},
+		// The Events tab's second table, the Map Pins section's.
+		pins: {
 			search: "",
 			sortColumn: "turn",
 			sortDirection: "desc",

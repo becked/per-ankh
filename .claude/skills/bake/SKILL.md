@@ -91,6 +91,14 @@ npm run bake:crest-sprites     # crest-sprites.ts (tribe → its crest, and cres
                                # hasn't run it keeps the committed table)
 npm run bake:yield-colors      # yield-colors.ts (each yield's chart colour)
 npm run bake:orders-sources    # orders-sources.ts (orders-per-turn + legitimacy constants)
+npm run bake:ping-types        # ping-types.ts (the seven map-pin kinds IN PING.XML ORDER —
+                               # the save writes a pin's kind as that index, not as a zType
+                               # — with each kind's empty-text line, the Road/Urban
+                               # improvement-ping sentinel labels and the "Planning {0}"
+                               # string. Self-contained rather than sidecar+finalize, like
+                               # bake:power-tiers; the bake FAILS if indices 5 and 6 stop
+                               # being PING_NOTE / PING_IMPROVEMENT, because a reordered
+                               # file would silently remap every stored pin)
 npm run bake:power-tiers       # power-tiers.ts (military-power comparison tiers)
 npm run bake:cognomens         # cognomens.ts (cognomen → legitimacy + display string)
 npm run bake:trait-names       # trait-names.ts (TRAIT_NAMES override table — 105 of the 306

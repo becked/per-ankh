@@ -1,12 +1,16 @@
 <script lang="ts">
 	import type { EventLog } from "$lib/types/EventLog";
 	import type { PlayerHistory } from "$lib/types/PlayerHistory";
+	import type { FullGameData } from "$lib/parser/types";
 	import type { ChartOption } from "$lib/echarts";
 	import ChartContainer from "$lib/ChartContainer.svelte";
-	import { Select } from "bits-ui";
+	import SegmentedSwitch from "$lib/ui/SegmentedSwitch.svelte";
 	import { formatEnum, stripMarkup, nationName } from "$lib/utils/formatting";
 	import { CHART_THEME, getNationChartColor } from "$lib/config";
 	import TableFilterColumn from "./TableFilterColumn.svelte";
+	import TableFilterSelect from "./TableFilterSelect.svelte";
+	import MapPinsView from "./MapPinsView.svelte";
+	import { hasMapPins } from "./map-pins";
 	import {
 		type TableState,
 		type DetailPlayer,
@@ -21,6 +25,7 @@
 	import { withEndStateTotal } from "$lib/utils/victory-point-series";
 
 	let {
+		game,
 		eventLogs,
 		playerHistory,
 		players,
@@ -33,7 +38,16 @@
 			sortDirection: "desc",
 			filters: [],
 		}),
+		pinsTableState = $bindable<TableState>({
+			search: "",
+			sortColumn: "turn",
+			sortDirection: "desc",
+			filters: [],
+		}),
 	}: {
+		// What the Map Pins view below reads, which is the only reason this tab
+		// takes the game at all: the pins, and the grid they are placed on.
+		game: Pick<FullGameData, "pings" | "map_tiles" | "game_details">;
 		eventLogs: EventLog[];
 		playerHistory: PlayerHistory[];
 		players: DetailPlayer[];
@@ -44,11 +58,26 @@
 		victoryPoints: Map<number, number> | null;
 		chartFilter?: Record<string, boolean>;
 		tableState?: TableState;
+		pinsTableState?: TableState;
 	} = $props();
 
 	// Resolved identity lookup (stable label + color per player), keyed by the
 	// player id every per-player array carries. Mirror-match safe.
 	const playerById = $derived(new Map(players.map((p) => [p.playerId, p])));
+
+	// ─── List view ────────────────────────────────────────────────────
+	// The tab's two lists, switched under the chart: the event log, and the map
+	// pins the save still carried (MapPinsView). The switch shows only where the
+	// blob carries a pin at all, so a game with no pins reads as the log alone
+	// rather than a switch with one segment that can never fill.
+	type ListView = "events" | "pins";
+	const LIST_VIEWS: { key: ListView; label: string }[] = [
+		{ key: "events", label: "Events" },
+		{ key: "pins", label: "Map Pins" },
+	];
+
+	const hasPins = $derived(hasMapPins(game));
+	let listView = $state<ListView>("events");
 
 	// ─── Chart options ────────────────────────────────────────────────
 	const pointsChartOption = $derived.by<ChartOption | null>(() => {
@@ -151,6 +180,27 @@
 	);
 	const showPlayerColumn = $derived(filterablePlayers.length > 0);
 
+	// What the filter column offers: the seats that logged something, and the
+	// log types present. The Players group carries the same question
+	// `showPlayerColumn` asks, so where the column is hidden the group has no
+	// options and TableFilterSelect drops its heading with it.
+	const filterGroups = $derived([
+		{
+			heading: "Players",
+			options: filterablePlayers.map((p) => ({
+				value: `player:${p.playerId}`,
+				label: p.label,
+			})),
+		},
+		{
+			heading: "Log Types",
+			options: uniqueLogTypes.map((logType) => ({
+				value: `logtype:${logType}`,
+				label: formatEnum(logType, ""),
+			})),
+		},
+	]);
+
 	// Parse selected filters
 	const selectedLogTypes = $derived(
 		tableState.filters
@@ -251,11 +301,25 @@
 	</div>
 {/if}
 
-<!-- Event Logs Table -->
-{#if annotatedEventLogs.length === 0}
+<!-- Map Pins beside the log rather than merged into it: the same turn-stamped,
+     seat-attributed rows, but a pin's turn is a FLOOR on when it was on the map
+     and a log entry's is not, so no one column header could label both. -->
+{#if hasPins}
+	<div class="mb-4">
+		<SegmentedSwitch
+			items={LIST_VIEWS}
+			active={listView}
+			onSelect={(key) => (listView = key)}
+			ariaLabel="Events list view"
+		/>
+	</div>
+{/if}
+
+{#if listView === "pins"}
+	<MapPinsView {game} {players} bind:tableState={pinsTableState} />
+{:else if annotatedEventLogs.length === 0}
 	<p class="p-8 text-center italic text-tan">No event logs recorded</p>
 {:else}
-	<h3 class="mb-2 mt-0 font-bold text-tan">Event Logs</h3>
 	<div class={TABLE_FRAME_CLASS}>
 		<TableFilterColumn
 			bind:search={tableState.search}
@@ -267,74 +331,10 @@
 			)}
 		>
 			{#snippet filters()}
-				<!-- Combined Log Type and Player Filter -->
-				<Select.Root type="multiple" bind:value={tableState.filters}>
-					<Select.Trigger
-						class="flex w-full cursor-pointer items-center justify-between rounded border border-black bg-surface-raised px-2 py-1.5 text-xs text-tan"
-					>
-						<span class="truncate">Filter</span>
-						<span class="ml-2 text-tan opacity-60">▼</span>
-					</Select.Trigger>
-					<Select.Portal>
-						<Select.Content
-							class="z-50 max-h-64 overflow-y-auto rounded bg-surface-sunken shadow-lg"
-						>
-							<Select.Viewport>
-								<!-- Players Group (only show if player column is visible) -->
-								{#if showPlayerColumn}
-									<Select.Group>
-										<Select.GroupHeading
-											class="border-b border-surface px-3 py-2 text-xs font-bold uppercase tracking-wide text-tan"
-										>
-											Players
-										</Select.GroupHeading>
-										{#each filterablePlayers as player (player.playerId)}
-											<Select.Item
-												value={`player:${player.playerId}`}
-												label={player.label}
-												class="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-tan hover:bg-surface-raised data-[highlighted]:bg-surface-raised"
-											>
-												{#snippet children({ selected })}
-													{player.label}
-													{#if selected}
-														<span class="font-bold text-orange">✓</span>
-													{/if}
-												{/snippet}
-											</Select.Item>
-										{/each}
-									</Select.Group>
-								{/if}
-
-								<!-- Log Types Group -->
-								{#if uniqueLogTypes.length > 0}
-									<Select.Group>
-										<Select.GroupHeading
-											class="border-b border-surface px-3 py-2 text-xs font-bold uppercase tracking-wide text-tan {showPlayerColumn
-												? 'border-t border-surface'
-												: ''}"
-										>
-											Log Types
-										</Select.GroupHeading>
-										{#each uniqueLogTypes as logType (logType)}
-											<Select.Item
-												value={`logtype:${logType}`}
-												label={formatEnum(logType, "")}
-												class="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-tan hover:bg-surface-raised data-[highlighted]:bg-surface-raised"
-											>
-												{#snippet children({ selected })}
-													{formatEnum(logType, "")}
-													{#if selected}
-														<span class="font-bold text-orange">✓</span>
-													{/if}
-												{/snippet}
-											</Select.Item>
-										{/each}
-									</Select.Group>
-								{/if}
-							</Select.Viewport>
-						</Select.Content>
-					</Select.Portal>
-				</Select.Root>
+				<TableFilterSelect
+					groups={filterGroups}
+					bind:value={tableState.filters}
+				/>
 			{/snippet}
 		</TableFilterColumn>
 

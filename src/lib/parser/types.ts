@@ -342,6 +342,31 @@ export interface UnitFamilyInfo {
 }
 
 /**
+ * One map pin — the game's name for a tile marker a player drops
+ * (`TEXT_UI_PLACE_MAP_PIN`). Written per player as `<Pings>/<Ping>`, with the
+ * kind as an integer index into ping.xml that the parser resolves to a zType.
+ * The save holds only the pins alive at its final turn, one per tile per
+ * player, each carrying the turn it was placed. PARSER_VERSION 2.30.0+;
+ * absent on older blobs. See parsers/pings.ts for the rest.
+ */
+export interface PingInfo {
+	player_xml_id: number;
+	/** PING_NOTE, PING_IMPROVEMENT, … — resolved from the save's integer. */
+	ping_type: string;
+	turn: number;
+	/** Null for the tile-less pin the game permits (`canPingTile` on -1). */
+	tile_xml_id: number | null;
+	/** The author's text, or null when they typed none. */
+	text: string | null;
+	/**
+	 * An improvement zType, or one of the sentinel names the writer spells out
+	 * (GENERIC, ROAD, URBAN) — the `IMPROVEMENT_` prefix is what tells them
+	 * apart. Null on a pin that names no improvement.
+	 */
+	improvement: string | null;
+}
+
+/**
  * One tech a player CHOSE, with the cards passed over in the same draw
  * (Player.TechPathHistory). `alternates` is never empty — a draw with nothing
  * else in it records no pair, and so no row. Order across a player's rows is
@@ -557,9 +582,9 @@ export interface FullGameData {
 	diplomacy: DiplomacyRelation[];
 	units: UnitInfo[];
 	unit_promotions: UnitPromotionInfo[];
-	// The only two arrays here declared optional, and for a reason the others
-	// don't have: an ABSENT array and an EMPTY one are different claims for
-	// these, and both are reachable. A blob from before PARSER_VERSION 2.25.0
+	// Declared optional for a reason the required arrays don't have (`pings`
+	// below is the third): an ABSENT array and an EMPTY one are different
+	// claims for these, and both are reachable. A blob from before 2.25.0
 	// carries neither array — most stored blobs are of that vintage — while a
 	// freshly parsed save can carry an empty one, as a turn-1 save with no
 	// families founded and no bonus effects granted does. The unit card reads
@@ -574,6 +599,12 @@ export interface FullGameData {
 	memory_data: MemoryInfo[];
 	yield_price_history: YieldPriceEntry[];
 	tile_visibility: TileVisibilityInfo[];
+	// Optional on the same grounds as `unit_effects` above, and the same two
+	// states: absent on a blob parsed before 2.30.0, empty on a fresh parse of
+	// a save whose players dropped no pins — 55 of the 116 saves in
+	// test-data/saves/. The map's Pins layer gates on the difference, since a
+	// blob that can't answer is not a game with nothing to show.
+	pings?: PingInfo[];
 }
 
 /**
@@ -581,4 +612,4 @@ export interface FullGameData {
  * fixes, MINOR for additive fields, MAJOR for breaking schema changes.
  * Initial value `2.0.0` mirrors `FullGameData.version: 2`.
  */
-export const PARSER_VERSION = "2.29.0";
+export const PARSER_VERSION = "2.30.0";
