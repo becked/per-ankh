@@ -59,16 +59,18 @@
 		return getCivilizationColor(nation) ?? undefined;
 	}
 
-	// The shared framed-box header, plus this mount's two modifiers: it sticks
-	// to the top of the pane the table scrolls in (no offset — the pane has no
-	// padding of its own, unlike the matches page's), and a column the list
-	// query can order by advertises the click.
+	// The shared framed-box header, plus this mount's one modifier: a column the
+	// list query can order by advertises the click. The header doesn't stick —
+	// FRAMED_TABLE_WRAPPER's overflow-x-auto makes the wrapper the nearest
+	// scroll container on both axes, and it has no vertical scroll of its own,
+	// so a sticky <th> has nothing to stick to. MatchTable's stickyHeader mount
+	// sits on the same wrapper and doesn't stick either.
 	function thClass(column: GamesColumn): string {
 		const sortable =
 			column.sort !== null
 				? "cursor-pointer transition-colors hover:text-orange "
 				: "";
-		return `sticky top-0 z-10 ${sortable}${FRAMED_TABLE_TH}`;
+		return `${sortable}${FRAMED_TABLE_TH}`;
 	}
 
 	interface Props {
@@ -277,14 +279,6 @@
 <div class="grid gap-4 rounded-lg bg-blue-gray p-3 lg:grid-cols-12">
 	<!-- Left: filters, stacked. -->
 	<aside class="lg:col-span-2">
-		<!-- Spacer matching the table header row so the controls line up with
-		     the first data row, not the header. -->
-		<div
-			class="pb-2 pt-1 text-[10px] font-bold uppercase tracking-wide"
-			aria-hidden="true"
-		>
-			&nbsp;
-		</div>
 		<div class="space-y-2">
 			<SearchInput
 				bind:value={searchText}
@@ -313,12 +307,10 @@
 		</div>
 	</aside>
 
-	<!-- Center: the table. The framed box is also the scroll pane, so the
-	     header can stick to it — a separate inner frame would capture the
-	     scroll and the header would stick to nothing. -->
-	<div
-		class="{FRAMED_TABLE_WRAPPER} max-h-[calc(100vh-220px)] overflow-y-auto lg:col-span-10"
-	>
+	<!-- Center: the table, mounted bare the way MatchTable is: no height cap
+	     and no pane of its own, so .profile-scroll scrolls it along with the
+	     rest of the page rather than the rows scrolling inside a second box. -->
+	<div class="{FRAMED_TABLE_WRAPPER} lg:col-span-10">
 		<table class="w-full border-collapse text-sm">
 			<thead>
 				<tr>
