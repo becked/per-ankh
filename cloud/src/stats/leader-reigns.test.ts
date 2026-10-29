@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-	buildArchetypeThroneTime,
+	buildLeaderArchetypes,
 	type ReignInput,
 	type SeatInput,
 } from "./leader-reigns";
@@ -22,127 +22,111 @@ function reign(
 	player_index: number,
 	archetype: string | null,
 	start_turn: number,
-	end_turn: number,
 ): ReignInput {
-	return { game_id, player_index, archetype, start_turn, end_turn };
+	return { game_id, player_index, archetype, start_turn };
 }
 
-const share = (
-	bands: ReturnType<typeof buildArchetypeThroneTime>,
-	i: number,
-	archetype: string,
-) => {
-	const band = bands[i];
-	const row = band.rows.find((r) => r.archetype === archetype);
-	return row ? row.turns / (band.turns - band.unattributed_turns) : 0;
-};
-
-describe("buildArchetypeThroneTime", () => {
+describe("buildLeaderArchetypes", () => {
 	it("always returns the three bands, in turn order", () => {
-		const bands = buildArchetypeThroneTime([], []);
+		const bands = buildLeaderArchetypes([], []);
 
 		expect(bands.map((b) => [b.from, b.to])).toEqual([
 			[1, 40],
 			[41, 70],
 			[71, null],
 		]);
-		expect(bands.every((b) => b.turns === 0 && b.rows.length === 0)).toBe(true);
+		expect(bands.every((b) => b.leaders === 0 && b.rows.length === 0)).toBe(
+			true,
+		);
 	});
 
-	it("splits a reign that straddles a band edge, counting each turn once", () => {
-		// One leader from turn 1 to the end of a 100-turn game. The bands are
-		// inclusive on both bounds, so turns 1-40, 41-70 and 71-99 fall out —
-		// 99 and not 100, because the reign is half-open at its end.
-		const bands = buildArchetypeThroneTime(
-			[reign("g1", 0, JUDGE, 1, 100)],
+	it("counts a leader in the band their accession falls in, and only there", () => {
+		// One leader per band, plus one on each inside edge. Every accession is
+		// counted once, so the bands sum to the leaders handed in.
+		const bands = buildLeaderArchetypes(
+			[
+				reign("g1", 0, JUDGE, 1),
+				reign("g1", 0, JUDGE, 40),
+				reign("g1", 0, JUDGE, 41),
+				reign("g1", 0, JUDGE, 70),
+				reign("g1", 0, JUDGE, 71),
+				reign("g1", 0, JUDGE, 200),
+			],
+			[seat("g1", 0, 200)],
+		);
+
+		expect(bands.map((b) => b.leaders)).toEqual([2, 2, 2]);
+		expect(bands.reduce((a, b) => a + b.leaders, 0)).toBe(6);
+	});
+
+	it("counts leaders rather than tenure, so a short reign weighs the same", () => {
+		// The unit the request asks for. A leader who held the throne for two
+		// turns and one who held it for twenty-eight are one leader each.
+		const bands = buildLeaderArchetypes(
+			[reign("g1", 0, ZEALOT, 41), reign("g1", 0, JUDGE, 43)],
 			[seat("g1", 0, 100)],
 		);
 
-		expect(bands.map((b) => b.turns)).toEqual([40, 30, 29]);
-		expect(bands.reduce((a, b) => a + b.turns, 0)).toBe(99);
-	});
-
-	it("weights by leader-turns, not by reigns", () => {
-		// The distortion the chart exists to remove: inside one band a seat
-		// holds a 2-turn Zealot and a 28-turn Judge. Counted per reign they
-		// would tie at 50% each.
-		const bands = buildArchetypeThroneTime(
-			[reign("g1", 0, ZEALOT, 41, 43), reign("g1", 0, JUDGE, 43, 71)],
-			[seat("g1", 0, 100)],
-		);
-
-		expect(share(bands, 1, ZEALOT)).toBeCloseTo(2 / 30, 6);
-		expect(share(bands, 1, JUDGE)).toBeCloseTo(28 / 30, 6);
+		expect(bands[1].rows).toEqual([
+			{ archetype: ZEALOT, leaders: 1, wins: 0, rate: 0 },
+			{ archetype: JUDGE, leaders: 1, wins: 0, rate: 0 },
+		]);
 	});
 
 	it("counts the games that reach a band, so the last band's survivorship shows", () => {
 		// Two short games and one long one. The 71+ band describes the long
-		// game alone, and `games` is what says so.
-		const bands = buildArchetypeThroneTime(
+		// game alone, and `games` read against the first band's is what says so.
+		const bands = buildLeaderArchetypes(
 			[
-				reign("short1", 0, JUDGE, 1, 50),
-				reign("short2", 0, JUDGE, 1, 50),
-				reign("long", 0, ZEALOT, 1, 120),
+				reign("short1", 0, JUDGE, 1),
+				reign("short2", 0, JUDGE, 1),
+				reign("long", 0, ZEALOT, 1),
+				reign("long", 0, ZEALOT, 90),
 			],
 			[seat("short1", 0, 50), seat("short2", 0, 50), seat("long", 0, 120)],
 		);
 
 		expect(bands.map((b) => b.games)).toEqual([3, 3, 1]);
-		// And the band's rows follow: only the long game held a throne past 71.
+		// And the band's rows follow: only the long game crowned anyone past 71.
 		expect(bands[2].rows.map((r) => r.archetype)).toEqual([ZEALOT]);
 	});
 
-	it("reports throne-time with no archetype rather than dropping it", () => {
-		// 12-14% of the local corpus's throne-time per band. Left out of `turns`
-		// it would vanish; folded into the rows it would be a tenth archetype
-		// that does not exist. It is its own number, and the shares divide by
-		// what is left.
-		const bands = buildArchetypeThroneTime(
-			[reign("g1", 0, null, 1, 21), reign("g1", 0, JUDGE, 21, 41)],
+	it("holds a leader with no archetype in the band total but out of the rows", () => {
+		// 92 of the corpus's 742 leaders. Left out of `leaders` it would vanish;
+		// folded into the rows it would be an eleventh archetype that does not
+		// exist. The difference is what the panel reports.
+		const bands = buildLeaderArchetypes(
+			[reign("g1", 0, null, 1), reign("g1", 0, JUDGE, 21)],
 			[seat("g1", 0, 100)],
 		);
 
-		expect(bands[0].turns).toBe(40);
-		expect(bands[0].unattributed_turns).toBe(20);
+		expect(bands[0].leaders).toBe(2);
 		expect(bands[0].rows).toEqual([
-			{ archetype: JUDGE, turns: 20, win_turns: 0, rate: 0 },
+			{ archetype: JUDGE, leaders: 1, wins: 0, rate: 0 },
 		]);
-		expect(share(bands, 0, JUDGE)).toBe(1);
 	});
 
-	it("credits win_turns to the seat's outcome, in the same unit as the bar", () => {
-		const bands = buildArchetypeThroneTime(
-			[reign("g1", 0, JUDGE, 1, 41), reign("g1", 1, JUDGE, 1, 41)],
+	it("credits wins to the seat's outcome, in the same unit as the bar", () => {
+		const bands = buildLeaderArchetypes(
+			[reign("g1", 0, JUDGE, 1), reign("g1", 1, JUDGE, 1)],
 			[seat("g1", 0, 100, true), seat("g1", 1, 100)],
 		);
 
 		expect(bands[0].rows).toEqual([
-			{ archetype: JUDGE, turns: 80, win_turns: 40, rate: 0.5 },
+			{ archetype: JUDGE, leaders: 2, wins: 1, rate: 0.5 },
 		]);
 	});
 
-	it("ignores a reign whose seat is not focal", () => {
+	it("ignores a leader whose seat is not focal", () => {
 		// An opponent's seat on a profile corpus, or a nation the global facet
-		// excluded: the reign row comes back from the join, and the seat it
-		// belongs to is what decides whether it counts.
-		const bands = buildArchetypeThroneTime(
-			[reign("g1", 0, JUDGE, 1, 41), reign("g1", 1, ZEALOT, 1, 41)],
+		// excluded: the row comes back from the join, and the seat it belongs to
+		// is what decides whether it counts.
+		const bands = buildLeaderArchetypes(
+			[reign("g1", 0, JUDGE, 1), reign("g1", 1, ZEALOT, 1)],
 			[seat("g1", 0, 100)],
 		);
 
 		expect(bands[0].rows.map((r) => r.archetype)).toEqual([JUDGE]);
-		expect(bands[0].turns).toBe(40);
-	});
-
-	it("drops a zero-length reign without drawing an empty row", () => {
-		// 16 of the corpus's 742 reigns are zero-length (7 of them two
-		// accessions on one turn). They hold no throne-time, so an archetype
-		// held only in one of them earns no bar.
-		const bands = buildArchetypeThroneTime(
-			[reign("g1", 0, ZEALOT, 20, 20), reign("g1", 0, JUDGE, 20, 41)],
-			[seat("g1", 0, 100)],
-		);
-
-		expect(bands[0].rows.map((r) => r.archetype)).toEqual([JUDGE]);
+		expect(bands[0].leaders).toBe(1);
 	});
 });

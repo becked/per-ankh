@@ -702,7 +702,7 @@
 	<SegmentedSwitch
 		items={availableModes}
 		value={empireMode}
-		onChange={(key) => (empireMode = key as EmpireMode)}
+		onChange={(key) => (empireMode = key)}
 		ariaLabel="Empire chart view"
 		borderShade="sunken"
 		itemClass="min-w-[9rem]"

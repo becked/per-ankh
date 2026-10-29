@@ -31,7 +31,7 @@
 	import { buildSlotMaps } from "$lib/tournament/slot-identity";
 	import { getZoneClock } from "$lib/tournament/zone-context.svelte";
 	import SegmentedSwitch from "$lib/ui/SegmentedSwitch.svelte";
-	import ArchetypeThroneTimePanel from "$lib/stats/ArchetypeThroneTimePanel.svelte";
+	import LeaderArchetypesPanel from "$lib/stats/LeaderArchetypesPanel.svelte";
 	import FamilyKeepsPanel from "$lib/stats/FamilyKeepsPanel.svelte";
 	import FamilyStatsPanel from "$lib/stats/FamilyStatsPanel.svelte";
 	import GameLengthPanel from "$lib/stats/GameLengthPanel.svelte";
@@ -264,7 +264,7 @@
 						count: statusCounts[seg.key] ?? 0,
 					}))}
 					value={activeStatus}
-					onChange={(key) => selectStatus(key as MatchStatusSegment)}
+					onChange={(key) => selectStatus(key)}
 					ariaLabel="Match status"
 					class="mb-3 w-fit"
 				/>
@@ -340,11 +340,11 @@
 		</Tabs.Content>
 
 		<!-- Leaders — the starting leader each player was dealt (Plane B1):
-		     archetype and the traits they began with, each as games played
-		     split by outcome; then every reign the field actually had, banded by
-		     turn. The band section is the same component the stats catalog's
-		     Leaders panel renders, so the two pages can't drift on what a band
-		     means or on which caveats it carries. -->
+		     archetype and the traits they began with, each as games played split
+		     by outcome; then every leader the field actually had, counted and cut
+		     by when each took the throne. That section is the same component the
+		     stats catalog's Leaders panel renders, so the two pages can't drift on
+		     what a band means or on which counts it prints. -->
 		<Tabs.Content value="leaders">
 			<section class="mb-8">
 				<h2 class="mb-3 text-base font-bold text-tan">Starting archetype</h2>
@@ -361,11 +361,11 @@
 				{/if}
 			</section>
 
-			<!-- The starting bar above covers one leader per seat, who holds
-			     under half the throne-time; this is the rest of it. -->
+			<!-- The bar above counts one leader per seat; this one counts all of
+			     them, in the same unit, so the two read against each other. -->
 			<section class="mb-8">
-				<h2 class="mb-3 text-base font-bold text-tan">Archetype throne-time</h2>
-				<ArchetypeThroneTimePanel bundle={data.games} />
+				<h2 class="mb-3 text-base font-bold text-tan">Leader archetypes</h2>
+				<LeaderArchetypesPanel bundle={data.games} />
 			</section>
 
 			<section class="mb-8">

@@ -25,30 +25,29 @@ export interface ChartBundleMeta {
 	parser_version: string;
 }
 
-// One turn band of the throne-time distribution. Every magnitude here is
-// LEADER-TURNS, not games.
-export interface ArchetypeThroneTimeBand {
+// One turn band of the leader-archetype distribution. Every magnitude here is
+// a COUNT OF LEADERS, banded by the turn each took the throne.
+export interface LeaderArchetypeBand {
 	// Inclusive turn bounds; `to` is null on the open-ended last band. Carried
 	// on the data rather than redeclared here, so a cached bundle reports the
 	// edges it was actually cut at.
 	from: number;
 	to: Nullable<number>;
-	// Distinct corpus games whose length reaches `from` — the band's
-	// denominator. The last band's is the one that matters: a corpus where a
-	// third of games end before turn 71 describes it from the two thirds that
-	// didn't, and the panel prints this beside the chart.
+	// Distinct focal games that ran as far as `from`. The first band's is every
+	// game, which is what a later band's is read against: a corpus where a
+	// third of games end before turn 71 describes that band from the two thirds
+	// that didn't.
 	games: number;
-	// Leader-turns inside the band across every focal seat, archetype or not.
-	turns: number;
-	// Of `turns`, those under a leader carrying no archetype. Shares divide by
-	// `turns - unattributed_turns`, which is what `rows` sums to.
-	unattributed_turns: number;
+	// Leaders who took the throne inside the band across every focal seat,
+	// archetype or not. What `rows` sums to is the part with an archetype, so
+	// the difference is the part no archetype could be credited for.
+	leaders: number;
 	rows: Array<{
 		archetype: string;
-		turns: number;
-		// Of `turns`, those held by a seat that went on to win — the bar's
-		// wins/losses split, in the same unit as its length.
-		win_turns: number;
+		leaders: number;
+		// Of those, the ones whose seat went on to win — the bar's wins/losses
+		// split, in the same unit as its length.
+		wins: number;
 		rate: number;
 	}>;
 }
@@ -173,14 +172,14 @@ export interface ChartBundleCore {
 		rate: number;
 	}>;
 
-	// Throne-time by archetype over EVERY reign the focal seats had, cut into
-	// three turn bands. The starting charts above read one leader per seat, who
-	// holds under half the throne-time; this reads them all, weighted by
-	// leader-turns so a two-turn leader and a forty-turn one don't count alike.
+	// Archetypes of EVERY leader the focal seats had, cut into three turn bands
+	// by when each took the throne. The starting chart above reads one leader
+	// per seat — 214 of the local corpus's 742 — and this counts them all.
 	// Reasoning and game-rules citations: cloud/src/stats/leader-reigns.ts.
 	//
-	// Always three entries, in turn order, even over an empty corpus.
-	archetypeThroneTime: ArchetypeThroneTimeBand[];
+	// Always three entries, in turn order, even over an empty corpus. The
+	// panel's All-turns cut is their sum, so there is no fourth entry to drift.
+	leaderArchetypes: LeaderArchetypeBand[];
 
 	// Per wonder: how often the focal players built it, out of how many were
 	// eligible — the wonder was enabled in their game (Old World enables only a

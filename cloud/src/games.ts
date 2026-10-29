@@ -189,10 +189,10 @@ const FAMILY_CITY_COLS = 5; // game_id, player_index, family_class, cities, firs
 const FAMILY_CITY_ROWS_PER_INSERT = Math.floor(
 	D1_MAX_PARAMS / FAMILY_CITY_COLS,
 ); // 19
-const LEADER_REIGN_COLS = 6; // game_id, player_index, character_xml_id, archetype, start_turn, end_turn
+const LEADER_REIGN_COLS = 5; // game_id, player_index, character_xml_id, archetype, start_turn
 const LEADER_REIGN_ROWS_PER_INSERT = Math.floor(
 	D1_MAX_PARAMS / LEADER_REIGN_COLS,
-); // 16
+); // 19
 
 // ---------- Rate limit checks (D1 events table) ----------
 
@@ -1028,9 +1028,8 @@ function buildFamilyCityStatements(
 	return statements;
 }
 
-// Every leader who held a seat's throne, with the turns they held it — the
-// succession chain the archetype band charts read. Derivation (and the reason
-// `end_turn` is the next accession rather than this leader's death) lives in
+// Every leader who held a seat's throne, with the turn they took it — the
+// succession chain the banded archetype chart reads. The derivation lives in
 // derive-leader-reigns.ts.
 //
 // Rows for every seat, human or not, like player_summaries: the readers filter
@@ -1050,7 +1049,6 @@ function buildLeaderReignStatements(
 		"character_xml_id",
 		"archetype",
 		"start_turn",
-		"end_turn",
 	];
 	const statements: D1PreparedStatement[] = [];
 	for (const chunk of chunked(reigns, LEADER_REIGN_ROWS_PER_INSERT)) {
@@ -1063,7 +1061,6 @@ function buildLeaderReignStatements(
 				r.character_xml_id,
 				r.archetype,
 				r.start_turn,
-				r.end_turn,
 			);
 		}
 		statements.push(db.prepare(sql).bind(...bindings));

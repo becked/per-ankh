@@ -1,27 +1,20 @@
-<script module lang="ts">
-	export interface SegmentedItem {
-		key: string;
-		label: string;
-		// Appended after the label, dimmed — a bucket's row count. Omit where
-		// the label is the whole story.
-		count?: number;
-		disabled?: boolean;
-	}
-</script>
-
-<script lang="ts">
+<script lang="ts" generics="K extends string">
 	// The app's in-page segmented switch: an equal-column grid of buttons with
 	// a raised-surface thumb that slides under the active one. The sibling of
 	// SegmentedNav, which is the same shape for cross-route LINKS; this one
 	// toggles a view of the route you are already on, so its items are buttons
 	// carrying aria-pressed rather than anchors carrying aria-current.
 	//
-	// It was hand-rolled in five places before it was one component: game
+	// It was hand-rolled in five more places before it was one component: game
 	// detail's science and empire switches, the tournament matches page's view
 	// toggle and the stats page's status switch, and the /players board switch.
-	// The sixth copy — the stats catalog's Leaders band switch — is the one that
-	// paid for the extraction. The thumb is the sole active indicator and the
-	// label text stays tan in every state.
+	// The thumb is the sole active indicator and the label text stays tan in
+	// every state.
+	//
+	// Generic over the key so a caller's own union survives the round trip —
+	// `items` constrains it and `onChange` hands it back, which is what makes a
+	// key that no longer matches the caller's state a type error rather than a
+	// switch that silently never lights.
 	//
 	// Still not this component: the tournament overview's Championship and
 	// division toggles. Those are bits-ui `Tabs.List`/`Tabs.Trigger` inside a
@@ -38,14 +31,20 @@
 		itemClass = "",
 		class: klass = "",
 	}: {
-		items: SegmentedItem[];
+		items: Array<{
+			key: K;
+			label: string;
+			// Appended after the label, dimmed — a bucket's row count. Omit
+			// where the label is the whole story.
+			count?: number;
+		}>;
 		// The active item's key. `null` parks the thumb hidden while leaving
 		// every button unpressed — which is a real state, not a defensive
 		// branch: the matches page's Calendar button lives outside this control
 		// and none of these reads as pressed while it is open.
-		value: string | null;
+		value: K | null;
 		// eslint-disable-next-line no-unused-vars -- parameter in callback signature
-		onChange: (key: string) => void;
+		onChange: (key: K) => void;
 		ariaLabel: string;
 		// Which rung of the surface ladder the edge sits on, decided by what the
 		// control sits ON: `sunken` against a bg-surface card (the game-detail
@@ -80,9 +79,8 @@
 	{#each items as item (item.key)}
 		<button
 			type="button"
-			class="relative z-10 cursor-pointer whitespace-nowrap px-3 py-1.5 text-center text-xs font-bold text-tan transition-colors disabled:cursor-default disabled:opacity-50 {itemClass}"
+			class="relative z-10 cursor-pointer whitespace-nowrap px-3 py-1.5 text-center text-xs font-bold text-tan transition-colors {itemClass}"
 			aria-pressed={item.key === value}
-			disabled={item.disabled}
 			onclick={() => onChange(item.key)}
 		>
 			{item.label}

@@ -416,7 +416,7 @@
 				<SegmentedSwitch
 					items={BOARDS.map((b) => ({ key: b.key, label: b.label }))}
 					value={data.board}
-					onChange={(key) => select(key as Board, live.selected.slug)}
+					onChange={(key) => select(key, live.selected.slug)}
 					ariaLabel="Board"
 					class="w-fit"
 				/>

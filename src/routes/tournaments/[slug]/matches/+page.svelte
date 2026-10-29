@@ -195,8 +195,11 @@
 	const clock = getZoneClock();
 	// The three table views, in the segmented switch below. Calendar is not one
 	// of them: it is a button of its own on the right, so while it is open the
-	// switch shows no pressed segment at all (value null parks its thumb).
-	const VIEW_SEGMENTS = [
+	// switch shows no pressed segment at all (value null parks its thumb) —
+	// which is also what the annotation is for, since the switch's key type is
+	// the three table views and not every MatchesView.
+	type MatchesTableView = Exclude<MatchesView, "calendar">;
+	const VIEW_SEGMENTS: { key: MatchesTableView; label: string }[] = [
 		{ key: "live", label: "Upcoming" },
 		{ key: "cast", label: "Casts" },
 		{ key: "all", label: "All" },
@@ -509,7 +512,7 @@
 	<SegmentedSwitch
 		items={VIEW_SEGMENTS}
 		value={view === "calendar" ? null : view}
-		onChange={(key) => (view = key as MatchesView)}
+		onChange={(key) => (view = key)}
 		ariaLabel="View"
 		class="justify-self-center"
 	/>

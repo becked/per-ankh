@@ -309,7 +309,7 @@
 		<SegmentedSwitch
 			items={LIST_VIEWS}
 			value={listView}
-			onChange={(key) => (listView = key as ListView)}
+			onChange={(key) => (listView = key)}
 			ariaLabel="Events list view"
 			borderShade="sunken"
 			class="w-fit"

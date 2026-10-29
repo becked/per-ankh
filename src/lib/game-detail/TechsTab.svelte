@@ -271,7 +271,7 @@
 	// min-width is this control's own — it is content-sized rather than sitting
 	// in a fixed grid cell, so without it the cells would be as uneven as the
 	// labels and the thumb would resize as it slid.
-	const viewItems = $derived([
+	const viewItems: { key: TechsChartMode; label: string }[] = $derived([
 		{
 			key: "cumulative",
 			label: scienceIsGameTotal ? "Science Total" : "Science Cumulative",
@@ -1037,7 +1037,7 @@
 		<SegmentedSwitch
 			items={viewItems}
 			value={chartMode}
-			onChange={(key) => (chartMode = key as TechsChartMode)}
+			onChange={(key) => (chartMode = key)}
 			ariaLabel="Science chart view"
 			borderShade="sunken"
 			itemClass="min-w-[10rem]"

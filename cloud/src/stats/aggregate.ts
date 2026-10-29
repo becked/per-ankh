@@ -17,7 +17,7 @@
 import { LAW_CLASSES } from "../generated/law-classes";
 import { WONDER_CULTURE_PREREQ, cultureRank } from "../generated/wonders";
 import { buildFamilyKeeps } from "./family-keeps";
-import { buildArchetypeThroneTime } from "./leader-reigns";
+import { buildLeaderArchetypes } from "./leader-reigns";
 import type { StatsCorpus } from "./resolve";
 import { TURN_LENGTH_BUCKET } from "./types";
 import type {
@@ -1012,11 +1012,10 @@ interface LeaderReignRow {
 	player_index: number;
 	archetype: string | null;
 	start_turn: number;
-	end_turn: number;
 }
 
-// Every reign of every human seat in the corpus — the succession chain behind
-// the archetype band charts. One row per leader who held a throne, so a seat
+// Every leader of every human seat in the corpus — the succession chain behind
+// the banded archetype chart. One row per leader who took a throne, so a seat
 // contributes as many rows as it had leaders (0 to 11 across the local corpus,
 // median 3).
 //
@@ -1029,8 +1028,7 @@ async function loadLeaderReigns(
 	const out: LeaderReignRow[] = [];
 	for (const ids of chunk(gameIds, CHUNK_SIZE)) {
 		const res = await env.SHARE_DB.prepare(
-			`SELECT lr.game_id, lr.player_index, lr.archetype,
-			        lr.start_turn, lr.end_turn
+			`SELECT lr.game_id, lr.player_index, lr.archetype, lr.start_turn
 			 FROM leader_reigns lr
 			 JOIN player_summaries ps ON ps.game_id = lr.game_id
 			                          AND ps.player_index = lr.player_index
@@ -1396,17 +1394,17 @@ export async function buildChartBundle(
 		}),
 	);
 
-	// --- Every reign, cut by turn band -------------------------------
-	// The two charts above read one leader per seat. This reads them all, which
-	// over the local corpus is 3.5x as many reigns and twice the throne-time.
-	// Weighted by leader-turns and banded; stats/leader-reigns.ts carries the
-	// reasoning and the game-rules citations.
+	// --- Every leader, banded by accession ---------------------------
+	// The chart above reads one leader per seat. This counts them all, which
+	// over the local corpus is 742 leaders rather than 214. Banded by the turn
+	// each took the throne; stats/leader-reigns.ts carries the reasoning and the
+	// game-rules citations.
 	//
 	// selfRows, not baseRows: the band distribution answers for the same focal
 	// set every other per-player aggregate does — the owner on a profile, every
 	// human on a tournament — so a 1v1 contributes one seat or two by the same
 	// rule as the starting-archetype bar beside it.
-	const archetypeThroneTime = buildArchetypeThroneTime(
+	const leaderArchetypes = buildLeaderArchetypes(
 		leaderReignRows,
 		selfRows.map((r) => ({
 			game_id: r.game_id,
@@ -1861,7 +1859,7 @@ export async function buildChartBundle(
 		nationAvgPoints,
 		startingArchetypeWinRate,
 		startingTraitWinRate,
-		archetypeThroneTime,
+		leaderArchetypes,
 		wonderStats,
 		capitalFamilyWinRate,
 		familyByNation,
@@ -1957,7 +1955,7 @@ function emptyCore(parserVersion: string): ChartBundleCore {
 		// Built from the empty corpus for the reason familyKeeps is: the three
 		// bands are part of the shape, and hand-writing them here is how they
 		// drift from the ones the real path cuts.
-		archetypeThroneTime: buildArchetypeThroneTime([], []),
+		leaderArchetypes: buildLeaderArchetypes([], []),
 		wonderStats: [],
 		capitalFamilyWinRate: [],
 		familyByNation: [],

@@ -180,7 +180,7 @@
 			{:else if section.id === "family-fielded"}
 				<FamilyKeepsPanel {bundle} {showNationSelect} toolbarFlush />
 			{:else if section.id === "leaders"}
-				<LeadersStatsPanel {bundle} toolbarFlush />
+				<LeadersStatsPanel {bundle} />
 			{:else if section.id === "laws"}
 				<LawsStatsPanel {bundle} {showNationSelect} toolbarFlush />
 			{:else if section.id === "tech"}

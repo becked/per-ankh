@@ -41,9 +41,9 @@ export const CHART_SPECS: ChartSpec[] = [
 		height: (b) => barChartHeight(b.nationAvgPoints.length),
 	},
 	// Leaders — category anchor only; rendered by LeadersStatsPanel (the
-	// starting leader's archetype and traits, plus the banded throne-time chart
-	// and the turn-band switch that drives it). A panel rather than three specs
-	// because the band switch has nowhere to live in the generic spec loop —
+	// starting leader's archetype and traits, plus the every-leader archetype
+	// chart and the turn-band switch that cuts it). A panel rather than three
+	// specs because that switch has nowhere to live in the generic spec loop —
 	// the same reason Laws is a panel.
 	{
 		id: "leaders",

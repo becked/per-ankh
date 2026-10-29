@@ -2,89 +2,6 @@
 
 exports[`chart bundle round-trip > builds the all-humans bundle from the same corpus 1`] = `
 {
-  "archetypeThroneTime": [
-    {
-      "from": 1,
-      "games": 3,
-      "rows": [
-        {
-          "archetype": "TRAIT_BUILDER_ARCHETYPE",
-          "rate": 0,
-          "turns": 40,
-          "win_turns": 0,
-        },
-        {
-          "archetype": "TRAIT_COMMANDER_ARCHETYPE",
-          "rate": 0,
-          "turns": 80,
-          "win_turns": 0,
-        },
-        {
-          "archetype": "TRAIT_SCHEMER_ARCHETYPE",
-          "rate": 0.6666666666666666,
-          "turns": 120,
-          "win_turns": 80,
-        },
-      ],
-      "to": 40,
-      "turns": 240,
-      "unattributed_turns": 0,
-    },
-    {
-      "from": 41,
-      "games": 3,
-      "rows": [
-        {
-          "archetype": "TRAIT_BUILDER_ARCHETYPE",
-          "rate": 0,
-          "turns": 30,
-          "win_turns": 0,
-        },
-        {
-          "archetype": "TRAIT_COMMANDER_ARCHETYPE",
-          "rate": 0,
-          "turns": 60,
-          "win_turns": 0,
-        },
-        {
-          "archetype": "TRAIT_SCHEMER_ARCHETYPE",
-          "rate": 0.6666666666666666,
-          "turns": 90,
-          "win_turns": 60,
-        },
-      ],
-      "to": 70,
-      "turns": 180,
-      "unattributed_turns": 0,
-    },
-    {
-      "from": 71,
-      "games": 3,
-      "rows": [
-        {
-          "archetype": "TRAIT_BUILDER_ARCHETYPE",
-          "rate": 0,
-          "turns": 29,
-          "win_turns": 0,
-        },
-        {
-          "archetype": "TRAIT_COMMANDER_ARCHETYPE",
-          "rate": 0,
-          "turns": 58,
-          "win_turns": 0,
-        },
-        {
-          "archetype": "TRAIT_SCHEMER_ARCHETYPE",
-          "rate": 0.6666666666666666,
-          "turns": 87,
-          "win_turns": 58,
-        },
-      ],
-      "to": null,
-      "turns": 174,
-      "unattributed_turns": 0,
-    },
-  ],
   "capitalFamilyWinRate": [
     {
       "family_class": "FAMILYCLASS_LANDOWNERS",
@@ -414,6 +331,48 @@ exports[`chart bundle round-trip > builds the all-humans bundle from the same co
       "nation": "__all__",
       "p25_turn": 2.5,
       "p75_turn": 3.5,
+    },
+  ],
+  "leaderArchetypes": [
+    {
+      "from": 1,
+      "games": 3,
+      "leaders": 6,
+      "rows": [
+        {
+          "archetype": "TRAIT_BUILDER_ARCHETYPE",
+          "leaders": 1,
+          "rate": 0,
+          "wins": 0,
+        },
+        {
+          "archetype": "TRAIT_COMMANDER_ARCHETYPE",
+          "leaders": 2,
+          "rate": 0,
+          "wins": 0,
+        },
+        {
+          "archetype": "TRAIT_SCHEMER_ARCHETYPE",
+          "leaders": 3,
+          "rate": 0.6666666666666666,
+          "wins": 2,
+        },
+      ],
+      "to": 40,
+    },
+    {
+      "from": 41,
+      "games": 3,
+      "leaders": 0,
+      "rows": [],
+      "to": 70,
+    },
+    {
+      "from": 71,
+      "games": 3,
+      "leaders": 0,
+      "rows": [],
+      "to": null,
     },
   ],
   "meta": {
@@ -4482,71 +4441,6 @@ exports[`chart bundle round-trip > builds the records payload from the same corp
 
 exports[`chart bundle round-trip > builds the user bundle from the fixture corpus 1`] = `
 {
-  "archetypeThroneTime": [
-    {
-      "from": 1,
-      "games": 3,
-      "rows": [
-        {
-          "archetype": "TRAIT_BUILDER_ARCHETYPE",
-          "rate": 0,
-          "turns": 40,
-          "win_turns": 0,
-        },
-        {
-          "archetype": "TRAIT_SCHEMER_ARCHETYPE",
-          "rate": 0.5,
-          "turns": 80,
-          "win_turns": 40,
-        },
-      ],
-      "to": 40,
-      "turns": 120,
-      "unattributed_turns": 0,
-    },
-    {
-      "from": 41,
-      "games": 3,
-      "rows": [
-        {
-          "archetype": "TRAIT_BUILDER_ARCHETYPE",
-          "rate": 0,
-          "turns": 30,
-          "win_turns": 0,
-        },
-        {
-          "archetype": "TRAIT_SCHEMER_ARCHETYPE",
-          "rate": 0.5,
-          "turns": 60,
-          "win_turns": 30,
-        },
-      ],
-      "to": 70,
-      "turns": 90,
-      "unattributed_turns": 0,
-    },
-    {
-      "from": 71,
-      "games": 3,
-      "rows": [
-        {
-          "archetype": "TRAIT_BUILDER_ARCHETYPE",
-          "rate": 0,
-          "turns": 29,
-          "win_turns": 0,
-        },
-        {
-          "archetype": "TRAIT_SCHEMER_ARCHETYPE",
-          "rate": 0.5,
-          "turns": 58,
-          "win_turns": 29,
-        },
-      ],
-      "to": null,
-      "turns": 87,
-      "unattributed_turns": 0,
-    },
-  ],
   "capitalFamilyWinRate": [
     {
       "family_class": "FAMILYCLASS_LANDOWNERS",
@@ -4768,6 +4662,42 @@ exports[`chart bundle round-trip > builds the user bundle from the fixture corpu
       "nation": "__all__",
       "p25_turn": 2,
       "p75_turn": 2,
+    },
+  ],
+  "leaderArchetypes": [
+    {
+      "from": 1,
+      "games": 3,
+      "leaders": 3,
+      "rows": [
+        {
+          "archetype": "TRAIT_BUILDER_ARCHETYPE",
+          "leaders": 1,
+          "rate": 0,
+          "wins": 0,
+        },
+        {
+          "archetype": "TRAIT_SCHEMER_ARCHETYPE",
+          "leaders": 2,
+          "rate": 0.5,
+          "wins": 1,
+        },
+      ],
+      "to": 40,
+    },
+    {
+      "from": 41,
+      "games": 3,
+      "leaders": 0,
+      "rows": [],
+      "to": 70,
+    },
+    {
+      "from": 71,
+      "games": 3,
+      "leaders": 0,
+      "rows": [],
+      "to": null,
     },
   ],
   "meta": {
