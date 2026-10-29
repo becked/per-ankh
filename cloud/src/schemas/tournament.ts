@@ -285,6 +285,13 @@ export const PatchSlotSchema = v.object({
 	signup_answer: v.optional(
 		v.nullable(v.pipe(v.string(), v.trim(), v.maxLength(2000))),
 	),
+	// Admin edit of the seat's own zone (migration 0055). The signup picker
+	// needs status=setup AND signups_open, so once signups close this is the
+	// only writer left: a tournament already in swiss has no other way to get
+	// a zone onto a seat. Nullable to clear, and validated/canonicalized by
+	// the same TimeZoneSchema the signup body uses, so an admin-set zone and
+	// a registrant-set one are the same spelling of the same thing.
+	timezone: v.optional(v.nullable(TimeZoneSchema)),
 });
 
 // Body for POST /v1/tournaments/:id/slots/reorder. Each division array is the

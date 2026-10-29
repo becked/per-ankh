@@ -2102,6 +2102,11 @@ export const cloudApi = {
 			// edited by an admin on the slots panel. null clears it; omit to
 			// leave it untouched.
 			signup_answer?: string | null;
+			// The seat's own IANA zone, edited by an admin from the roster's
+			// Zone column. The only writer once signups close. null clears it;
+			// omit to leave it untouched. Rejected with 400 when the id isn't
+			// one the Worker's Intl resolves.
+			timezone?: string | null;
 		},
 		opts?: CallOpts,
 	): Promise<void> => {
@@ -2725,6 +2730,11 @@ export interface SlotStanding {
 	// is a coarse location signal. Null when neither is set; the DM then falls
 	// back to signup_answer. See schedulingZone in $lib/tournament/slot-identity.
 	timezone: string | null;
+	// The seat's own stored zone, unresolved — the column the admin zone
+	// editor seeds from and writes. Admin-only, like `timezone` above. It
+	// differs from `timezone` exactly when the occupant's account zone is
+	// outranking it, which is what SlotTimezoneCell says on the row.
+	slot_timezone: string | null;
 	// The slot's raw stored Discord handle. Only populated for admin viewers
 	// (null for everyone else). The occupant editor seeds and compares against
 	// this — never display_name — so editing the signup answer can't rewrite the

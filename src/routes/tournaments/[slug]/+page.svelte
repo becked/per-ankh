@@ -20,6 +20,7 @@
 	import MatchPopover from "$lib/tournament/MatchPopover.svelte";
 	import PlayerAvatar from "$lib/tournament/PlayerAvatar.svelte";
 	import UserAutocomplete from "$lib/ui/UserAutocomplete.svelte";
+	import SlotTimezoneCell from "$lib/tournament/SlotTimezoneCell.svelte";
 	import SlotUsernameCell from "$lib/tournament/SlotUsernameCell.svelte";
 	import SwissFlowBracket from "$lib/tournament/SwissFlowBracket.svelte";
 	import SwissStandings from "$lib/tournament/SwissStandings.svelte";
@@ -693,6 +694,20 @@
 		);
 	}
 
+	// Set a seat's own timezone column. The signup picker needs setup +
+	// signups_open, so from swiss onward this is the only writer there is —
+	// it is how an organiser turns the answers they already have into zones
+	// the DM can state an offset from, without waiting on 60-odd players.
+	async function setSlotTimezone(slotId: string, zone: string | null) {
+		await withBusy(
+			() =>
+				cloudApi.patchSlot(data.tournament.tournament_id, slotId, {
+					timezone: zone,
+				}),
+			zone === null ? "Cleared timezone" : `Timezone set to ${zone}`,
+		);
+	}
+
 	function slotLabelFor(slotId: string): string {
 		return slotLabels[slotId] ?? `slot ${slotId.slice(0, 6)}`;
 	}
@@ -1141,6 +1156,13 @@ setup (no matches) and complete (bracket/standings tell that story). -->
 									{/if}
 									<th class="py-1 pr-2 text-left">#</th>
 									<th class="py-1 pr-2 text-left">Player</th>
+									{#if isAdmin}
+										<th
+											class="py-1 pr-2 text-right"
+											title="Timezone the scheduling DM will print — the player's account zone when they have set one, else the seat's own"
+											>Zone</th
+										>
+									{/if}
 									<th class="py-1 text-right">Claimed</th>
 									{#if isAdmin}
 										<th class="py-1 pl-2 text-right"></th>
@@ -1212,6 +1234,16 @@ setup (no matches) and complete (bracket/standings tell that story). -->
 												{/if}
 											</span>
 										</td>
+										{#if isAdmin}
+											<td class="py-1 pr-2 text-right">
+												<SlotTimezoneCell
+													resolved={s.timezone}
+													seatZone={s.slot_timezone}
+													disabled={busy}
+													onSave={(zone) => setSlotTimezone(s.slot_id, zone)}
+												/>
+											</td>
+										{/if}
 										<td class="py-1 text-right">
 											{s.user_id ? "✓" : "—"}
 										</td>
@@ -1374,6 +1406,7 @@ setup (no matches) and complete (bracket/standings tell that story). -->
 									onSubstitute={data.tournament.status === "championship"
 										? undefined
 										: substituteSlot}
+									onSetTimezone={isAdmin ? setSlotTimezone : undefined}
 									onWithdraw={data.tournament.status === "swiss"
 										? withdrawSlot
 										: undefined}

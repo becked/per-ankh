@@ -658,7 +658,7 @@ Tournament detail.
 ### `GET /v1/tournaments/:id/standings`
 Swiss standings per division + combined qualifier ranking.
 
-- **Response 200:** `{ tournament_id, divisions: { A: { name, standings: RankedStanding[] }, B: {...} }, combined_qualifier_ranking?: [...] }`. Per-row fields include `slot_id, rank, wins, losses, status, h2h, buchholz_cut1, opponents_buchholz, cumulative, division, display_name, user_id, slug, avatar_url, swiss_seed, withdrawn`; admins additionally see `signup_answer`, `timezone` and `discord_username` (null for public). `timezone` is the occupant's scheduling zone already resolved account-first — `users.timezone` via the slot's `user_id`, else the slot's own column — so a substituted seat reports the player now in it.
+- **Response 200:** `{ tournament_id, divisions: { A: { name, standings: RankedStanding[] }, B: {...} }, combined_qualifier_ranking?: [...] }`. Per-row fields include `slot_id, rank, wins, losses, status, h2h, buchholz_cut1, opponents_buchholz, cumulative, division, display_name, user_id, slug, avatar_url, swiss_seed, withdrawn`; admins additionally see `signup_answer`, `timezone`, `slot_timezone` and `discord_username` (null for public). `timezone` is the occupant's scheduling zone already resolved account-first — `users.timezone` via the slot's `user_id`, else the slot's own column — so a substituted seat reports the player now in it. `slot_timezone` is that second column unresolved, which is what the roster's Zone editor seeds from and writes; it differs from `timezone` exactly when the occupant's account zone is outranking it.
 - **Errors:** `404 TOURNAMENT_NOT_FOUND`, `429 RATE_LIMIT_TOURNAMENT_VIEW`.
 
 ### `GET /v1/tournaments/:id/bracket`
@@ -805,10 +805,10 @@ Swap the occupants of two same-phase slots (identity moves; the seat — seed, d
 ### `PATCH /v1/tournaments/:id/slots/:slot_id`
 Edit a slot.
 
-- **Body:** `PatchSlotSchema` (all optional) — `discord_username` (1–64, lowercased), `division` (`A`|`B`), `swiss_seed` (int 1–1000), `user_id` (21-char), `signup_answer` (nullable, ≤2000).
+- **Body:** `PatchSlotSchema` (all optional) — `discord_username` (1–64, lowercased), `division` (`A`|`B`), `swiss_seed` (int 1–1000), `user_id` (21-char), `signup_answer` (nullable, ≤2000), `timezone` (nullable IANA zone id, validated against `Intl` and stored canonicalized).
 - **Response 200:** `{ slot }` (the full row).
 - **Errors:** `404 SLOT_NOT_FOUND`, `409 TOURNAMENT_LOCKED` (division change when status ≠ setup), `400 INVALID_USER_ID`, `409 DUPLICATE_USERNAME`.
-- **Notes:** A `user_id` pre-links identity; a free-text occupant change clears the link (re-claim at login). Only the division change is phase-gated.
+- **Notes:** A `user_id` pre-links identity; a free-text occupant change clears the link (re-claim at login). Only the division change is phase-gated. `timezone` deliberately is not: the signup picker needs `status=setup` **and** `signups_open`, so from `swiss` onward this is the only writer of a seat's zone — it is how an admin fills in zones for a tournament already under way. An occupant's account zone still outranks what is written here (see `slotTimezone`).
 
 ### `DELETE /v1/tournaments/:id/slots/:slot_id`
 Remove a slot (setup only).

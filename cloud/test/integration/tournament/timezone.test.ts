@@ -10,7 +10,7 @@
 
 import { applyD1Migrations, env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
-import { expectOk } from "../../helpers/assertions";
+import { expectErrorCode, expectOk } from "../../helpers/assertions";
 import { makeTournament, makeUser } from "../../helpers/builders";
 import type { TestUser } from "../../helpers/builders";
 import { request } from "../../helpers/requests";
@@ -57,6 +57,9 @@ async function slotColumn(
 interface StandingsRow {
 	slot_id: string;
 	timezone: string | null;
+	// The seat's own column, unresolved — what the roster's Zone editor
+	// seeds from, as opposed to `timezone`, which is what the DM prints.
+	slot_timezone: string | null;
 	signup_answer: string | null;
 }
 
@@ -191,6 +194,120 @@ describe("signup — the per-tournament switch is the gate", () => {
 			body: { division: "A", timezone: "America/Nowhere" },
 		});
 		expect(res.status).toBe(400);
+	});
+});
+
+// The admin's seat-zone editor. It exists because the signup picker needs
+// status=setup AND signups_open: a tournament already in swiss has no other
+// writer, so without this an organiser holding 60-odd freeform answers has no
+// way to turn any of them into a zone the DM can state an offset from.
+describe("PATCH /v1/tournaments/:id/slots/:slotId — timezone", () => {
+	async function patchZone(
+		t: Awaited<ReturnType<typeof makeTournament>>,
+		slotId: string,
+		body: Record<string, unknown>,
+	): Promise<Response> {
+		return request.patch({
+			path: `/v1/tournaments/${t.tournamentId}/slots/${slotId}`,
+			as: t.admin,
+			body,
+		});
+	}
+
+	it("stores the zone on the seat and canonicalizes it", async () => {
+		const t = await makeTournament({ slotsPerDivision: 1 });
+		const slot = t.slotsByDivision.A[0];
+		await expectOk(await patchZone(t, slot.slotId, { timezone: "us/eastern" }));
+		expect(await slotColumn(slot.slotId, "timezone")).toBe("America/New_York");
+	});
+
+	it("clears the zone on an explicit null", async () => {
+		const t = await makeTournament({ slotsPerDivision: 1 });
+		const slot = t.slotsByDivision.A[0];
+		await expectOk(await patchZone(t, slot.slotId, { timezone: "Asia/Tokyo" }));
+		await expectOk(await patchZone(t, slot.slotId, { timezone: null }));
+		expect(await slotColumn(slot.slotId, "timezone")).toBeNull();
+	});
+
+	// The occupant editor and the zone editor are separate controls on the same
+	// row; neither may write the other's column.
+	it("leaves the zone untouched when the patch omits it", async () => {
+		const t = await makeTournament({ slotsPerDivision: 1 });
+		const slot = t.slotsByDivision.A[0];
+		await expectOk(await patchZone(t, slot.slotId, { timezone: "Asia/Tokyo" }));
+		await expectOk(
+			await patchZone(t, slot.slotId, { signup_answer: "evenings" }),
+		);
+		expect(await slotColumn(slot.slotId, "timezone")).toBe("Asia/Tokyo");
+		expect(await slotColumn(slot.slotId, "signup_answer")).toBe("evenings");
+	});
+
+	it("rejects a zone the runtime doesn't recognize", async () => {
+		const t = await makeTournament({ slotsPerDivision: 1 });
+		const slot = t.slotsByDivision.A[0];
+		const res = await patchZone(t, slot.slotId, { timezone: "UTC+3" });
+		expect(res.status).toBe(400);
+		expect(await slotColumn(slot.slotId, "timezone")).toBeNull();
+	});
+
+	// The case the editor exists for: config locks after setup, and the zone
+	// deliberately isn't part of that lock.
+	it("writes the zone after the tournament has left setup", async () => {
+		const t = await makeTournament({ slotsPerDivision: 2, advanceTo: "swiss" });
+		const slot = t.slotsByDivision.A[0];
+		await expectOk(
+			await patchZone(t, slot.slotId, { timezone: "Europe/Lisbon" }),
+		);
+		expect(await slotColumn(slot.slotId, "timezone")).toBe("Europe/Lisbon");
+	});
+
+	it("is refused for a signed-in non-admin", async () => {
+		const outsider = await makeUser();
+		const t = await makeTournament({ slotsPerDivision: 1 });
+		const slot = t.slotsByDivision.A[0];
+		await expectErrorCode(
+			await request.patch({
+				path: `/v1/tournaments/${t.tournamentId}/slots/${slot.slotId}`,
+				as: outsider,
+				body: { timezone: "Asia/Tokyo" },
+			}),
+			{ status: 403, code: "NOT_TOURNAMENT_ADMIN" },
+		);
+		expect(await slotColumn(slot.slotId, "timezone")).toBeNull();
+	});
+
+	// What the Zone cell needs to be able to say: the admin's write landed, and
+	// the DM is still printing something else because the player set their own.
+	it("stays behind the occupant's account zone, and the payload shows both", async () => {
+		const player = await makeUser();
+		await setAccountZone(player, "Europe/Berlin");
+		const t = await makeTournament({
+			slotsPerDivision: 1,
+			slotOwners: { A: [player] },
+		});
+		const slot = t.slotsByDivision.A[0];
+		await expectOk(await patchZone(t, slot.slotId, { timezone: "Asia/Tokyo" }));
+
+		const row = (await standingsRows(t.tournamentId, t.admin)).find(
+			(r) => r.slot_id === slot.slotId,
+		);
+		expect(row?.slot_timezone).toBe("Asia/Tokyo");
+		expect(row?.timezone).toBe("Europe/Berlin");
+	});
+
+	it("hides the seat's own zone from a non-admin viewer", async () => {
+		const outsider = await makeUser();
+		const t = await makeTournament({ slotsPerDivision: 1 });
+		const slot = t.slotsByDivision.A[0];
+		await expectOk(await patchZone(t, slot.slotId, { timezone: "Asia/Tokyo" }));
+		// Open signups so the setup gate doesn't 404 the non-admin read.
+		await openSignups(t.tournamentId);
+
+		const row = (await standingsRows(t.tournamentId, outsider)).find(
+			(r) => r.slot_id === slot.slotId,
+		);
+		expect(row?.slot_timezone).toBeNull();
+		expect(row?.timezone).toBeNull();
 	});
 });
 

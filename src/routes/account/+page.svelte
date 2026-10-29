@@ -562,18 +562,16 @@
 
 					<!-- Timezone. Same card as the switch rows above, with the
 					     control on its own line: a zone id needs the width, and
-					     there are 400-odd of them to pick from. -->
+					     there are 400-odd of them to pick from.
+					     The id makes /account#timezone land on this row — tournament
+					     organisers link players straight here to ask them to set it,
+					     and the page has no sticky chrome for it to hide under. -->
 					<div
+						id="timezone"
 						class="rounded-lg p-3"
 						style="background-color: rgb(var(--color-surface-raised));"
 					>
 						<div class="text-sm font-bold text-tan">Timezone</div>
-						<p class="mt-1 text-xs text-gray-400">
-							Read by the admins of tournaments you play in, and by nobody else.
-							It lets the message that pairs you state the offset you are
-							actually on, instead of a label typed once at signup — and it
-							follows you if an admin moves you to a different slot.
-						</p>
 						<div class="mt-2 flex items-center gap-2">
 							<Select
 								value={timezone}

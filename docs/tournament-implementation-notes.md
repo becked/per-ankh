@@ -478,7 +478,15 @@ The slot column earns its place as the second step, not the first. A registrant 
 
 One consequence worth recording: a championship slot is a fresh row that copies neither the Swiss slot's `signup_answer` nor its zone, so before 0055 the DM for a championship match always said "(timezone TBD)". The account-level read is what fills it in, and it is the only thing that can.
 
-`signup_question` / `signup_answer` keep working unchanged. The question is used for more than timezone — "what time of day do you want to play" — so removing it would cost admins a prompt they still need.
+`signup_question` / `signup_answer` keep working unchanged. The question is used for more than timezone — "what time of day do you want to play" — so removing it would cost admins a prompt they still need. Because the answer stays the DM's last rung, a tournament that never asked for a zone keeps the DM it has: the 2026 Community Tournament went into Swiss with 55 of its 63 seats carrying an answer and none carrying a zone, and every one of those lines still reads the way it did before 0055.
+
+### Who can write a zone, and when
+
+Three writers, and they do not overlap. A player writes their own account zone on `/account` (the row is anchored, so `/account#timezone` lands on it — an organiser's announcement links there). A registrant writes the seat's zone at signup, which needs `status=setup` **and** `signups_open=1`. An admin writes the seat's zone through `PatchSlotSchema.timezone` at any status, which is the only one of the three still available to a tournament already in `swiss`.
+
+That third writer is why the admin rosters have a **Zone** column (`SlotTimezoneCell`, rendered by both the setup-phase Slots panel and `SwissStandings`). It does two jobs an organiser needs at once: it shows which seats have no zone yet — the list of players still to chase — and it is where a zone gets set for the ones who will not set their own. The column shows the *resolved* zone, because that is the value the DM will print, and says so when an occupant's account zone is outranking the seat's own: an admin who writes a seat zone and sees the row keep a different one has no other way to tell why.
+
+The seat column stays the second rung for a reason worth stating: an admin-set seat zone is still a snapshot of whoever holds the seat when it is written, and a substitution does not clear it. The account-first read is what covers the substituted-and-linked case, which is every seat of the live tournament; a substituted seat whose new occupant has no account zone would report the departed player's, exactly as `signup_answer` does today.
 
 ## Operational checklist for first tournament
 

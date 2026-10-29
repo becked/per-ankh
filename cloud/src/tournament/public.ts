@@ -1173,6 +1173,7 @@ export async function computeStandingsResponse(
 			division: "A" | "B" | null;
 			signup_answer: string | null;
 			timezone: string | null;
+			slot_timezone: string | null;
 			discord_username: string | null;
 		}
 	>();
@@ -1194,6 +1195,12 @@ export async function computeStandingsResponse(
 			// of its own: a zone is a coarse location signal, so it sits in the
 			// same lane rather than beside the public standings row.
 			timezone: viewerIsAdmin ? slotTimezone(s) : null,
+			// The seat's own column, unresolved — what the admin zone editor
+			// seeds from and writes back. Same admin-only lane as `timezone`.
+			// It differs from `timezone` exactly when the occupant's account
+			// zone is outranking it, which is the one thing the editor has to
+			// be able to say out loud.
+			slot_timezone: viewerIsAdmin ? s.timezone : null,
 			// Admin-only — the raw Discord handle is storage-level (claim
 			// matching, pre-link). Exposed only to admins so the slots panel /
 			// standings pencil can seed the occupant editor with the real handle
@@ -1213,6 +1220,7 @@ export async function computeStandingsResponse(
 				swiss_seed: number | null;
 				signup_answer: string | null;
 				timezone: string | null;
+				slot_timezone: string | null;
 				discord_username: string | null;
 			}
 		>
@@ -1237,6 +1245,7 @@ export async function computeStandingsResponse(
 				division: null,
 				signup_answer: null,
 				timezone: null,
+				slot_timezone: null,
 				discord_username: null,
 			};
 			// Strip `division` — division grouping is communicated by the

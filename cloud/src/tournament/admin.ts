@@ -1344,6 +1344,13 @@ export async function handlePatchSlot(
 		fragments.push("signup_answer = ?");
 		binds.push(normalized);
 	}
+	if (patch.timezone !== undefined) {
+		// No normalization step: TimeZoneSchema already rejects anything Intl
+		// won't resolve and stores the canonical spelling, so the only two
+		// values that reach here are a canonical id and null (clear).
+		fragments.push("timezone = ?");
+		binds.push(patch.timezone);
+	}
 	if (prelink) {
 		fragments.push("discord_username = ?", "discord_id = ?", "user_id = ?");
 		binds.push(prelink.discord_username, prelink.discord_id, prelink.user_id);

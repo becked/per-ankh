@@ -2,6 +2,7 @@
 	import type { SlotStanding } from "$lib/api-cloud";
 	import ProfileLink from "$lib/ProfileLink.svelte";
 	import PlayerAvatar from "$lib/tournament/PlayerAvatar.svelte";
+	import SlotTimezoneCell from "$lib/tournament/SlotTimezoneCell.svelte";
 	import SlotUsernameCell from "$lib/tournament/SlotUsernameCell.svelte";
 	import SlotPickerPopover from "$lib/tournament/SlotPickerPopover.svelte";
 
@@ -11,6 +12,7 @@
 		isViewerAdmin = false,
 		busy = false,
 		onSubstitute,
+		onSetTimezone,
 		onWithdraw,
 		onReinstate,
 		onSwap,
@@ -30,6 +32,16 @@
 			newUsername: string | undefined,
 			// eslint-disable-next-line no-unused-vars -- param names documentary
 			userId: string | null,
+		) => void;
+		// Set the seat's own timezone column (null clears it). Admin-only, and
+		// the presence of the callback is what renders the Zone column at all —
+		// a non-admin viewer gets neither the column nor the values behind it,
+		// which the server already nulls for them.
+		onSetTimezone?: (
+			// eslint-disable-next-line no-unused-vars -- param names documentary
+			slotId: string,
+			// eslint-disable-next-line no-unused-vars -- param names documentary
+			zone: string | null,
 		) => void;
 		// eslint-disable-next-line no-unused-vars -- param name documentary
 		onWithdraw?: (slotId: string) => void;
@@ -132,6 +144,11 @@
 	// section already labels the division (e.g. under SwissFlowBracket).
 	const showHeader = $derived(divisionName.length > 0);
 
+	// The Zone column: the organiser's coverage view of who still has no
+	// timezone, and the only place a seat's zone can be set once signups
+	// close. One flag for the `th` and the `td` so they can't come apart.
+	const showZone = $derived(isViewerAdmin && onSetTimezone !== undefined);
+
 	function statusBadge(s: SlotStanding["status"]): string {
 		// In the new model, "advanced" means "qualified for the championship
 		// bracket" (no cutoff cuts after the cascade; everyone who clinched
@@ -183,6 +200,13 @@
 				<tr class="border-b border-black text-left">
 					<th class="py-1 pr-2">#</th>
 					<th class="py-1 pr-2">Player</th>
+					{#if showZone}
+						<th
+							class="py-1 pr-2 text-right"
+							title="Timezone the scheduling DM will print — the player's account zone when they have set one, else the seat's own"
+							>Zone</th
+						>
+					{/if}
 					<th class="py-1 pr-2 text-right">W-L</th>
 					<th
 						class="py-1 pr-2 text-right"
@@ -309,6 +333,16 @@
 								{/if}
 							</span>
 						</td>
+						{#if showZone}
+							<td class="py-1 pr-2 text-right">
+								<SlotTimezoneCell
+									resolved={s.timezone}
+									seatZone={s.slot_timezone}
+									disabled={busy}
+									onSave={(zone) => onSetTimezone?.(s.slot_id, zone)}
+								/>
+							</td>
+						{/if}
 						<td class="py-1 pr-2 text-right font-mono">
 							{s.wins}-{s.losses}
 						</td>
