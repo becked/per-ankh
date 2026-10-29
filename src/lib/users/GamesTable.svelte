@@ -4,8 +4,8 @@
 	// the roster the ?players=1 opt-in adds. The chrome is the tournament
 	// match table's (FRAMED_TABLE_* in $lib/ui/classes): framed box, raised
 	// sticky header, zebra body, and a cell that may carry a second muted
-	// line — the matchup over the save's name and map, the result over the
-	// victory it was decided by, the date over how long ago that was.
+	// line — the matchup over the save's name and map, and the result over
+	// the victory it was decided by. Played is the save date alone.
 	//
 	// Server pagination via infinite scroll, month dividers (date sorts
 	// only). Filter + sort state lives in the URL — the headers write it, as
@@ -36,7 +36,6 @@
 	import {
 		formatDate,
 		formatEnum,
-		formatRelativeToNow,
 		nationName,
 		savedGameName,
 		seatLabel,
@@ -388,7 +387,6 @@
 						]
 							.filter((part) => part !== null)
 							.join(" · ")}
-						{@const relative = formatRelativeToNow(game.save_date, "local")}
 						<!-- How the game was decided, and for whom — the winner only
 						     where the badge hasn't already said it, since on a win the
 						     nation is the row's own. Both parts are missing often
@@ -525,13 +523,14 @@
 									{/if}
 								</div>
 							</td>
+							<!-- The date alone: save_date is a bare YYYY-MM-DD (the
+							     parser's parseSaveDate builds one, and
+							     parseEntryNameDate matches the entry name's clock and
+							     discards it), so a relative subtext under it would
+							     either count on a different calendar than the date
+							     above or read a clock the save never recorded. -->
 							<td class={FRAMED_TABLE_TD}>
-								<div class="flex flex-col gap-0.5">
-									<span>{formatDate(game.save_date)}</span>
-									{#if relative}
-										<span class="text-xs opacity-75">{relative}</span>
-									{/if}
-								</div>
+								<span>{formatDate(game.save_date)}</span>
 							</td>
 						</tr>
 					{/each}

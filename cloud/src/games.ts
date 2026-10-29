@@ -2499,8 +2499,9 @@ interface GameListPlayer {
 	// pairing (ProfileLink + PlayerAvatar) every tournament surface names a
 	// player with. null exactly when user_id is: an unresolved seat has no
 	// avatar to show, which is the case PlayerAvatar fills with its
-	// unclaimed-slot sprite. discord_id is read to address the CDN and is
-	// never itself emitted.
+	// unclaimed-slot sprite. discord_id is SELECTed for the CDN address and
+	// serialized as no field of its own — but it travels inside the URL, the
+	// accepted app-wide shape users.ts spells out (difference 2 there).
 	avatar_url: string | null;
 }
 

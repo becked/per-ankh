@@ -19,6 +19,7 @@ interface SeedGameOpts {
 	readonly displayName?: string | null;
 	readonly userNation?: string | null;
 	readonly saveDate?: string | null;
+	readonly mapClass?: string | null;
 	readonly collectionId?: number | null;
 	readonly isPublic?: boolean;
 	readonly totalTurns?: number;
@@ -32,10 +33,10 @@ async function seedGame(
 	await env.SHARE_DB.prepare(
 		`INSERT INTO games (
 			game_id, user_id, xml_game_id, total_turns, file_hash,
-			game_name, display_name, save_date,
+			game_name, display_name, save_date, map_class,
 			user_nation, is_public, collection_id,
 			blob_version, blob_size_bytes, parser_version
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 2, 1024, '2.5.0')`,
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 2, 1024, '2.5.0')`,
 	)
 		.bind(
 			gameId,
@@ -46,6 +47,7 @@ async function seedGame(
 			opts.gameName ?? null,
 			opts.displayName ?? null,
 			opts.saveDate ?? null,
+			opts.mapClass ?? null,
 			opts.userNation ?? null,
 			opts.isPublic ? 1 : 0,
 			opts.collectionId ?? null,
@@ -80,6 +82,7 @@ interface GamesListResponse {
 		game_id: string;
 		game_name: string | null;
 		display_name: string | null;
+		map_class: string | null;
 		players?: ListedPlayer[];
 	}[];
 	total: number;
@@ -348,9 +351,12 @@ describe("GET /v1/games", () => {
 		expect(body.total).toBe(1);
 	});
 
-	it("omits players unless ?players=1 asks for them", async () => {
+	it("serves map_class but omits players unless ?players=1 asks", async () => {
 		const user = await makeUser({ discordUsername: "list-no-players" });
-		const gameId = await seedGame(user, { gameName: "unasked" });
+		const gameId = await seedGame(user, {
+			gameName: "unasked",
+			mapClass: "MAPCLASS_MapScriptContinent",
+		});
 		await seedSeats(gameId, [
 			{ index: 0, name: "Uploader", nation: "NATION_ASSYRIA", uploader: true },
 			{ index: 1, name: "Rival", nation: "NATION_HITTITE" },
@@ -359,6 +365,9 @@ describe("GET /v1/games", () => {
 		const body = await expectOk<GamesListResponse>(
 			await request.get({ path: "/v1/games", as: user }),
 		);
+		// The map script rides on every row — it is the opt-in's neighbour in
+		// the SELECT, not part of it.
+		expect(body.games[0].map_class).toBe("MAPCLASS_MapScriptContinent");
 		// Absent, not empty: the two say different things to the client, and
 		// the Games table's player cell reads the difference.
 		expect(body.games[0].players).toBeUndefined();
