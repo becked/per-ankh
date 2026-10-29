@@ -1,4 +1,5 @@
 import type { GameListItem, GameListPlayer } from "$lib/api-cloud";
+import { seatLabel } from "$lib/utils/formatting";
 
 // The profile Games table's column model and the two questions its cells ask
 // of a row: which seat is the profile owner's, and who the game was against.
@@ -75,6 +76,17 @@ function gameSelfIndex(game: GameListItem): number | null {
 	return game.players?.find((p) => p.is_human)?.player_index ?? null;
 }
 
+// The roster entry `gameSelfIndex` names, or null when the row carries no
+// roster. The Game cell labels this seat the way it labels an opponent —
+// crest, avatar, `seatLabel` — so that an observer upload, whose self seat is
+// the first human rather than the uploader, doesn't name one side by nation
+// and the other by person.
+export function gameSelfSeat(game: GameListItem): GameListPlayer | null {
+	const self = gameSelfIndex(game);
+	if (self === null) return null;
+	return game.players?.find((p) => p.player_index === self) ?? null;
+}
+
 // Everyone else on the roster, in player order — humans and AI alike, which
 // is what makes this "who the game was against" rather than "the other
 // humans": 38 of the 116 saves in test-data/saves/ have at most one human
@@ -84,8 +96,40 @@ export function gameOpponents(game: GameListItem): GameListPlayer[] {
 	return (game.players ?? []).filter((p) => p.player_index !== self);
 }
 
-// How many opponents a row names before the rest collapse into "+N". Three
-// covers 95 of the 116 saves in test-data/saves/ outright (75 have exactly
-// one opponent, 6 have two, 14 have three); the cap bites on the FFA tail,
-// where the longest roster is nine seats and the game page is one click away.
-export const MAX_OPPONENTS_SHOWN = 3;
+// How much opponent text a row spells out before the rest collapse into an
+// ellipsis. A character budget rather than a seat count, because the two
+// shapes that overrun the cell are not the same shape: a duel against one
+// 18-character handle and a five-nation game against four short AI names both
+// end up near the same width, and a count cap cuts only the second.
+//
+// 40 keeps every 1-, 2- and 3-opponent row whole across the 1,095 games in the
+// 2026-10-23 D1 snapshot (their longest lists are 18, 19 and 36 characters)
+// and most 4-opponent ones (average 34, longest 51). It bites on the tail
+// above that, where the longest list is 84 characters and the game page is one
+// click away.
+const OPPONENT_LABEL_BUDGET = 40;
+
+// What the " · " between two opponents costs against the budget.
+const OPPONENT_SEPARATOR_COST = 3;
+
+// The opponents a row spells out, and whether it left any unnamed.
+//
+// The first opponent is always named, however long its label: one opponent is
+// the whole matchup, and a row that collapsed it to an ellipsis would say
+// nothing at all. Its label truncates in CSS instead.
+export function visibleOpponents(opponents: GameListPlayer[]): {
+	shown: GameListPlayer[];
+	truncated: boolean;
+} {
+	const shown: GameListPlayer[] = [];
+	let used = 0;
+	for (const opponent of opponents) {
+		const cost =
+			seatLabel(opponent).length +
+			(shown.length > 0 ? OPPONENT_SEPARATOR_COST : 0);
+		if (shown.length > 0 && used + cost > OPPONENT_LABEL_BUDGET) break;
+		shown.push(opponent);
+		used += cost;
+	}
+	return { shown, truncated: shown.length < opponents.length };
+}

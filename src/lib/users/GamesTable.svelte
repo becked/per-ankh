@@ -44,10 +44,11 @@
 	import { mapScriptLabel, mapSizeLabel } from "$lib/map-settings";
 	import {
 		GAMES_COLUMNS,
-		MAX_OPPONENTS_SHOWN,
 		gameOpponents,
+		gameSelfSeat,
 		nextGameSort,
 		parseGameSort,
+		visibleOpponents,
 		type GamesColumn,
 	} from "./games-table";
 
@@ -365,6 +366,9 @@
 				<tbody>
 					{#each group.games as game (game.game_id)}
 						{@const opponents = gameOpponents(game)}
+						{@const visible = visibleOpponents(opponents)}
+						{@const selfSeat = gameSelfSeat(game)}
+						{@const claimedSeat = game.uploader_player_index != null}
 						{@const subtext = [
 							savedGameName(game),
 							game.map_class ? mapScriptLabel(game.map_class) : null,
@@ -388,12 +392,12 @@
 						]
 							.filter((part) => part !== null)
 							.join(" · ")}
-						<!-- The row opens the game, as it did when it was a
-						     role="button" div with a trailing chevron. The nation on
-						     the matchup line is the same link spelled as one, so the
-						     row is reachable by keyboard and openable in a new tab;
-						     the opponent links stopPropagation so following one
-						     doesn't also open the game. -->
+						<!-- The row opens the game, as it did when it was a role="button" div
+						     with a trailing chevron. The second line is its one anchor — the
+						     matchup above it links each seat to a profile — so the row stays
+						     reachable by keyboard and openable in a new tab. Every link in the
+						     cell stopPropagation so following one doesn't also fire the row
+						     handler. -->
 						<tr
 							class="cursor-pointer {FRAMED_TABLE_ROW}"
 							onclick={() => navigateToGame(game.game_id)}
@@ -401,37 +405,60 @@
 							<td class={FRAMED_TABLE_TD}>
 								<div class="flex flex-col gap-0.5">
 									<span class="flex items-center gap-x-2">
-										<a
-											href={resolve("/games/[id]", { id: game.game_id })}
-											class="flex min-w-0 items-center gap-1.5 hover:underline"
-											onclick={(e) => e.stopPropagation()}
-										>
-											<!-- Fixed-size wrapper: SpriteIcon renders nothing when
-											     the crest has no sprite, and the names beside it
-											     would unalign without the reserved cell. -->
-											<span class="flex w-4 flex-none">
-												{#if game.user_nation}
-													<SpriteIcon
-														category="crests"
-														value={game.user_nation}
-														size={16}
-														alt={nationName(game.user_nation)}
-													/>
-												{/if}
+										{#if selfSeat}
+											<span class="flex min-w-0 items-center gap-1.5">
+												<!-- Fixed-size wrapper: SpriteIcon renders nothing when
+												     the crest has no sprite, and the names beside it
+												     would unalign without the reserved cell. -->
+												<span class="flex w-4 flex-none">
+													{#if selfSeat.nation}
+														<SpriteIcon
+															category="crests"
+															value={selfSeat.nation}
+															size={16}
+															alt={nationName(selfSeat.nation)}
+														/>
+													{/if}
+												</span>
+												<ProfileLink
+													userId={selfSeat.user_id}
+													slug={selfSeat.slug}
+													class="flex min-w-0 items-center gap-1 hover:underline"
+													onclick={(e) => e.stopPropagation()}
+												>
+													{#if selfSeat.is_human}
+														<PlayerAvatar
+															avatarUrl={selfSeat.avatar_url}
+															size={16}
+														/>
+													{/if}
+													<!-- Every name on the line carries its own nation's color, so the
+													     row reads as a matchup and not as a verdict — the Result column
+													     is what says who won. The uploader's own seat keeps the heavier
+													     weight that marks this profile's player; an observer upload has
+													     no such seat, so nothing on its row is bolded. -->
+													<span
+														class="truncate text-bright {claimedSeat
+															? 'font-bold'
+															: ''}"
+														style={nationColor(selfSeat.nation)
+															? `color: ${nationColor(selfSeat.nation)}`
+															: undefined}
+													>
+														{seatLabel(selfSeat)}
+													</span>
+												</ProfileLink>
 											</span>
-											<span
-												class="truncate font-bold text-gray-100"
-												style={nationColor(game.user_nation)
-													? `color: ${nationColor(game.user_nation)}`
-													: undefined}
-											>
-												{game.user_nation ? nationName(game.user_nation) : "—"}
-											</span>
-										</a>
-										{#if opponents.length > 0}
-											<span class="flex-none opacity-60">v</span>
 										{/if}
-										{#each opponents.slice(0, MAX_OPPONENTS_SHOWN) as opponent, i (opponent.player_index)}
+										{#if selfSeat && opponents.length === 1}
+											<!-- "v" reads as a matchup only where there are two sides to it. With
+											     three or more seats on the line there is no "against", so the same
+											     separator carries the whole list. -->
+											<span class="flex-none opacity-60">v</span>
+										{:else if selfSeat && opponents.length > 1}
+											<span class="flex-none opacity-40">·</span>
+										{/if}
+										{#each visible.shown as opponent, i (opponent.player_index)}
 											{#if i > 0}
 												<span class="flex-none opacity-40">·</span>
 											{/if}
@@ -464,21 +491,32 @@
 															size={16}
 														/>
 													{/if}
-													<span class="truncate text-bright"
-														>{seatLabel(opponent)}</span
+													<span
+														class="truncate text-bright"
+														style={nationColor(opponent.nation)
+															? `color: ${nationColor(opponent.nation)}`
+															: undefined}>{seatLabel(opponent)}</span
 													>
 												</ProfileLink>
 											</span>
 										{/each}
-										{#if opponents.length > MAX_OPPONENTS_SHOWN}
-											<span class="flex-none opacity-60"
-												>+{opponents.length - MAX_OPPONENTS_SHOWN}</span
-											>
+										{#if visible.truncated}
+											<!-- The seats that didn't fit the budget. An ellipsis rather than a
+											     count: what the row is saying is that the line ran out, and the
+											     game page one click away is where the whole roster is. -->
+											<span class="flex-none opacity-60">…</span>
 										{/if}
 									</span>
-									{#if subtext}
-										<span class="text-xs opacity-75">{subtext}</span>
-									{/if}
+									<!-- The row's one anchor to the game: every seat on the line above links
+									     to a profile instead. "View game" stands in for the save that has
+									     neither a name nor map data to label it with. -->
+									<a
+										href={resolve("/games/[id]", { id: game.game_id })}
+										class="text-xs opacity-75 hover:underline"
+										onclick={(e) => e.stopPropagation()}
+									>
+										{subtext || "View game"}
+									</a>
 								</div>
 							</td>
 							<td class={FRAMED_TABLE_TD}>
