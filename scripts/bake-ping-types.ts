@@ -49,7 +49,7 @@ const SENTINEL_TEXT_KEYS: ReadonlyArray<[string, string]> = [
 	["URBAN", "TEXT_CONCEPT_URBAN"],
 ];
 
-const IMPROVEMENT_SPECIFIC_KEY = "TEXT_PING_IMPROVEMENT_SPECIFIC_LOG";
+const IMPROVEMENT_SPECIFIC_TEXT = "TEXT_PING_IMPROVEMENT_SPECIFIC_LOG";
 
 interface PingEntry {
 	zType?: string;
@@ -130,10 +130,10 @@ async function main(): Promise<void> {
 		sentinels[sentinel] = label;
 	}
 
-	const specific = bareText(IMPROVEMENT_SPECIFIC_KEY, textByKey);
+	const specific = bareText(IMPROVEMENT_SPECIFIC_TEXT, textByKey);
 	if (!specific?.includes("{0_improvement}")) {
 		throw new Error(
-			`bake-ping-types: ${IMPROVEMENT_SPECIFIC_KEY} lost its substitution`,
+			`bake-ping-types: ${IMPROVEMENT_SPECIFIC_TEXT} lost its substitution`,
 		);
 	}
 
