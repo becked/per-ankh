@@ -498,9 +498,29 @@
 											style="background-color:rgb(var(--color-danger-surface));color:rgb(var(--color-danger));"
 											>Loss</span
 										>
+									{:else if game.uploader_player_index == null}
+										<!-- Observer upload: no seat carries `is_uploader`, so
+										     deriveUploaderColumns (cloud/src/games.ts) leaves both
+										     user_nation and user_won NULL. The row still names a
+										     nation — the list query COALESCEs it to the first human
+										     seat — so an unlabelled dash reads as a missing result
+										     rather than a seat nobody claimed. `== null`, not falsy:
+										     seat 0 is a valid index. Orange rather than a neutral
+										     step: the zebra's two stripes and the sticky header already
+										     use the surface ramp, so a badge drawn from it reads as
+										     chrome. Same fill/foreground shape as Win and Loss, because
+										     the three are one set and only hue should separate them. -->
+										<span
+											class="rounded px-2 py-0.5 text-[10px] font-bold"
+											style="background-color:rgb(var(--color-orange-surface));color:rgb(var(--color-orange));"
+											>Observer</span
+										>
 									{:else}
-										<!-- Observer upload: the save records no seat for the
-										     owner, so there is no win or loss to report. -->
+										<!-- Seat claimed, save records no winner: the game ended by
+										     surrender or with every human dead, and neither writes a
+										     victory (`Player.makeSurrendered`, Player.cs:6577;
+										     `Game.doVictory`, Game.cs:14089). `decided` is empty on
+										     these too, so the dash is the whole cell. -->
 										<span class="opacity-60">—</span>
 									{/if}
 									{#if decided}

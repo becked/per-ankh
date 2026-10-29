@@ -130,6 +130,13 @@
 	--color-success-surface: 42 58 36; /* #2a3a24 — dark-tinted success badge bg */
 	--color-danger: 200 110 90;
 	--color-danger-surface: 58 38 34; /* #3a2622 — dark-tinted danger badge bg */
+	/* The third badge fill, for a result that is neither: --color-orange is the
+	   foreground, so only the surface is new. Same recipe as the two above — the
+	   foreground darkened to roughly a quarter, which is what keeps all three
+	   badges one set. Not --color-border-tooltip (#3a2f24), the nearest existing
+	   shade: that is a 1px tooltip stroke, and reusing it as a fill would put two
+	   unrelated jobs on one value. */
+	--color-orange-surface: 62 45 18; /* #3e2d12 — dark-tinted orange badge bg */
 }
 
 * {
