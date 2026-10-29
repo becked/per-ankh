@@ -32,10 +32,14 @@ export interface SlotMaps {
 // abbreviation and offset, because stating the offset is the point of storing
 // a zone instead of whatever label the player typed.
 function schedulingZone(slot: {
-	timezone: string | null;
+	timezone?: string | null;
 	signup_answer?: string | null;
 }): string | null {
-	if (slot.timezone !== null) return formatTimeZone(slot.timezone);
+	// `!= null`, not `!== null`: both fields are declared present on the
+	// payloads, so the only way to reach here with `undefined` is a response
+	// that predates them — and `undefined !== null` is true, which would hand
+	// `undefined` to formatTimeZone and print it.
+	if (slot.timezone != null) return formatTimeZone(slot.timezone);
 	const answer = slot.signup_answer?.trim();
 	return answer != null && answer.length > 0 ? answer : null;
 }
