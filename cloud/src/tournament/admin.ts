@@ -779,8 +779,8 @@ export async function handlePatchTournament(
 			// Skip — JSON blob fields, handled below from their *Json vars (arrays
 			// can't bind to D1 directly).
 			continue;
-		} else if (key === "signups_open") {
-			// SQLite has no boolean; the column is INTEGER 0/1.
+		} else if (typeof value === "boolean") {
+			// SQLite has no boolean; every flag column here is INTEGER 0/1.
 			fragments.push(`${key} = ?`);
 			binds.push(value ? 1 : 0);
 		} else {
@@ -1344,6 +1344,13 @@ export async function handlePatchSlot(
 		fragments.push("signup_answer = ?");
 		binds.push(normalized);
 	}
+	if (patch.timezone !== undefined) {
+		// No normalization step: TimeZoneSchema already rejects anything Intl
+		// won't resolve and stores the canonical spelling, so the only two
+		// values that reach here are a canonical id and null (clear).
+		fragments.push("timezone = ?");
+		binds.push(patch.timezone);
+	}
 	if (prelink) {
 		fragments.push("discord_username = ?", "discord_id = ?", "user_id = ?");
 		binds.push(prelink.discord_username, prelink.discord_id, prelink.user_id);
@@ -1621,8 +1628,8 @@ async function forfeitPendingMatchesForSlot(
 // proceed now.
 //
 // Identity travels; the seat stays. discord_username / discord_id / user_id /
-// signup_answer / claim_banner_dismissed_at swap; seeds, division, and match
-// history remain with the seat. That is exactly why the guard below exists:
+// signup_answer / timezone / claim_banner_dismissed_at swap; seeds, division,
+// and match history remain with the seat. That is exactly why the guard below exists:
 // once either seat has a DECIDED match (complete, forfeit, or a bye — a bye is
 // +1 win), swapping occupants would silently hand one player's record to the
 // other, so the swap refuses. While everything is pending there is nothing to
@@ -1715,11 +1722,12 @@ export async function handleSwapSlots(
 			s.discord_id,
 			s.user_id,
 			s.signup_answer,
+			s.timezone,
 			s.claim_banner_dismissed_at,
 		] as const;
 	const setSql = `UPDATE tournament_slots
 		 SET discord_username = ?, discord_id = ?, user_id = ?,
-		     signup_answer = ?, claim_banner_dismissed_at = ?
+		     signup_answer = ?, timezone = ?, claim_banner_dismissed_at = ?
 		 WHERE slot_id = ?`;
 	await env.SHARE_DB.batch([
 		env.SHARE_DB.prepare(setSql).bind(...identity(slotB), slot_a_id),

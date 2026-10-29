@@ -85,9 +85,12 @@
 		// link's two halves always describe the same person (see matchSlotSlug).
 		slotSlugs: Record<string, string | null>;
 		slotAvatars: Record<string, string | null>;
-		// Each slot's signup answer (timezone/availability), admin-only — drives
-		// the "Copy DM" scheduling template. Empty/null when unavailable.
-		slotSignupAnswers?: Record<string, string | null>;
+		// Each slot occupant's timezone for the "Copy DM" scheduling template,
+		// resolved by schedulingZone ($lib/tournament/slot-identity). Admin-only,
+		// and null per slot when nothing is known. Required rather than optional:
+		// the DM is reachable from four surfaces, and the three that didn't pass
+		// the optional predecessor printed "(timezone TBD)" for everyone.
+		slotSchedulingZones: Record<string, string | null>;
 		user: UserMe | null;
 		// Admin substitute: rename the named slot's occupant, optionally pre-
 		// linking to a registered user (userId from the autocomplete; null for
@@ -111,7 +114,7 @@
 		slotUserIds,
 		slotSlugs,
 		slotAvatars,
-		slotSignupAnswers,
+		slotSchedulingZones,
 		user,
 		onSubstitute,
 		onClose,
@@ -219,10 +222,8 @@
 			// Not on the atlas — show the name plain, no dead link.
 			mapLine = `Your map is **${mapName}**${caveatSuffix}`;
 		}
-		const tzA =
-			slotSignupAnswers?.[match.slot_a_id]?.trim() || "(timezone TBD)";
-		const tzB =
-			slotSignupAnswers?.[match.slot_b_id]?.trim() || "(timezone TBD)";
+		const tzA = slotSchedulingZones[match.slot_a_id] ?? "(timezone TBD)";
+		const tzB = slotSchedulingZones[match.slot_b_id] ?? "(timezone TBD)";
 		// Caster-thread link, resolved from the tournament's admin-curated Links
 		// (first label containing "cast", e.g. "Caster thread") rather than a
 		// hardcoded channel — each tournament points at its own thread. The

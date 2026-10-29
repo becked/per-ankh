@@ -17,10 +17,13 @@
 	import { PUBLIC_ORIGIN } from "$lib/page-meta";
 	import { PARSER_VERSION } from "$lib/parser/types";
 	import ScreenshotTerms from "$lib/screenshots/ScreenshotTerms.svelte";
+	import Select from "$lib/ui/Select.svelte";
 	import { formatGameTitle, formatLongDate } from "$lib/utils/formatting";
+	import { timeZoneOptions } from "$lib/utils/timezones";
 	import { isNewer } from "$lib/utils/semver";
 	import { ensureUrlScheme } from "$lib/utils/url";
 	import { toast } from "$lib/ui/toast";
+	import { getLocalTimeZone } from "@internationalized/date";
 	import { profileHref } from "$lib/utils/profile-href";
 	import type { Snippet } from "svelte";
 	import type { PageData } from "./$types";
@@ -64,6 +67,25 @@
 	let savingPref = $state<"default_game_public" | "open_to_matches" | null>(
 		null,
 	);
+
+	// Timezone — a zone id, not a toggle, so it gets its own row shape rather
+	// than the switch snippet below. Save-on-submit for the reason the stream
+	// link is: the worker canonicalizes the id it stores, so what comes back is
+	// the stored value rather than what was picked.
+	//
+	// The control opens on the browser's detected zone when nothing is stored,
+	// which is the answer for nearly everyone — but a shown zone is not a saved
+	// one, and `savedTimezone` is what keeps the row able to say so. "" is the
+	// Select's own placeholder value and means "not set".
+	// svelte-ignore state_referenced_locally
+	let savedTimezone = $state(data.user.timezone);
+	// svelte-ignore state_referenced_locally
+	let timezone = $state(data.user.timezone ?? getLocalTimeZone());
+	let savingTimezone = $state(false);
+	const timezoneChoices = $derived(
+		timeZoneOptions(timezone === "" ? null : timezone),
+	);
+	const timezoneUnsaved = $derived((savedTimezone ?? "") !== timezone);
 
 	// Casting stream link — plain save-on-submit (not optimistic: the worker
 	// validates the host allowlist, so the persisted value is what it echoes
@@ -196,6 +218,25 @@
 			);
 		} finally {
 			savingStream = false;
+		}
+	}
+
+	async function saveTimezone() {
+		if (savingTimezone) return;
+		savingTimezone = true;
+		try {
+			const saved = await cloudApi.updateSettings({
+				timezone: timezone === "" ? null : timezone,
+			});
+			savedTimezone = saved.timezone;
+			timezone = saved.timezone ?? "";
+			toast.info(saved.timezone ? "Timezone saved" : "Timezone cleared");
+		} catch (err) {
+			toast.error(
+				`Settings update failed: ${err instanceof Error ? err.message : err}`,
+			);
+		} finally {
+			savingTimezone = false;
 		}
 	}
 
@@ -518,6 +559,44 @@
 						(v) => (openToMatches = v),
 						openToMatchesCopy,
 					)}
+
+					<!-- Timezone. Same card as the switch rows above, with the
+					     control on its own line: a zone id needs the width, and
+					     there are 400-odd of them to pick from.
+					     The id makes /account#timezone land on this row — tournament
+					     organisers link players straight here to ask them to set it,
+					     and the page has no sticky chrome for it to hide under. -->
+					<div
+						id="timezone"
+						class="rounded-lg p-3"
+						style="background-color: rgb(var(--color-surface-raised));"
+					>
+						<div class="text-sm font-bold text-tan">Timezone</div>
+						<div class="mt-2 flex items-center gap-2">
+							<Select
+								value={timezone}
+								onChange={(v) => (timezone = v ?? "")}
+								options={timezoneChoices}
+								ariaLabel="Timezone"
+								disabled={savingTimezone}
+								matchTriggerWidth
+								class="min-w-0 flex-1"
+							/>
+							<button
+								type="button"
+								onclick={saveTimezone}
+								class="shrink-0 rounded border border-input px-3 py-1.5 text-sm text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
+								disabled={savingTimezone || !timezoneUnsaved}
+							>
+								Save
+							</button>
+						</div>
+						{#if savedTimezone === null}
+							<p class="mt-1 text-[11px] text-gray-400">
+								Detected from your browser. Save to store it.
+							</p>
+						{/if}
+					</div>
 				</div>
 			</Tabs.Content>
 

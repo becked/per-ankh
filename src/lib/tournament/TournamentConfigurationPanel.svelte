@@ -20,6 +20,8 @@
 	// svelte-ignore state_referenced_locally
 	let signupQuestion = $state(tournament.signup_question ?? "");
 	// svelte-ignore state_referenced_locally
+	let collectTimezone = $state(tournament.collect_timezone);
+	// svelte-ignore state_referenced_locally
 	let swissMaxRounds = $state(tournament.swiss_max_rounds);
 	// svelte-ignore state_referenced_locally
 	let swissWinsToAdvance = $state(tournament.swiss_wins_to_advance);
@@ -127,6 +129,14 @@
 		if (!ok) signupsOpen = tournament.signups_open;
 	}
 
+	// Optimistic, mirroring commitSignupsOpen above — same checkbox shape, same
+	// single-field PATCH, so it gets the same flip-then-restore.
+	async function commitCollectTimezone(next: boolean) {
+		collectTimezone = next;
+		const ok = await commit({ collect_timezone: next });
+		if (!ok) collectTimezone = tournament.collect_timezone;
+	}
+
 	// Commit on blur, mirroring the swiss-config inputs. Empty → null clears the
 	// question (same nullable-clear pattern as description).
 	function commitSignupQuestion() {
@@ -151,6 +161,21 @@
 			>
 				<span>Open for signups</span>
 			</Checkbox>
+		</div>
+
+		<div>
+			<Checkbox
+				checked={collectTimezone}
+				onCheckedChange={(c) => commitCollectTimezone(c)}
+				disabled={saving}
+			>
+				<span>Ask for timezone</span>
+			</Checkbox>
+			<p class="ml-6 mt-1 text-[11px] text-tan opacity-60">
+				Adds a timezone picker to the signup form. The scheduling DM prefers
+				what a player saved on their account, then this, then the answer below —
+				so the zone follows a substituted player instead of staying on the slot.
+			</p>
 		</div>
 
 		<label class="flex flex-col gap-1">

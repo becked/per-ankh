@@ -33,6 +33,9 @@
 		slotUserIds: Record<string, string | null>;
 		slotSlugs: Record<string, string | null>;
 		slotAvatars: Record<string, string | null>;
+		// Each slot occupant's timezone, threaded to the match card's "Copy DM"
+		// template (see MatchPopover). Not read by the table rows.
+		slotSchedulingZones: Record<string, string | null>;
 		user: UserMe | null;
 		// Passed through to the table's actions column. Every row here is a
 		// scheduled sitting, so it changes nothing on this panel today — but the
@@ -58,6 +61,7 @@
 		slotUserIds,
 		slotSlugs,
 		slotAvatars,
+		slotSchedulingZones,
 		user,
 		isAdmin = false,
 		onSubstitute,
@@ -152,6 +156,7 @@
 	{slotUserIds}
 	{slotSlugs}
 	{slotAvatars}
+	{slotSchedulingZones}
 	{user}
 	{onSubstitute}
 	onClose={() => (detailMatchId = null)}

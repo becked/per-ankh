@@ -29,6 +29,7 @@ import {
 	slotAvatarUrl,
 	slotDisplayName,
 	slotRowToRef,
+	slotTimezone,
 	tournamentConfig,
 	USER_MATCHES_WHERE,
 	type MatchPart,
@@ -598,6 +599,10 @@ export async function handleTournamentDetail(
 			},
 			signups_open: tournament.signups_open === 1,
 			signup_question: tournament.signup_question,
+			// Whether the signup form asks the registrant for their timezone.
+			// Public — it describes the form every viewer may be about to fill
+			// in, the same way signup_question does.
+			collect_timezone: tournament.collect_timezone === 1,
 			// The raw admin-set playlist URL (public — it drives a public tab).
 			// Null hides the Videos tab; the videos themselves come from the
 			// separate /videos read.
@@ -1167,6 +1172,8 @@ export async function computeStandingsResponse(
 			swiss_seed: number | null;
 			division: "A" | "B" | null;
 			signup_answer: string | null;
+			timezone: string | null;
+			slot_timezone: string | null;
 			discord_username: string | null;
 		}
 	>();
@@ -1183,6 +1190,17 @@ export async function computeStandingsResponse(
 			// Admin-only — omitted for non-admin viewers so signup answers don't
 			// leak into the public standings payload.
 			signup_answer: viewerIsAdmin ? s.signup_answer : null,
+			// The occupant's scheduling zone, already resolved account-first by
+			// slotTimezone. Admin-only for the reason signup_answer is, with one
+			// of its own: a zone is a coarse location signal, so it sits in the
+			// same lane rather than beside the public standings row.
+			timezone: viewerIsAdmin ? slotTimezone(s) : null,
+			// The seat's own column, unresolved — what the admin zone editor
+			// seeds from and writes back. Same admin-only lane as `timezone`.
+			// It differs from `timezone` exactly when the occupant's account
+			// zone is outranking it, which is the one thing the editor has to
+			// be able to say out loud.
+			slot_timezone: viewerIsAdmin ? s.timezone : null,
 			// Admin-only — the raw Discord handle is storage-level (claim
 			// matching, pre-link). Exposed only to admins so the slots panel /
 			// standings pencil can seed the occupant editor with the real handle
@@ -1201,6 +1219,8 @@ export async function computeStandingsResponse(
 				avatar_url: string | null;
 				swiss_seed: number | null;
 				signup_answer: string | null;
+				timezone: string | null;
+				slot_timezone: string | null;
 				discord_username: string | null;
 			}
 		>
@@ -1224,6 +1244,8 @@ export async function computeStandingsResponse(
 				swiss_seed: null,
 				division: null,
 				signup_answer: null,
+				timezone: null,
+				slot_timezone: null,
 				discord_username: null,
 			};
 			// Strip `division` — division grouping is communicated by the
@@ -1531,6 +1553,12 @@ export async function handleTournamentBracket(
 			// slug is the URL that addressed this read (Decision 1, #186).
 			slug: s.user_slug,
 			avatar_url: slotAvatarUrl(s),
+			// Same admin-only scheduling zone the standings rows carry. A
+			// championship slot is a fresh seat that copies neither the Swiss
+			// slot's signup_answer nor its zone, so the account-first read in
+			// slotTimezone is the only thing that puts a timezone in a
+			// championship match's DM.
+			timezone: viewerIsAdmin ? slotTimezone(s) : null,
 		})),
 		rounds: champRounds.map((r) => ({
 			round_id: r.round_id,

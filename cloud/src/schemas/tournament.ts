@@ -2,6 +2,7 @@
 
 import * as v from "valibot";
 import { CANONICAL_MAP_SCRIPTS_SET } from "../tournament/canonical-maps";
+import { TimeZoneSchema } from "./timezone";
 import { parseYouTubePlaylistUrl } from "../video/youtube";
 
 const slugRegex = /^[a-z0-9][a-z0-9-]{0,63}$/;
@@ -192,6 +193,11 @@ export const PatchTournamentSchema = v.object({
 	signup_question: v.optional(
 		v.nullable(v.pipe(v.string(), v.maxLength(2000))),
 	),
+	// Whether the signup form asks the registrant for an IANA timezone
+	// (migration 0055) alongside the freeform question. Off for every existing
+	// tournament, so turning it on is the admin's choice per tournament. Not
+	// phase-locked, but only consulted while signups are open.
+	collect_timezone: v.optional(v.boolean()),
 	// Admin-set YouTube playlist whose uploads feed the Videos tab. `null` clears
 	// it (hiding the tab). Not phase-locked — like `links`, editable in every
 	// status (VODs get added mid- and post-tournament). See YouTubePlaylistUrlSchema.
@@ -207,6 +213,11 @@ export const TournamentSignupSchema = v.object({
 	// the question itself is optional, and even when set the answer isn't
 	// required. Stored on the player's slot.
 	signup_answer: v.optional(v.pipe(v.string(), v.trim(), v.maxLength(2000))),
+	// The registrant's IANA zone, collected only when the tournament has
+	// collect_timezone set. Optional for the same reason signup_answer is, and
+	// the handler drops it outright when the tournament didn't ask — the
+	// switch is the gate, not the form.
+	timezone: v.optional(TimeZoneSchema),
 });
 
 // Body for POST /v1/tournaments/:id/admins. The caller (an existing admin)
@@ -274,6 +285,13 @@ export const PatchSlotSchema = v.object({
 	signup_answer: v.optional(
 		v.nullable(v.pipe(v.string(), v.trim(), v.maxLength(2000))),
 	),
+	// Admin edit of the seat's own zone (migration 0055). The signup picker
+	// needs status=setup AND signups_open, so once signups close this is the
+	// only writer left: a tournament already in swiss has no other way to get
+	// a zone onto a seat. Nullable to clear, and validated/canonicalized by
+	// the same TimeZoneSchema the signup body uses, so an admin-set zone and
+	// a registrant-set one are the same spelling of the same thing.
+	timezone: v.optional(v.nullable(TimeZoneSchema)),
 });
 
 // Body for POST /v1/tournaments/:id/slots/reorder. Each division array is the

@@ -10,9 +10,12 @@
 		type TournamentDetail,
 		type UserMe,
 	} from "$lib/api-cloud";
+	import { getLocalTimeZone } from "@internationalized/date";
 	import Popover from "$lib/ui/Popover.svelte";
 	import RadioGroup from "$lib/ui/RadioGroup.svelte";
 	import RadioItem from "$lib/ui/RadioItem.svelte";
+	import Select from "$lib/ui/Select.svelte";
+	import { timeZoneOptions } from "$lib/utils/timezones";
 	import { runAction } from "$lib/tournament/async-action";
 	import { divisionName } from "$lib/tournament/bracket-label";
 	import FormFooter from "$lib/tournament/FormFooter.svelte";
@@ -29,7 +32,18 @@
 	let open = $state(false);
 	let selectedDivision = $state<Division | null>(null);
 	let signupAnswer = $state("");
+	// Opens on the zone the browser reports, which is the answer for nearly
+	// everyone and makes the field one the player confirms rather than fills
+	// in. Their account zone, when they have one, outranks whatever is sent
+	// here — the worker resolves that order, so this never has to.
+	// "" is the Select's placeholder value and sends nothing.
+	// svelte-ignore state_referenced_locally
+	let timezone = $state(user.timezone ?? getLocalTimeZone());
 	let busy = $state(false);
+
+	const timezoneChoices = $derived(
+		timeZoneOptions(timezone === "" ? null : timezone),
+	);
 
 	const counts = $derived(tournament.slot_counts.swiss_by_division);
 
@@ -55,6 +69,7 @@
 					tournament.tournament_id,
 					division,
 					signupAnswer,
+					tournament.collect_timezone ? timezone : null,
 				),
 			{
 				setBusy: (b) => (busy = b),
@@ -123,6 +138,26 @@
 				<span>{divisionLabel("B")}</span>
 			</label>
 		</RadioGroup>
+
+		{#if tournament.collect_timezone}
+			<!-- A div rather than a label: the Select's trigger is a button, which
+			     a <label> can't be `for`. The name is carried by its ariaLabel. -->
+			<div class="flex flex-col gap-1 text-xs text-tan">
+				<span>Your timezone</span>
+				<Select
+					value={timezone}
+					onChange={(v) => (timezone = v ?? "")}
+					options={timezoneChoices}
+					ariaLabel="Your timezone"
+					disabled={busy}
+					matchTriggerWidth
+					class="w-full"
+				/>
+				<span class="text-[11px] opacity-60">
+					Detected from your browser. Admins use it to schedule your matches.
+				</span>
+			</div>
+		{/if}
 
 		{#if tournament.signup_question}
 			<label class="flex flex-col gap-1 text-xs text-tan">

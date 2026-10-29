@@ -212,6 +212,11 @@ export interface UserMe {
 	// toggle and by the Suggested tab, which tells an opted-out viewer that
 	// the suggesting runs both ways.
 	open_to_matches: boolean;
+	// The user's IANA timezone id, null until they save one in Preferences.
+	// The tournament scheduling DM prefers it over anything stored on a slot,
+	// so it follows the player into a seat they're substituted into. Read by
+	// the Preferences dropdown to tell a saved zone from the detected one.
+	timezone: string | null;
 	// ISO instant the account agreed to the screenshot terms, null if it never
 	// has. Read by the account page's terms section to say which it is. Not a
 	// gate anywhere on the client: the uploader prompts off the endpoint's
@@ -891,12 +896,14 @@ export const cloudApi = {
 			default_game_public?: boolean;
 			stream_url?: string | null;
 			open_to_matches?: boolean;
+			timezone?: string | null;
 		},
 		opts?: CallOpts,
 	): Promise<{
 		default_game_public: boolean;
 		stream_url: string | null;
 		open_to_matches: boolean;
+		timezone: string | null;
 	}> => {
 		const res = await request("/auth/settings", {
 			...opts,
@@ -908,6 +915,7 @@ export const cloudApi = {
 			default_game_public: boolean;
 			stream_url: string | null;
 			open_to_matches: boolean;
+			timezone: string | null;
 		}>;
 	},
 
@@ -2094,6 +2102,11 @@ export const cloudApi = {
 			// edited by an admin on the slots panel. null clears it; omit to
 			// leave it untouched.
 			signup_answer?: string | null;
+			// The seat's own IANA zone, edited by an admin from the roster's
+			// Zone column. The only writer once signups close. null clears it;
+			// omit to leave it untouched. Rejected with 400 when the id isn't
+			// one the Worker's Intl resolves.
+			timezone?: string | null;
 		},
 		opts?: CallOpts,
 	): Promise<void> => {
@@ -2226,20 +2239,30 @@ export const cloudApi = {
 	},
 
 	// Self-service tournament signup. The player picks a division and may
-	// answer the tournament's optional signup question; the server creates a
-	// tournament_slots row keyed to their session user. Gated server-side on
-	// status='setup' AND signups_open=1.
+	// answer the tournament's optional signup question and give their IANA
+	// timezone; the server creates a tournament_slots row keyed to their
+	// session user. Gated server-side on status='setup' AND signups_open=1,
+	// and the zone is stored only when the tournament asked for one
+	// (collect_timezone) — the switch is the gate, not this call.
 	signupForTournament: async (
 		tournamentId: string,
 		division: Division,
 		signupAnswer?: string,
+		timezone?: string | null,
 		opts?: CallOpts,
 	): Promise<{
 		slot: { slot_id: string; division: Division; swiss_seed: number };
 	}> => {
-		const body: { division: Division; signup_answer?: string } = { division };
+		const body: {
+			division: Division;
+			signup_answer?: string;
+			timezone?: string;
+		} = { division };
 		if (signupAnswer !== undefined && signupAnswer.trim().length > 0) {
 			body.signup_answer = signupAnswer.trim();
+		}
+		if (timezone != null && timezone.length > 0) {
+			body.timezone = timezone;
 		}
 		const res = await request(`/tournaments/${tournamentId}/signup`, {
 			...opts,
@@ -2569,6 +2592,10 @@ export interface TournamentDetail {
 	// Optional freeform prompt shown on the signup form. Null when no question
 	// is configured.
 	signup_question: string | null;
+	// Whether the signup form also asks the registrant for an IANA timezone.
+	// False for every tournament that predates the switch, so an existing
+	// signup form is unchanged until an admin turns it on.
+	collect_timezone: boolean;
 	// The caller's swiss slot in this tournament, if any. Drives the "you're
 	// signed up" strip and Withdraw button. Null when the caller has no slot,
 	// when there's no session, or when only a championship slot exists.
@@ -2624,6 +2651,8 @@ export interface PatchTournamentBody {
 	starts_at?: string | null;
 	// Optional freeform signup prompt, or null to clear.
 	signup_question?: string | null;
+	// Whether the signup form asks the registrant for their timezone.
+	collect_timezone?: boolean;
 	// Admin-set YouTube playlist URL (or null to clear). Server validates it's a
 	// youtube.com playlist link; its uploads feed the Videos tab. Editable in
 	// every phase.
@@ -2695,6 +2724,17 @@ export interface SlotStanding {
 	// populated for admin viewers (null for everyone else); null also when the
 	// player didn't answer. Admin-only display in the roster.
 	signup_answer: string | null;
+	// The occupant's IANA scheduling zone, already resolved account-first by
+	// the worker (users.timezone via the slot's user_id, then the slot's own
+	// column). Admin-only like signup_answer, with a reason of its own — a zone
+	// is a coarse location signal. Null when neither is set; the DM then falls
+	// back to signup_answer. See schedulingZone in $lib/tournament/slot-identity.
+	timezone: string | null;
+	// The seat's own stored zone, unresolved — the column the admin zone
+	// editor seeds from and writes. Admin-only, like `timezone` above. It
+	// differs from `timezone` exactly when the occupant's account zone is
+	// outranking it, which is what SlotTimezoneCell says on the row.
+	slot_timezone: string | null;
 	// The slot's raw stored Discord handle. Only populated for admin viewers
 	// (null for everyone else). The occupant editor seeds and compares against
 	// this — never display_name — so editing the signup answer can't rewrite the
@@ -2787,6 +2827,11 @@ export interface BracketSlot {
 	// championship-only slot has no standings row, so both loops must set it.
 	slug: string | null;
 	avatar_url: string | null;
+	// Same admin-only scheduling zone as SlotStanding.timezone. A championship
+	// slot is a fresh seat carrying neither the Swiss slot's signup_answer nor
+	// its zone, so the account-level half of the resolution is the only thing
+	// that ever fills this in.
+	timezone: string | null;
 }
 
 export interface BracketRound {
