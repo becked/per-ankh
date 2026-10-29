@@ -16,6 +16,7 @@
 	// be a claim about skew that the corpus doesn't make either way.
 	import ChartContainer from "$lib/ChartContainer.svelte";
 	import StatTile from "$lib/StatTile.svelte";
+	import CountRow from "$lib/ui/CountRow.svelte";
 	import { gameLengthHistogramOption } from "./charts/game-length";
 	import type { ChartBundleCore } from "./types";
 
@@ -88,9 +89,7 @@
 	</p>
 {:else}
 	<section class="mb-6">
-		<p class="mb-3 text-xs text-brown">
-			{stats.games.toLocaleString("en-US")} Games
-		</p>
+		<CountRow>{stats.games.toLocaleString("en-US")} Games</CountRow>
 
 		<div class="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
 			{#each cells as cell (cell.key)}

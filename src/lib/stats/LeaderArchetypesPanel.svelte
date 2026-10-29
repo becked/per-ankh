@@ -13,6 +13,7 @@
 	// the URL this tab is addressed by.
 
 	import ChartContainer from "$lib/ChartContainer.svelte";
+	import CountRow from "$lib/ui/CountRow.svelte";
 	import SegmentedSwitch from "$lib/ui/SegmentedSwitch.svelte";
 	import { barChartHeight } from "./charts/helpers";
 	import {
@@ -61,14 +62,10 @@
 		class="mb-2 w-fit"
 	/>
 
-	<!-- The catalog's count label: what the bars are drawn from, and what that
-	     number rests on, above the content as GameLengthPanel and RecordsPanel
-	     put theirs. Suppressed where there is nothing to count, so the empty
-	     state below isn't introduced by a "0 Leaders". -->
+	<!-- Suppressed where there is nothing to count, so the empty state below
+	     isn't introduced by a "0 Leaders". -->
 	{#if active.band.leaders > 0}
-		<p class="mb-3 text-xs text-brown">
-			{leaderBandCountLabel(active.band, totalGames)}
-		</p>
+		<CountRow>{leaderBandCountLabel(active.band, totalGames)}</CountRow>
 	{/if}
 
 	{#if active.band.rows.length > 0}
