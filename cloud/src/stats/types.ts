@@ -37,6 +37,34 @@ export interface YieldCohort {
 
 import type { FamilyKeeps } from "./family-keeps";
 
+// One turn band of the leader-archetype distribution. Every magnitude is a
+// COUNT OF LEADERS, banded by the turn each took the throne, so a leader is in
+// exactly one band and the three bands sum to the whole.
+export interface LeaderArchetypeBand {
+	// Inclusive turn bounds. `to` is null on the open-ended last band.
+	from: number;
+	to: Nullable<number>;
+	// Distinct focal games that ran as far as `from`. The first band's is every
+	// game, which is what a later band's is read against: a corpus where a
+	// third of games end before turn 71 describes that band from the two thirds
+	// that didn't, and the panel prints that beside the chart.
+	games: number;
+	// Leaders who took the throne inside the band across every focal seat,
+	// archetype or not. `leaders` minus what `rows` sums to is the part no
+	// archetype could be credited for, which is why that part is not a field of
+	// its own.
+	leaders: number;
+	rows: Array<{
+		archetype: string;
+		// Leaders of this archetype who took the throne inside the band.
+		leaders: number;
+		// Of those, the ones whose seat went on to win the game — the bar's
+		// wins/losses split, in the same unit as its length.
+		wins: number;
+		rate: number;
+	}>;
+}
+
 export interface ChartBundleMeta {
 	// Number of games actually aggregated (after visibility / game-type
 	// filtering). The signal for whole-bundle "no data yet" empty states.
@@ -173,6 +201,16 @@ export interface ChartBundleCore {
 		wins: number;
 		rate: number;
 	}>;
+
+	// Archetypes of EVERY leader the focal seats had, not just the starting
+	// one, cut into three turn bands by when each took the throne. The
+	// reasoning and the band edges are in stats/leader-reigns.ts; this is its
+	// wire shape.
+	//
+	// Always three entries, in turn order, even over a corpus that reaches none
+	// of them: an absent band and an empty one make the same claim. The panel's
+	// All-turns cut is their sum, so there is no fourth entry to drift.
+	leaderArchetypes: LeaderArchetypeBand[];
 
 	// --- Wonders -----------------------------------------------------
 	// Per wonder: how often the focal players built it, out of how many were

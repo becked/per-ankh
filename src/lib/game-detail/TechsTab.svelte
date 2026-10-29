@@ -19,6 +19,7 @@
 	import type { ChartOption, ECharts } from "$lib/echarts";
 	import Chart from "$lib/Chart.svelte";
 	import ChartContainer from "$lib/ChartContainer.svelte";
+	import SegmentedSwitch from "$lib/ui/SegmentedSwitch.svelte";
 	import {
 		archetypeSpriteKey,
 		deathReasonLabel,
@@ -265,13 +266,19 @@
 		techs: "Tech Discovery Over Time",
 	});
 
-	// Segmented-control button tokens for the sliding view toggle below,
-	// matching the tournament matches view switch. min-w keeps the three cells
-	// equal-width so the w-1/3 sliding thumb lines up, and wide enough for the
-	// longest label (this is a standalone, content-sized control; the tournament
-	// copy takes its width from a fixed grid cell instead).
-	const viewTriggerClass =
-		"relative z-10 min-w-[10rem] cursor-pointer whitespace-nowrap px-3 py-1.5 text-center text-xs font-bold text-tan transition-colors";
+	// Science plot views: cumulative science (default), the per-turn rate (small
+	// numbers keep a late-game tech adoption visible), or the tech count. The
+	// min-width is this control's own — it is content-sized rather than sitting
+	// in a fixed grid cell, so without it the cells would be as uneven as the
+	// labels and the thumb would resize as it slid.
+	const viewItems: { key: TechsChartMode; label: string }[] = $derived([
+		{
+			key: "cumulative",
+			label: scienceIsGameTotal ? "Science Total" : "Science Cumulative",
+		},
+		{ key: "rate", label: "Science per Turn" },
+		{ key: "techs", label: "Techs over Time" },
+	]);
 
 	const chartOption = $derived(
 		chartMode === "techs"
@@ -1025,51 +1032,17 @@
 		class="mb-4 rounded-lg p-4"
 		style="background-color: rgb(var(--color-surface));"
 	>
-		<!-- View switch for the science plot: cumulative science (default),
-		     per-turn science rate (small numbers keep a late-game tech adoption
-		     visible), or the tech count. Sliding segmented control matching the
-		     tournament matches view toggle — a w-1/3 thumb translated to the
-		     active cell. The rail below pairs under all three. -->
-		<div
-			class="relative mb-2 grid w-fit grid-cols-3 overflow-hidden rounded-lg border-2 border-surface-sunken"
-			style="background-color: rgb(var(--color-surface));"
-			role="group"
-			aria-label="Science chart view"
-		>
-			<div
-				class="pointer-events-none absolute inset-y-0 left-0 w-1/3 transition-transform duration-200 ease-out"
-				style:background-color="rgb(var(--color-surface-raised))"
-				style:transform={chartMode === "rate"
-					? "translateX(100%)"
-					: chartMode === "techs"
-						? "translateX(200%)"
-						: "translateX(0)"}
-			></div>
-			<button
-				type="button"
-				class={viewTriggerClass}
-				aria-pressed={chartMode === "cumulative"}
-				onclick={() => (chartMode = "cumulative")}
-			>
-				{scienceIsGameTotal ? "Science Total" : "Science Cumulative"}
-			</button>
-			<button
-				type="button"
-				class={viewTriggerClass}
-				aria-pressed={chartMode === "rate"}
-				onclick={() => (chartMode = "rate")}
-			>
-				Science per Turn
-			</button>
-			<button
-				type="button"
-				class={viewTriggerClass}
-				aria-pressed={chartMode === "techs"}
-				onclick={() => (chartMode = "techs")}
-			>
-				Techs over Time
-			</button>
-		</div>
+		<!-- View switch for the science plot. The rail below pairs under all
+		     three views. -->
+		<SegmentedSwitch
+			items={viewItems}
+			value={chartMode}
+			onChange={(key) => (chartMode = key)}
+			ariaLabel="Science chart view"
+			borderShade="sunken"
+			itemClass="min-w-[10rem]"
+			class="mb-2 w-fit"
+		/>
 		{#if chartOption}
 			{#if scienceRailGroups.length > 0}
 				<!-- Matchup variant: the plot plus the science event rail below it —

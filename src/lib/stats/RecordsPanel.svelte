@@ -19,6 +19,7 @@
 	import { Toolbar } from "bits-ui";
 	import { resolve } from "$app/paths";
 	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
+	import CountRow from "$lib/ui/CountRow.svelte";
 	import { nationName } from "$lib/utils/formatting";
 	import { YIELD_SERIES } from "./charts/yields";
 	import type { RecordsBundle } from "./types";
@@ -210,10 +211,10 @@
 		</Toolbar.Root>
 
 		{#if boardCount > 0}
-			<p class="mb-3 text-xs text-brown">
+			<CountRow>
 				{boardCount.toLocaleString("en-US")}
 				{countLabel ?? "Games"}
-			</p>
+			</CountRow>
 		{/if}
 
 		{#if cards.length === 0}

@@ -16,6 +16,7 @@
 	import RecordsPanel from "./RecordsPanel.svelte";
 	import FamilyStatsPanel from "./FamilyStatsPanel.svelte";
 	import LawsStatsPanel from "./LawsStatsPanel.svelte";
+	import LeadersStatsPanel from "./LeadersStatsPanel.svelte";
 	import TechStatsPanel from "./TechStatsPanel.svelte";
 	import { CHART_THEME, COMMON_GRID } from "./charts/helpers";
 	import { CATEGORIES, CHART_SPECS } from "./charts/registry";
@@ -23,10 +24,6 @@
 		nationAvgPointsOption,
 		nationWinLossStackedOption,
 	} from "./charts/nations";
-	import {
-		startingArchetypeWinLossOption,
-		startingTraitWinLossOption,
-	} from "./charts/leaders";
 	import { wonderOverviewOption } from "./charts/wonders";
 	import { expansionWinRateOption } from "./charts/cities";
 	import type { ChartBundleCore, RecordsBundle, StatsCategory } from "./types";
@@ -112,10 +109,6 @@
 				return nationWinLossStackedOption(bundle);
 			case "nation-avg-points":
 				return nationAvgPointsOption(bundle);
-			case "starting-archetype-winloss":
-				return startingArchetypeWinLossOption(bundle);
-			case "starting-trait-winloss":
-				return startingTraitWinLossOption(bundle);
 			case "wonder-overview":
 				return wonderOverviewOption(bundle);
 			case "city-expansion-winrate":
@@ -186,6 +179,8 @@
 				<FamilyStatsPanel {bundle} {showNationSelect} toolbarFlush />
 			{:else if section.id === "family-fielded"}
 				<FamilyKeepsPanel {bundle} {showNationSelect} toolbarFlush />
+			{:else if section.id === "leaders"}
+				<LeadersStatsPanel {bundle} />
 			{:else if section.id === "laws"}
 				<LawsStatsPanel {bundle} {showNationSelect} toolbarFlush />
 			{:else if section.id === "tech"}

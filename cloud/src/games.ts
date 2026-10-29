@@ -78,6 +78,7 @@ import {
 	buildSummaryGameContext,
 	derivePlayerSummary,
 } from "./derive-player-summary";
+import { deriveLeaderReigns } from "./derive-leader-reigns";
 import { invalidateStatsCache } from "./stats/cache";
 import { chunk, CHUNK_SIZE } from "./stats/aggregate";
 import { getBlobCached, invalidateBlob, readBlob } from "./blob-cache";
@@ -187,6 +188,10 @@ const TECH_LAW_ROWS_PER_INSERT = Math.floor(D1_MAX_PARAMS / 4); // 24
 const FAMILY_CITY_COLS = 5; // game_id, player_index, family_class, cities, first_founded_turn
 const FAMILY_CITY_ROWS_PER_INSERT = Math.floor(
 	D1_MAX_PARAMS / FAMILY_CITY_COLS,
+); // 19
+const LEADER_REIGN_COLS = 5; // game_id, player_index, character_xml_id, archetype, start_turn
+const LEADER_REIGN_ROWS_PER_INSERT = Math.floor(
+	D1_MAX_PARAMS / LEADER_REIGN_COLS,
 ); // 19
 
 // ---------- Rate limit checks (D1 events table) ----------
@@ -1017,6 +1022,46 @@ function buildFamilyCityStatements(
 		const bindings: unknown[] = [];
 		for (const e of chunk) {
 			bindings.push(gameId, e.player, e.familyClass, e.cities, e.firstTurn);
+		}
+		statements.push(db.prepare(sql).bind(...bindings));
+	}
+	return statements;
+}
+
+// Every leader who held a seat's throne, with the turn they took it — the
+// succession chain the banded archetype chart reads. The derivation lives in
+// derive-leader-reigns.ts.
+//
+// Rows for every seat, human or not, like player_summaries: the readers filter
+// on is_human through the join, and a reindex that dropped the AI seats would
+// have to re-derive them the day a chart wants an opponent's chain.
+function buildLeaderReignStatements(
+	db: QueryableD1,
+	gameId: string,
+	blob: FullGameData,
+): D1PreparedStatement[] {
+	const reigns = deriveLeaderReigns(blob);
+	if (reigns.length === 0) return [];
+
+	const columns = [
+		"game_id",
+		"player_index",
+		"character_xml_id",
+		"archetype",
+		"start_turn",
+	];
+	const statements: D1PreparedStatement[] = [];
+	for (const chunk of chunked(reigns, LEADER_REIGN_ROWS_PER_INSERT)) {
+		const sql = buildMultiRowInsert("leader_reigns", columns, chunk.length);
+		const bindings: unknown[] = [];
+		for (const r of chunk) {
+			bindings.push(
+				gameId,
+				r.player_index,
+				r.character_xml_id,
+				r.archetype,
+				r.start_turn,
+			);
 		}
 		statements.push(db.prepare(sql).bind(...bindings));
 	}
@@ -2246,6 +2291,11 @@ export async function handleGameUpload(
 	});
 	const gptStmts = buildGamePlayerTurnStatements(env.SHARE_DB, gameId, blob);
 	const familyCityStmts = buildFamilyCityStatements(env.SHARE_DB, gameId, blob);
+	const leaderReignStmts = buildLeaderReignStatements(
+		env.SHARE_DB,
+		gameId,
+		blob,
+	);
 	const techStmts = buildTechEventStatements(env.SHARE_DB, gameId, blob);
 	const lawStmts = buildLawEventStatements(env.SHARE_DB, gameId, blob);
 	const wonderStmts = [
@@ -2258,6 +2308,7 @@ export async function handleGameUpload(
 		...summaryStmts,
 		...gptStmts,
 		...familyCityStmts,
+		...leaderReignStmts,
 		...techStmts,
 		...lawStmts,
 		...wonderStmts,
@@ -4240,6 +4291,9 @@ export async function handleAdminReindex(
 		env.SHARE_DB.prepare(
 			"DELETE FROM player_family_cities WHERE game_id = ?",
 		).bind(gameId),
+		env.SHARE_DB.prepare("DELETE FROM leader_reigns WHERE game_id = ?").bind(
+			gameId,
+		),
 		...buildSummaryStatements(env.SHARE_DB, {
 			gameId,
 			blob,
@@ -4248,6 +4302,7 @@ export async function handleAdminReindex(
 		}),
 		...buildGamePlayerTurnStatements(env.SHARE_DB, gameId, blob),
 		...buildFamilyCityStatements(env.SHARE_DB, gameId, blob),
+		...buildLeaderReignStatements(env.SHARE_DB, gameId, blob),
 		...buildTechEventStatements(env.SHARE_DB, gameId, blob),
 		...buildLawEventStatements(env.SHARE_DB, gameId, blob),
 		...buildWonderEventStatements(env.SHARE_DB, gameId, blob),

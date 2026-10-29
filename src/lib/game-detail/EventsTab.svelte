@@ -308,9 +308,11 @@
 	<div class="mb-4">
 		<SegmentedSwitch
 			items={LIST_VIEWS}
-			active={listView}
-			onSelect={(key) => (listView = key)}
+			value={listView}
+			onChange={(key) => (listView = key)}
 			ariaLabel="Events list view"
+			borderShade="sunken"
+			class="w-fit"
 		/>
 	</div>
 {/if}

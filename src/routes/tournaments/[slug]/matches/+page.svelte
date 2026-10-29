@@ -53,6 +53,7 @@
 	import { seshMatchLine, seshVersus } from "$lib/tournament/sesh";
 	import CastView from "$lib/tournament/CastView.svelte";
 	import CopyButton from "$lib/tournament/CopyButton.svelte";
+	import SegmentedSwitch from "$lib/ui/SegmentedSwitch.svelte";
 	import { buildSlotMaps } from "$lib/tournament/slot-identity";
 	import { toast } from "$lib/ui/toast";
 	import type { Measurable } from "$lib/ui/types";
@@ -192,7 +193,20 @@
 	const initialView = VIEWS.find((v) => v === params.get("view")) ?? "live";
 	let view = $state<MatchesView>(initialView);
 	const clock = getZoneClock();
-	const viewTriggerClass =
+	// The three table views, in the segmented switch below. Calendar is not one
+	// of them: it is a button of its own on the right, so while it is open the
+	// switch shows no pressed segment at all (value null parks its thumb) —
+	// which is also what the annotation is for, since the switch's key type is
+	// the three table views and not every MatchesView.
+	type MatchesTableView = Exclude<MatchesView, "calendar">;
+	const VIEW_SEGMENTS: { key: MatchesTableView; label: string }[] = [
+		{ key: "live", label: "Upcoming" },
+		{ key: "cast", label: "Casts" },
+		{ key: "all", label: "All" },
+	];
+	// The Calendar button's own tokens — a single cell rather than a segment, so
+	// it carries its own border and its own pressed fill.
+	const calendarTriggerClass =
 		"relative z-10 cursor-pointer px-3 py-1.5 text-center text-xs font-bold text-tan transition-colors";
 
 	// --- Free-text search, shared across the three table views (live/all/cast)
@@ -493,50 +507,15 @@
 			</CopyButton>
 		{/if}
 	</div>
-	<!-- View toggle (Upcoming / Casts / All), centered. Plain segmented
-	     control matching the clock toggle; Calendar is its own button on
-	     the right, so when it's active none of these read as pressed. -->
-	<div
-		class="relative grid grid-cols-3 justify-self-center overflow-hidden rounded-lg border-2 border-surface"
-		style="background-color: rgb(var(--color-surface));"
-		role="group"
-		aria-label="View"
-	>
-		<div
-			class="pointer-events-none absolute inset-y-0 left-0 w-1/3 transition-transform duration-200 ease-out"
-			style:background-color="rgb(var(--color-surface-raised))"
-			style:opacity={view === "calendar" ? "0" : "1"}
-			style:transform={view === "cast"
-				? "translateX(100%)"
-				: view === "all"
-					? "translateX(200%)"
-					: "translateX(0)"}
-		></div>
-		<button
-			type="button"
-			class={viewTriggerClass}
-			aria-pressed={view === "live"}
-			onclick={() => (view = "live")}
-		>
-			Upcoming
-		</button>
-		<button
-			type="button"
-			class={viewTriggerClass}
-			aria-pressed={view === "cast"}
-			onclick={() => (view = "cast")}
-		>
-			Casts
-		</button>
-		<button
-			type="button"
-			class={viewTriggerClass}
-			aria-pressed={view === "all"}
-			onclick={() => (view = "all")}
-		>
-			All
-		</button>
-	</div>
+	<!-- View toggle (Upcoming / Casts / All), centered. Calendar is its own
+	     button on the right, so when it's active none of these read as pressed. -->
+	<SegmentedSwitch
+		items={VIEW_SEGMENTS}
+		value={view === "calendar" ? null : view}
+		onChange={(key) => (view = key)}
+		ariaLabel="View"
+		class="justify-self-center"
+	/>
 
 	<!-- Right cluster: search + Calendar toggle. (The UTC/Local clock moved
 	     to the top-right action cluster.) -->
@@ -554,7 +533,7 @@
 		<!-- Calendar: its own single-cell toggle, pressed in the calendar view. -->
 		<button
 			type="button"
-			class="{viewTriggerClass} inline-flex items-center justify-center gap-1.5 rounded-lg border-2 border-surface"
+			class="{calendarTriggerClass} inline-flex items-center justify-center gap-1.5 rounded-lg border-2 border-surface"
 			style:background-color={view === "calendar"
 				? "rgb(var(--color-surface-raised))"
 				: "rgb(var(--color-surface))"}

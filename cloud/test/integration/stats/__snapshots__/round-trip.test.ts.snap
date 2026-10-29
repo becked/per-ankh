@@ -333,6 +333,48 @@ exports[`chart bundle round-trip > builds the all-humans bundle from the same co
       "p75_turn": 3.5,
     },
   ],
+  "leaderArchetypes": [
+    {
+      "from": 1,
+      "games": 3,
+      "leaders": 6,
+      "rows": [
+        {
+          "archetype": "TRAIT_BUILDER_ARCHETYPE",
+          "leaders": 1,
+          "rate": 0,
+          "wins": 0,
+        },
+        {
+          "archetype": "TRAIT_COMMANDER_ARCHETYPE",
+          "leaders": 2,
+          "rate": 0,
+          "wins": 0,
+        },
+        {
+          "archetype": "TRAIT_SCHEMER_ARCHETYPE",
+          "leaders": 3,
+          "rate": 0.6666666666666666,
+          "wins": 2,
+        },
+      ],
+      "to": 40,
+    },
+    {
+      "from": 41,
+      "games": 3,
+      "leaders": 0,
+      "rows": [],
+      "to": 70,
+    },
+    {
+      "from": 71,
+      "games": 3,
+      "leaders": 0,
+      "rows": [],
+      "to": null,
+    },
+  ],
   "meta": {
     "game_count": 3,
     "parser_version": "2.12.0",
@@ -4620,6 +4662,42 @@ exports[`chart bundle round-trip > builds the user bundle from the fixture corpu
       "nation": "__all__",
       "p25_turn": 2,
       "p75_turn": 2,
+    },
+  ],
+  "leaderArchetypes": [
+    {
+      "from": 1,
+      "games": 3,
+      "leaders": 3,
+      "rows": [
+        {
+          "archetype": "TRAIT_BUILDER_ARCHETYPE",
+          "leaders": 1,
+          "rate": 0,
+          "wins": 0,
+        },
+        {
+          "archetype": "TRAIT_SCHEMER_ARCHETYPE",
+          "leaders": 2,
+          "rate": 0.5,
+          "wins": 1,
+        },
+      ],
+      "to": 40,
+    },
+    {
+      "from": 41,
+      "games": 3,
+      "leaders": 0,
+      "rows": [],
+      "to": 70,
+    },
+    {
+      "from": 71,
+      "games": 3,
+      "leaders": 0,
+      "rows": [],
+      "to": null,
     },
   ],
   "meta": {

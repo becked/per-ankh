@@ -26,6 +26,7 @@
 	import { CHART_THEME } from "$lib/config";
 	import Chart from "$lib/Chart.svelte";
 	import ChartContainer from "$lib/ChartContainer.svelte";
+	import SegmentedSwitch from "$lib/ui/SegmentedSwitch.svelte";
 	import { formatEnum, nationName } from "$lib/utils/formatting";
 	import EventRail, {
 		TOOLTIP_BORDER,
@@ -349,10 +350,6 @@
 			series,
 		} as ChartOption;
 	});
-
-	// Segmented-control tokens, matching the Techs tab's science view switch.
-	const viewTriggerClass =
-		"relative z-10 min-w-[9rem] cursor-pointer whitespace-nowrap px-3 py-1.5 text-center text-xs font-bold text-tan transition-colors";
 
 	// ─── Annotation rail ──────────────────────────────────────────────
 	// The live chart instance: rail markers are DOM, positioned by
@@ -700,32 +697,17 @@
 	<!-- Empire view switch: the economy curves the blob can answer, each with
 	     its own blind spot. It sits outside the plot's guard so a view that
 	     turns out to hold nothing leaves the user a way back to one that
-	     doesn't. -->
-	<div
-		class="relative mb-1 grid w-fit overflow-hidden rounded-lg border-2 border-surface-sunken"
-		style="background-color: rgb(var(--color-surface)); grid-template-columns: repeat({availableModes.length}, minmax(0, 1fr));"
-		role="group"
-		aria-label="Empire chart view"
-	>
-		<div
-			class="pointer-events-none absolute inset-y-0 left-0 transition-transform duration-200 ease-out"
-			style:width="{100 / availableModes.length}%"
-			style:background-color="rgb(var(--color-surface-raised))"
-			style:transform="translateX({availableModes.findIndex(
-				(m) => m.key === empireMode,
-			) * 100}%)"
-		></div>
-		{#each availableModes as mode (mode.key)}
-			<button
-				type="button"
-				class={viewTriggerClass}
-				aria-pressed={empireMode === mode.key}
-				onclick={() => (empireMode = mode.key)}
-			>
-				{mode.label}
-			</button>
-		{/each}
-	</div>
+	     doesn't. The min-width is this control's own, as on the Techs tab:
+	     content-sized cells would otherwise be as uneven as the labels. -->
+	<SegmentedSwitch
+		items={availableModes}
+		value={empireMode}
+		onChange={(key) => (empireMode = key)}
+		ariaLabel="Empire chart view"
+		borderShade="sunken"
+		itemClass="min-w-[9rem]"
+		class="mb-1 w-fit"
+	/>
 
 	{#if !empireChartOption}
 		<p class="p-8 text-center italic text-tan">

@@ -25,6 +25,33 @@ export interface ChartBundleMeta {
 	parser_version: string;
 }
 
+// One turn band of the leader-archetype distribution. Every magnitude here is
+// a COUNT OF LEADERS, banded by the turn each took the throne.
+export interface LeaderArchetypeBand {
+	// Inclusive turn bounds; `to` is null on the open-ended last band. Carried
+	// on the data rather than redeclared here, so a cached bundle reports the
+	// edges it was actually cut at.
+	from: number;
+	to: Nullable<number>;
+	// Distinct focal games that ran as far as `from`. The first band's is every
+	// game, which is what a later band's is read against: a corpus where a
+	// third of games end before turn 71 describes that band from the two thirds
+	// that didn't.
+	games: number;
+	// Leaders who took the throne inside the band across every focal seat,
+	// archetype or not. What `rows` sums to is the part with an archetype, so
+	// the difference is the part no archetype could be credited for.
+	leaders: number;
+	rows: Array<{
+		archetype: string;
+		leaders: number;
+		// Of those, the ones whose seat went on to win — the bar's wins/losses
+		// split, in the same unit as its length.
+		wins: number;
+		rate: number;
+	}>;
+}
+
 // Summary tiles common to both corpora (per-game facts).
 //
 // avg_total_turns is `turnLength.mean` under its original name — the Worker
@@ -144,6 +171,15 @@ export interface ChartBundleCore {
 		wins: number;
 		rate: number;
 	}>;
+
+	// Archetypes of EVERY leader the focal seats had, cut into three turn bands
+	// by when each took the throne. The starting chart above reads one leader
+	// per seat — 214 of the local corpus's 742 — and this counts them all.
+	// Reasoning and game-rules citations: cloud/src/stats/leader-reigns.ts.
+	//
+	// Always three entries, in turn order, even over an empty corpus. The
+	// panel's All-turns cut is their sum, so there is no fourth entry to drift.
+	leaderArchetypes: LeaderArchetypeBand[];
 
 	// Per wonder: how often the focal players built it, out of how many were
 	// eligible — the wonder was enabled in their game (Old World enables only a
