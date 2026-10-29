@@ -1,5 +1,51 @@
 # Changelog
 
+## [2026-10-29-11ee831] - 2026-10-29
+
+### Features
+
+- (bake) what grants a victory point, from the reference XML — [97311b6](https://github.com/becked/per-ankh/commit/97311b6c0d2aacd2bed2704ebe27dc48c3a9253d)
+- (parser) culture steps past the top tier — 2.29.0 — [d724bde](https://github.com/becked/per-ankh/commit/d724bde8c3e6ddbf95c985b3466f583ebe50a18b)
+- (parser) read the map pins a save carries — [fc5e623](https://github.com/becked/per-ankh/commit/fc5e6239f253345f2c7a95086c2742d7cb293467)
+- (cloud) keep a shared game's map pins to the uploader's seat — [9eb2633](https://github.com/becked/per-ankh/commit/9eb2633cb82a3a1abdb253d4c9ede3a12a533f49)
+- (map) draw the map pins, and name them in the tile panel — [3d9e4a5](https://github.com/becked/per-ankh/commit/3d9e4a5b50474756d087d26ad3a19218ecbd5ece)
+- (game-detail) a Map Pins tab, gated on the game having any — [7cb9ac4](https://github.com/becked/per-ankh/commit/7cb9ac4274e14b46644e74e8ad0778f3e7289ad1)
+- (tournament) store an IANA timezone on the account and the slot — [eb8173a](https://github.com/becked/per-ankh/commit/eb8173aa8f2b83484ea5e1cbbc690c4375b24828)
+- (tournament) pick a timezone, and read it in the scheduling DM — [7516180](https://github.com/becked/per-ankh/commit/7516180d0f03e856c8175378e58f820bdcf2e9a8)
+- (tournament) an admin writer and a Zone column for the seat timezone — [cbaf568](https://github.com/becked/per-ankh/commit/cbaf56865695c1e15163a7895859196f1e9794ba)
+- (games) serve a list row's roster under ?players=1 — [e8be223](https://github.com/becked/per-ankh/commit/e8be223093f484a7aa604887c914ebc35ec2bdf3)
+- (profile) rebuild the Games tab on the match table's two-line row — [052cf07](https://github.com/becked/per-ankh/commit/052cf07419f16f5be68ac3164205e293f70b0c6a)
+- (profile) name an observer upload in the Games tab's Result column — [b2bdf42](https://github.com/becked/per-ankh/commit/b2bdf42d5f6834ff884bd894a34435bfa25dc1fc)
+- (profile) name both sides of a Games tab row the same way — [c49e51b](https://github.com/becked/per-ankh/commit/c49e51bbac76991be002d115f7ee71ed6ba8f18f)
+- (stats) chart every reign, banded by turn, not just the starting one — [6944eda](https://github.com/becked/per-ankh/commit/6944edaf0051be17053ff3deb43446a348afaa8d)
+
+### Fixes
+
+- (games) victory points come from the save's end state, not its turn-start series — [c5c8ef2](https://github.com/becked/per-ankh/commit/c5c8ef25b2dc7b20714c93212b4666d70a0194a1)
+- (games) the victory-point gate is the victory settings, not the series — [8cca31d](https://github.com/becked/per-ankh/commit/8cca31d3b7113478fb7bfc71ac21cf47d38c5203)
+- (games) The Hill's victory points are the mod's, and the save cannot price them — [81ebe03](https://github.com/becked/per-ankh/commit/81ebe036c8e22e5947ffd0909064cd0f0a8c074c)
+- (games) the per-turn victory-point charts end on the end-state total — [bf3387d](https://github.com/becked/per-ankh/commit/bf3387d2395cf8b0eaab1d5597253d9abd318c05)
+- (map) renumber the pins bump to 2.30.0, and the review's copy and reuse fixes — [927909f](https://github.com/becked/per-ankh/commit/927909f7f943bf29b5764c31d4d8b4b495b6853e)
+- (tournament) read the slot's zone with `!= null`, not `!== null` — [3136793](https://github.com/becked/per-ankh/commit/31367930cb6c0e0058ff0da522c1d0cb31a56832)
+- (games) the Played cell is the date alone, and the avatar PII note is accurate — [813eff6](https://github.com/becked/per-ankh/commit/813eff65215ced371617d88f49c93d6424fcfd84)
+- (stats) one count row, in tan rather than a 2.1:1 red — [20df72e](https://github.com/becked/per-ankh/commit/20df72e4a4742374ac0f56f8d70a12aae37a3e1e)
+- (scripts) name the ping text key so secrets.leak stops flagging it — [a101f70](https://github.com/becked/per-ankh/commit/a101f70682c27a7679c558bf595aad910af21c98)
+- (profile) scroll the Games table with the page, not inside a box — [11ee831](https://github.com/becked/per-ankh/commit/11ee83139c72abf6cffe01bdc455d3524ff7c54e)
+
+### Other
+
+- (stats) a seat that scored nothing counts in the per-nation points average — [849839a](https://github.com/becked/per-ankh/commit/849839a4d4b01a0005052a9b5a613109d92b3ecd)
+- (save-file-format) replace the Pings stub with what the save writes — [0765377](https://github.com/becked/per-ankh/commit/07653774474c349b3c4edae4117cec69127d7363)
+- (game-detail) give the game views toggle its own header row — [9cff798](https://github.com/becked/per-ankh/commit/9cff7984e8af4e26933c88964bbb08e74ba704a3)
+- (game-detail) fold Map Pins into the Events tab as a section — [639961f](https://github.com/becked/per-ankh/commit/639961f9b04698677e3cbc4e3e74bbb906396f05)
+- (game-detail) switch the Events tab between the log and Map Pins — [2857e9d](https://github.com/becked/per-ankh/commit/2857e9d18caa862a4d5d743135d0fe9a0b420721)
+- (map) crest a pin's seat in the tile panel, and drop the turn's + — [efb0125](https://github.com/becked/per-ankh/commit/efb012575312da0e85d15413a79825855b7aa477)
+- (game-detail) one grouped multi-select behind the filter columns — [f5b2f0e](https://github.com/becked/per-ankh/commit/f5b2f0e4b0d5c34ba30934b206a2b29ee8609bdf)
+- (ui) one framed-table chrome, shared with the Games table — [1aa75da](https://github.com/becked/per-ankh/commit/1aa75da5db77e90be75d69fd6daa40e3fc0f6751)
+- (profile) drop the Games tab sort dropdown and widen the table — [663641c](https://github.com/becked/per-ankh/commit/663641c9b504afcaa46cccd453c82d3c23d0e3b6)
+- (ui) one segmented switch, not five hand-rolled copies — [610f008](https://github.com/becked/per-ankh/commit/610f008d2e0664215c662c14dd0073530ab932c1)
+- (stats) count leaders per turn band, not throne-time — [0ecf213](https://github.com/becked/per-ankh/commit/0ecf2138ad0d846562047fd20e0151823cb81f87)
+
 ## [2026-10-25-bb6edd9] - 2026-10-25
 
 ### Features
