@@ -115,11 +115,21 @@
 			}
 		}
 
-		// Cities from city statistics
+		// Cities from city statistics, attributed to the FOUNDER rather than to
+		// the current owner: a founding belongs to whoever founded it, and the
+		// table draws a column per roster player, so a city whose current
+		// owner is no player — captured, or held by a tribe — bucketed under
+		// `null` and was never drawn at all. That is 82 of the 2,769 city rows
+		// across `test-data/saves/`. `first_owner_player_xml_id` is stable
+		// across captures, which is the same reason the Cities tab's Founder
+		// column reads it.
 		for (const city of cityStatistics.cities) {
+			const founder = players.find(
+				(p) => p.playerId === city.first_owner_player_xml_id,
+			);
 			events.push({
 				turn: city.founded_turn,
-				nation: city.owner_nation,
+				nation: founder?.nation ?? null,
 				category: "city",
 				label: `${formatEnum(city.city_name, "CITYNAME_")}${city.is_capital ? " (Capital)" : ""}`,
 				enumValue: city.city_name,
