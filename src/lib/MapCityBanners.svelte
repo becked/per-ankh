@@ -9,11 +9,14 @@
 		/** Projected centre of the city-centre tile, in world units. */
 		worldX: number;
 		worldY: number;
-		/** Owner nation's colour, resolved as the tile hover panel resolves it. */
-		nationColor: string;
 		/**
-		 * Crest of whoever HOLDS the city — its nation, or its tribe for a city
-		 * under capture, which is the anarchy crest. "Civilization" is the
+		 * The colour of whoever HOLDS the city — its nation, or its tribe when
+		 * no nation does — resolved as the tile hover panel resolves it.
+		 */
+		ownerColor: string;
+		/**
+		 * Crest of whoever HOLDS the city — its nation, or its tribe, which for
+		 * a city under capture is the anarchy crest. "Civilization" is the
 		 * repo's word for that union (`getCivilizationColor`). Null when no
 		 * crest resolves, which is what makes the slot optional below.
 		 */
@@ -151,7 +154,7 @@
 		{#if full && banner.familyCrestKey}
 			<SpriteIcon category="crests" value={banner.familyCrestKey} size={10} />
 		{/if}
-		<span class="banner-name" style="color: {banner.nationColor};">
+		<span class="banner-name" style="color: {banner.ownerColor};">
 			{#if banner.isCapital}<span class="capital-marker">★</span
 				>{/if}{banner.label}
 		</span>
