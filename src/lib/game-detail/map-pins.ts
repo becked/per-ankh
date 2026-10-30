@@ -102,9 +102,7 @@ export function pinText(ping: PingInfo): { text: string; isFallback: boolean } {
  * Does the blob carry a pin at all — the question a surface asks before
  * offering a pin view of its own. A different claim from what `resolveMapPins`
  * answers, which is how many of them can be PLACED: a blob parsed before
- * 2.30.0 has no `pings` at all, a game nobody pinned has an empty one, and a
- * non-owner read of someone else's game can be left with none once the Worker
- * drops every seat but the uploader's (`stripForeignPings`).
+ * 2.30.0 has no `pings` at all, and a game nobody pinned has an empty one.
  */
 export function hasMapPins(game: Pick<FullGameData, "pings">): boolean {
 	return (game.pings ?? []).length > 0;

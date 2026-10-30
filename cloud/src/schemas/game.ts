@@ -393,9 +393,7 @@ export const MAX_PINGS = 50_000;
 //         below 2.30.0) and empty (a fresh parse of a game nobody pinned, 55
 //         of the 116 saves in `test-data/saves/`) are different claims. Note
 //         text is player-authored free text, so it is capped at 500
-//         characters at parse time and the array at MAX_PINGS here; the
-//         non-owner read also drops every seat but the uploader's, beside
-//         `stripOnlineIds` (see `stripForeignPings`, cloud/src/games.ts).
+//         characters at parse time and the array at MAX_PINGS here.
 export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.0.0",
 	"2.1.0",

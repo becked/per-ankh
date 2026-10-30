@@ -193,10 +193,6 @@
 	// blob parsed before 2.30.0, or one with no `map_width` — which is what
 	// disables the layer's checkbox rather than leaving a switch that can only
 	// ever show nothing.
-	//
-	// A non-owner's blob carries the uploader's own seat only; the Worker
-	// drops the rest (`stripForeignPings`, cloud/src/games.ts), because a note
-	// is text another human typed for their own team to read.
 	const mapPins = $derived(resolveMapPins(game, players));
 	// Unlike the unit markers these DO follow the slider: a pin carries the
 	// turn it was placed, so there is a per-turn answer to draw. It is a floor
