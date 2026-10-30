@@ -14,18 +14,18 @@
 		UNOWNED_CITY_BORDER_COLOR,
 		getCivilizationColor,
 		getMutedTerrainColor,
-		getTribeColor,
 	} from "$lib/config";
 	import {
 		ATLAS_MANIFEST,
 		NATION_ALIASES_URL,
 	} from "$lib/generated/atlas-manifest";
-	import {
-		CREST_SPRITE_NAMES,
-		TRIBE_CRESTS,
-	} from "$lib/generated/crest-sprites";
 	import { SPRITE_MANIFEST } from "$lib/generated/sprite-manifest";
-	import { familyCrestKey, familyForOwner } from "$lib/game-detail/helpers";
+	import {
+		cityOwner,
+		familyCrestKey,
+		familyForOwner,
+		tribeCrestKey,
+	} from "$lib/game-detail/helpers";
 	import { hexNeighbors } from "$lib/utils/hex";
 	import { circularPng } from "$lib/utils/circular-image";
 	import MapTooltip from "$lib/MapTooltip.svelte";
@@ -473,42 +473,26 @@
 	// city_name → the tribe it READS AS, for the cities no player holds at the
 	// represented turn. Membership is the test for "unowned city": a city
 	// absent from this map has an owner, so its tiles belong to the nation
-	// outline and its crest to its nation.
+	// outline and its crest to its nation. The tribe then feeds the crest, the
+	// banner's name colour and the tile panel's — everything but the territory
+	// border, which is one colour for every tribe.
 	//
 	// An ABSENT `tribe` resolves to anarchy rather than to nothing, which is
 	// what makes this one map rather than two readings that can disagree. A
 	// blob from before PARSER_VERSION 2.26.0 carries no `tribe` at all, and a
 	// `PARSER_VERSION` bump leaves most blobs on the old shape — so that
 	// default decides the common case, not the edge one. It is also the right
-	// reading: all 6 of the corpus's frozen captures are anarchy, and the
-	// anarchy treatment is what the map already gave every one of them.
+	// reading: 81 of the 82 player-less cities across `test-data/saves/` are
+	// anarchy, which is the anarchy treatment the map already gave them. The
+	// 82nd is a real tribe holding its city outright — the state #360 was
+	// filed for, which is why the readings built on this now name and colour
+	// the tribe instead of leaving the city unowned.
 	const unownedCityTribeByName = $derived.by(() => {
 		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- locally-scoped Map, not reactive state
 		const map = new Map<string, string>();
 		for (const t of tiles) {
 			if (!t.is_city_center || !t.owner_city || t.owner_nation) continue;
 			map.set(t.owner_city, cityTribeByName.get(t.owner_city) ?? ANARCHY_TRIBE);
-		}
-		return map;
-	});
-
-	// …and the colour that tribe's territory border draws in. The game colours
-	// territory from the CITY rather than from the tile's owning player
-	// (`Game.getBorderColors`, Game.cs:21782), and the tribe picks the colour:
-	//   - under capture (TRIBE_ANARCHY) → the near-black every tribe shares,
-	//     which is what the game paints a city being taken;
-	//   - held by a real tribe → that tribe's own colour, the one
-	//     `InfoHelpers.getTribeColor` reads. The corpus holds no such city at
-	//     save time, so this branch is unmeasured; it exists because the two
-	//     states have to be told apart, and until `tribe` was parsed nothing
-	//     could.
-	const unownedCityBorderColors = $derived.by(() => {
-		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- locally-scoped Map, not reactive state
-		const map = new Map<string, [number, number, number, number]>();
-		for (const [cityName, tribe] of unownedCityTribeByName) {
-			const tribeHex =
-				tribe === ANARCHY_TRIBE ? undefined : getTribeColor(tribe);
-			map.set(cityName, tribeHex ? opaqueRgba(tribeHex) : CAPTURE_BORDER_COLOR);
 		}
 		return map;
 	});
@@ -774,9 +758,8 @@
 	// A TRIBE first, when one holds the city: `City.getCrest` (City.cs:3319)
 	// returns `tribeInfo().meCrest` before it looks at a nation, which is what
 	// gives a city under capture the anarchy badge rather than an empty slot.
-	// Both legs are baked, because neither is a naming rule — TRIBE_BARBARIANS
-	// wears CREST_TRIBE_GENERIC, and CREST_TRIBE_ANARCHY's art ships as
-	// CREST_TRIBE_REBELS (scripts/bake-crest-sprites.ts).
+	// That leg is the shared `tribeCrestKey`, which every other surface that
+	// names a city's holder reads too.
 	//
 	// Else the nation, with the same 3-tier fallback as before:
 	//   1. The nation's own crest if shipped (handles MAURYA/TAMIL/YUEZHI,
@@ -792,16 +775,7 @@
 		ownerNation: string | null,
 		tribe?: string | null,
 	): string | null {
-		if (tribe) {
-			const crest = TRIBE_CRESTS[tribe];
-			if (crest) {
-				const sprite = CREST_SPRITE_NAMES[crest] ?? crest;
-				if (SPRITE_MANIFEST[`crests/${sprite}`] != null) {
-					return sprite.replace(/^CREST_/, "");
-				}
-			}
-			return "TRIBE_GENERIC";
-		}
+		if (tribe) return tribeCrestKey(tribe);
 		if (!ownerNation) return null;
 		const stem = ownerNation.replace(/^NATION_/, "");
 		if (SPRITE_MANIFEST[`crests/CREST_NATION_${stem}`] != null) {
@@ -838,10 +812,13 @@
 	// tile's first ownership row lands at founded_turn + 1 in 3,601 of the
 	// 3,604 cities measured across the 122 local blobs (2 at +0, 1 at −3).
 	//
-	// A city nobody holds keeps its banner, because the game keeps drawing it:
-	// `reconstructMapTiles` admits a RELEASED tile's city chrome, and the name
-	// there stays the unowned tan — nobody owns the city, and painting it in
-	// the captor's colour would read as ownership.
+	// A city no PLAYER holds keeps its banner, because the game keeps drawing
+	// it: `reconstructMapTiles` admits a RELEASED tile's city chrome. Its name
+	// takes the TRIBE's colour, which is what the game writes a tribe's name
+	// in (`HelpText.buildTribeLinkVariable`, HelpText.Game.cs:2390 — the
+	// branch `ClientUI.updateCityBuildData` takes for the city widget's owner
+	// slot at ClientUI.cs:7362); the captor's colour is what would wrongly
+	// read as ownership, and that one still goes nowhere near the name.
 	const cityBanners = $derived.by(() => {
 		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- locally-scoped Map, not reactive state
 		const byName = new Map<string, CityInfo>();
@@ -854,6 +831,7 @@
 		for (const t of tiles) {
 			if (!t.is_city_center || !t.owner_city) continue;
 			const [worldX, worldY] = hexToPixel(t.x, t.y);
+			const tribe = unownedCityTribeByName.get(t.owner_city);
 			out.push({
 				cityName: t.owner_city,
 				label: formatEnum(t.owner_city, "CITYNAME_"),
@@ -861,13 +839,9 @@
 				worldY,
 				// Resolved as MapTooltip resolves it, so a tile's hover colour
 				// and its banner agree.
-				nationColor: t.owner_nation
-					? (getCivilizationColor(t.owner_nation) ?? "rgb(var(--color-tan))")
-					: "rgb(var(--color-tan))",
-				civilizationCrestKey: resolveCityCrestKey(
-					t.owner_nation,
-					unownedCityTribeByName.get(t.owner_city),
-				),
+				ownerColor:
+					cityOwner(t.owner_nation, tribe)?.color ?? "rgb(var(--color-tan))",
+				civilizationCrestKey: resolveCityCrestKey(t.owner_nation, tribe),
 				familyCrestKey: cityFamilyCrestByName.get(t.owner_city) ?? null,
 				isCapital: t.is_capital,
 				citizens: isFinalTurn
@@ -1188,13 +1162,19 @@
 	const SUB_BORDER_ALPHA = 200;
 	const SUB_BORDER_WIDTH = 1.5;
 	// A city no player holds resolves to owner_nation === null on every one of
-	// its tiles, and its border is what says so. The game draws that border
-	// from the CITY rather than from the tile's owning player
-	// (`Game.getBorderColors`, Game.cs:21782 → `City.getPrimaryPlayerColor`,
-	// City.cs:3279), which for a city under capture is the near-black every
-	// tribe shares — so it renders at a nation border's own weight and full
-	// alpha, as the city's dominant colour, not as a faint marker.
-	const CAPTURE_BORDER_COLOR = opaqueRgba(UNOWNED_CITY_BORDER_COLOR);
+	// its tiles, and its border is what says so. ONE colour for every such
+	// city, whichever tribe holds it: the game draws that border from the CITY
+	// rather than from the tile's owning player (`Game.getBorderColors`,
+	// Game.cs:21782) and reads the city's PRIMARY player colour, which for a
+	// tribe's city is its team colour's `TeamPlayerColor`
+	// (`City.getPrimaryPlayerColor`, City.cs:3279) — PLAYERCOLOR_BARBARIANS
+	// for all 23 tribes, which is why `TRIBE_BORDER_COLOR` is one baked
+	// constant and the bake fails if they ever disagree. A tribe's OWN colour
+	// is its SECONDARY (`City.getSecondaryPlayerColor`, City.cs:3288), which
+	// is what the banner's name takes instead. Rendered at a nation border's
+	// own weight and full alpha, as the city's dominant colour, not as a faint
+	// marker.
+	const UNOWNED_CITY_BORDER_RGBA = opaqueRgba(UNOWNED_CITY_BORDER_COLOR);
 
 	// Stable key for a hex vertex pixel coord. Hex tessellation is exact, so the
 	// same physical vertex computed from neighboring tiles produces identical (or
@@ -1380,7 +1360,9 @@
 
 	function computePoliticalData(
 		mapTiles: MapTile[],
-		borderByCity: Map<string, [number, number, number, number]>,
+		// The tribe-by-city map, read for its MEMBERSHIP only: a city in it is
+		// one no player holds. The colour no longer varies by tribe.
+		unownedCityTribes: ReadonlyMap<string, string>,
 	): PoliticalData {
 		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- Map used locally in function, not as reactive state
 		const tileMap = new Map<string, MapTile>();
@@ -1425,18 +1407,19 @@
 
 		// The border of a city no player holds, keyed on owner_city — its
 		// territory tiles are exactly the ones with a city and no owner nation.
-		// `borderByCity` says which cities those are and in what colour; a city
-		// absent from it has an owner, so its tiles belong to the nation
-		// outline above.
+		// `unownedCityTribes` says which cities those are; a city absent from
+		// it has an owner, so its tiles belong to the nation outline above.
+		// One colour for all of them, for the reason UNOWNED_CITY_BORDER_RGBA
+		// gives.
 		const unownedCityBorders = buildTerritoryOutline({
 			mapTiles,
 			tileMap,
 			vertexMap,
 			keyOf: (t) =>
-				!t.owner_nation && t.owner_city && borderByCity.has(t.owner_city)
+				!t.owner_nation && t.owner_city && unownedCityTribes.has(t.owner_city)
 					? t.owner_city
 					: null,
-			colorFor: (key) => borderByCity.get(key) ?? null,
+			colorFor: () => UNOWNED_CITY_BORDER_RGBA,
 			width: NATION_BORDER_WIDTH,
 		});
 
@@ -1764,7 +1747,7 @@
 		if (tiles.length === 0)
 			return { borders: [], subBorders: [], unownedCityBorders: [] };
 		if (import.meta.env.DEV) console.time("computePoliticalData");
-		const result = computePoliticalData(tiles, unownedCityBorderColors);
+		const result = computePoliticalData(tiles, unownedCityTribeByName);
 		if (import.meta.env.DEV) console.timeEnd("computePoliticalData");
 		return result;
 	});
@@ -2479,6 +2462,9 @@
 {/snippet}
 
 {#snippet tilePanel(panel: TilePanel & { onUnlock?: () => void })}
+	{@const panelTribe = panel.tile.owner_city
+		? (unownedCityTribeByName.get(panel.tile.owner_city) ?? null)
+		: null}
 	<MapTooltip
 		tile={panel.tile}
 		cityFamily={panel.tile.owner_city
@@ -2486,10 +2472,9 @@
 			: null}
 		civilizationCrestKey={resolveCityCrestKey(
 			panel.tile.owner_nation,
-			panel.tile.owner_city
-				? unownedCityTribeByName.get(panel.tile.owner_city)
-				: null,
+			panelTribe,
 		)}
+		cityTribe={panelTribe}
 		capture={panel.tile.owner_city
 			? (captureByCity.get(panel.tile.owner_city) ?? null)
 			: null}

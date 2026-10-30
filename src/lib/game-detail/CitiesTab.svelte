@@ -2,8 +2,7 @@
 	import type { CityStatistics } from "$lib/types/CityStatistics";
 	import type { PlayerNationEntry } from "$lib/parser/types";
 	import { Select } from "bits-ui";
-	import { characterName, nationName } from "$lib/utils/formatting";
-	import { getCivilizationColor } from "$lib/config";
+	import { characterName, civilizationName } from "$lib/utils/formatting";
 	import SpriteIcon from "./SpriteIcon.svelte";
 	import TableFilterColumn from "./TableFilterColumn.svelte";
 	import NationFilterSelect from "./NationFilterSelect.svelte";
@@ -14,16 +13,11 @@
 		TABLE_CLASS,
 		TABLE_HEADER_TH_CLASS,
 		TABLE_CELL_TD_CLASS,
+		cityOwner,
 		formatCityCell,
 		resolveCityRows,
 		toggleSort,
 	} from "./helpers";
-
-	// Nation accent color for the Nation cell, mirroring the games table.
-	function nationColor(nation: string | null): string | undefined {
-		if (!nation) return undefined;
-		return getCivilizationColor(nation) ?? undefined;
-	}
 
 	let {
 		cityStatistics,
@@ -70,18 +64,20 @@
 		}
 	}
 
-	// Get unique nations for city filter dropdown
+	// The holders to offer in the filter dropdown: every nation that holds a
+	// city, plus every tribe that does — a tribe-held city was dropping out of
+	// the list, and so out of every filtered view.
 	const uniqueCityNations = $derived(
 		[
 			...new Set(
 				cityStatistics.cities
-					.map((city) => city.owner_nation)
+					.map((city) => cityOwner(city.owner_nation, city.tribe)?.civilization)
 					.filter((n): n is string => n != null),
 			),
 		].sort(),
 	);
 
-	// Parse selected city filters (nation only)
+	// Parse selected city filters (holder only)
 	const selectedCityNations = $derived(
 		tableState.filters
 			.filter((f) => f.startsWith("nation:"))
@@ -93,25 +89,29 @@
 		let cities = cityRows;
 
 		if (selectedCityNations.length > 0) {
-			cities = cities.filter(
-				(city) =>
-					city.owner_nation && selectedCityNations.includes(city.owner_nation),
-			);
+			cities = cities.filter((city) => {
+				const owner = cityOwner(city.owner_nation, city.tribe);
+				return (
+					owner != null && selectedCityNations.includes(owner.civilization)
+				);
+			});
 		}
 
 		if (tableState.search) {
 			const term = tableState.search.toLowerCase();
-			// Nation and governor match the label the column shows, not the enum
-			// behind it — "Hatti" and "Muwattalli" are what a reader can type.
-			cities = cities.filter(
-				(city) =>
+			// Holder and governor match the label the column shows, not the enum
+			// behind it — "Hatti", "Danes" and "Muwattalli" are what a reader can
+			// type.
+			cities = cities.filter((city) => {
+				const owner = cityOwner(city.owner_nation, city.tribe);
+				return (
 					city.city_name.toLowerCase().includes(term) ||
-					(city.owner_nation != null &&
-						nationName(city.owner_nation).toLowerCase().includes(term)) ||
+					(owner != null && owner.label.toLowerCase().includes(term)) ||
 					(city.family?.toLowerCase().includes(term) ?? false) ||
 					(city.governor_name != null &&
-						characterName(city.governor_name).toLowerCase().includes(term)),
-			);
+						characterName(city.governor_name).toLowerCase().includes(term))
+				);
+			});
 		}
 
 		const column = CITY_COLUMNS.find(
@@ -156,7 +156,7 @@
 		<TableFilterColumn
 			bind:search={tableState.search}
 			count={`${filteredSortedCities.length} / ${cityStatistics.cities.length} cities`}
-			chips={selectedCityNations.map((n) => nationName(n))}
+			chips={selectedCityNations.map((n) => civilizationName(n))}
 		>
 			{#snippet filters()}
 				<NationFilterSelect
@@ -237,6 +237,7 @@
 										? column.iconValue(city)
 										: column.getValue(city)
 									: null}
+								{@const owner = cityOwner(city.owner_nation, city.tribe)}
 								<td
 									class="{TABLE_CELL_TD_CLASS} {i === 0
 										? 'rounded-l-lg'
@@ -245,9 +246,8 @@
 										: ''} {column.key === 'city_name'
 										? 'font-bold'
 										: ''} whitespace-nowrap"
-									style={column.key === "owner_nation" &&
-									nationColor(city.owner_nation)
-										? `color: ${nationColor(city.owner_nation)}`
+									style={column.key === "owner_nation" && owner
+										? `color: ${owner.color}`
 										: undefined}
 								>
 									{#if column.iconCategory}

@@ -3,7 +3,7 @@
 	import { formatEnum, nationName } from "$lib/utils/formatting";
 	import { getCivilizationColor } from "$lib/config";
 	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
-	import { improvementDisplayName } from "$lib/game-detail/helpers";
+	import { cityOwner, improvementDisplayName } from "$lib/game-detail/helpers";
 	import { specialistName } from "$lib/game-detail/specialists";
 	import { CHROME_PANEL_CLASS } from "$lib/game-detail/map-chrome";
 	import { PIN_REMOVAL_NOTE, type MapPin } from "$lib/game-detail/map-pins";
@@ -12,6 +12,7 @@
 		tile,
 		cityFamily = null,
 		civilizationCrestKey = null,
+		cityTribe = null,
 		capture = null,
 		pins = [],
 		screenX,
@@ -30,6 +31,12 @@
 		// nation-asset-aliases so variant nations (NATION_AMUN, NATION_ATHENS)
 		// fall back to their parent civ's crest (CREST_NATION_EGYPT, ...).
 		civilizationCrestKey?: string | null;
+		// The tribe holding this tile's city, when no player does — which is
+		// what `<Tribe>` names and nothing else does. Resolved by the parent,
+		// which is also what defaults an absent one to anarchy so the crest,
+		// the border and this read the same thing. Null for every tile a
+		// nation owns and every tile nobody does.
+		cityTribe?: string | null;
 		// Who is taking this tile's city, when one is. Null is "not being
 		// captured"; a null `nation` inside it is a capture whose captor the
 		// blob can't name — a blob from before PARSER_VERSION 2.26.0, or a
@@ -56,10 +63,12 @@
 
 	const locked = $derived(onUnlock != null);
 
-	const nationColor = $derived.by(() => {
-		if (!tile.owner_nation) return "rgb(var(--color-tan))";
-		return getCivilizationColor(tile.owner_nation) ?? "rgb(var(--color-tan))";
-	});
+	// The header's colour: whoever holds the tile's city, which is a tribe when
+	// no nation does — the same `cityOwner` the banner over this hex reads, so
+	// the two agree.
+	const ownerColor = $derived(
+		cityOwner(tile.owner_nation, cityTribe)?.color ?? "rgb(var(--color-tan))",
+	);
 
 	const cityName = $derived(
 		tile.owner_city ? formatEnum(tile.owner_city, "CITYNAME_") : null,
@@ -102,8 +111,8 @@
 	// The captor, named only when the blob names one — see `capture` above.
 	// In its own nation's colour, which is what the game writes it in
 	// (ClientUI.cs:7333 fills the capture bar in
-	// `capturePlayer().getPlayerNameColor(...)`); the city NAME above keeps the
-	// unowned tan, because nobody owns the city.
+	// `capturePlayer().getPlayerNameColor(...)`); the city NAME above takes the
+	// HOLDER's colour, which is a tribe's and never the captor's.
 	const captorNation = $derived(capture?.nation ?? null);
 	const captorColor = $derived(
 		(captorNation ? getCivilizationColor(captorNation) : null) ??
@@ -158,7 +167,7 @@
 					<SpriteIcon category="crests" value={cityFamily} size={18} />
 				{/if}
 			</div>
-			<span class="city-name" style="color: {nationColor};">
+			<span class="city-name" style="color: {ownerColor};">
 				{#if tile.is_capital}<span class="capital-marker">★</span>{/if}
 				{headerLabel}
 			</span>

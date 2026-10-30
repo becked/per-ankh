@@ -18,6 +18,7 @@
 	import { IMPROVEMENT_BUILDS } from "$lib/generated/improvement-builds";
 	import {
 		characterName,
+		civilizationName,
 		formatEnum,
 		nationName,
 		turnCount,
@@ -33,6 +34,7 @@
 	} from "./specialists";
 	import {
 		CITY_COLUMNS,
+		cityOwner,
 		familyCrestKey,
 		familyForOwner,
 		formatCityCell,
@@ -121,17 +123,41 @@
 
 	const ownerAtTurn = $derived(playerAt(spanAtTurn?.playerXmlId ?? null));
 
+	// The TRIBE holding the city across a span no player does. `<Tribe>` is a
+	// single CURRENT value (City.cs:1263, written only under `City.isTribe()`),
+	// not a history, so every unowned span is named by the holder at save
+	// time — the one value the map paints at every turn too, which is what
+	// keeps this card and the banner that opened it agreeing. Measured right
+	// for every span it names: of the corpus's 82 player-less cities, 14 carry
+	// an EARLIER, closed unowned span as well, and all 14 are held by
+	// TRIBE_ANARCHY now, which is what a breached city sits in. A blob from
+	// before PARSER_VERSION 2.26.0 carries no `tribe`, and then nothing names
+	// the holder.
+	function tribeForSpan(span: OwnerSpan | null): string | null {
+		if (span == null || span.playerXmlId !== null) return null;
+		return city?.tribe ?? null;
+	}
+
+	// Who the card names, crests and colours as the holder at the selected
+	// turn: the roster player the span names, else the tribe, through the same
+	// `cityOwner` the banner and the Cities tab read.
+	const tribeOwnerAtTurn = $derived(cityOwner(null, tribeForSpan(spanAtTurn)));
+
 	// The whole ownership record as one line of comma-separated range/holder
 	// pairs, reading like the founded line it sits under.
 	const ownerSpanLine = $derived(
 		ownerSpans
 			.map((span) => {
 				const held = playerAt(span.playerXmlId);
+				const tribe = tribeForSpan(span);
 				const range =
 					span.from === span.to
 						? `Turn ${span.from}`
 						: `Turns ${span.from}–${span.to}`;
-				return `${range} · ${held ? held.label : "Unowned, mid-capture"}`;
+				const holder =
+					held?.label ??
+					(tribe != null ? civilizationName(tribe) : "Unowned, mid-capture");
+				return `${range} · ${holder}`;
 			})
 			.join(", "),
 	);
@@ -140,11 +166,10 @@
 	// turn. `<CapturePlayer>` is a single current value (City.cs:1251), not a
 	// history, and the eventual owner from `tile_ownership_history` is the
 	// captor for 1,320 of the corpus's 1,342 closed released spans and the
-	// DEFENDER for the other 22. So an EARLIER unowned span shows the state —
-	// through the border on the map and "Unowned, mid-capture" in the line
-	// below — without a name, rather than the wrong one. Null too when the
-	// captor is a tribe (`capture_tribe`, which names no player) or when the
-	// blob predates the field.
+	// DEFENDER for the other 22. So an EARLIER unowned span names its HOLDER
+	// (see `tribeForSpan`) and no captor at all, rather than the wrong one.
+	// Null too when the captor is a tribe (`capture_tribe`, which names no
+	// player) or when the blob predates the field.
 	const captorAtTurn = $derived.by(() => {
 		const span = spanAtTurn;
 		if (span == null || span.playerXmlId !== null || span.to !== finalTurn) {
@@ -189,10 +214,16 @@
 	});
 
 	// The header takes its colour and crests from the owner at the selected
-	// turn, so the card and the banner that opened it agree.
+	// turn, so the card and the banner that opened it agree — which means the
+	// tribe's crest and colour where a tribe holds the city, since that is
+	// what the banner draws.
 	const nationAtTurn = $derived(ownerAtTurn?.nation ?? null);
-	const nationColor = $derived(
+	const holderCrestAtTurn = $derived(
+		nationAtTurn ?? tribeOwnerAtTurn?.crestKey ?? null,
+	);
+	const holderColor = $derived(
 		(nationAtTurn ? getCivilizationColor(nationAtTurn) : null) ??
+			tribeOwnerAtTurn?.color ??
 			"rgb(var(--color-tan))",
 	);
 
@@ -451,12 +482,14 @@
 		<!-- Zone 1: who this is, which never changes. -->
 		<header class="flex items-start gap-2">
 			<div class="flex flex-shrink-0 items-center gap-1">
-				{#if nationAtTurn}
+				{#if holderCrestAtTurn}
 					<SpriteIcon
 						category="crests"
-						value={nationAtTurn}
+						value={holderCrestAtTurn}
 						size={20}
-						alt={nationName(nationAtTurn)}
+						alt={nationAtTurn
+							? nationName(nationAtTurn)
+							: (tribeOwnerAtTurn?.label ?? "")}
 					/>
 				{/if}
 				{#if familyCrestAtTurn}
@@ -469,7 +502,7 @@
 				{/if}
 			</div>
 			<div class="min-w-0">
-				<h2 class="text-sm font-bold" style="color: {nationColor};">
+				<h2 class="text-sm font-bold" style="color: {holderColor};">
 					{#if city.is_capital}<span class="mr-1 opacity-85">★</span
 						>{/if}{formatEnum(city.city_name, "CITYNAME_")}
 				</h2>
@@ -514,6 +547,19 @@
 								/>
 							{/if}
 							{ownerAtTurn.label}
+						</span>
+					{:else if tribeOwnerAtTurn}
+						<span
+							class="inline-flex items-center gap-1"
+							style="color: {tribeOwnerAtTurn.color};"
+						>
+							<SpriteIcon
+								category="crests"
+								value={tribeOwnerAtTurn.crestKey}
+								size={14}
+								alt={tribeOwnerAtTurn.label}
+							/>
+							{tribeOwnerAtTurn.label}
 						</span>
 					{:else}
 						Unowned
