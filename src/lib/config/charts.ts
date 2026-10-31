@@ -8,7 +8,7 @@
  * Old World's own yield palette. Each says which it is below.
  */
 
-import { YIELD_COLORS } from "$lib/generated/yield-colors";
+import { YIELD_COLORS } from "../generated/yield-colors";
 
 /**
  * Warm fallback ramp, indexed by series ordinal.

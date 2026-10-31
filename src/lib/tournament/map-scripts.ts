@@ -6,12 +6,12 @@
 // Worker package's tests can read it. Everything here needs formatMapClass,
 // which is why the two are separate files.
 
-import { formatMapClass } from "$lib/utils/formatting";
+import { formatMapClass } from "../utils/formatting";
 import {
 	KNOWN_MAP_SCRIPTS,
 	type MapScriptDlc,
 	type MapScriptInfo,
-} from "$lib/tournament/map-scripts-table";
+} from "./map-scripts-table";
 
 export const DLC_GROUP_LABELS: Record<MapScriptDlc, string> = {
 	base: "Base game",
