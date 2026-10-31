@@ -35,6 +35,12 @@ const REVIEWED: Record<string, string> = {
 	// Anonymous, and the board and window are both query parameters, which are
 	// in the cache key.
 	"GET /v1/stats/players": "no session read",
+	// The link-preview image. Reads no session — `is_public = 1` is the whole
+	// visibility rule — so every caller gets the same bytes. Its gate is the
+	// og_card_view read budget, which is on what a caller may spend and not on
+	// what they may see; a crawler, the population this route exists for, is
+	// exempt from it anyway.
+	"GET /v1/games/:id/card.png": "no session read",
 	// The exception to the rule rather than an instance of it: two bodies on
 	// one URL, separated by `Vary: Cookie, Origin`. The cookie-less key can
 	// only ever hold the stripOnlineIds variant, and the owner's body is
@@ -74,6 +80,8 @@ const PUBLIC_DIRECTIVE_SITES: Record<string, number> = {
 	"featured.ts": 1,
 	// handlePublicRecentGames, and handleGameDetail's non-owner branch.
 	"games.ts": 2,
+	// handleGameCard.
+	"og-card/handler.ts": 1,
 	// handleFeaturedScreenshots.
 	"screenshots/handlers.ts": 1,
 	// globalStatsResponse (both /stats reads), handlePlayerLeaderboard,

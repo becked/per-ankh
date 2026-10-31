@@ -16,6 +16,17 @@ The friction on past contributions was consistency, not correctness. Before addi
 
 `cloud/src/generated/*` and `cloud/src/momentum.ts` are written by `scripts/bake-*.ts` — never edit them by hand. `momentum.ts` mirrors the frontend scorer `src/lib/game-detail/momentum.ts`; edit that file and regenerate with `npm run bake:momentum -- --mirror-only` (a regeneration test fails on drift).
 
+## Link-preview card (`cloud/src/og-card/`)
+
+`GET /v1/games/:id/card.png` renders the home feed's `RecentSaveCard` for one game, as SVG, and rasterizes it with resvg-wasm. Four things about it are not visible from the code:
+
+- **It is a second implementation of the component and will drift from it.** A tile added to `src/lib/RecentSaveCard.svelte` does not reach the embed until it is added to `card-svg.ts` too. That is the price of not running headless Chromium per game — the component's sparkline is ECharts on a canvas inside an `$effect`, so its server-rendered HTML is an empty div. Issue #363 carries the full argument.
+- **resvg makes no network requests.** A remote `<image href>` is silently skipped and only data URIs resolve, which is why the card has neither the per-tile sprite icons (gitignored pinacotheca output) nor the uploader's avatar (a `cdn.discordapp.com` URL). Adding either means baking it to a data URI first.
+- **Fonts are bytes, and variable fonts do not work.** resvg renders a variable face at its default instance whatever `font-weight` the SVG asks for, so the two weights are two static faces baked by `npm run bake:card-fonts` into `generated/card-fonts.ts`. A codepoint neither covers draws nothing — `loadSystemFonts` is false and there is no fallback face in a Worker.
+- **The `.wasm` module import only resolves under workerd.** Vitest's Node pool cannot, so the unit project aliases it to a stub (`cloud/test/helpers/wasm-stub.ts`) and the rasterizer is exercised only in `cloud/test/integration/games/og-card.test.ts`. A unit test that reaches `raster.ts` will fail at `initWasm`, by design.
+
+The card's URL is versioned on `games.updated_at`, which is why **every writer of a game bumps it — the admin reindex included**, even though a reindex touches only derived tables. It is the operation that backfills `vp_series`/`momentum_series`, so it is the one most likely to change what the card draws.
+
 ## Worker tests
 
 Two-project Vitest setup (`cloud/vitest.config.mts`):

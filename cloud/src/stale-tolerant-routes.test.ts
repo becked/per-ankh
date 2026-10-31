@@ -33,6 +33,11 @@ const REVIEWED: Record<string, string> = {
 	// persists what this route read — unlike the two above, it has no KV
 	// entry — so the answer lives only as long as the response.
 	"GET /v1/games/public-recent": "SELECT-only call graph",
+	// The same three SELECTs over the same tables, for one game instead of
+	// twenty — the fan-outs are literally the same function
+	// (assemblePublicGameCards). Its read budget counts and inserts on
+	// EVENTS_DB like the feed's, and the PNG is persisted nowhere.
+	"GET /v1/games/:id/card.png": "SELECT-only call graph",
 };
 
 // `events` is both audit log and rate-limit counter, so it always runs on the

@@ -62,6 +62,7 @@ import {
 	handleGameUpload,
 } from "./games";
 import type { GamesEnv } from "./games";
+import { handleGameCard } from "./og-card/handler";
 import {
 	handleChallengeDetail,
 	handleChallengeList,
@@ -513,6 +514,30 @@ const ROUTES: RouteSpec[] = [
 		// because it names Cookie in its `Vary` (games.ts), which puts the
 		// distinction into the cache key, and answers the owner `private,
 		// no-store` so that body is never stored at all.
+		sharedCache: true,
+	},
+	{
+		// The link-preview image. `?v=<updated_at>` versions it; the handler
+		// ignores the parameter and the cache keys on it, which is what lets
+		// the response be immutable for a year.
+		method: "GET",
+		match: {
+			kind: "regex",
+			regex: /^\/v1\/games\/([A-Za-z0-9_-]{21})\/card\.png$/,
+		},
+		route: "GET /v1/games/:id/card.png",
+		handler: (r, e, m) => handleGameCard(m![1], r, e),
+		// One SHARE_DB read for the game row, then the two fan-outs
+		// assemblePublicGameCards issues — all SELECT. The read-budget count
+		// and its audit insert go through EVENTS_DB, so neither anchors the
+		// session's bookmark. The answer is persisted nowhere, and it is
+		// already served from a year-long cache entry, so replica lag is
+		// orders of magnitude inside what the route accepts.
+		staleTolerant: true,
+		// `is_public = 1` is the whole visibility rule and the handler reads
+		// no session, so every caller gets the same bytes. A hit skips the
+		// read budget, which is a gate on what a caller may spend rather than
+		// on what they may see — and a crawler is exempt from it anyway.
 		sharedCache: true,
 	},
 	{

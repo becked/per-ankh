@@ -16,6 +16,12 @@
 // mechanism: a reader sees pre-backfill values, the sweep runs, and the next
 // read sees the backfilled ones — on the owner's corpus and the tournament's
 // alike, since one reindexed game is in both.
+//
+// `games.updated_at` is the second cache a reindex has to move, for the same
+// reason and one layer out: it is what the link-preview card's URL is versioned
+// on (GET /v1/games/:id/card.png), and a reindex is what backfills vp_series
+// and momentum_series — so the operation most likely to turn "no sparkline"
+// into "sparkline" is exactly the one that must not leave the old card stored.
 
 import { applyD1Migrations, env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -23,6 +29,7 @@ import { expectOk } from "../../helpers/assertions";
 import {
 	makeSiteAdmin,
 	makeTournament,
+	makeUser,
 	type TestUser,
 } from "../../helpers/builders";
 import { postMultipart, request } from "../../helpers/requests";
@@ -149,5 +156,46 @@ describe("admin reindex", () => {
 		// all-null band for the rest of the TTL.
 		expect((await readUser()).length).toBeGreaterThan(0);
 		expect((await readTournament()).length).toBeGreaterThan(0);
+	});
+
+	it("bumps games.updated_at, so the link-preview card is re-rendered", async () => {
+		const owner = await makeUser({ discordUsername: "reindex-card-owner" });
+		const res = await postMultipart({
+			path: "/v1/games",
+			form: await pricedUpload(),
+			as: owner,
+		});
+		expect(res.status).toBe(201);
+		const { game_id } = await res.json<{ game_id: string }>();
+
+		// Backdate it, because the upload and the reindex land in the same
+		// second and `datetime('now')` has one-second resolution — without this
+		// the assertion would be about the clock rather than about the write.
+		await env.SHARE_DB.prepare(
+			"UPDATE games SET updated_at = '2020-01-01 00:00:00' WHERE game_id = ?",
+		)
+			.bind(game_id)
+			.run();
+
+		await expectOk(
+			await request.post({
+				path: `/v1/admin/games/${game_id}/reindex`,
+				as: admin,
+			}),
+		);
+
+		const row = await env.SHARE_DB.prepare(
+			"SELECT updated_at FROM games WHERE game_id = ?",
+		)
+			.bind(game_id)
+			.first<{ updated_at: string }>();
+		expect(row?.updated_at).not.toBe("2020-01-01 00:00:00");
+
+		// And the detail read is what carries it to the page that builds the
+		// card URL.
+		const detail = await expectOk<{ updated_at?: string }>(
+			await request.get({ path: `/v1/games/${game_id}`, as: owner }),
+		);
+		expect(detail.updated_at).toBe(row?.updated_at);
 	});
 });

@@ -361,6 +361,15 @@ HOME_SUMMARY_VIEW_PER_HOUR = "600"
 CHALLENGE_VIEW_PER_HOUR = "600"
 CHALLENGE_LINK_VIEW_PER_HOUR = "600"
 
+# === Link-preview card limit ===
+# Per-IP hourly ceiling on GET /v1/games/:id/card.png (cloud/src/og-card/),
+# on the same lever as the read ceilings above. Its own budget rather than a
+# share of anon_read because the populations differ: this meters whatever
+# fetched a link someone pasted into a chat, anon_read meters people reading
+# the game page. On the shared budget a link going round a busy server would
+# decide when the game pages start refusing.
+OG_CARD_VIEW_PER_HOUR = "600"
+
 # === Screenshot upload limits ===
 # Hourly ceiling on screenshot upload ATTEMPTS per user, on the same lever and
 # with the same override caveat as the ceilings above. A different job from the
@@ -567,6 +576,7 @@ SEASON_VIEW_PER_HOUR = "600"
 HOME_SUMMARY_VIEW_PER_HOUR = "600"
 CHALLENGE_VIEW_PER_HOUR = "600"
 CHALLENGE_LINK_VIEW_PER_HOUR = "600"
+OG_CARD_VIEW_PER_HOUR = "600"
 PER_USER_SCREENSHOTS_PER_HOUR = "20"
 SCREENSHOT_VIEW_PER_HOUR = "600"
 PER_USER_SCREENSHOT_REPORTS_PER_HOUR = "20"
