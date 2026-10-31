@@ -1,7 +1,10 @@
 import { error, redirect } from "@sveltejs/kit";
 import {
 	cloudApi,
+	gameCardImageUrl,
 	ApiError,
+	GAME_CARD_HEIGHT,
+	GAME_CARD_WIDTH,
 	UnauthorizedError,
 	type CollectionInfo,
 } from "$lib/api-cloud";
@@ -46,11 +49,23 @@ function gameTitle(game: {
 // Build the OG/Twitter description from match metadata. Same shape that
 // used to live inline in +page.svelte's <svelte:head>; moved here so
 // social-link unfurls work without the page mounting.
-function buildMeta(game: {
-	game_details: Record<string, unknown>;
-	display_name?: string | null;
-	user_nation?: string | null;
-}): PageMeta {
+//
+// The image is this game's own card — the Worker's render of the home feed's
+// RecentSaveCard (cloud/src/og-card/), versioned on `updated_at` so a reindex
+// or a rename is a new URL. It is offered for a game the Worker will actually
+// serve a card for: one that is public, and one whose `updated_at` the
+// payload carried. Everything else falls through to the brand card the root
+// layout supplies, which is what every unfurl got before this.
+function buildMeta(
+	gameId: string,
+	game: {
+		game_details: Record<string, unknown>;
+		display_name?: string | null;
+		user_nation?: string | null;
+		is_public?: boolean;
+		updated_at?: string | null;
+	},
+): PageMeta {
 	const gd = game.game_details as {
 		winner_civilization?: string | null;
 		winner_name?: string | null;
@@ -72,7 +87,26 @@ function buildMeta(game: {
 		parts.length > 0 ? parts.join(", ") : "An Old World save game on Per-Ankh.";
 	// The same title the page renders above the view, so the <head>/OG title
 	// matches what the user sees.
-	return { title: `${gameTitle(game)} - Per-Ankh`, description };
+	//
+	// `is_public` is present only on an OWNER's payload (the Worker injects it
+	// for them alone), so its absence means one of two things: a non-owner
+	// looking at a game that is public by definition — they could not have
+	// loaded it otherwise — or an owner on an older Worker. Both are served a
+	// card URL, and the second one 404s to the brand card, which is what it
+	// had before.
+	const cardVersion =
+		game.is_public === false ? null : (game.updated_at ?? null);
+	return {
+		title: `${gameTitle(game)} - Per-Ankh`,
+		description,
+		image: cardVersion
+			? {
+					url: gameCardImageUrl(gameId, cardVersion),
+					width: GAME_CARD_WIDTH,
+					height: GAME_CARD_HEIGHT,
+				}
+			: undefined,
+	};
 }
 
 // Translate the API's `ApiError` into the right SvelteKit response —
@@ -198,6 +232,6 @@ export const load: LayoutLoad = async ({ params, fetch, url }) => {
 		// game fields of their own, and GameHeader reads it off `page.data` for
 		// the breadcrumb on all three views.
 		gameName: gameTitle(game),
-		meta: buildMeta(game),
+		meta: buildMeta(params.id, game),
 	};
 };
