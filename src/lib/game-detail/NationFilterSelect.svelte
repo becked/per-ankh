@@ -4,7 +4,7 @@
 	// and renders matching chips elsewhere. One group over `TableFilterSelect`,
 	// which is the control every filter column's select goes through.
 	import TableFilterSelect from "./TableFilterSelect.svelte";
-	import { nationName } from "$lib/utils/formatting";
+	import { civilizationName } from "$lib/utils/formatting";
 
 	let {
 		nations,
@@ -12,6 +12,9 @@
 		label = "Filter",
 		heading = "Nations",
 	}: {
+		// Nations, or — where a row's owner can be either, as a city's can —
+		// the NATION_*/TRIBE_* union. Labelled through `civilizationName`,
+		// which is `nationName` for every NATION_* a nation-only caller passes.
 		nations: string[];
 		value?: string[];
 		label?: string;
@@ -23,7 +26,7 @@
 			heading,
 			options: nations.map((nation) => ({
 				value: `nation:${nation}`,
-				label: nationName(nation),
+				label: civilizationName(nation),
 			})),
 		},
 	]);

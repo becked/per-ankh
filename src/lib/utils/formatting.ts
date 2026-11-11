@@ -55,6 +55,33 @@ export function nationName(nation: string | null | undefined): string {
 }
 
 /**
+ * The name Old World gives a nation **or a tribe** — the label for a value
+ * that can be either, which is the union the repo calls a civilization
+ * (`getCivilizationColor` takes the same one). A city's holder is that union:
+ * the game writes `<Tribe>` only under `City.isTribe()` (City.cs:1263), and
+ * then the city has no player at all.
+ *
+ * The nation arm is `nationName`, baked table and all. The tribe arm is
+ * `formatEnum`, which matches what `text-tribe.xml` names 22 of the 23 tribes
+ * the crest and colour bakes cover; `TRIBE_CASSANDER` is the one that
+ * differs — the game calls it "Cassander's Forces". There is no baked
+ * tribe-name table to reach for, so a one-entry `TRIBE_NAMES` bake is what
+ * would fix it, here and for every caller at once.
+ *
+ * `cityOwner` and `unitOwner` (`$lib/game-detail/helpers`) wrap this with the
+ * holder's crest key and colour; reach for one of those where a surface needs
+ * more than the name.
+ */
+export function civilizationName(
+	civilization: string | null | undefined,
+): string {
+	if (civilization?.startsWith("TRIBE_")) {
+		return formatEnum(civilization, "TRIBE_");
+	}
+	return nationName(civilization);
+}
+
+/**
  * How a human seat is labelled in a player picker: the in-game leader name,
  * falling back to the nation for a save that recorded none.
  *

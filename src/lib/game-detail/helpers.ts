@@ -15,6 +15,7 @@ import type { StoryEvent } from "$lib/types/StoryEvent";
 import type { TechDiscoveryDataPoint } from "$lib/types/TechDiscoveryDataPoint";
 import type { ChartOption, LineSeriesOption } from "$lib/echarts";
 import {
+	civilizationName,
 	cognomenName,
 	formatEnum,
 	toRomanNumeral,
@@ -29,6 +30,7 @@ import {
 	getNationChartColor,
 	getSeriesColor,
 } from "$lib/config";
+import { CREST_SPRITE_NAMES, TRIBE_CRESTS } from "$lib/generated/crest-sprites";
 import { SPRITE_MANIFEST } from "$lib/generated/sprite-manifest";
 import { UNIT_STATS } from "$lib/generated/unit-stats";
 import { TECH_NAMES } from "$lib/generated/tech-names";
@@ -274,9 +276,13 @@ export const CITY_COLUMNS: CityColumn[] = [
 		key: "owner_nation",
 		label: "Nation",
 		defaultVisible: true,
-		getValue: (c) => c.owner_nation,
-		format: (v) => nationName(v as string | null),
+		// Whoever HOLDS the city, which is a tribe when no nation does — see
+		// `cityOwner`. `owner_nation` alone read every tribe-held city as
+		// "Unknown", crestless and colourless.
+		getValue: (c) => cityOwner(c.owner_nation, c.tribe).civilization,
+		format: (v) => civilizationName(v as string | null),
 		iconCategory: "crests",
+		iconValue: (c) => cityOwner(c.owner_nation, c.tribe).crestKey,
 	},
 	{
 		key: "founder_nation",
@@ -1397,8 +1403,13 @@ export interface UnitOwner {
 	/** The roster's label for a player — the nation, disambiguated by name only
 	 * in a mirror — or the tribe's name. */
 	label: string;
-	/** NATION_* or TRIBE_*, which is what the crest sprite takes. */
+	/** NATION_* or TRIBE_*, the union `getCivilizationColor` takes. */
 	civilization: string | null;
+	/**
+	 * The crest sprite key for that civilization, which is NOT the raw token
+	 * for a tribe — see `civilizationCrestKey`. Null when no owner resolves.
+	 */
+	crestKey: string | null;
 	/** The colour the unit wears on the map and on its card. */
 	color: string;
 }
@@ -1444,12 +1455,124 @@ export function unitOwner(
 			player?.label ??
 			(unit.player_xml_id != null
 				? `Player ${unit.player_xml_id}`
-				: formatEnum(unit.tribe, "TRIBE_")),
+				: civilizationName(unit.tribe)),
 		civilization,
+		crestKey: civilization != null ? civilizationCrestKey(civilization) : null,
 		color:
 			player?.color ??
 			(civilization != null ? getCivilizationColor(civilization) : undefined) ??
 			getSeriesColor(fallbackIndex),
+	};
+}
+
+/**
+ * The crest sprite key for a tribe: the crest `tribe.xml` gives it — which is
+ * what the game draws for a city the tribe holds (`City.getCrest`,
+ * City.cs:3319, reads `tribeInfo().meCrest` under `isTribe()`) — through the
+ * art name that crest actually ships under, with the generic tribe crest when
+ * neither resolves.
+ *
+ * The raw `TRIBE_*` is NOT the key. It finds the same art for only 7 of the 23
+ * baked tribes: 15 ship no `CREST_TRIBE_<zType>` at all and would render
+ * nothing (`TRIBE_ANARCHY`'s art is `CREST_TRIBE_REBELS`, `TRIBE_BERBERS`
+ * draws the Thracians'), and `TRIBE_SCYTHIANS` would render the wrong one —
+ * its own file ships, but the game draws Kush's crest for it.
+ */
+export function tribeCrestKey(tribe: string): string {
+	const crest = TRIBE_CRESTS[tribe];
+	if (crest) {
+		const sprite = CREST_SPRITE_NAMES[crest] ?? crest;
+		if (SPRITE_MANIFEST[`crests/${sprite}`] != null) {
+			return sprite.replace(/^CREST_/, "");
+		}
+	}
+	return "TRIBE_GENERIC";
+}
+
+/**
+ * The crest sprite key for a civilization — the `NATION_*`/`TRIBE_*` union
+ * `getCivilizationColor` and `civilizationName` take. A nation's crest key IS
+ * its token; a tribe's is not, which is the whole point of `tribeCrestKey`.
+ *
+ * Every surface that crests a holder goes through this, so a tribe can't
+ * render Kush's crest on one and nothing on the next.
+ */
+export function civilizationCrestKey(civilization: string): string {
+	return civilization.startsWith("TRIBE_")
+		? tribeCrestKey(civilization)
+		: civilization;
+}
+
+/**
+ * The tribe a capture hands a city to. `Unit.doCityCapture` (Unit.cs:2004)
+ * calls `setPlayer(PlayerType.NONE, infos().Globals.ANARCHY_TRIBE, ...)`, so
+ * this is the tribe every city under capture carries — as opposed to a city a
+ * real tribe holds, which carries its own. `text-tribe.xml` names it
+ * "Anarchy" (`TEXT_TRIBE_ANARCHY`): the state a breached city sits in until
+ * someone finishes taking it.
+ */
+export const ANARCHY_TRIBE = "TRIBE_ANARCHY";
+
+/** Who holds a city, named, crested and coloured. */
+export interface CityOwner {
+	/** The nation's name, or the tribe's. */
+	label: string;
+	/** NATION_* or TRIBE_*, the union `getCivilizationColor` takes. */
+	civilization: string;
+	/** The crest sprite key for that civilization. */
+	crestKey: string;
+	/** The colour the owner's name draws in. */
+	color: string;
+}
+
+/**
+ * Resolve who holds a city: the nation that owns it, else the TRIBE that does.
+ * `unitOwner` is the same resolution for a unit, and `getCivilizationColor`
+ * covers both baked colour tables, so a tribe's city reads like its units.
+ *
+ * A tribe-held city is not an unowned one. The game writes `<Tribe>` only
+ * under `City.isTribe()` (City.cs:1263) and such a city has no player at all,
+ * so the two arms are exclusive: across the 2,769 city rows in
+ * `test-data/saves/`, 2,687 carry a player and no tribe, 82 a tribe and no
+ * player, and none both. Of those 82, 80 are `TRIBE_ANARCHY` with a capture
+ * field set — the state a capture leaves behind (`Unit.doCityCapture`,
+ * Unit.cs:2004) — 1 is anarchy with the capture finished, and 1 is a real
+ * tribe holding the city outright.
+ *
+ * NEITHER names a holder only on a blob parsed before PARSER_VERSION 2.26.0,
+ * which carries no `<Tribe>` at all — never on a city nobody holds, a row the
+ * corpus does not contain. Measured over the same 2,769 rows: of the 2,687
+ * player-held, none carries a null `owner_nation`; of the 82 player-less,
+ * none omits a tribe. So that case is a player-less city whose tribe went
+ * unrecorded, and it resolves to `ANARCHY_TRIBE` — the state 81 of those 82
+ * are in. Resolving it HERE is what keeps the card, the Cities tab and the
+ * map saying the same thing: a `PARSER_VERSION` bump leaves most stored blobs
+ * on the old shape, so this is the common path, and three callers wording it
+ * for themselves is three readings that disagree.
+ *
+ * `crestKey`'s nation arm is the nation's own crest, the key the Cities tab
+ * has always passed. The hex map resolves that arm further, through the
+ * runtime nation-asset aliases that let a variant nation fall back to its
+ * parent civ's crest; nothing outside the map loads them, which is why
+ * `SpriteMap.resolveCityCrestKey` wraps this rather than replacing it.
+ *
+ * Always answers, so the CALLER decides whether there is a city to ask about:
+ * a tile with no city and no nation, or a turn before the city was founded,
+ * has no holder to name and must not reach this.
+ */
+export function cityOwner(
+	nation: string | null | undefined,
+	tribe: string | null | undefined,
+): CityOwner {
+	// Tribe first, the order `City.getCrest` and `City.getPrimaryPlayerColor`
+	// check in — immaterial on the measured corpus, where the two never both
+	// hold, and the game's answer if a save ever disagrees.
+	const civilization = tribe ?? nation ?? ANARCHY_TRIBE;
+	return {
+		label: civilizationName(civilization),
+		civilization,
+		crestKey: civilizationCrestKey(civilization),
+		color: getCivilizationColor(civilization) ?? "rgb(var(--color-tan))",
 	};
 }
 
