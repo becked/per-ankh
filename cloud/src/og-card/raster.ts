@@ -49,6 +49,14 @@ function initOnce(): Promise<void> {
 /** Rasterize a card SVG to PNG bytes at its own intrinsic size. */
 export async function renderCardPng(svg: string): Promise<Uint8Array> {
 	await initOnce();
+	// Both wasm handles are freed by hand, and the `finally` blocks are why a
+	// throw cannot skip it. resvg's bindings register a wrapped `RenderedImage`
+	// with a FinalizationRegistry, but a directly-constructed `Resvg` is never
+	// registered at all — its constructor sets the pointer and returns, and
+	// `__destroy_into_raw` only ever *unregisters* — so `free()` is the only
+	// thing that reclaims the parsed tree and the font database built with it.
+	// Unfreed, each render would hold its allocation for the isolate's life,
+	// against a 128 MB limit, on a route whose work is cache misses.
 	const resvg = new Resvg(svg, {
 		font: {
 			loadSystemFonts: false,
@@ -56,5 +64,14 @@ export async function renderCardPng(svg: string): Promise<Uint8Array> {
 			defaultFontFamily: CARD_FONT_FAMILY,
 		},
 	});
-	return resvg.render().asPng();
+	try {
+		const rendered = resvg.render();
+		try {
+			return rendered.asPng();
+		} finally {
+			rendered.free();
+		}
+	} finally {
+		resvg.free();
+	}
 }

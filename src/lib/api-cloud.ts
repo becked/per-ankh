@@ -10,6 +10,7 @@ import type {
 	Objective,
 } from "$lib/challenges/types";
 import type { FullGameData } from "$lib/parser/types";
+import { OG_CARD_VERSION } from "$lib/og-card";
 import type { ScreenshotReportReason } from "$lib/screenshots/report-reasons";
 import {
 	DEFAULT_GLOBAL_PERIOD,
@@ -890,11 +891,24 @@ async function downloadResponse(
 // belongs in one place whether the caller means to read the response or hand
 // the URL to a crawler.
 //
-// `version` is the game's `updated_at`, which every writer bumps (the admin
-// reindex included). It is the whole cache key the Worker's year-long TTL
-// stands on: without it a card that changed would keep being served.
+// The URL carries the two halves of the cache key the Worker's year-long TTL
+// stands on, because without them a card that changed would keep being served:
+//
+//   - `v`, the game's `updated_at`. Every writer of a *game row* bumps it, the
+//     admin reindex included. It does not move for a change to anything the
+//     card reads from another table — most visibly the uploader's display
+//     name, which `users` refreshes on every Discord login (cloud/src/auth.ts).
+//     A rename reaches an already-stored card only when the game is next
+//     written; that staleness is accepted rather than fixed, since the
+//     alternative is bumping every one of a user's games on every login.
+//   - `c`, the renderer version (`$lib/og-card`), which `v` cannot cover: a
+//     deploy of a changed card-svg.ts purges nothing.
+//
+// The Worker redirects any other pair to this one, so a URL already pasted
+// into a chat keeps answering — see cloud/src/og-card/handler.ts.
 export function gameCardImageUrl(gameId: string, version: string): string {
-	return `${API_BASE}/games/${gameId}/card.png?v=${encodeURIComponent(version)}`;
+	const v = encodeURIComponent(version);
+	return `${API_BASE}/games/${gameId}/card.png?v=${v}&c=${OG_CARD_VERSION}`;
 }
 
 // The card's pixel size, declared to crawlers as og:image:width/height. Fixed
@@ -1238,8 +1252,10 @@ export const cloudApi = {
 			// its tournament's slug.
 			user_slug?: string | null;
 			display_name?: string | null;
-			// Bumped by every writer of the game, the admin reindex included.
-			// Versions the link-preview card URL — see gameCardImageUrl.
+			// Bumped by every writer of the game ROW, the admin reindex
+			// included — not by a change to another table the card reads.
+			// One of the two segments that version the link-preview card URL;
+			// see gameCardImageUrl for what the other covers.
 			// Optional for the same legacy/observer safety as the fields above.
 			updated_at?: string | null;
 		}

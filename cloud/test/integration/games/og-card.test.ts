@@ -6,7 +6,8 @@
 // this file is for is everything that only shows up once all of it is wired
 // together — that the wasm module compiles and renders, that the fonts the
 // bake produced actually load, that the PNG comes out at the size the meta
-// tags promise, and that the visibility rule and the cache posture hold.
+// tags promise, and that the visibility rule, the cache posture and the
+// canonical-URL rule hold.
 
 import { applyD1Migrations, env, SELF } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -49,6 +50,37 @@ function pngSize(bytes: Uint8Array): { width: number; height: number } {
 	return { width: view.getUint32(16), height: view.getUint32(20) };
 }
 
+async function updatedAt(gameId: string): Promise<string> {
+	const row = await env.SHARE_DB.prepare(
+		`SELECT updated_at FROM games WHERE game_id = ?`,
+	)
+		.bind(gameId)
+		.first<{ updated_at: string }>();
+	if (!row) throw new Error(`no game ${gameId}`);
+	return row.updated_at;
+}
+
+// Ask the Worker which URL it considers canonical, rather than rebuilding it
+// here: `v` and `c` both come from code this test is checking, so a copy of
+// the formula would only ever agree with itself. Any non-canonical request
+// redirects, so the bare path is the cheapest way to be told.
+async function canonicalPath(gameId: string): Promise<string> {
+	const res = await SELF.fetch(`http://test/v1/games/${gameId}/card.png`, {
+		redirect: "manual",
+	});
+	expect(res.status).toBe(302);
+	const location = res.headers.get("Location");
+	expect(location).toBeTruthy();
+	const url = new URL(location!);
+	expect(url.searchParams.get("v")).toBe(await updatedAt(gameId));
+	// The renderer version. Present and non-empty is the whole assertion — its
+	// value is OG_CARD_VERSION (src/lib/og-card.ts), which the Worker and the
+	// page's og:image URL both read from that one module, so they cannot
+	// disagree about it.
+	expect(url.searchParams.get("c")).toMatch(/^\d+$/);
+	return `${url.pathname}${url.search}`;
+}
+
 async function seedPublicGameWithChart(): Promise<string> {
 	const gameId = await seedGame(owner, {
 		isPublic: true,
@@ -66,9 +98,7 @@ async function seedPublicGameWithChart(): Promise<string> {
 describe("GET /v1/games/:id/card.png", () => {
 	it("renders a 1200×630 PNG for a public game", async () => {
 		const gameId = await seedPublicGameWithChart();
-		const res = await request.get({
-			path: `/v1/games/${gameId}/card.png?v=2026-01-01+00%3A00%3A00`,
-		});
+		const res = await request.get({ path: await canonicalPath(gameId) });
 		expect(res.status).toBe(200);
 		expect(res.headers.get("Content-Type")).toBe("image/png");
 		const bytes = new Uint8Array(await res.arrayBuffer());
@@ -80,7 +110,7 @@ describe("GET /v1/games/:id/card.png", () => {
 		// it the wrapper in index.ts rewrites the response `private, no-store`
 		// and every unfurl re-renders the card.
 		const gameId = await seedPublicGameWithChart();
-		const res = await request.get({ path: `/v1/games/${gameId}/card.png` });
+		const res = await request.get({ path: await canonicalPath(gameId) });
 		expect(res.headers.get("Cache-Control")).toBe(
 			"public, max-age=31536000, s-maxage=31536000, immutable",
 		);
@@ -94,10 +124,64 @@ describe("GET /v1/games/:id/card.png", () => {
 		// rows instead of coming out a different size, which is what lets
 		// buildMeta declare one pair of dimensions for every game.
 		const gameId = await seedGame(owner, { isPublic: true });
-		const res = await request.get({ path: `/v1/games/${gameId}/card.png` });
+		const res = await request.get({ path: await canonicalPath(gameId) });
 		expect(res.status).toBe(200);
 		const bytes = new Uint8Array(await res.arrayBuffer());
 		expect(pngSize(bytes)).toEqual({ width: 1200, height: 630 });
+	});
+
+	it("redirects a superseded version pair instead of rendering it", async () => {
+		// The URL in an embed posted before the game was last written. It has
+		// to keep answering — Discord re-fetches an embed's image without
+		// re-reading the page's meta tags — and it must not re-render, because
+		// every distinct pair is its own cache key.
+		const gameId = await seedPublicGameWithChart();
+		const res = await SELF.fetch(
+			`http://test/v1/games/${gameId}/card.png?v=2026-01-01+00%3A00%3A00&c=1`,
+			{ redirect: "manual" },
+		);
+		expect(res.status).toBe(302);
+		expect(res.headers.get("Location")).toBe(
+			`http://test${await canonicalPath(gameId)}`,
+		);
+		// Storable, so a link doing the rounds costs one D1 read an hour, and
+		// short, so a game written in the meantime is picked up by the next
+		// crawl rather than at the end of the card's own year.
+		expect(res.headers.get("Cache-Control")).toBe(
+			"public, max-age=3600, s-maxage=3600",
+		);
+	});
+
+	it("redirects a right `v` with the renderer version missing", async () => {
+		// `c` is the half `updated_at` cannot cover: a deploy that changed
+		// card-svg.ts moves no game row and purges no edge entry.
+		const gameId = await seedPublicGameWithChart();
+		const v = encodeURIComponent(await updatedAt(gameId));
+		const res = await SELF.fetch(
+			`http://test/v1/games/${gameId}/card.png?v=${v}`,
+			{ redirect: "manual" },
+		);
+		expect(res.status).toBe(302);
+		expect(res.headers.get("Location")).toBe(
+			`http://test${await canonicalPath(gameId)}`,
+		);
+	});
+
+	it("gives a spoofed crawler a redirect, not a render, off a made-up `v`", async () => {
+		// The read budget exempts scraper UAs by a prefix test on a header
+		// anyone can send (read-budget.ts), so the canonical-pair check is the
+		// only thing standing between that exemption and unmetered renders on
+		// an endless supply of fresh cache keys.
+		const gameId = await seedPublicGameWithChart();
+		const res = await SELF.fetch(
+			`http://test/v1/games/${gameId}/card.png?v=${nanoid(21)}&c=99999`,
+			{
+				redirect: "manual",
+				headers: { "User-Agent": "Discordbot/2.0 (+https://discordapp.com)" },
+			},
+		);
+		expect(res.status).toBe(302);
+		expect(res.headers.get("Content-Type")).not.toBe("image/png");
 	});
 
 	it("404s a private game, for its owner as much as anyone", async () => {
@@ -123,14 +207,15 @@ describe("GET /v1/games/:id/card.png", () => {
 
 	it("charges the og_card_view budget, and exempts a link-preview crawler", async () => {
 		const gameId = await seedPublicGameWithChart();
+		const path = await canonicalPath(gameId);
 		const before = await countCardViews();
 
-		await SELF.fetch(`http://test/v1/games/${gameId}/card.png`, {
+		await SELF.fetch(`http://test${path}`, {
 			headers: { "User-Agent": "Discordbot/2.0 (+https://discordapp.com)" },
 		});
 		expect(await countCardViews()).toBe(before);
 
-		await request.get({ path: `/v1/games/${gameId}/card.png` });
+		await request.get({ path });
 		expect(await countCardViews()).toBe(before + 1);
 	});
 });

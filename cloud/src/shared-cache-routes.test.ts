@@ -80,8 +80,9 @@ const PUBLIC_DIRECTIVE_SITES: Record<string, number> = {
 	"featured.ts": 1,
 	// handlePublicRecentGames, and handleGameDetail's non-owner branch.
 	"games.ts": 2,
-	// handleGameCard.
-	"og-card/handler.ts": 1,
+	// handleGameCard — twice: the card itself, and the redirect that sends a
+	// superseded version pair to the canonical URL.
+	"og-card/handler.ts": 2,
 	// handleFeaturedScreenshots.
 	"screenshots/handlers.ts": 1,
 	// globalStatsResponse (both /stats reads), handlePlayerLeaderboard,

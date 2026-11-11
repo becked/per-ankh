@@ -2733,10 +2733,8 @@ export async function handleGameList(
 
 // ---------- Public game cards ----------
 
-// The game-row columns the public card shape is assembled from. Each caller
-// writes its own SELECT — the two differ in their WHERE and in nothing else
-// (see assemblePublicGameCards) — so this is the contract between those
-// queries and the assembly, not a query of its own.
+// The game-row columns the public card shape is assembled from — the contract
+// between publicGameCardSelectSql below and assemblePublicGameCards.
 export interface PublicGameCardRow {
 	game_id: string;
 	game_name: string | null;
@@ -2760,6 +2758,44 @@ export interface PublicGameCardRow {
 	uploader_slug: string | null;
 	uploader_discord_id: string;
 	uploader_avatar_hash: string | null;
+}
+
+// The SELECT list and joins behind every PublicGameCardRow, shared by the two
+// queries that produce one: the home feed (handlePublicRecentGames) and the
+// per-game link-preview card (og-card/handler.ts). They differ in their
+// WHERE/ORDER BY/LIMIT and in nothing else, which is exactly the shape that
+// drifts when it is written twice — a column added for one card surface has to
+// reach the other, since both feed the same assembly.
+//
+// COALESCE(g.user_nation, …) supplies a usable nation for observer-mode
+// uploads, so a card's player crest matches the game-detail header — see
+// listGames.
+//
+// `extraColumns` is appended to the list for a caller that needs more than the
+// card shape: the OG card also reads `g.updated_at`, to decide whether the URL
+// it was asked for is the canonical one. The feed has no use for it and does
+// not return it.
+export function publicGameCardSelectSql(
+	extraColumns: readonly string[] = [],
+): string {
+	const extra = extraColumns.map((c) => `,\n\t\t        ${c}`).join("");
+	return `SELECT g.game_id, g.game_name, g.display_name,
+		        COALESCE(g.user_nation, (
+		            SELECT ps.nation FROM player_summaries ps
+		            WHERE ps.game_id = g.game_id AND ps.is_human = 1
+		            ORDER BY ps.player_index ASC LIMIT 1
+		        )) AS user_nation,
+		        g.user_won,
+		        g.winner_nation, g.winner_name, g.victory_type,
+		        g.map_size, g.map_class, g.difficulty, g.total_turns,
+		        g.save_date, g.created_at,
+		        g.user_id AS uploader_user_id,
+		        ${displayNameSql("u")} AS uploader_display_name,
+		        u.slug AS uploader_slug,
+		        u.discord_id AS uploader_discord_id,
+		        u.avatar_hash AS uploader_avatar_hash${extra}
+		 FROM games g
+		 JOIN users u ON g.user_id = u.user_id`;
 }
 
 export interface PublicGameCardPlayer {
@@ -2998,27 +3034,12 @@ export async function handlePublicRecentGames(
 
 	const PUBLIC_RECENT_LIMIT = 20;
 
-	// Latest public games + uploader display name. COALESCE(g.user_nation, …)
-	// supplies a usable nation for observer-mode uploads so the home cards'
-	// player crest matches the game-detail header — see listGames.
+	// Latest public games + uploader display name. Columns and joins from
+	// publicGameCardSelectSql, shared with the per-game OG card; what is left
+	// here is the only thing that differs — the feed drops challenge runs,
+	// which are forced public on upload, and takes the newest twenty.
 	const gameRows = await env.SHARE_DB.prepare(
-		`SELECT g.game_id, g.game_name, g.display_name,
-		        COALESCE(g.user_nation, (
-		            SELECT ps.nation FROM player_summaries ps
-		            WHERE ps.game_id = g.game_id AND ps.is_human = 1
-		            ORDER BY ps.player_index ASC LIMIT 1
-		        )) AS user_nation,
-		        g.user_won,
-		        g.winner_nation, g.winner_name, g.victory_type,
-		        g.map_size, g.map_class, g.difficulty, g.total_turns,
-		        g.save_date, g.created_at,
-		        g.user_id AS uploader_user_id,
-		        ${displayNameSql("u")} AS uploader_display_name,
-		        u.slug AS uploader_slug,
-		        u.discord_id AS uploader_discord_id,
-		        u.avatar_hash AS uploader_avatar_hash
-		 FROM games g
-		 JOIN users u ON g.user_id = u.user_id
+		`${publicGameCardSelectSql()}
 		 WHERE g.is_public = 1
 		   AND ${noChallengeRunsSql("g")}
 		 ORDER BY g.save_date DESC NULLS LAST, g.created_at DESC
@@ -3108,7 +3129,8 @@ export async function handleGameDetail(
 			display_name: string | null;
 			// Part of the blob cache key — see cacheKey in blob-cache.ts.
 			parser_version: string;
-			// Bumped by every writer of this game, the admin reindex included.
+			// Bumped by every writer of this game's ROW, the admin reindex
+			// included — not by a change to another table the card reads.
 			// Returned below so the page can version its og:image URL — see
 			// buildMeta in src/routes/games/[id]/+layout.ts.
 			updated_at: string;

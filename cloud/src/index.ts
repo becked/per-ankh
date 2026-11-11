@@ -517,9 +517,10 @@ const ROUTES: RouteSpec[] = [
 		sharedCache: true,
 	},
 	{
-		// The link-preview image. `?v=<updated_at>` versions it; the handler
-		// ignores the parameter and the cache keys on it, which is what lets
-		// the response be immutable for a year.
+		// The link-preview image. `?v=<updated_at>&c=<renderer version>`
+		// versions it, and the cache keys on the pair, which is what lets the
+		// response be immutable for a year. The handler renders only the
+		// canonical pair and redirects everything else to it.
 		method: "GET",
 		match: {
 			kind: "regex",

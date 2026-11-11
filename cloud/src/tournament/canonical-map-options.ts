@@ -3,10 +3,13 @@
 // Mirror of the data in src/lib/generated/{map-option-defs,map-script-options}.ts.
 // Keep these two in sync when re-baking or when a new DLC ships.
 //
-// Why duplicated: cloud/ is a separate package with its own tsconfig
-// (cloud/tsconfig.json), bundled by wrangler/esbuild — importing from
-// ../../../src/lib/generated/* would pull in SvelteKit-shaped path
-// resolution the Worker bundle doesn't need.
+// Why duplicated: nothing in the bundle stops the direct import. Both modules
+// mirrored here are standalone data tables with no imports of their own, so
+// there is no path resolution to drag in, and this Worker already ships one of
+// them — og-card/card-svg.ts reaches src/lib/generated/map-option-defs.ts
+// through src/lib/map-settings.ts. What keeps the mirror is that collapsing it
+// means reconciling the drift the regeneration test below is red on, which is
+// #115/#141's work.
 //
 // Drift safety nets:
 //   - canonical-map-options.test.ts: asserts this file matches the

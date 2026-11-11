@@ -462,6 +462,12 @@ export function buildCardSvg(game: PublicGameCard): string {
 	// returns `YYYY-MM-DD` or "Unknown" and nothing else, so one width holds
 	// every card — and sizing it to the string is the one thing on this card
 	// that would need a text measurement.
+	//
+	// The one constant below not derived from the component's spacing × SCALE,
+	// so it is derived from the string instead: in the baked 400 face, the
+	// widest ten characters `formatDate` can return ("4" is the widest digit)
+	// advance 146.1px at PILL_SIZE, and "Unknown" 107.6px. 150 is the next
+	// round number above the worst case.
 	const pillText =
 		game.save_date && formatDate(game.save_date) !== "Unknown"
 			? formatDate(game.save_date)

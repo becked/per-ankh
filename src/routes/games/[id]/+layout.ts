@@ -52,7 +52,8 @@ function gameTitle(game: {
 //
 // The image is this game's own card — the Worker's render of the home feed's
 // RecentSaveCard (cloud/src/og-card/), versioned on `updated_at` so a reindex
-// or a rename is a new URL. It is offered for a game the Worker will actually
+// or a rename is a new URL, and on the renderer's own version so a redraw is
+// too (gameCardImageUrl). It is offered for a game the Worker will actually
 // serve a card for: one that is public, and one whose `updated_at` the
 // payload carried. Everything else falls through to the brand card the root
 // layout supplies, which is what every unfurl got before this.
