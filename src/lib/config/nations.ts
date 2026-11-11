@@ -15,7 +15,7 @@ import {
 	NATION_COLORS,
 	TRIBE_BORDER_COLOR,
 	TRIBE_COLORS,
-} from "$lib/generated/civilization-colors";
+} from "../generated/civilization-colors";
 
 import { getChartColor } from "./charts";
 

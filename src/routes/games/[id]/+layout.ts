@@ -1,10 +1,12 @@
 import { error, redirect } from "@sveltejs/kit";
 import {
 	cloudApi,
+	gameCardImageUrl,
 	ApiError,
 	UnauthorizedError,
 	type CollectionInfo,
 } from "$lib/api-cloud";
+import { CARD_HEIGHT, CARD_WIDTH } from "$lib/og-card";
 import type { PageMeta } from "$lib/page-meta";
 import { formatEnum, formatGameTitle, nationName } from "$lib/utils/formatting";
 import { rethrowRateLimit } from "$lib/utils/load-errors";
@@ -46,11 +48,24 @@ function gameTitle(game: {
 // Build the OG/Twitter description from match metadata. Same shape that
 // used to live inline in +page.svelte's <svelte:head>; moved here so
 // social-link unfurls work without the page mounting.
-function buildMeta(game: {
-	game_details: Record<string, unknown>;
-	display_name?: string | null;
-	user_nation?: string | null;
-}): PageMeta {
+//
+// The image is this game's own card — the Worker's render of the home feed's
+// RecentSaveCard (cloud/src/og-card/), versioned on `updated_at` so a reindex
+// or a rename is a new URL, and on the renderer's own version so a redraw is
+// too (gameCardImageUrl). It is offered for a game the Worker will actually
+// serve a card for: one that is public, and one whose `updated_at` the
+// payload carried. Everything else falls through to the brand card the root
+// layout supplies, which is what every unfurl got before this.
+function buildMeta(
+	gameId: string,
+	game: {
+		game_details: Record<string, unknown>;
+		display_name?: string | null;
+		user_nation?: string | null;
+		is_public?: boolean;
+		updated_at?: string | null;
+	},
+): PageMeta {
 	const gd = game.game_details as {
 		winner_civilization?: string | null;
 		winner_name?: string | null;
@@ -72,7 +87,33 @@ function buildMeta(game: {
 		parts.length > 0 ? parts.join(", ") : "An Old World save game on Per-Ankh.";
 	// The same title the page renders above the view, so the <head>/OG title
 	// matches what the user sees.
-	return { title: `${gameTitle(game)} - Per-Ankh`, description };
+	//
+	// Two fields decide whether there is a card to point at, and a missing one
+	// is never a 404 — it is simply no `image`, which the root layout fills
+	// with the brand card, exactly as every unfurl did before this.
+	//
+	// `is_public` is injected only on an OWNER's payload (cloud/src/games.ts),
+	// so its absence means the viewer is not the owner — and a non-owner could
+	// not have loaded this game at all unless it is public. Present and false
+	// is the one case that has to opt out: the owner's own private game, which
+	// the Worker serves no card for.
+	//
+	// `updated_at` is what versions the URL, and a Worker that predates it
+	// returns none. Owner and non-owner alike then fall through to the brand
+	// card rather than to a card URL with nothing to version it.
+	const cardVersion =
+		game.is_public === false ? null : (game.updated_at ?? null);
+	return {
+		title: `${gameTitle(game)} - Per-Ankh`,
+		description,
+		image: cardVersion
+			? {
+					url: gameCardImageUrl(gameId, cardVersion),
+					width: CARD_WIDTH,
+					height: CARD_HEIGHT,
+				}
+			: undefined,
+	};
 }
 
 // Translate the API's `ApiError` into the right SvelteKit response —
@@ -198,6 +239,6 @@ export const load: LayoutLoad = async ({ params, fetch, url }) => {
 		// game fields of their own, and GameHeader reads it off `page.data` for
 		// the breadcrumb on all three views.
 		gameName: gameTitle(game),
-		meta: buildMeta(game),
+		meta: buildMeta(params.id, game),
 	};
 };

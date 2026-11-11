@@ -120,6 +120,8 @@ export interface GamesEnv extends SessionEnv, EventsEnv, ScreenshotStorageEnv {
 	// constants there are the defaults.
 	CHALLENGE_VIEW_PER_HOUR?: string;
 	CHALLENGE_LINK_VIEW_PER_HOUR?: string;
+	// Link-preview card read ceiling (og-card/handler.ts) — same shape.
+	OG_CARD_VIEW_PER_HOUR?: string;
 }
 
 // Size limits (spec §4). The challenge-map upload shares them — the map is
@@ -229,7 +231,8 @@ export type RateLimitedEventType =
 	| "challenge_create"
 	| "screenshot_upload_attempt"
 	| "screenshot_view"
-	| "screenshot_report";
+	| "screenshot_report"
+	| "og_card_view";
 
 // Upload rate limits cover both first-time uploads and re-imports — both
 // hit the same R2 puts + D1 batch, so they cost the same.
@@ -2728,6 +2731,254 @@ export async function handleGameList(
 	return jsonResponse({ games, total: total?.count ?? 0 }, 200, cors);
 }
 
+// ---------- Public game cards ----------
+
+// The game-row columns the public card shape is assembled from — the contract
+// between publicGameCardSelectSql below and assemblePublicGameCards.
+export interface PublicGameCardRow {
+	game_id: string;
+	game_name: string | null;
+	display_name: string | null;
+	user_nation: string | null;
+	user_won: number | null;
+	winner_nation: string | null;
+	winner_name: string | null;
+	victory_type: string | null;
+	map_size: string | null;
+	map_class: string | null;
+	difficulty: string | null;
+	total_turns: number;
+	save_date: string | null;
+	created_at: string;
+	uploader_user_id: string;
+	uploader_display_name: string;
+	// Prefixed like the other uploader columns: a game row is one of the
+	// flattened shapes Decision 1 (#186) names, so a bare `slug` here would
+	// read as the game's own.
+	uploader_slug: string | null;
+	uploader_discord_id: string;
+	uploader_avatar_hash: string | null;
+}
+
+// The SELECT list and joins behind every PublicGameCardRow, shared by the two
+// queries that produce one: the home feed (handlePublicRecentGames) and the
+// per-game link-preview card (og-card/handler.ts). They differ in their
+// WHERE/ORDER BY/LIMIT and in nothing else, which is exactly the shape that
+// drifts when it is written twice — a column added for one card surface has to
+// reach the other, since both feed the same assembly.
+//
+// COALESCE(g.user_nation, …) supplies a usable nation for observer-mode
+// uploads, so a card's player crest matches the game-detail header — see
+// listGames.
+//
+// `extraColumns` is appended to the list for a caller that needs more than the
+// card shape: the OG card also reads `g.updated_at`, to decide whether the URL
+// it was asked for is the canonical one. The feed has no use for it and does
+// not return it.
+export function publicGameCardSelectSql(
+	extraColumns: readonly string[] = [],
+): string {
+	const extra = extraColumns.map((c) => `,\n\t\t        ${c}`).join("");
+	return `SELECT g.game_id, g.game_name, g.display_name,
+		        COALESCE(g.user_nation, (
+		            SELECT ps.nation FROM player_summaries ps
+		            WHERE ps.game_id = g.game_id AND ps.is_human = 1
+		            ORDER BY ps.player_index ASC LIMIT 1
+		        )) AS user_nation,
+		        g.user_won,
+		        g.winner_nation, g.winner_name, g.victory_type,
+		        g.map_size, g.map_class, g.difficulty, g.total_turns,
+		        g.save_date, g.created_at,
+		        g.user_id AS uploader_user_id,
+		        ${displayNameSql("u")} AS uploader_display_name,
+		        u.slug AS uploader_slug,
+		        u.discord_id AS uploader_discord_id,
+		        u.avatar_hash AS uploader_avatar_hash${extra}
+		 FROM games g
+		 JOIN users u ON g.user_id = u.user_id`;
+}
+
+export interface PublicGameCardPlayer {
+	player_index: number;
+	player_name: string;
+	nation: string | null;
+	is_human: boolean;
+	is_uploader: boolean;
+	is_winner: boolean;
+	final_points: number | null;
+	cities_total: number | null;
+	techs_completed: number | null;
+	laws_count: number | null;
+	vp_series: Array<{ turn: number; vp: number | null }>;
+	momentum_series: Array<{ turn: number; p: number }>;
+}
+
+export type PublicGameCard = Omit<
+	PublicGameCardRow,
+	"user_won" | "uploader_discord_id" | "uploader_avatar_hash"
+> & {
+	user_won: boolean | null;
+	uploader_avatar_url: string;
+	players: PublicGameCardPlayer[];
+};
+
+// Everything the home feed's card shape needs beyond the game row itself: the
+// player roster and the two per-turn series, indexed and attached.
+//
+// Shared by the feed (handlePublicRecentGames) and the per-game OG card
+// (og-card/handler.ts), which render the same card from the same fields. Only
+// the game-row query differs between them, and it differs in ways that can't
+// be folded into one: the feed drops challenge runs and takes the newest
+// twenty, while the card is one game by id and must serve a challenge run's
+// own page. Everything downstream of the rows is identical for N=20 and N=1,
+// so it lives here once.
+//
+// `games` must be non-empty — the fan-outs build an `IN (…)` from it. Both
+// callers already know: the feed returns an empty list before reaching here,
+// and the card has exactly one row or a 404.
+export async function assemblePublicGameCards(
+	db: QueryableD1,
+	games: readonly PublicGameCardRow[],
+): Promise<PublicGameCard[]> {
+	const gameIds = games.map((g) => g.game_id);
+	const placeholders = gameIds.map(() => "?").join(", ");
+
+	// The two fan-outs go out together: both bind only `gameIds` and neither
+	// reads the other, so awaiting them in sequence paid a second crossing to
+	// ENAM for nothing. Three blocking round trips rather than four — the
+	// game list above still has to land first, since it is what supplies
+	// `gameIds`.
+	const [playerRows, seriesRows] = await Promise.all([
+		// Player summaries for every game in the list — humans AND AI. The
+		// sparkline renders every nation; AI lines fill in the picture of how
+		// the game played out, not just the human seats.
+		//
+		// cities_total / techs_completed / laws_count + is_winner power the
+		// home's Nations-card-style featured-player block, mirroring the
+		// Overview tab's per-player card.
+		db
+			.prepare(
+				`SELECT game_id, player_index, player_name, nation, is_human, is_uploader,
+			        is_winner, final_points, cities_total, techs_completed, laws_count
+			 FROM player_summaries
+			 WHERE game_id IN (${placeholders})
+			 ORDER BY game_id, player_index`,
+			)
+			.bind(...gameIds)
+			.all<{
+				game_id: string;
+				player_index: number;
+				player_name: string;
+				nation: string | null;
+				is_human: number;
+				is_uploader: number;
+				is_winner: number;
+				final_points: number | null;
+				cities_total: number | null;
+				techs_completed: number | null;
+				laws_count: number | null;
+			}>(),
+		// Per-turn victory points for every player — humans and AI.
+		db
+			.prepare(
+				`SELECT game_id, player_index, turn, points, momentum
+			 FROM game_player_turn
+			 WHERE game_id IN (${placeholders})
+			 ORDER BY game_id, player_index, turn`,
+			)
+			.bind(...gameIds)
+			.all<{
+				game_id: string;
+				player_index: number;
+				turn: number;
+				points: number | null;
+				momentum: number | null;
+			}>(),
+	]);
+
+	// Index series rows by (game_id, player_index) so the assembly loop
+	// stays O(N) instead of N² scans. Skip NULL points: games uploaded
+	// before the points ingest (and not yet reindexed via /admin/reindex)
+	// have rows with NULL points — emitting them would draw a flat-zero
+	// line. Dropping them leaves vp_series empty so the card's hasSparkline
+	// guard hides the chart until the game is backfilled.
+	const seriesByPlayer = new Map<string, Array<{ turn: number; vp: number }>>();
+	// Momentum rides the same rows; NULL everywhere for FFA / not-yet-reindexed
+	// games, which leaves the card on its VP fallback.
+	const momentumByPlayer = new Map<
+		string,
+		Array<{ turn: number; p: number }>
+	>();
+	for (const r of seriesRows.results ?? []) {
+		const key = `${r.game_id}:${r.player_index}`;
+		if (r.points !== null) {
+			let arr = seriesByPlayer.get(key);
+			if (!arr) {
+				arr = [];
+				seriesByPlayer.set(key, arr);
+			}
+			arr.push({ turn: r.turn, vp: r.points });
+		}
+		if (r.momentum !== null) {
+			let arr = momentumByPlayer.get(key);
+			if (!arr) {
+				arr = [];
+				momentumByPlayer.set(key, arr);
+			}
+			arr.push({ turn: r.turn, p: r.momentum });
+		}
+	}
+
+	const playersByGame = new Map<string, PublicGameCardPlayer[]>();
+	for (const r of playerRows.results ?? []) {
+		let arr = playersByGame.get(r.game_id);
+		if (!arr) {
+			arr = [];
+			playersByGame.set(r.game_id, arr);
+		}
+		arr.push({
+			player_index: r.player_index,
+			player_name: r.player_name,
+			nation: r.nation,
+			is_human: r.is_human === 1,
+			is_uploader: r.is_uploader === 1,
+			is_winner: r.is_winner === 1,
+			final_points: r.final_points,
+			cities_total: r.cities_total,
+			techs_completed: r.techs_completed,
+			laws_count: r.laws_count,
+			vp_series: seriesByPlayer.get(`${r.game_id}:${r.player_index}`) ?? [],
+			momentum_series:
+				momentumByPlayer.get(`${r.game_id}:${r.player_index}`) ?? [],
+		});
+	}
+
+	return games.map((g) => ({
+		game_id: g.game_id,
+		game_name: g.game_name,
+		display_name: g.display_name,
+		user_nation: g.user_nation,
+		user_won: coerceD1Bool(g.user_won),
+		winner_nation: g.winner_nation,
+		winner_name: g.winner_name,
+		victory_type: g.victory_type,
+		map_size: g.map_size,
+		map_class: g.map_class,
+		difficulty: g.difficulty,
+		total_turns: g.total_turns,
+		save_date: g.save_date,
+		created_at: g.created_at,
+		uploader_user_id: g.uploader_user_id,
+		uploader_display_name: g.uploader_display_name,
+		uploader_slug: g.uploader_slug,
+		uploader_avatar_url: buildAvatarUrl(
+			g.uploader_discord_id,
+			g.uploader_avatar_hash,
+		),
+		players: playersByGame.get(g.game_id) ?? [],
+	}));
+}
+
 // GET /v1/games/public-recent — anonymous, IP-rate-limited list of the most
 // recent is_public=1 games across all users. Used to populate the marketing
 // home page (src/routes/+page.svelte) with a discovery feed. Each row carries
@@ -2783,214 +3034,26 @@ export async function handlePublicRecentGames(
 
 	const PUBLIC_RECENT_LIMIT = 20;
 
-	// Latest public games + uploader display name. COALESCE(g.user_nation, …)
-	// supplies a usable nation for observer-mode uploads so the home cards'
-	// player crest matches the game-detail header — see listGames.
+	// Latest public games + uploader display name. Columns and joins from
+	// publicGameCardSelectSql, shared with the per-game OG card; what is left
+	// here is the only thing that differs — the feed drops challenge runs,
+	// which are forced public on upload, and takes the newest twenty.
 	const gameRows = await env.SHARE_DB.prepare(
-		`SELECT g.game_id, g.game_name, g.display_name,
-		        COALESCE(g.user_nation, (
-		            SELECT ps.nation FROM player_summaries ps
-		            WHERE ps.game_id = g.game_id AND ps.is_human = 1
-		            ORDER BY ps.player_index ASC LIMIT 1
-		        )) AS user_nation,
-		        g.user_won,
-		        g.winner_nation, g.winner_name, g.victory_type,
-		        g.map_size, g.map_class, g.difficulty, g.total_turns,
-		        g.save_date, g.created_at,
-		        g.user_id AS uploader_user_id,
-		        ${displayNameSql("u")} AS uploader_display_name,
-		        u.slug AS uploader_slug,
-		        u.discord_id AS uploader_discord_id,
-		        u.avatar_hash AS uploader_avatar_hash
-		 FROM games g
-		 JOIN users u ON g.user_id = u.user_id
+		`${publicGameCardSelectSql()}
 		 WHERE g.is_public = 1
 		   AND ${noChallengeRunsSql("g")}
 		 ORDER BY g.save_date DESC NULLS LAST, g.created_at DESC
 		 LIMIT ?`,
 	)
 		.bind(PUBLIC_RECENT_LIMIT)
-		.all<{
-			game_id: string;
-			game_name: string | null;
-			display_name: string | null;
-			user_nation: string | null;
-			user_won: number | null;
-			winner_nation: string | null;
-			winner_name: string | null;
-			victory_type: string | null;
-			map_size: string | null;
-			map_class: string | null;
-			difficulty: string | null;
-			total_turns: number;
-			save_date: string | null;
-			created_at: string;
-			uploader_user_id: string;
-			uploader_display_name: string;
-			// Prefixed like the other uploader columns: a game row is one of the
-			// flattened shapes Decision 1 (#186) names, so a bare `slug` here would
-			// read as the game's own.
-			uploader_slug: string | null;
-			uploader_discord_id: string;
-			uploader_avatar_hash: string | null;
-		}>();
+		.all<PublicGameCardRow>();
 
 	const games = gameRows.results ?? [];
 	if (games.length === 0) {
 		return jsonResponse({ games: [] }, 200, cors);
 	}
 
-	const gameIds = games.map((g) => g.game_id);
-	const placeholders = gameIds.map(() => "?").join(", ");
-
-	// The two fan-outs go out together: both bind only `gameIds` and neither
-	// reads the other, so awaiting them in sequence paid a second crossing to
-	// ENAM for nothing. Three blocking round trips rather than four — the
-	// game list above still has to land first, since it is what supplies
-	// `gameIds`.
-	const [playerRows, seriesRows] = await Promise.all([
-		// Player summaries for every game in the list — humans AND AI. The
-		// sparkline renders every nation; AI lines fill in the picture of how
-		// the game played out, not just the human seats.
-		//
-		// cities_total / techs_completed / laws_count + is_winner power the
-		// home's Nations-card-style featured-player block, mirroring the
-		// Overview tab's per-player card.
-		env.SHARE_DB.prepare(
-			`SELECT game_id, player_index, player_name, nation, is_human, is_uploader,
-			        is_winner, final_points, cities_total, techs_completed, laws_count
-			 FROM player_summaries
-			 WHERE game_id IN (${placeholders})
-			 ORDER BY game_id, player_index`,
-		)
-			.bind(...gameIds)
-			.all<{
-				game_id: string;
-				player_index: number;
-				player_name: string;
-				nation: string | null;
-				is_human: number;
-				is_uploader: number;
-				is_winner: number;
-				final_points: number | null;
-				cities_total: number | null;
-				techs_completed: number | null;
-				laws_count: number | null;
-			}>(),
-		// Per-turn victory points for every player — humans and AI.
-		env.SHARE_DB.prepare(
-			`SELECT game_id, player_index, turn, points, momentum
-			 FROM game_player_turn
-			 WHERE game_id IN (${placeholders})
-			 ORDER BY game_id, player_index, turn`,
-		)
-			.bind(...gameIds)
-			.all<{
-				game_id: string;
-				player_index: number;
-				turn: number;
-				points: number | null;
-				momentum: number | null;
-			}>(),
-	]);
-
-	// Index series rows by (game_id, player_index) so the assembly loop
-	// stays O(N) instead of N² scans. Skip NULL points: games uploaded
-	// before the points ingest (and not yet reindexed via /admin/reindex)
-	// have rows with NULL points — emitting them would draw a flat-zero
-	// line. Dropping them leaves vp_series empty so the card's hasSparkline
-	// guard hides the chart until the game is backfilled.
-	const seriesByPlayer = new Map<string, Array<{ turn: number; vp: number }>>();
-	// Momentum rides the same rows; NULL everywhere for FFA / not-yet-reindexed
-	// games, which leaves the card on its VP fallback.
-	const momentumByPlayer = new Map<
-		string,
-		Array<{ turn: number; p: number }>
-	>();
-	for (const r of seriesRows.results ?? []) {
-		const key = `${r.game_id}:${r.player_index}`;
-		if (r.points !== null) {
-			let arr = seriesByPlayer.get(key);
-			if (!arr) {
-				arr = [];
-				seriesByPlayer.set(key, arr);
-			}
-			arr.push({ turn: r.turn, vp: r.points });
-		}
-		if (r.momentum !== null) {
-			let arr = momentumByPlayer.get(key);
-			if (!arr) {
-				arr = [];
-				momentumByPlayer.set(key, arr);
-			}
-			arr.push({ turn: r.turn, p: r.momentum });
-		}
-	}
-
-	const playersByGame = new Map<
-		string,
-		Array<{
-			player_index: number;
-			player_name: string;
-			nation: string | null;
-			is_human: boolean;
-			is_uploader: boolean;
-			is_winner: boolean;
-			final_points: number | null;
-			cities_total: number | null;
-			techs_completed: number | null;
-			laws_count: number | null;
-			vp_series: Array<{ turn: number; vp: number | null }>;
-			momentum_series: Array<{ turn: number; p: number }>;
-		}>
-	>();
-	for (const r of playerRows.results ?? []) {
-		let arr = playersByGame.get(r.game_id);
-		if (!arr) {
-			arr = [];
-			playersByGame.set(r.game_id, arr);
-		}
-		arr.push({
-			player_index: r.player_index,
-			player_name: r.player_name,
-			nation: r.nation,
-			is_human: r.is_human === 1,
-			is_uploader: r.is_uploader === 1,
-			is_winner: r.is_winner === 1,
-			final_points: r.final_points,
-			cities_total: r.cities_total,
-			techs_completed: r.techs_completed,
-			laws_count: r.laws_count,
-			vp_series: seriesByPlayer.get(`${r.game_id}:${r.player_index}`) ?? [],
-			momentum_series:
-				momentumByPlayer.get(`${r.game_id}:${r.player_index}`) ?? [],
-		});
-	}
-
-	const responseGames = games.map((g) => ({
-		game_id: g.game_id,
-		game_name: g.game_name,
-		display_name: g.display_name,
-		user_nation: g.user_nation,
-		user_won: coerceD1Bool(g.user_won),
-		winner_nation: g.winner_nation,
-		winner_name: g.winner_name,
-		victory_type: g.victory_type,
-		map_size: g.map_size,
-		map_class: g.map_class,
-		difficulty: g.difficulty,
-		total_turns: g.total_turns,
-		save_date: g.save_date,
-		created_at: g.created_at,
-		uploader_user_id: g.uploader_user_id,
-		uploader_display_name: g.uploader_display_name,
-		uploader_slug: g.uploader_slug,
-		uploader_avatar_url: buildAvatarUrl(
-			g.uploader_discord_id,
-			g.uploader_avatar_hash,
-		),
-		players: playersByGame.get(g.game_id) ?? [],
-	}));
+	const responseGames = await assemblePublicGameCards(env.SHARE_DB, games);
 
 	// Public cache: 60s edge, 5min browser. Short TTL keeps newly uploaded
 	// public games surfacing on the home page within a minute.
@@ -3045,7 +3108,7 @@ export async function handleGameDetail(
 	// players-array fallback now that this query supplies a usable value.
 	const row = await env.SHARE_DB.prepare(
 		`SELECT g.user_id, g.is_public, g.display_name, g.user_won,
-		        g.parser_version,
+		        g.parser_version, g.updated_at,
 		        g.user_nation AS uploader_nation,
 		        ${uploaderPlayerIndexSql("g")} AS uploader_player_index,
 		        COALESCE(g.user_nation, (
@@ -3066,6 +3129,11 @@ export async function handleGameDetail(
 			display_name: string | null;
 			// Part of the blob cache key — see cacheKey in blob-cache.ts.
 			parser_version: string;
+			// Bumped by every writer of this game's ROW, the admin reindex
+			// included — not by a change to another table the card reads.
+			// Returned below so the page can version its og:image URL — see
+			// buildMeta in src/routes/games/[id]/+layout.ts.
+			updated_at: string;
 			user_nation: string | null;
 			// Raw uploader choice (un-COALESCE'd); null = observer upload.
 			// Distinct from user_nation above, which falls back to the first
@@ -3187,6 +3255,10 @@ export async function handleGameDetail(
 		user_display_name: row.user_display_name,
 		user_slug: row.user_slug,
 		display_name: row.display_name,
+		// The link-preview card's cache-busting version. Served to owner and
+		// non-owner alike: the <head> is rendered the same for both, and the
+		// card itself is public.
+		updated_at: row.updated_at,
 	};
 	const bodyText = JSON.stringify(transformed);
 
@@ -4220,7 +4292,18 @@ export async function handleAdminReindex(
 	// Delete-then-rebuild all derived child tables in a single batch. The
 	// games row is never INSERT OR REPLACEd, so its ON DELETE CASCADE doesn't
 	// fire — these explicit DELETEs are what clear the prior child rows.
+	//
+	// The games row itself is touched for one reason: `updated_at` means
+	// "anything about this game changed", the sense `tournaments.updated_at`
+	// already has (bumpTournamentUpdatedAt). A reindex rewrites
+	// player_summaries and game_player_turn, which is what the link-preview
+	// card is drawn from and what backfills vp_series/momentum_series for an
+	// older game — so the operation most likely to turn "no sparkline" into
+	// "sparkline" is exactly the one a key built on updated_at must not miss.
 	const statements: D1PreparedStatement[] = [
+		env.SHARE_DB.prepare(
+			"UPDATE games SET updated_at = datetime('now') WHERE game_id = ?",
+		).bind(gameId),
 		env.SHARE_DB.prepare("DELETE FROM player_summaries WHERE game_id = ?").bind(
 			gameId,
 		),

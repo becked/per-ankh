@@ -119,6 +119,11 @@ npm run bake:victory-points    # victory-points.ts (every term of `Player.countV
 npm run bake:dynasty-traits    # dynasty-traits.ts (src/ AND cloud/src/; the traits the game
                                # ties to a historical ruler) + leader-traits.ts (frontend only)
 npm run bake:theology-tiers    # theology-tiers.ts (src/ AND cloud/src/; each theology's tier)
+npm run bake:card-fonts        # cloud/src/generated/card-fonts.ts — the two static Inter
+                               # instances the link-preview card's rasterizer needs, from
+                               # static/fonts/InterVariable-latin-opsz.woff2. The ONE baker
+                               # whose source is neither Reference/XML nor pinacotheca, so
+                               # it runs on any checkout; see "Re-bake when" for its trigger
 ```
 
 Not a table baker at all — `bake:challenge-mirror` regenerates the Worker's copy of the challenge scorer from the frontend source, the way `bake:momentum -- --mirror-only` does for momentum. It reads no XML, and it is in `bake:all`, so a full bake leaves no mirror stale; `cloud/src/challenges/mirror.test.ts` fails when an on-disk mirror isn't what the transform produces:
@@ -134,7 +139,7 @@ npm run bake:finalize          # Emits committed manifest TS modules + reconcile
 npm run bake:all               # Every baker above except owtt + momentum, then finalize
 ```
 
-`bake:all` runs 38 of the 40 bakers above, then `finalize`. The fences above group them by route, not by run order — which lives only in the `bake:all` chain in `package.json`, where a new baker goes at the position it needs to run. It deliberately omits `bake:owtt` and `bake:momentum` — rerun those by hand when their sources change. Membership doesn't follow from what a baker reads: `bake:atlas-pool` needs an owtournamentatlas checkout and is in `bake:all`, while `bake:owtt` needs one of its own and isn't — so a new baker records its choice here either way. Separately, `bake:favicon` / `bake:og` generate site icons and OG images, and the UX-review bundle under `docs/ux-review/` is captured by `./per-ankh ux-review` (a CLI command, not an npm script).
+`bake:all` runs 38 of the 41 bakers above, then `finalize`. The fences above group them by route, not by run order — which lives only in the `bake:all` chain in `package.json`, where a new baker goes at the position it needs to run. It deliberately omits `bake:owtt`, `bake:momentum` and `bake:card-fonts` — rerun those by hand when their sources change. Membership doesn't follow from what a baker reads: `bake:atlas-pool` needs an owtournamentatlas checkout and is in `bake:all`, while `bake:owtt` needs one of its own and isn't — so a new baker records its choice here either way. Separately, `bake:favicon` / `bake:og` generate site icons and OG images, and the UX-review bundle under `docs/ux-review/` is captured by `./per-ankh ux-review` (a CLI command, not an npm script).
 
 ## Adding a name-override table
 
@@ -167,6 +172,7 @@ Hashed paths get `Cache-Control: immutable, max-age=1y` via `_headers` at the re
 
 - Pinacotheca ships refreshed renders.
 - `Reference/XML/` is refreshed against a current Old World install (picks up new DLC `zType`s, nation aliases, and tech display-name changes).
+- `static/fonts/InterVariable-latin-opsz.woff2` changes — `npm run bake:card-fonts` alone, and only then. Neither trigger above touches it, which is why it sits outside `bake:all`: a full bake could never make it produce a different file. What goes stale if it is forgotten is the face the link-preview card renders in, which would then be the old Inter while the site is on the new one.
 
 `zType`s present in saves but absent from `Reference/XML/` silently won't render until Reference is updated. The bake logs any `zType → zIconName` whose target is missing and falls those `zType`s back to a generic city sprite.
 

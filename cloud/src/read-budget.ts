@@ -30,7 +30,7 @@ import { errorResponse, getClientIp } from "./util";
 // read. This is the shape the interface had before it was lifted out of
 // tournament/public.ts (one shape, three instances); global_stats_view was the
 // fourth read to want it, season_view the fifth and home_summary_view the
-// sixth.
+// sixth; og_card_view, the per-game link-preview card, is the tenth.
 export type ReadEventType = Extract<
 	RateLimitedEventType,
 	| "tournament_view"
@@ -42,6 +42,7 @@ export type ReadEventType = Extract<
 	| "challenge_view"
 	| "challenge_link_view"
 	| "screenshot_view"
+	| "og_card_view"
 >;
 
 // A per-IP read budget: which events rows count toward it, and how it answers

@@ -75,6 +75,17 @@ export default defineConfig({
 	test: {
 		projects: [
 			{
+				resolve: {
+					alias: {
+						// See cloud/test/helpers/wasm-stub.ts: the Node pool cannot
+						// resolve a `.wasm` module import, and `src/index.ts` reaches
+						// one through the OG-card rasterizer.
+						"@resvg/resvg-wasm/index_bg.wasm": path.resolve(
+							import.meta.dirname,
+							"./test/helpers/wasm-stub.ts",
+						),
+					},
+				},
 				test: {
 					name: "unit",
 					include: ["src/**/*.test.ts"],

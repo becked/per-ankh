@@ -93,6 +93,11 @@ export const RETENTION_BUCKETS: readonly RetentionBucket[] = [
 			// than anon_read's for the challenge_link_view reason: the strip
 			// read runs on every /games/[id] render. Metadata-free.
 			"screenshot_view",
+			// Link-preview card reads (og-card/handler.ts). Its own budget
+			// rather than anon_read's because the populations differ — this
+			// meters whatever fetched a pasted link, anon_read meters people
+			// reading the page. Metadata-free.
+			"og_card_view",
 		],
 	},
 	{

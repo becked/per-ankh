@@ -35,6 +35,12 @@ const REVIEWED: Record<string, string> = {
 	// Anonymous, and the board and window are both query parameters, which are
 	// in the cache key.
 	"GET /v1/stats/players": "no session read",
+	// The link-preview image. Reads no session — `is_public = 1` is the whole
+	// visibility rule — so every caller gets the same bytes. Its gate is the
+	// og_card_view read budget, which is on what a caller may spend and not on
+	// what they may see; a crawler, the population this route exists for, is
+	// exempt from it anyway.
+	"GET /v1/games/:id/card.png": "no session read",
 	// The exception to the rule rather than an instance of it: two bodies on
 	// one URL, separated by `Vary: Cookie, Origin`. The cookie-less key can
 	// only ever hold the stripOnlineIds variant, and the owner's body is
@@ -64,9 +70,12 @@ const REVIEWED: Record<string, string> = {
 // Every source site that hands a client a shared-cache directive, by file.
 // The map is the other direction of the guard: the flags above say which
 // routes a reviewer cleared, and this says no *handler* started serving
-// `public` without one. Counts, not routes, because the mapping isn't 1:1 —
-// `globalStatsResponse` serves two routes from one site, so ten flags stand
-// on nine sites.
+// `public` without one. Counts, not routes, because the mapping isn't 1:1 in
+// either direction: `globalStatsResponse` serves two routes from one site, and
+// the card route has two sites of its own — the image, and the redirect that
+// sends a superseded version pair to the canonical URL. Eleven flags stand on
+// eleven sites, which the two mismatches make equal by arithmetic rather than
+// by construction.
 const PUBLIC_DIRECTIVE_SITES: Record<string, number> = {
 	// handleCreatorVideos.
 	"channels.ts": 1,
@@ -74,6 +83,9 @@ const PUBLIC_DIRECTIVE_SITES: Record<string, number> = {
 	"featured.ts": 1,
 	// handlePublicRecentGames, and handleGameDetail's non-owner branch.
 	"games.ts": 2,
+	// handleGameCard — twice: the card itself, and the redirect that sends a
+	// superseded version pair to the canonical URL.
+	"og-card/handler.ts": 2,
 	// handleFeaturedScreenshots.
 	"screenshots/handlers.ts": 1,
 	// globalStatsResponse (both /stats reads), handlePlayerLeaderboard,

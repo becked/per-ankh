@@ -7,7 +7,12 @@
 	import { syncFeatured } from "$lib/featured-videos.svelte";
 	import Toaster from "$lib/ui/Toaster.svelte";
 	import ConfirmDialogHost from "$lib/ui/ConfirmDialogHost.svelte";
-	import { PUBLIC_ORIGIN, type PageMeta } from "$lib/page-meta";
+	import {
+		DEFAULT_OG_IMAGE,
+		PUBLIC_ORIGIN,
+		THEME_COLOR,
+		type PageMeta,
+	} from "$lib/page-meta";
 	import { markScrolling } from "$lib/scroll-activity";
 	import type { LayoutData } from "./$types";
 
@@ -71,7 +76,7 @@
 	// the layout's own `data` prop (which is only LayoutData and would
 	// always be DEFAULT_META, losing per-page overrides).
 	const meta = $derived(page.data.meta as PageMeta);
-	const ogImage = $derived(meta.image ?? `${PUBLIC_ORIGIN}/og-default.png`);
+	const ogImage = $derived(meta.image ?? DEFAULT_OG_IMAGE);
 	const ogUrl = $derived(`${PUBLIC_ORIGIN}${page.url.pathname}`);
 </script>
 
@@ -87,14 +92,22 @@
 	<meta name="description" content={meta.description} />
 	<meta property="og:title" content={meta.title} />
 	<meta property="og:description" content={meta.description} />
-	<meta property="og:image" content={ogImage} />
+	<meta property="og:image" content={ogImage.url} />
+	<!-- Dimensions let a crawler lay the embed out before the bytes land, and
+	     are what tells Discord the image is wide enough for the large layout
+	     rather than a thumbnail. -->
+	<meta property="og:image:width" content={String(ogImage.width)} />
+	<meta property="og:image:height" content={String(ogImage.height)} />
 	<meta property="og:url" content={ogUrl} />
 	<meta property="og:type" content="website" />
 	<meta property="og:site_name" content="Per-Ankh" />
+	<!-- Discord's embed accent stripe, and the browser-chrome tint on mobile.
+	     One value for the whole app — see THEME_COLOR. -->
+	<meta name="theme-color" content={THEME_COLOR} />
 	<meta name="twitter:card" content="summary_large_image" />
 	<meta name="twitter:title" content={meta.title} />
 	<meta name="twitter:description" content={meta.description} />
-	<meta name="twitter:image" content={ogImage} />
+	<meta name="twitter:image" content={ogImage.url} />
 </svelte:head>
 
 {#if showCloudHeader}

@@ -1,8 +1,8 @@
-import { COGNOMENS } from "$lib/generated/cognomens";
-import { NAME_TEXT } from "$lib/generated/name-text";
-import { NATION_NAMES } from "$lib/generated/nation-names";
-import { TRAIT_NAMES } from "$lib/generated/trait-names";
-import { UNIT_STATS } from "$lib/generated/unit-stats";
+import { COGNOMENS } from "../generated/cognomens";
+import { NAME_TEXT } from "../generated/name-text";
+import { NATION_NAMES } from "../generated/nation-names";
+import { TRAIT_NAMES } from "../generated/trait-names";
+import { UNIT_STATS } from "../generated/unit-stats";
 
 /**
  * Formats enum-style values from the backend by removing prefixes and applying title casing.
@@ -379,8 +379,13 @@ export function viewerUses12Hour(): boolean {
 	// everyone, including the "2:30 PM UTC" that UTC_CLOCK_OPTIONS exists to
 	// prevent, and including readers whose own clock is 24-hour. The canonical
 	// face is the honest first paint; hydration upgrades the viewers who do read
-	// 12-hour. Same `document` probe the zone cookie uses (zone-preference.ts).
-	if (typeof document === "undefined") return false;
+	// 12-hour. Same `document` probe the zone cookie uses (zone-preference.ts),
+	// spelled through `globalThis` rather than as a bare `typeof document`:
+	// this module is imported by cloud/src/og-card/, and the Worker tsconfig
+	// ships no DOM lib, so the bare form is an error there rather than a
+	// guard. Identical at runtime — `document` is a real object wherever it is
+	// declared at all.
+	if (!("document" in globalThis)) return false;
 	return (cached12Hour ??=
 		new Intl.DateTimeFormat(undefined, { hour: "numeric" }).resolvedOptions()
 			.hour12 === true);

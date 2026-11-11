@@ -13,10 +13,10 @@
 // layers is what keeps the row model out of the eager chunk the home page's
 // save cards load; this module reaches SETUP_VALUE_NAMES alone.
 
-import { SETUP_VALUE_NAMES } from "$lib/generated/game-setup";
-import { MAP_OPTION_DEFS } from "$lib/generated/map-option-defs";
-import { mapScriptLabel } from "$lib/tournament/map-scripts";
-import { formatEnum } from "$lib/utils/formatting";
+import { SETUP_VALUE_NAMES } from "./generated/game-setup";
+import { MAP_OPTION_DEFS } from "./generated/map-option-defs";
+import { mapScriptLabel } from "./tournament/map-scripts";
+import { formatEnum } from "./utils/formatting";
 
 // Canonical map-script display name (e.g. MAPCLASS_MapScriptInlandSea2 →
 // "Inland Sea"). The curated KNOWN_MAP_SCRIPTS table strips OW source quirks
