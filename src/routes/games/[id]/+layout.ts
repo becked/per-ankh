@@ -89,12 +89,19 @@ function buildMeta(
 	// The same title the page renders above the view, so the <head>/OG title
 	// matches what the user sees.
 	//
-	// `is_public` is present only on an OWNER's payload (the Worker injects it
-	// for them alone), so its absence means one of two things: a non-owner
-	// looking at a game that is public by definition — they could not have
-	// loaded it otherwise — or an owner on an older Worker. Both are served a
-	// card URL, and the second one 404s to the brand card, which is what it
-	// had before.
+	// Two fields decide whether there is a card to point at, and a missing one
+	// is never a 404 — it is simply no `image`, which the root layout fills
+	// with the brand card, exactly as every unfurl did before this.
+	//
+	// `is_public` is injected only on an OWNER's payload (cloud/src/games.ts),
+	// so its absence means the viewer is not the owner — and a non-owner could
+	// not have loaded this game at all unless it is public. Present and false
+	// is the one case that has to opt out: the owner's own private game, which
+	// the Worker serves no card for.
+	//
+	// `updated_at` is what versions the URL, and a Worker that predates it
+	// returns none. Owner and non-owner alike then fall through to the brand
+	// card rather than to a card URL with nothing to version it.
 	const cardVersion =
 		game.is_public === false ? null : (game.updated_at ?? null);
 	return {
