@@ -1,5 +1,22 @@
 # Changelog
 
+## [2026-11-11-343b158] - 2026-11-11
+
+### Features
+
+- (cloud) serve every seat's map pins on a non-owner read — [23e0ecc](https://github.com/becked/per-ankh/commit/23e0ecccf976d19bbbf40c392a10acc98cb59766)
+
+### Fixes
+
+- (game-detail) read a tribe-held city as the tribe's, not as unowned — [a455582](https://github.com/becked/per-ankh/commit/a45558246a6becb860d81103d662efe72304ae1b)
+- (game-detail) attribute a city founding to its founder — [1229cc1](https://github.com/becked/per-ankh/commit/1229cc12d3ca403e149ef380890fe6378f4c2089)
+- (game-detail) resolve a city's holder in one place — [c51e310](https://github.com/becked/per-ankh/commit/c51e310bc386ab8fa169a60116ec7d25c4f3f308)
+
+### Other
+
+- state the map-pin stance as current design, not as a removal — [85e4f71](https://github.com/becked/per-ankh/commit/85e4f71e5c51b3fa2ab36374f67671e4b888816f)
+- (cloud) refresh the worker dev-toolchain lockfile — [343b158](https://github.com/becked/per-ankh/commit/343b158651d014f75310aae2e6ca72fb40c19e35)
+
 ## [2026-10-29-11ee831] - 2026-10-29
 
 ### Features
