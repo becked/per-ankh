@@ -25,7 +25,6 @@
 		TOURNAMENT_VIEW_LABELS,
 		tournamentView,
 	} from "$lib/tournament/views";
-	import { resolveInitialZone } from "$lib/tournament/zone-preference";
 	import { ZoneClock, setZoneClock } from "$lib/tournament/zone-context.svelte";
 	import type { LayoutData } from "./$types";
 
@@ -69,11 +68,10 @@
 	);
 
 	// The active clock, owned once here and provided down so all three tabs read
-	// one value with no re-init flicker on navigation. Seeded from the deep-link
-	// precedence (?zone= param > cookie > local); the toggle persists changes.
-	const clock = new ZoneClock(
-		resolveInitialZone(page.url.searchParams.get("zone")),
-	);
+	// one value with no re-init flicker on navigation. Carries this visit's
+	// ?zone= override and falls through to the app-wide preference without it;
+	// the toggle persists changes (see zone-context).
+	const clock = new ZoneClock(page.url.searchParams.get("zone"));
 	setZoneClock(clock);
 
 	// The UTC/local toggle shows only where there's a schedule to switch: always

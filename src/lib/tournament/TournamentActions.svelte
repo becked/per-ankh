@@ -22,7 +22,7 @@
 		// setup-phase overview page), where the UTC/local toggle is hidden. It gates
 		// that toggle alone — the face toggle beside it has its own flag.
 		zone?: ScheduleZone;
-		// Flip handler; the caller persists the choice app-wide (writeZoneCookie).
+		// Flip handler; the caller persists the choice app-wide (setClockZone).
 		// eslint-disable-next-line no-unused-vars -- callback signature
 		onZoneChange?: (zone: ScheduleZone) => void;
 		// Whether to offer the 12/24-hour face toggle. Gated separately from `zone`
@@ -65,9 +65,10 @@
 	const localZoneLabel = $derived(shortTimeZoneName() || "Local");
 
 	// The viewer's clock face, for the toggle beside the zone one. Read from the
-	// module singleton rather than threaded as a prop like `zone`: the face is
-	// viewer-global — it governs every local time the app renders — where the
-	// active zone is per-tournament state the layout owns and provides.
+	// module singleton rather than threaded as a prop like `zone`: both
+	// preferences are viewer-global, but the zone arrives as a prop because the
+	// layout's ZoneClock layers this visit's ?zone= deep link over the saved one,
+	// and that override is the layout's to own.
 	const use12Hour = $derived(clockFaceIs12Hour());
 </script>
 

@@ -1,8 +1,8 @@
 // The viewer's sticky 12/24-hour clock FACE — whether a local time reads
 // "7:30 PM" or "19:30". Companion to the UTC/local zone preference (pa_zone,
-// $lib/tournament/zone-preference): that one picks which clock a time is read
-// on, this one picks how that clock is written. Both persist through the shared
-// preference-cookie policy in $lib/utils/pref-cookie.
+// $lib/tournament/zone-preference.svelte): that one picks which clock a time is
+// read on, this one picks how that clock is written. Both persist through the
+// shared preference-cookie policy in $lib/utils/pref-cookie.
 //
 // Unset means "follow the browser", which is what every viewer got before this
 // control existed. An explicit choice exists because the browser cannot answer
@@ -14,9 +14,9 @@
 // unaffected — en-DE, en-FR, en-PL and friends all have tailorings and already
 // read 24-hour.
 //
-// A module singleton rather than per-tournament context (ZoneClock): the face
-// is a property of the viewer, not of a tournament, and governs any local time
-// the app renders. Calling clockFaceIs12Hour() inside a template or $derived
+// A module singleton, as the zone preference beside it is: the face is a
+// property of the viewer, not of a tournament, and governs any local time the
+// app renders. Calling clockFaceIs12Hour() inside a template or $derived
 // subscribes to it, so a flip re-renders every time on the page — the same
 // mechanism nowMs() uses in now.svelte.ts.
 import { viewerUses12Hour } from "$lib/utils/formatting";
@@ -57,7 +57,7 @@ export function clockFaceIs12Hour(): boolean {
 /**
  * Record an explicit face and remember it app-wide for a year. Called only from
  * the header toggle, so the cookie is written on a real choice and never on a
- * passive render (mirroring ZoneClock.set).
+ * passive render (mirroring setClockZone).
  */
 export function setClockFace(next: ClockFace): void {
 	face = next;
