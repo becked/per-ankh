@@ -11,7 +11,17 @@
 //
 // Fonts are passed as bytes: resvg reads no system fonts in a Worker and
 // `loadSystemFonts` is false regardless, so the two baked Inter instances are
-// the entire font stack. A codepoint neither covers draws nothing.
+// the entire font stack. A codepoint neither covers draws nothing — there is
+// no platform fallback behind them the way there is in a browser.
+//
+// What that costs today, counted against the 2026-11-10 remote snapshot by
+// reading the baked faces' own cmap (230 codepoints, Latin, identical in both
+// weights): of 1,014 public games, 5 — one account's — carry an uploader
+// display name made entirely of codepoints outside it, Cyrillic, and draw an
+// empty left header column. Game titles: 0. Winner names: 0. Seat names: 0 of
+// 2,381. Widening the set means re-baking from a face that covers more
+// (bake-card-fonts.ts takes its character set from the source WOFF2), not
+// anything here.
 
 import { initWasm, Resvg } from "@resvg/resvg-wasm";
 import wasm from "@resvg/resvg-wasm/index_bg.wasm";

@@ -9,6 +9,7 @@
  */
 
 import { YIELD_COLORS } from "../generated/yield-colors";
+import { PAGE_BACKGROUND } from "./theme";
 
 /**
  * Warm fallback ramp, indexed by series ordinal.
@@ -68,7 +69,9 @@ export const CHART_FONT_PROBE = `12px "${UI_FONT_FAMILY}"`;
  */
 export const CHART_THEME = {
 	colors: CHART_COLORS,
-	backgroundColor: "#211A12", // Blue-gray background matches main UI
+	// The page background the chart sits on, so the canvas ground and the
+	// surface around it are one colour (./theme).
+	backgroundColor: PAGE_BACKGROUND,
 	animation: false, // Disable initial animation for smoother page transitions
 	textStyle: {
 		fontFamily: CHART_FONT_FAMILY,

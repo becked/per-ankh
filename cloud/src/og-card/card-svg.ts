@@ -35,6 +35,7 @@ import {
 	mapSizeLabel,
 	prosperityName,
 } from "../../../src/lib/map-settings";
+import { CARD_HEIGHT, CARD_WIDTH } from "../../../src/lib/og-card";
 import { getNationChartColor } from "../../../src/lib/config/nations";
 import { CHART_REFERENCE_LINE_COLOR } from "../../../src/lib/config/charts";
 import { withEndStateTotal } from "../../../src/lib/utils/victory-point-series";
@@ -43,16 +44,12 @@ import type { PublicGameCard, PublicGameCardPlayer } from "../games";
 
 // ─── Canvas ───────────────────────────────────────────────────────────────
 
-// 1200×630 is the size every unfurl consumer sizes its large-image slot for.
-// Fixed regardless of what the game carries — a card with no series centres
-// its rows instead of shrinking, so one declared pair is true of every game.
-//
-// Restated as GAME_CARD_WIDTH / GAME_CARD_HEIGHT in src/lib/api-cloud.ts,
-// which is what `og:image:width` / `og:image:height` are built from. Two
-// copies because the frontend bundle cannot import a Worker module; change
-// both, and the integration test asserts the rendered PNG against the pair.
-export const CARD_WIDTH = 1200;
-export const CARD_HEIGHT = 630;
+// CARD_WIDTH × CARD_HEIGHT, imported above, is 1200×630 — the size every
+// unfurl consumer sizes its large-image slot for. It comes from
+// src/lib/og-card.ts rather than being declared here because the game page
+// declares the same pair to the crawler as `og:image:width` /
+// `og:image:height`, and the crawler lays its slot out from those numbers
+// before the bytes land.
 
 // The component's Tailwind spacing, doubled. Everything below is `<value in
 // RecentSaveCard.svelte> × 2`, which is what keeps the two legible as the same

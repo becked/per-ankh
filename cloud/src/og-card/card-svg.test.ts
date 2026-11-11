@@ -8,7 +8,8 @@
 // `.wasm` module import resolves.
 
 import { describe, expect, it } from "vitest";
-import { buildCardSvg, CARD_HEIGHT, CARD_WIDTH } from "./card-svg";
+import { buildCardSvg } from "./card-svg";
+import { CARD_HEIGHT, CARD_WIDTH } from "../../../src/lib/og-card";
 import type { PublicGameCard, PublicGameCardPlayer } from "../games";
 
 function player(
@@ -68,7 +69,9 @@ describe("buildCardSvg", () => {
 		expect(svg).toContain(`viewBox="0 0 ${CARD_WIDTH} ${CARD_HEIGHT}"`);
 	});
 
-	it("labels the same ten tiles the component does, in its order", () => {
+	it("labels nine of the component's ten tiles, in its order", () => {
+		// Nine, not ten: the first row's fifth tile is labelled Multiplayer or
+		// Prosperity depending on the seat count, which the next case covers.
 		const svg = buildCardSvg(
 			card({
 				players: [

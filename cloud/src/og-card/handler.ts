@@ -141,10 +141,10 @@ export async function handleGameCard(
 	// anonymous caller that a private game by that id exists.
 	if (!row) return errorResponse("Not found", 404, cors, "NOT_FOUND");
 
-	// Only the canonical version pair is rendered. Everything else — a `v` from
+	// Only the canonical query string is rendered. Everything else — a `v` from
 	// an embed posted before the last reindex, a missing or stale `c`, a value
-	// someone made up — is answered with a redirect to the pair this row says
-	// is current.
+	// someone made up, a right pair with a third parameter bolted on — is
+	// answered with a redirect to the string this row says is current.
 	//
 	// Two things turn on that. The read budget above exempts scraper UAs
 	// (read-budget.ts), and that test is a prefix match on a header anyone can
@@ -156,12 +156,18 @@ export async function handleGameCard(
 	// without re-reading the page's meta tags, so a 404 on a stale `v` would
 	// blank embeds that are already posted. A redirect answers both, on the one
 	// D1 read already spent.
+	//
+	// The whole search string is compared, not the two parameters read out of
+	// it, because the search string is what the edge keys on: `?v=…&c=1&x=1`
+	// and `?v=…&c=1&x=2` carry the canonical pair and are still two cache
+	// entries and two renders. A URL the frontend built matches byte for byte
+	// — it encodes `v` the same way (gameCardImageUrl in api-cloud.ts) — and
+	// anything that doesn't costs one cacheable redirect. No loop is possible:
+	// the redirect target is this string, whatever the request carried.
 	const url = new URL(request.url);
-	if (
-		url.searchParams.get("v") !== row.updated_at ||
-		url.searchParams.get("c") !== String(OG_CARD_VERSION)
-	) {
-		url.search = `v=${encodeURIComponent(row.updated_at)}&c=${OG_CARD_VERSION}`;
+	const canonicalSearch = `v=${encodeURIComponent(row.updated_at)}&c=${OG_CARD_VERSION}`;
+	if (url.search !== `?${canonicalSearch}`) {
+		url.search = canonicalSearch;
 		return new Response(null, {
 			status: 302,
 			headers: {

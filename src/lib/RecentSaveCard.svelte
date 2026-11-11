@@ -22,19 +22,10 @@
 	import {
 		CHART_THEME,
 		CHART_REFERENCE_LINE_COLOR,
-		getChartColor,
-		getCivilizationColor,
+		getNationChartColor,
 	} from "$lib/config";
 
 	let { game }: { game: PublicRecentGame } = $props();
-
-	function playerColor(nation: string | null, idx: number): string {
-		if (nation) {
-			const c = getCivilizationColor(nation);
-			if (c) return c;
-		}
-		return getChartColor(idx);
-	}
 
 	// Sort uploader first, then by player_index — anchors sparkline colors.
 	const orderedPlayers = $derived(
@@ -128,7 +119,10 @@
 				lineStyle: { opacity: 0 },
 				areaStyle: {
 					origin: 50,
-					color: playerColor(momentumPlayers[side]?.nation ?? null, side),
+					color: getNationChartColor(
+						momentumPlayers[side]?.nation ?? null,
+						side,
+					),
 					opacity: 0.25,
 				},
 				data: (momentumPlayers[0]?.momentum_series ?? []).map((pt) => [
@@ -143,7 +137,7 @@
 				sampling: "lttb" as const,
 				lineStyle: {
 					width: 1.5,
-					color: playerColor(momentumPlayers[0]?.nation ?? null, 0),
+					color: getNationChartColor(momentumPlayers[0]?.nation ?? null, 0),
 				},
 				data: (momentumPlayers[0]?.momentum_series ?? []).map((pt) => [
 					pt.turn,
@@ -213,7 +207,7 @@
 			showSymbol: false,
 			smooth: true,
 			sampling: "lttb",
-			lineStyle: { width: 1.5, color: playerColor(p.nation, i) },
+			lineStyle: { width: 1.5, color: getNationChartColor(p.nation, i) },
 			// `final_points` is this seat's end-state total, written at upload
 			// (derive-player-summary.ts). The card has no blob to recompute from,
 			// so a game uploaded before that recomputation shipped keeps the

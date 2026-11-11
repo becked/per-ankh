@@ -16,6 +16,7 @@ import { expectErrorCode } from "../../helpers/assertions";
 import { makeUser, type TestUser } from "../../helpers/builders";
 import { seedGame, seedSeats } from "../../helpers/games";
 import { request } from "../../helpers/requests";
+import { CARD_HEIGHT, CARD_WIDTH } from "../../../../src/lib/og-card";
 
 let owner: TestUser;
 
@@ -96,13 +97,21 @@ async function seedPublicGameWithChart(): Promise<string> {
 }
 
 describe("GET /v1/games/:id/card.png", () => {
-	it("renders a 1200×630 PNG for a public game", async () => {
+	it("renders the PNG at the size the meta tags declare", async () => {
+		// Against CARD_WIDTH / CARD_HEIGHT, not against 1200×630 written out
+		// here: those two constants are what the game page hands the crawler as
+		// og:image:width / og:image:height (src/lib/og-card.ts), so literals
+		// would let the rendered size and the declared size move apart without
+		// failing anything.
 		const gameId = await seedPublicGameWithChart();
 		const res = await request.get({ path: await canonicalPath(gameId) });
 		expect(res.status).toBe(200);
 		expect(res.headers.get("Content-Type")).toBe("image/png");
 		const bytes = new Uint8Array(await res.arrayBuffer());
-		expect(pngSize(bytes)).toEqual({ width: 1200, height: 630 });
+		expect(pngSize(bytes)).toEqual({
+			width: CARD_WIDTH,
+			height: CARD_HEIGHT,
+		});
 	});
 
 	it("keeps its shared-cache directive through the wrapper", async () => {
@@ -132,7 +141,10 @@ describe("GET /v1/games/:id/card.png", () => {
 		const res = await request.get({ path: await canonicalPath(gameId) });
 		expect(res.status).toBe(200);
 		const bytes = new Uint8Array(await res.arrayBuffer());
-		expect(pngSize(bytes)).toEqual({ width: 1200, height: 630 });
+		expect(pngSize(bytes)).toEqual({
+			width: CARD_WIDTH,
+			height: CARD_HEIGHT,
+		});
 	});
 
 	it("redirects a superseded version pair instead of rendering it", async () => {
@@ -187,6 +199,22 @@ describe("GET /v1/games/:id/card.png", () => {
 		);
 		expect(res.status).toBe(302);
 		expect(res.headers.get("Content-Type")).not.toBe("image/png");
+	});
+
+	it("redirects a canonical pair carrying an extra parameter", async () => {
+		// The query string is the edge cache key, so `?v=…&c=1&x=1` and
+		// `?v=…&c=1&x=2` are two entries and two renders even though both carry
+		// the canonical pair. Reading `v` and `c` out of the string would pass
+		// them both; comparing the whole string is what bounds the renders to
+		// one per game.
+		const gameId = await seedPublicGameWithChart();
+		const canonical = await canonicalPath(gameId);
+		const res = await SELF.fetch(`http://test${canonical}&x=1`, {
+			redirect: "manual",
+			headers: { "User-Agent": "Discordbot/2.0 (+https://discordapp.com)" },
+		});
+		expect(res.status).toBe(302);
+		expect(res.headers.get("Location")).toBe(`http://test${canonical}`);
 	});
 
 	it("404s a private game, for its owner as much as anyone", async () => {

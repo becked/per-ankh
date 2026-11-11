@@ -911,19 +911,6 @@ export function gameCardImageUrl(gameId: string, version: string): string {
 	return `${API_BASE}/games/${gameId}/card.png?v=${v}&c=${OG_CARD_VERSION}`;
 }
 
-// The card's pixel size, declared to crawlers as og:image:width/height. Fixed
-// for every game — the Worker renders one canvas size, and a game with nothing
-// to chart centres its rows inside it rather than coming out shorter.
-//
-// The other copy of these two numbers is CARD_WIDTH / CARD_HEIGHT in
-// cloud/src/og-card/card-svg.ts, where they are actually rendered; change
-// both. Duplicated rather than imported because this module ships to the
-// browser and that one is Worker-only. A disagreement shows as an embed whose
-// image slot is the wrong shape, so the pair is asserted against the real PNG
-// in cloud/test/integration/games/og-card.test.ts.
-export const GAME_CARD_WIDTH = 1200;
-export const GAME_CARD_HEIGHT = 630;
-
 export const cloudApi = {
 	// --- Auth ---
 	discordStart: (redirectUri: string, next: string | null, opts?: CallOpts) =>

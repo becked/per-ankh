@@ -70,9 +70,12 @@ const REVIEWED: Record<string, string> = {
 // Every source site that hands a client a shared-cache directive, by file.
 // The map is the other direction of the guard: the flags above say which
 // routes a reviewer cleared, and this says no *handler* started serving
-// `public` without one. Counts, not routes, because the mapping isn't 1:1 —
-// `globalStatsResponse` serves two routes from one site, so ten flags stand
-// on nine sites.
+// `public` without one. Counts, not routes, because the mapping isn't 1:1 in
+// either direction: `globalStatsResponse` serves two routes from one site, and
+// the card route has two sites of its own — the image, and the redirect that
+// sends a superseded version pair to the canonical URL. Eleven flags stand on
+// eleven sites, which the two mismatches make equal by arithmetic rather than
+// by construction.
 const PUBLIC_DIRECTIVE_SITES: Record<string, number> = {
 	// handleCreatorVideos.
 	"channels.ts": 1,

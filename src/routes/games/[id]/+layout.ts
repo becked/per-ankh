@@ -3,11 +3,10 @@ import {
 	cloudApi,
 	gameCardImageUrl,
 	ApiError,
-	GAME_CARD_HEIGHT,
-	GAME_CARD_WIDTH,
 	UnauthorizedError,
 	type CollectionInfo,
 } from "$lib/api-cloud";
+import { CARD_HEIGHT, CARD_WIDTH } from "$lib/og-card";
 import type { PageMeta } from "$lib/page-meta";
 import { formatEnum, formatGameTitle, nationName } from "$lib/utils/formatting";
 import { rethrowRateLimit } from "$lib/utils/load-errors";
@@ -110,8 +109,8 @@ function buildMeta(
 		image: cardVersion
 			? {
 					url: gameCardImageUrl(gameId, cardVersion),
-					width: GAME_CARD_WIDTH,
-					height: GAME_CARD_HEIGHT,
+					width: CARD_WIDTH,
+					height: CARD_HEIGHT,
 				}
 			: undefined,
 	};

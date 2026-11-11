@@ -1,5 +1,11 @@
-// The link-preview card's renderer version — the second segment of that card's
-// cache key, beside the game's `updated_at`.
+// The two facts about the link-preview card that both packages have to agree
+// on: its renderer version and its pixel size. The Worker renders the card
+// (cloud/src/og-card/) and the game page declares it to crawlers, so each of
+// these is read from here by both.
+//
+// ── Renderer version ──
+//
+// The second segment of the card's cache key, beside the game's `updated_at`.
 //
 // `GET /v1/games/:id/card.png` is stored for a day at the edge and a year in
 // the browser (cloud/src/og-card/handler.ts), and a Worker deploy purges
@@ -14,7 +20,21 @@
 // It lives in src/lib/ rather than beside the renderer because both packages
 // have to agree on it and only this direction is importable — cloud/ already
 // imports src/lib/* modules (card-svg.ts does), while the browser bundle
-// cannot reach a Worker module. That is the same constraint CARD_WIDTH /
-// GAME_CARD_WIDTH are duplicated under, resolved the other way round because
-// a version that has to be bumped in two places is a version that will not be.
+// cannot reach a Worker module.
 export const OG_CARD_VERSION = 1;
+
+// ── Pixel size ──
+//
+// What card-svg.ts draws on, and what the game page declares to crawlers as
+// og:image:width / og:image:height. Fixed for every game — the Worker renders
+// one canvas size, and a game with nothing to chart centres its rows inside it
+// rather than coming out shorter, which is what lets one declared pair be true
+// of every game.
+//
+// Here rather than beside the renderer for the same reason OG_CARD_VERSION
+// is: the two packages have to agree and only this direction is importable.
+// One definition rather than two that say "change both" — a disagreement
+// shows as an embed whose image slot is the wrong shape, which the crawler
+// lays out before the bytes land and does not re-measure after.
+export const CARD_WIDTH = 1200;
+export const CARD_HEIGHT = 630;

@@ -5,6 +5,8 @@
 // Single source of truth → no duplicate <meta> tags in the rendered head
 // (which crawlers handle inconsistently across platforms).
 
+import { PAGE_BACKGROUND } from "$lib/config/theme";
+
 export type OgImage = {
 	// Absolute URL. Crawlers require one; relative paths are silently dropped
 	// by some.
@@ -52,9 +54,10 @@ export const DEFAULT_OG_IMAGE: OgImage = {
 };
 
 // The accent Discord paints down the left edge of an embed, and the colour a
-// mobile browser tints its chrome with. `--color-blue-gray` in src/app.css —
-// the app's own page background, so the browser chrome matches the page and
-// the embed stripe matches the card beside it. Hex rather than the variable
-// for the same reason the chart theme is: a <meta> content attribute has no
-// stylesheet to resolve one against.
-export const THEME_COLOR = "#211a12";
+// mobile browser tints its chrome with: the app's own page background, so the
+// browser chrome matches the page and the embed stripe matches the card
+// beside it. A hex rather than `--color-blue-gray` itself because a <meta>
+// content attribute has no stylesheet to resolve a variable against — which
+// is why the value lives in $lib/config/theme, shared with the chart ground,
+// the other consumer in that position.
+export const THEME_COLOR = PAGE_BACKGROUND;
