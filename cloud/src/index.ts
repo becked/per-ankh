@@ -133,6 +133,8 @@ import type {
 	HomeSummaryEnv,
 	PlayerLeaderboardEnv,
 } from "./stats/handlers";
+import { handleQuery, handleQueryCatalog } from "./query/handlers";
+import type { QueryEnv } from "./query/handlers";
 import {
 	STATS_PRECOMPUTE_CRONS,
 	STATS_WARM_CRON,
@@ -210,6 +212,7 @@ interface Env
 		ScreenshotsEnv,
 		ScreenshotModerationEnv,
 		GlobalStatsEnv,
+		QueryEnv,
 		HomeSummaryEnv,
 		OpponentsEnv,
 		PlayerLeaderboardEnv,
@@ -1348,6 +1351,44 @@ const ROUTES: RouteSpec[] = [
 		route: "GET /v1/stats/records",
 		handler: (r, e, _m, c) => handleGlobalRecords(r, e, c),
 		// Same corpus, same gate, same consequence.
+		sharedCache: true,
+	},
+	// The ad-hoc query surface (issue #272). The catalog is the vocabulary a
+	// question may be composed from; /v1/query runs one. Two routes rather than
+	// one payload because the builder needs the vocabulary before it can
+	// compose anything, and the vocabulary changes only when this Worker is
+	// deployed where an answer changes whenever a game is uploaded.
+	//
+	// The catalog is public, sessionless and outside every read budget: it
+	// reads nothing at all — no D1, no KV — and is the same bytes for every
+	// caller.
+	{
+		method: "GET",
+		match: { kind: "path", path: "/v1/query/catalog" },
+		route: "GET /v1/query/catalog",
+		handler: (r, e) => handleQueryCatalog(r, e),
+		// Constant data serialized from a module. There is no second body to
+		// serve and nothing viewer-dependent to leak.
+		sharedCache: true,
+	},
+	// One composed question. Session-gated for the reason `/v1/stats` is — the
+	// payload is viewer-independent (`is_public = 1` is the whole visibility
+	// rule, and the catalog is the whole column allowlist), so what the session
+	// gates is who may spend an ad-hoc aggregation — and checked ahead of its
+	// own per-IP budget (`AD_HOC_QUERY_PER_HOUR`), which is not a share of
+	// `global_stats_view`: this is the endpoint whose cost per request the
+	// caller chooses, so its ceiling has to move on its own.
+	{
+		method: "GET",
+		match: { kind: "path", path: "/v1/query" },
+		route: "GET /v1/query",
+		handler: (r, e) => handleQuery(r, e),
+		// The selection is entirely in the query string, which *is* the cache
+		// key, and `canonicalSelection` is what makes two spellings of one
+		// question one entry. A hit answers without running the handler, so the
+		// session gate stops being checked — accepted on the same terms
+		// `/v1/stats` accepts it: the gate is on spending an aggregation, and a
+		// hit spends none.
 		sharedCache: true,
 	},
 	// The home page's stats panels — the three bundle fields they draw, over the
