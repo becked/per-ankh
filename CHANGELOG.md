@@ -1,5 +1,26 @@
 # Changelog
 
+## [2026-11-11-6732ade] - 2026-11-11
+
+### Features
+
+- (cloud) serve a per-game link-preview card at /v1/games/:id/card.png — [f1c5a5c](https://github.com/becked/per-ankh/commit/f1c5a5c329889a91989ce9673f862187ee898951)
+- (web) point a game's og:image at its own card — [d74b034](https://github.com/becked/per-ankh/commit/d74b0346361955faf5ccd85358c6c64ccab931c6)
+
+### Fixes
+
+- (cloud) render the link-preview card only at its canonical URL — [6a40369](https://github.com/becked/per-ankh/commit/6a403699e9fa87fb11d1ee081400a124875610ec)
+- (cloud) let a failed resvg init retry — [a7203b4](https://github.com/becked/per-ankh/commit/a7203b47b93a0f4432f076cd69d7f07fe9e21a60)
+- (cloud) bound how long a withdrawn link-preview card is served — [abe0d08](https://github.com/becked/per-ankh/commit/abe0d08c6c7ddd380208377100b1b4a1c47dbda9)
+- render the link-preview card only at its exact canonical URL — [4996ea5](https://github.com/becked/per-ankh/commit/4996ea516097e57da67715ffcc0b9630788de9ad)
+
+### Other
+
+- drop the $lib alias from the modules the Worker shares — [3edd617](https://github.com/becked/per-ankh/commit/3edd617a1af63f604bf9dcf04f98dce3cb6af813)
+- scope frontend UI conventions to src/CLAUDE.md — [fc05afe](https://github.com/becked/per-ankh/commit/fc05afedb911499799d67f089e1d10f4d66cd9b5)
+- (web) correct what a missing card field falls back to — [9e99ba8](https://github.com/becked/per-ankh/commit/9e99ba8a46c65f00dc11112ae2a85c722eb2ef5b)
+- normalize package-lock after installing the card-font deps — [6732ade](https://github.com/becked/per-ankh/commit/6732ade216c907ef5874d39bb5c4f2bb63a9c20b)
+
 ## [2026-11-11-343b158] - 2026-11-11
 
 ### Features
