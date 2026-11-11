@@ -29,6 +29,8 @@ The card's URL carries two cache-key segments, and neither is decoration. `v` is
 
 Two consequences of that key. It covers the game row and the renderer and nothing else, so the uploader's display name — refreshed in `users` on every Discord login — reaches an already-stored card only when the game is next written; that staleness is accepted, because the alternative is bumping every one of a user's games on each login. And because the key is a public URL rather than an internal one (unlike `cacheKey` in `blob-cache.ts`), a superseded pair is still fetched by embeds already in chat history: the handler answers those with a 302 to the canonical pair rather than a 404 or a fresh render, which is also what keeps the scraper-UA rate-limit exemption from being an unmetered render loop.
 
+**The edge TTL is a removal bound, not a tuning knob.** A card is stored `s-maxage=86400` and a day is deliberate: nothing purges the card when a game is made private or deleted, so that day is how long a withdrawn card carries on being served. A purge could not close it either — every `updated_at` a game has held was its own canonical URL and its own stored entry, and the old ones are not recorded. The screenshot objects have the same shape and the repo answers them by refusing the unpublish outright (`handleUpdateGame`, "a game with screenshots stays public"); that is unavailable here, because every public game has a card, so the refusal would be a ban on going private. The browser half (`max-age`) is a year and does not share the constraint — a downloaded copy is the viewer's. Lengthening `s-maxage` lengthens the window; `og-card.test.ts` pins the exact string so it is not retuned in passing.
+
 ## Worker tests
 
 Two-project Vitest setup (`cloud/vitest.config.mts`):

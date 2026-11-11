@@ -105,14 +105,19 @@ describe("GET /v1/games/:id/card.png", () => {
 		expect(pngSize(bytes)).toEqual({ width: 1200, height: 630 });
 	});
 
-	it("keeps its immutable shared-cache directive through the wrapper", async () => {
+	it("keeps its shared-cache directive through the wrapper", async () => {
 		// The `sharedCache` flag in ROUTES is what makes this reachable; without
 		// it the wrapper in index.ts rewrites the response `private, no-store`
 		// and every unfurl re-renders the card.
+		//
+		// The exact string, because the edge half of it is load-bearing: it is
+		// the only thing bounding how long a card for a game since made private
+		// or deleted carries on being served (nothing purges it). Lengthening it
+		// lengthens that window, so it is not a number to retune in passing.
 		const gameId = await seedPublicGameWithChart();
 		const res = await request.get({ path: await canonicalPath(gameId) });
 		expect(res.headers.get("Cache-Control")).toBe(
-			"public, max-age=31536000, s-maxage=31536000, immutable",
+			"public, max-age=31536000, s-maxage=86400",
 		);
 		// A stored entry outlives the request that filled it, so the id would
 		// be replayed to everyone for the whole s-maxage.

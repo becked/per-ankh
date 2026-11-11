@@ -519,8 +519,9 @@ const ROUTES: RouteSpec[] = [
 	{
 		// The link-preview image. `?v=<updated_at>&c=<renderer version>`
 		// versions it, and the cache keys on the pair, which is what lets the
-		// response be immutable for a year. The handler renders only the
-		// canonical pair and redirects everything else to it.
+		// response be stored for a day rather than re-rendered per fetch. The
+		// handler renders only the canonical pair and redirects everything else
+		// to it.
 		method: "GET",
 		match: {
 			kind: "regex",
@@ -532,7 +533,7 @@ const ROUTES: RouteSpec[] = [
 		// assemblePublicGameCards issues — all SELECT. The read-budget count
 		// and its audit insert go through EVENTS_DB, so neither anchors the
 		// session's bookmark. The answer is persisted nowhere, and it is
-		// already served from a year-long cache entry, so replica lag is
+		// already served from a day-long cache entry, so replica lag is
 		// orders of magnitude inside what the route accepts.
 		staleTolerant: true,
 		// `is_public = 1` is the whole visibility rule and the handler reads

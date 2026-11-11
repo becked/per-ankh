@@ -891,7 +891,7 @@ async function downloadResponse(
 // belongs in one place whether the caller means to read the response or hand
 // the URL to a crawler.
 //
-// The URL carries the two halves of the cache key the Worker's year-long TTL
+// The URL carries the two halves of the cache key the Worker's long TTL
 // stands on, because without them a card that changed would keep being served:
 //
 //   - `v`, the game's `updated_at`. Every writer of a *game row* bumps it, the

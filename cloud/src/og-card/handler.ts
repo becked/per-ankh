@@ -1,8 +1,8 @@
 // GET /v1/games/:id/card.png — the link-preview image for one public game.
 //
 // What a game's `og:image` points at (src/routes/games/[id]/+layout.ts). The
-// URL carries `?v=<updated_at>&c=<OG_CARD_VERSION>`, so a card is immutable
-// for that pair and the TTL below can be long. `games.updated_at` is bumped by
+// URL carries `?v=<updated_at>&c=<OG_CARD_VERSION>`, so the card at that pair
+// never changes and the TTL below can be long. `games.updated_at` is bumped by
 // every writer of a game row, the admin reindex included; `c` covers the one
 // thing it cannot, a deploy that changed the renderer. Anything else the card
 // draws — most visibly the uploader's display name, which `users` refreshes on
@@ -62,20 +62,44 @@ const CARD_BUDGET: ReadBudget = {
 	code: "RATE_LIMIT",
 };
 
-// A year, in both tiers, and only ever on the canonical URL — the version pair
-// in the query string is what makes that safe, since a re-fetch of that URL
-// could only ever learn that nothing had changed.
+// A day at the edge, a year in the browser, and only ever on the canonical
+// URL.
+//
+// The version pair makes the card's *content* immutable: a re-fetch of this
+// URL could only ever learn that nothing had changed. What it cannot make
+// immutable is whether the game should be served at all. Making a game private
+// (handleUpdateGame) or deleting it (handleGameDelete) bumps or drops the row,
+// so the next render is a 404 — but the entry stored under the pair that was
+// canonical while it was public keeps answering, and neither path purges it.
+// Nor could a purge reach every one: each `updated_at` a game has held was its
+// own canonical URL and its own stored entry, and nothing records the old ones.
+//
+// The screenshot objects have the same shape — public, edge-cached, no
+// per-request gate — and the repo's answer there is to refuse the unpublish
+// outright (games.ts, "a game with screenshots stays public"). That is not
+// available here: every public game has a card, so the refusal would be a ban
+// on going private.
+//
+// So the edge TTL is what bounds it, and a day is the window a withdrawn card
+// is still served for. The cost is a re-render — ~60 ms and five SELECTs —
+// once per cache key per day per cache tier that asks for it. It also caps
+// forced re-renders: the scraper-UA exemption (read-budget.ts) is unmetered,
+// so a caller claiming to be Discordbot can spend one render per canonical URL
+// per day per tier and no more.
+//
+// `immutable` goes with it, being a promise the shared copy can no longer
+// keep. The browser's own year stays: a copy already downloaded belongs to the
+// viewer, as it does for any image.
 //
 // Spelled as one string literal rather than interpolated from a number: the
 // inventory in shared-cache-routes.test.ts scans source for the directive's
 // opening, so a template literal would not be counted as a site at all.
-const CARD_CACHE_CONTROL =
-	"public, max-age=31536000, s-maxage=31536000, immutable";
+const CARD_CACHE_CONTROL = "public, max-age=31536000, s-maxage=86400";
 
 // The redirect that sends every other version pair to the canonical one.
 // Storable, so a URL doing the rounds in a chat costs one D1 read an hour
-// rather than one per fetch, and short, so a game written during that hour is
-// picked up by the next crawl rather than at the end of a year.
+// rather than one per fetch, and shorter than the card's own entry, so a game
+// written during that hour is picked up by the next crawl.
 const REDIRECT_CACHE_CONTROL = "public, max-age=3600, s-maxage=3600";
 
 export async function handleGameCard(
