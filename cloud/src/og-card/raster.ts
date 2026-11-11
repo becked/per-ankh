@@ -6,9 +6,8 @@
 // the card is built as SVG (card-svg.ts) and turned into bytes here.
 //
 // resvg is wasm, imported as a module so workerd compiles it at deploy time
-// rather than at the first request. `initWasm` is idempotent per isolate and
-// kept behind a memoized promise — a second call throws ("Already initialized"),
-// which concurrent first requests in one isolate would otherwise hit.
+// rather than at the first request. `initWasm` runs once per isolate, behind
+// the memoized handle in initOnce below.
 //
 // Fonts are passed as bytes: resvg reads no system fonts in a Worker and
 // `loadSystemFonts` is false regardless, so the two baked Inter instances are
@@ -42,7 +41,20 @@ function fonts(): Uint8Array[] {
 let ready: Promise<void> | null = null;
 
 function initOnce(): Promise<void> {
-	ready ??= initWasm(wasm);
+	// Memoized because a second initWasm in one isolate throws ("Already
+	// initialized"), which concurrent first requests would otherwise hit.
+	//
+	// A rejection is deliberately not memoized. A stored rejected promise is
+	// rethrown by every later await of it, so one failed init would make the
+	// isolate serve 500s until it was recycled — on a route whose work is cache
+	// misses. Clearing the handle is safe because a failed init leaves resvg
+	// uninitialized: its `initialized` flag is set only after the inner await
+	// resolves (`initWasm`, @resvg/resvg-wasm 2.6.2), so the retry does not hit
+	// the "Already initialized" throw above.
+	ready ??= initWasm(wasm).catch((err: unknown) => {
+		ready = null;
+		throw err;
+	});
 	return ready;
 }
 
