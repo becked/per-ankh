@@ -18,7 +18,6 @@
 	import { IMPROVEMENT_BUILDS } from "$lib/generated/improvement-builds";
 	import {
 		characterName,
-		civilizationName,
 		formatEnum,
 		nationName,
 		turnCount,
@@ -131,17 +130,29 @@
 	// for every span it names: of the corpus's 82 player-less cities, 14 carry
 	// an EARLIER, closed unowned span as well, and all 14 are held by
 	// TRIBE_ANARCHY now, which is what a breached city sits in. A blob from
-	// before PARSER_VERSION 2.26.0 carries no `tribe`, and then nothing names
-	// the holder.
+	// before PARSER_VERSION 2.26.0 carries no `tribe`; `cityOwner` reads that
+	// as anarchy, the same default the map applies, so the two still agree.
 	function tribeForSpan(span: OwnerSpan | null): string | null {
 		if (span == null || span.playerXmlId !== null) return null;
 		return city?.tribe ?? null;
 	}
 
 	// Who the card names, crests and colours as the holder at the selected
-	// turn: the roster player the span names, else the tribe, through the same
-	// `cityOwner` the banner and the Cities tab read.
-	const tribeOwnerAtTurn = $derived(cityOwner(null, tribeForSpan(spanAtTurn)));
+	// turn: the roster player the span names, else the tribe holding it,
+	// resolved by the same `cityOwner` the banner and the Cities tab read so
+	// all three word an absent `<Tribe>` the same way. Null only when NO span
+	// covers the turn — before the city was founded — where there is no holder
+	// to name and `cityOwner` must not be asked.
+	const holderAtTurn = $derived.by(() => {
+		const span = spanAtTurn;
+		if (span == null) return null;
+		// A span a PLAYER holds is that player's even when the roster cannot
+		// name them. Only a span with no player at all falls through to the
+		// tribe, so an unresolvable player reads as it always has — its label
+		// without a crest — rather than as anarchy.
+		if (span.playerXmlId !== null && ownerAtTurn?.nation == null) return null;
+		return cityOwner(ownerAtTurn?.nation ?? null, tribeForSpan(span));
+	});
 
 	// The whole ownership record as one line of comma-separated range/holder
 	// pairs, reading like the founded line it sits under.
@@ -154,9 +165,10 @@
 					span.from === span.to
 						? `Turn ${span.from}`
 						: `Turns ${span.from}–${span.to}`;
-				const holder =
-					held?.label ??
-					(tribe != null ? civilizationName(tribe) : "Unowned, mid-capture");
+				// The same resolution the Owner row and the banner use, so an
+				// absent `<Tribe>` reads as anarchy here too rather than as a
+				// wording this line invents for itself.
+				const holder = held?.label ?? cityOwner(null, tribe).label;
 				return `${range} · ${holder}`;
 			})
 			.join(", "),
@@ -217,15 +229,8 @@
 	// turn, so the card and the banner that opened it agree — which means the
 	// tribe's crest and colour where a tribe holds the city, since that is
 	// what the banner draws.
-	const nationAtTurn = $derived(ownerAtTurn?.nation ?? null);
-	const holderCrestAtTurn = $derived(
-		nationAtTurn ?? tribeOwnerAtTurn?.crestKey ?? null,
-	);
-	const holderColor = $derived(
-		(nationAtTurn ? getCivilizationColor(nationAtTurn) : null) ??
-			tribeOwnerAtTurn?.color ??
-			"rgb(var(--color-tan))",
-	);
+	const holderCrestAtTurn = $derived(holderAtTurn?.crestKey ?? null);
+	const holderColor = $derived(holderAtTurn?.color ?? "rgb(var(--color-tan))");
 
 	// ─── Zone 3: the end-of-game record ───────────────────────────────
 	// Rendered through the Cities tab's own column definitions so the labels,
@@ -386,8 +391,10 @@
 	type UnitGroup = {
 		key: string;
 		label: string;
-		// NATION_* or TRIBE_*, which is what the crest sprite takes.
-		civilization: string | null;
+		// The crest sprite key for the owner's civilization — NOT the raw
+		// NATION_*/TRIBE_* token, which finds the right art for only 7 of the
+		// 23 tribes. See `civilizationCrestKey`.
+		crestKey: string | null;
 		// The heading colour. A player's is its resolved roster colour, which a
 		// tribe has none of — see `unitGroups`.
 		color: string;
@@ -463,7 +470,7 @@
 					key,
 					total,
 					label: owner.label,
-					civilization: owner.civilization,
+					crestKey: owner.crestKey,
 					color: owner.color,
 					entries: [...counts.entries()]
 						.map(([k, count]) => ({ key: k, count }))
@@ -487,9 +494,7 @@
 						category="crests"
 						value={holderCrestAtTurn}
 						size={20}
-						alt={nationAtTurn
-							? nationName(nationAtTurn)
-							: (tribeOwnerAtTurn?.label ?? "")}
+						alt={holderAtTurn?.label ?? ""}
 					/>
 				{/if}
 				{#if familyCrestAtTurn}
@@ -535,7 +540,12 @@
 		<section class="zone-rule">
 			<dl class="chrome-rows">
 				<dt>Owner</dt>
-				<dd>
+				<!-- Coloured on the row, as the Capturing row below is, so the
+				     holder wears its colour whether that holder is a nation or
+				     a tribe — and the same `holderColor` the header takes, so
+				     the two cannot disagree. Left uncoloured when there is no
+				     holder to colour, which is the row's inherited tan. -->
+				<dd style={holderAtTurn ? `color: ${holderColor}` : undefined}>
 					{#if ownerAtTurn}
 						<span class="inline-flex items-center gap-1">
 							{#if ownerAtTurn.nation}
@@ -546,20 +556,19 @@
 									alt={nationName(ownerAtTurn.nation)}
 								/>
 							{/if}
+							<!-- The ROSTER's label, which is what tells a mirror's two
+							     Egypts apart. -->
 							{ownerAtTurn.label}
 						</span>
-					{:else if tribeOwnerAtTurn}
-						<span
-							class="inline-flex items-center gap-1"
-							style="color: {tribeOwnerAtTurn.color};"
-						>
+					{:else if holderAtTurn}
+						<span class="inline-flex items-center gap-1">
 							<SpriteIcon
 								category="crests"
-								value={tribeOwnerAtTurn.crestKey}
+								value={holderAtTurn.crestKey}
 								size={14}
-								alt={tribeOwnerAtTurn.label}
+								alt={holderAtTurn.label}
 							/>
-							{tribeOwnerAtTurn.label}
+							{holderAtTurn.label}
 						</span>
 					{:else}
 						Unowned
@@ -787,14 +796,15 @@
 										style="color: {group.color};"
 									>
 										<!-- Fixed-size slot: SpriteIcon renders nothing when
-										     the crest is missing (TRIBE_BARBARIANS and
-										     TRIBE_RAIDERS have none), which would unalign the
-										     heading. -->
+										     the crest art is missing, which would unalign the
+										     heading. A tribe always resolves one now
+										     (`tribeCrestKey` falls back to TRIBE_GENERIC); a
+										     nation whose crest we do not ship still does not. -->
 										<span class="flex w-3.5 flex-none">
-											{#if group.civilization}
+											{#if group.crestKey}
 												<SpriteIcon
 													category="crests"
-													value={group.civilization}
+													value={group.crestKey}
 													size={14}
 													alt={group.label}
 												/>

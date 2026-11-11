@@ -22,7 +22,6 @@ export {
 export {
 	UNOWNED_CITY_BORDER_COLOR,
 	getNationColor,
-	getTribeColor,
 	getCivilizationColor,
 	getNationChartColor,
 } from "./nations";

@@ -65,7 +65,12 @@ export function nationName(nation: string | null | undefined): string {
  * `formatEnum`, which matches what `text-tribe.xml` names 22 of the 23 tribes
  * the crest and colour bakes cover; `TRIBE_CASSANDER` is the one that
  * differs — the game calls it "Cassander's Forces". There is no baked
- * tribe-name table to reach for, and `unitOwner` carries the same divergence.
+ * tribe-name table to reach for, so a one-entry `TRIBE_NAMES` bake is what
+ * would fix it, here and for every caller at once.
+ *
+ * `cityOwner` and `unitOwner` (`$lib/game-detail/helpers`) wrap this with the
+ * holder's crest key and colour; reach for one of those where a surface needs
+ * more than the name.
  */
 export function civilizationName(
 	civilization: string | null | undefined,

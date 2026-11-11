@@ -65,9 +65,13 @@
 
 	// The header's colour: whoever holds the tile's city, which is a tribe when
 	// no nation does — the same `cityOwner` the banner over this hex reads, so
-	// the two agree.
+	// the two agree. Guarded on the same condition `headerLabel` is: a tile
+	// with neither a city nor a nation draws no header at all, and `cityOwner`
+	// answers for every city it is asked about, so an empty hex must not ask.
 	const ownerColor = $derived(
-		cityOwner(tile.owner_nation, cityTribe)?.color ?? "rgb(var(--color-tan))",
+		tile.owner_city || tile.owner_nation
+			? cityOwner(tile.owner_nation, cityTribe).color
+			: "rgb(var(--color-tan))",
 	);
 
 	const cityName = $derived(

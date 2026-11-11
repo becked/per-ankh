@@ -70,9 +70,9 @@
 	const uniqueCityNations = $derived(
 		[
 			...new Set(
-				cityStatistics.cities
-					.map((city) => cityOwner(city.owner_nation, city.tribe)?.civilization)
-					.filter((n): n is string => n != null),
+				cityStatistics.cities.map(
+					(city) => cityOwner(city.owner_nation, city.tribe).civilization,
+				),
 			),
 		].sort(),
 	);
@@ -89,12 +89,11 @@
 		let cities = cityRows;
 
 		if (selectedCityNations.length > 0) {
-			cities = cities.filter((city) => {
-				const owner = cityOwner(city.owner_nation, city.tribe);
-				return (
-					owner != null && selectedCityNations.includes(owner.civilization)
-				);
-			});
+			cities = cities.filter((city) =>
+				selectedCityNations.includes(
+					cityOwner(city.owner_nation, city.tribe).civilization,
+				),
+			);
 		}
 
 		if (tableState.search) {
@@ -106,7 +105,7 @@
 				const owner = cityOwner(city.owner_nation, city.tribe);
 				return (
 					city.city_name.toLowerCase().includes(term) ||
-					(owner != null && owner.label.toLowerCase().includes(term)) ||
+					owner.label.toLowerCase().includes(term) ||
 					(city.family?.toLowerCase().includes(term) ?? false) ||
 					(city.governor_name != null &&
 						characterName(city.governor_name).toLowerCase().includes(term))
@@ -230,6 +229,7 @@
 				</thead>
 				<tbody>
 					{#each filteredSortedCities as city (city.city_id)}
+						{@const owner = cityOwner(city.owner_nation, city.tribe)}
 						<tr class="group">
 							{#each visibleCityColumns as column, i (column.key)}
 								{@const iconValue = column.iconCategory
@@ -237,7 +237,6 @@
 										? column.iconValue(city)
 										: column.getValue(city)
 									: null}
-								{@const owner = cityOwner(city.owner_nation, city.tribe)}
 								<td
 									class="{TABLE_CELL_TD_CLASS} {i === 0
 										? 'rounded-l-lg'
@@ -246,7 +245,7 @@
 										: ''} {column.key === 'city_name'
 										? 'font-bold'
 										: ''} whitespace-nowrap"
-									style={column.key === "owner_nation" && owner
+									style={column.key === "owner_nation"
 										? `color: ${owner.color}`
 										: undefined}
 								>

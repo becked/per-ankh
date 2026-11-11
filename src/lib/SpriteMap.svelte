@@ -21,6 +21,7 @@
 	} from "$lib/generated/atlas-manifest";
 	import { SPRITE_MANIFEST } from "$lib/generated/sprite-manifest";
 	import {
+		ANARCHY_TRIBE,
 		cityOwner,
 		familyCrestKey,
 		familyForOwner,
@@ -452,12 +453,6 @@
 		return map;
 	});
 
-	// The tribe a capture hands a city to. `Unit.doCityCapture` (Unit.cs:2004)
-	// calls `setPlayer(PlayerType.NONE, infos().Globals.ANARCHY_TRIBE, ...)`, so
-	// this is the tribe every city under capture carries — as opposed to a city
-	// a real tribe holds, which carries its own.
-	const ANARCHY_TRIBE = "TRIBE_ANARCHY";
-
 	// city_name → the tribe holding it, or null/undefined when a nation does.
 	// Feeds the crest, which the game takes from the city's tribe when it has
 	// one (`City.getCrest`, City.cs:3319).
@@ -477,16 +472,12 @@
 	// banner's name colour and the tile panel's — everything but the territory
 	// border, which is one colour for every tribe.
 	//
-	// An ABSENT `tribe` resolves to anarchy rather than to nothing, which is
-	// what makes this one map rather than two readings that can disagree. A
-	// blob from before PARSER_VERSION 2.26.0 carries no `tribe` at all, and a
-	// `PARSER_VERSION` bump leaves most blobs on the old shape — so that
-	// default decides the common case, not the edge one. It is also the right
-	// reading: 81 of the 82 player-less cities across `test-data/saves/` are
-	// anarchy, which is the anarchy treatment the map already gave them. The
-	// 82nd is a real tribe holding its city outright — the state #360 was
-	// filed for, which is why the readings built on this now name and colour
-	// the tribe instead of leaving the city unowned.
+	// An ABSENT `tribe` reads as anarchy — the same default `cityOwner` applies
+	// and for the same reason, which is what keeps the banner, the card it
+	// opens and the Cities tab from giving three answers. `cityOwner` is where
+	// that decision lives; it is spelled out again HERE only because
+	// `resolveCityCrestKey` needs a concrete tribe to look the crest up by,
+	// and a null would send it down the nation arm into an empty slot.
 	const unownedCityTribeByName = $derived.by(() => {
 		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- locally-scoped Map, not reactive state
 		const map = new Map<string, string>();
@@ -839,8 +830,7 @@
 				worldY,
 				// Resolved as MapTooltip resolves it, so a tile's hover colour
 				// and its banner agree.
-				ownerColor:
-					cityOwner(t.owner_nation, tribe)?.color ?? "rgb(var(--color-tan))",
+				ownerColor: cityOwner(t.owner_nation, tribe).color,
 				civilizationCrestKey: resolveCityCrestKey(t.owner_nation, tribe),
 				familyCrestKey: cityFamilyCrestByName.get(t.owner_city) ?? null,
 				isCapital: t.is_capital,

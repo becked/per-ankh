@@ -334,10 +334,10 @@
 				class="ml-auto flex flex-none items-center gap-1 text-[11px] text-bright"
 			>
 				<span class="flex w-3.5 flex-none">
-					{#if owner.civilization}
+					{#if owner.crestKey}
 						<SpriteIcon
 							category="crests"
-							value={owner.civilization}
+							value={owner.crestKey}
 							size={14}
 							alt={owner.label}
 						/>

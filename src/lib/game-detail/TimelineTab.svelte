@@ -123,13 +123,21 @@
 		// across `test-data/saves/`. `first_owner_player_xml_id` is stable
 		// across captures, which is the same reason the Cities tab's Founder
 		// column reads it.
+		//
+		// `first_owner_player_xml_id` dates to PARSER_VERSION 2.3.0
+		// (`cloud/src/schemas/game.ts`) and `CityInfo` types it non-optional, so
+		// on an older stored blob the key is absent at runtime rather than null.
+		// Fall back to the current holder's nation there — where the table
+		// placed the founding before — so an old blob loses the attribution fix
+		// rather than losing the row.
 		for (const city of cityStatistics.cities) {
-			const founder = players.find(
-				(p) => p.playerId === city.first_owner_player_xml_id,
-			);
+			const founder =
+				city.first_owner_player_xml_id != null
+					? players.find((p) => p.playerId === city.first_owner_player_xml_id)
+					: undefined;
 			events.push({
 				turn: city.founded_turn,
-				nation: founder?.nation ?? null,
+				nation: founder?.nation ?? city.owner_nation ?? null,
 				category: "city",
 				label: `${formatEnum(city.city_name, "CITYNAME_")}${city.is_capital ? " (Capital)" : ""}`,
 				enumValue: city.city_name,
