@@ -121,8 +121,8 @@ describe("parseSelection", () => {
 
 	it("validates a value against its type", () => {
 		expect(
-			err("source=games&measure=matches&f=played_from:gte:last-tuesday"),
-		).toContain("played_from");
+			err("source=games&measure=matches&f=played:gte:last-tuesday"),
+		).toContain("played");
 		expect(
 			err("source=games&measure=matches&f=tournament:in:not-a-nanoid"),
 		).toContain("tournament");

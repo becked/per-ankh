@@ -13,14 +13,18 @@
 
 	import { goto } from "$app/navigation";
 	import { page } from "$app/state";
+	import SegmentedChips from "$lib/ui/SegmentedChips.svelte";
 	import Select from "$lib/ui/Select.svelte";
 	import { INPUT_CLASS } from "$lib/ui/classes";
 	import type { SelectOption } from "$lib/ui/types";
 	import {
 		canonicalQuery,
+		defaultFiltersFor,
 		filterIsComplete,
 		isRangeOp,
 		opLabel,
+		recentCutoff,
+		RECENT_WINDOW_MONTHS,
 		SORTS,
 		sortLabel,
 		type Draft,
@@ -106,7 +110,7 @@
 		const taken = opsTakenElsewhere(filter.key, atIndex);
 		return spec.ops
 			.filter((o) => o === filter.op || !taken.includes(o))
-			.map((o) => ({ value: o, label: opLabel(o) }));
+			.map((o) => ({ value: o, label: opLabel(o, spec.type) }));
 	};
 
 	// Whether any (key, operator) pair is left to add, the way the grouping
@@ -165,6 +169,16 @@
 		// grouping the source has no join for would send a selection the
 		// Worker refuses, and silently dropping it at send time would answer a
 		// wider question than the controls show.
+		const kept = draft.filters.filter((f) =>
+			next.filters.some((nf) => nf.key === f.key),
+		);
+		// The new source's own defaults, for any it doesn't already carry over.
+		// Arriving at Players from Games has no human filter to keep, so it is
+		// seeded; arriving from Techs researched already has whichever one the
+		// reader chose there, including the AI-only form, and that one wins.
+		const seeded = defaultFiltersFor(next).filter(
+			(d) => !kept.some((f) => f.key === d.key),
+		);
 		patch({
 			source: next.key,
 			measure:
@@ -173,9 +187,7 @@
 			dimensions: draft.dimensions.filter((d) =>
 				next.dimensions.some((nd) => nd.key === d),
 			),
-			filters: draft.filters.filter((f) =>
-				next.filters.some((nf) => nf.key === f.key),
-			),
+			filters: [...kept, ...seeded],
 		});
 	}
 
@@ -193,6 +205,49 @@
 			patch({ filters: [...draft.filters, { key: spec.key, op, values: [] }] });
 			return;
 		}
+	}
+
+	// The date bound's quick windows, beside the day input rather than instead
+	// of it: picking one fills the input with that day, pressing the lit one
+	// again clears it, and typing a day of your own unlights both. So there is
+	// no third "custom" item and no mode for the control to remember — what is
+	// lit is read back off the value every time.
+	//
+	// A window is resolved to a fixed day on the way in (recentCutoff), never
+	// carried as the word: the selection is the URL here, so "last 6 months"
+	// as a token would be one address answering a different question each
+	// month, and one edge entry holding whichever answer got there first.
+	const WINDOW_ITEMS: { key: string; label: string }[] =
+		RECENT_WINDOW_MONTHS.map((m) => ({
+			key: String(m),
+			label: `Last ${m} months`,
+		}));
+
+	// A window is a lower bound, so it is offered only where this row can hold
+	// `gte` — the upper half of a hand-built window already holds `lte`.
+	const windowOffered = (filter: DraftFilter, atIndex: number): boolean =>
+		filter.op === "gte" ||
+		!opsTakenElsewhere(filter.key, atIndex).includes("gte");
+
+	const windowValue = (filter: DraftFilter): string | null => {
+		if (filter.op !== "gte") return null;
+		const months = RECENT_WINDOW_MONTHS.find(
+			(m) => recentCutoff(m) === filter.values[0],
+		);
+		return months === undefined ? null : String(months);
+	};
+
+	function setWindow(
+		index: number,
+		filter: DraftFilter,
+		key: string | null,
+	): void {
+		patchFilter(
+			index,
+			key === null
+				? { ...filter, values: [] }
+				: { ...filter, op: "gte", values: [recentCutoff(Number(key))] },
+		);
 	}
 
 	function setFilterKey(index: number, key: string | null): void {
@@ -383,6 +438,14 @@
 											: [],
 									})}
 							/>
+							{#if spec.type === "date" && windowOffered(filter, i)}
+								<SegmentedChips
+									items={WINDOW_ITEMS}
+									value={windowValue(filter)}
+									onChange={(k) => setWindow(i, filter, k)}
+									ariaLabel="Recent window"
+								/>
+							{/if}
 						{:else if spec.type === "boolean"}
 							<Select
 								value={filter.values[0] ?? "1"}

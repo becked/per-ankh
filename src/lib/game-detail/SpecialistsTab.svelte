@@ -4,7 +4,7 @@
 	import { nationName } from "$lib/utils/formatting";
 	import { CHART_THEME } from "$lib/config";
 	import SpriteIcon from "./SpriteIcon.svelte";
-	import { ToggleGroup } from "bits-ui";
+	import SegmentedChips from "$lib/ui/SegmentedChips.svelte";
 	import ChartContainer from "$lib/ChartContainer.svelte";
 	import Checkbox from "$lib/ui/Checkbox.svelte";
 	import TableFilterColumn from "./TableFilterColumn.svelte";
@@ -60,10 +60,11 @@
 	let kindFilter = $state<KindFilter>("all");
 	let breakOutByLevel = $state(false);
 
-	// Segmented-control item styling, matching the Yields tab's
-	// Per Turn / Cumulative toggle.
-	const kindItemClass =
-		"px-2.5 py-1 text-xs text-tan transition-colors data-[state=off]:bg-surface data-[state=on]:bg-surface-raised";
+	const KIND_ITEMS: { key: KindFilter; label: string }[] = [
+		{ key: "all", label: "All" },
+		{ key: "urban", label: "Urban" },
+		{ key: "rural", label: "Rural" },
+	];
 
 	// Stacked-bar segment colors: muted brown for rural, a light→dark copper ramp
 	// for the three urban tiers (deeper = more developed).
@@ -436,24 +437,17 @@
 					nations={uniqueNations}
 					bind:value={tableState.filters}
 				/>
-				<ToggleGroup.Root
-					type="single"
+				<SegmentedChips
+					items={KIND_ITEMS}
 					value={kindFilter}
-					onValueChange={(v) => {
-						if (v) kindFilter = v as KindFilter;
+					onChange={(k) => {
+						// One kind is always filtered on, so pressing the lit item
+						// again leaves it lit rather than clearing to no filter —
+						// which is what `if (v)` guarded before this was a component.
+						if (k !== null) kindFilter = k;
 					}}
-					class="flex w-fit overflow-hidden rounded border border-black"
-				>
-					<ToggleGroup.Item value="all" class="rounded-l {kindItemClass}">
-						All
-					</ToggleGroup.Item>
-					<ToggleGroup.Item value="urban" class={kindItemClass}>
-						Urban
-					</ToggleGroup.Item>
-					<ToggleGroup.Item value="rural" class="rounded-r {kindItemClass}">
-						Rural
-					</ToggleGroup.Item>
-				</ToggleGroup.Root>
+					ariaLabel="Specialist kind"
+				/>
 				<Checkbox
 					bind:checked={breakOutByLevel}
 					labelClass="gap-1.5 text-xs text-tan"

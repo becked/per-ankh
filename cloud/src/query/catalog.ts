@@ -329,21 +329,17 @@ const GAME_FILTERS: CatalogFilter[] = [
 		help: "The games attached to one tournament's completed matches — the same set that tournament's stats bundle reads.",
 	},
 	{
-		key: "played_from",
-		label: "Played on or after",
+		// One key with both bounds rather than a `played_from` and a
+		// `played_to`: the column is the same and the operator is what the
+		// comparison dropdown is for, which is how `total_turns` already reads.
+		// A window is still two rows, because a key takes each operator once.
+		key: "played",
+		label: "Played",
 		reach: "games",
 		type: "date",
 		sql: "g.save_date",
-		ops: ["gte"],
+		ops: RANGE_OPS,
 		help: "YYYY-MM-DD, against the save's own date. A game with no date drops out of either bound.",
-	},
-	{
-		key: "played_to",
-		label: "Played on or before",
-		reach: "games",
-		type: "date",
-		sql: "g.save_date",
-		ops: ["lte"],
 	},
 	{
 		key: "total_turns",
@@ -570,7 +566,7 @@ const SOURCE_DEFS: QuerySource[] = [
 	},
 	{
 		key: "player_summaries",
-		label: "Player seats",
+		label: "Players",
 		table: "player_summaries",
 		alias: "ps",
 		grain: "One row per seat in a save — every player, human and AI.",

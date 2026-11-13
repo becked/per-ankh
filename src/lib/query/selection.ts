@@ -16,7 +16,7 @@
 // draft rather than failing the page, and the Worker's 400 (which the load
 // surfaces) is what reports it.
 
-import type { CatalogSource, FilterOp, QueryCatalog } from "./types";
+import type { CatalogSource, FilterOp, QueryCatalog, ValueType } from "./types";
 
 export type QuerySort = "measure_desc" | "measure_asc" | "dimension_asc";
 
@@ -47,8 +47,17 @@ const OP_LABELS: Readonly<Record<FilterOp, string>> = {
 	lte: "at most",
 };
 
-export function opLabel(op: FilterOp): string {
-	return OP_LABELS[op];
+// A date reads wrong under the generic comparisons: "played at least
+// 2026-05-13" is not English. These two are the labels the `played_from` and
+// `played_to` filters carried before one key with both operators replaced
+// them, so the words on screen haven't changed.
+const DATE_OP_LABELS: Readonly<Partial<Record<FilterOp, string>>> = {
+	gte: "on or after",
+	lte: "on or before",
+};
+
+export function opLabel(op: FilterOp, type?: ValueType): string {
+	return (type === "date" ? DATE_OP_LABELS[op] : undefined) ?? OP_LABELS[op];
 }
 
 export interface DraftFilter {
@@ -69,6 +78,71 @@ export interface Draft {
 const FILTER_SEPARATOR = ":";
 const VALUE_SEPARATOR = ",";
 
+const PLAYED_FILTER_KEY = "played";
+
+/**
+ * The opening date of a window that many months back, as YYYY-MM-DD.
+ *
+ * Mirrors `periodCutoff` (cloud/src/games-scope.ts) so "the last six months"
+ * opens on the same day here and on /stats, clamp included: setting the month
+ * alone would land on a date the target month does not have and JS rolls that
+ * forward, so six months before 31 August would open on 3 March — three days
+ * late — rather than on 28 February.
+ *
+ * Resolved to a fixed date rather than carried as a relative token, because
+ * the selection IS the URL here. A link that said "last 6 months" would answer
+ * a different question each month under one address, and the edge would key
+ * both answers to that one string.
+ */
+export function recentCutoff(months: number): string {
+	const now = new Date();
+	const year = now.getUTCFullYear();
+	const month = now.getUTCMonth() - months;
+	// Day 0 of the following month is the last day of this one.
+	const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+	const day = Math.min(now.getUTCDate(), lastDay);
+	return new Date(Date.UTC(year, month, day)).toISOString().slice(0, 10);
+}
+
+// The windows the date filter offers as one click, and the one a fresh draft
+// opens on. Old World changes between releases, so a question asked of the
+// whole corpus is partly a question about a game that no longer exists — and
+// the last six months is 633 of the 851 public matches, so the narrowing costs
+// about a quarter of the corpus rather than most of it.
+export const RECENT_WINDOW_MONTHS: readonly number[] = [6, 12];
+const DEFAULT_WINDOW_MONTHS = 6;
+
+// Every source that reaches a seat carries AI seats too, and almost every
+// question put to one is about people. So a draft that lands on any of them
+// opens with the human filter already on, as a chip the reader can see and
+// remove — rather than as a rule compiled into the corpus, which would make
+// "how often does the AI win" unaskable. Both defaults are keyed off the
+// filters the source actually carries rather than off a list of source keys,
+// so a source added later is seeded by what it can reach.
+//
+// Only a *draft* gets these. `draftFromParams` stays literal, because a URL
+// with no filter is how somebody shares the question that includes AI seats,
+// or the one that reaches back past the window.
+const HUMAN_FILTER: DraftFilter = { key: "is_human", op: "in", values: ["1"] };
+
+/** The filters a draft opens with when it lands on this source. */
+export function defaultFiltersFor(source: CatalogSource): DraftFilter[] {
+	const has = (key: string): boolean =>
+		source.filters.some((f) => f.key === key);
+	const filters: DraftFilter[] = [];
+	if (has(HUMAN_FILTER.key)) {
+		filters.push({ ...HUMAN_FILTER, values: [...HUMAN_FILTER.values] });
+	}
+	if (has(PLAYED_FILTER_KEY)) {
+		filters.push({
+			key: PLAYED_FILTER_KEY,
+			op: "gte",
+			values: [recentCutoff(DEFAULT_WINDOW_MONTHS)],
+		});
+	}
+	return filters;
+}
+
 /** The first source in the catalog, as the draft a visitor with no URL gets. */
 export function emptyDraft(catalog: QueryCatalog): Draft {
 	const source = catalog.sources[0];
@@ -76,7 +150,7 @@ export function emptyDraft(catalog: QueryCatalog): Draft {
 		source: source.key,
 		dimensions: [],
 		measure: source.measures[0].key,
-		filters: [],
+		filters: defaultFiltersFor(source),
 		sort: DEFAULT_SORT,
 		limit: catalog.limits.default_rows,
 	};
