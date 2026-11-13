@@ -10,14 +10,16 @@
 	import {
 		type TableState,
 		type DetailPlayer,
-		TABLE_FRAME_CLASS,
-		TABLE_CLASS,
-		TABLE_HEADER_TH_CLASS,
-		TABLE_CELL_TD_CLASS,
 		ownedByPlayer,
 		toggleSort,
 		improvementDisplayName,
 	} from "./helpers";
+	import {
+		TABLE_FRAME_CLASS,
+		TABLE_CLASS,
+		TABLE_HEADER_TH_CLASS,
+		TABLE_CELL_TD_CLASS,
+	} from "$lib/ui/classes";
 
 	let {
 		players,

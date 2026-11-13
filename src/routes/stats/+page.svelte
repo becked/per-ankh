@@ -13,6 +13,7 @@
 	import { navigating } from "$app/state";
 	import { cloudApi } from "$lib/api-cloud";
 	import GlobalFacetRow from "$lib/stats/GlobalFacetRow.svelte";
+	import StatsHeader from "$lib/stats/StatsHeader.svelte";
 	import {
 		parseGlobalPeriod,
 		parseGlobalSlice,
@@ -74,16 +75,19 @@
 <div class="flex flex-1 overflow-hidden">
 	<main class="isolate flex flex-1 flex-col overflow-hidden">
 		<div class="flex-1 overflow-y-auto px-4 pb-8 pt-4">
-			<div class="mx-auto max-w-screen-2xl">
-				<div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-					<h1 class="text-2xl font-bold text-gray-200">Global Stats</h1>
-					<GlobalFacetRow
-						slice={data.slice}
-						nation={data.nation}
-						period={data.period}
-					/>
-				</div>
+			<!-- The facet row belongs to this view, not to the pair: Explore narrows
+			     the corpus from its own builder, so a slice carried across the tabs
+			     would show a filter that view never applied. -->
+			{#snippet facets()}
+				<GlobalFacetRow
+					slice={data.slice}
+					nation={data.nation}
+					period={data.period}
+				/>
+			{/snippet}
+			<StatsHeader controls={facets} />
 
+			<div class="mx-auto max-w-screen-2xl">
 				<div
 					class="stats-catalog"
 					class:swapping={isSwapping}

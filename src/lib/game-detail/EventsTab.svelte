@@ -14,14 +14,16 @@
 	import {
 		type TableState,
 		type DetailPlayer,
-		TABLE_FRAME_CLASS,
-		TABLE_CLASS,
-		TABLE_HEADER_TH_CLASS,
-		TABLE_CELL_TD_CLASS,
 		eventLogOwnedBy,
 		toggleSort,
 		filledLineStyle,
 	} from "./helpers";
+	import {
+		TABLE_FRAME_CLASS,
+		TABLE_CLASS,
+		TABLE_HEADER_TH_CLASS,
+		TABLE_CELL_TD_CLASS,
+	} from "$lib/ui/classes";
 	import { withEndStateTotal } from "$lib/utils/victory-point-series";
 
 	let {

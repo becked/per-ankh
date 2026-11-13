@@ -32,10 +32,6 @@
 		type TableState,
 		type UnitClass,
 		type DetailPlayer,
-		TABLE_FRAME_CLASS,
-		TABLE_CLASS,
-		TABLE_HEADER_TH_CLASS,
-		TABLE_CELL_TD_CLASS,
 		comparisonRowKeys,
 		ownedByPlayer,
 		findByPlayer,
@@ -51,6 +47,12 @@
 		rulerCognomen,
 		rulerName,
 	} from "./helpers";
+	import {
+		TABLE_FRAME_CLASS,
+		TABLE_CLASS,
+		TABLE_HEADER_TH_CLASS,
+		TABLE_CELL_TD_CLASS,
+	} from "$lib/ui/classes";
 	import { standingShiftMarkers, type StandingShift } from "./standings";
 	import { POWER_TIERS } from "$lib/generated/power-tiers";
 

@@ -46,6 +46,14 @@ export const RETENTION_BUCKETS: readonly RetentionBucket[] = [
 			// the global stats page starts refusing — and vice versa. Same 1h
 			// counter role, metadata-free.
 			"global_stats_view",
+			// Ad-hoc query reads (query/handlers.ts): its own budget again, and
+			// specifically not a share of global_stats_view's — this is the one
+			// endpoint whose cost per request the caller picks, so its ceiling
+			// has to move without moving the stats bundles'. Same 1h counter
+			// role, metadata-free: what the question *was* is on the access-log
+			// line as a shape (source, measure, grouping and filter keys), never
+			// as values, and never here.
+			"ad_hoc_query_view",
 			// Season leaderboard reads (stats/handlers.ts): its own budget for the
 			// same reason, and not a share of global_stats_view's either — /players
 			// is anonymous where /stats is session-gated, so pooling them would

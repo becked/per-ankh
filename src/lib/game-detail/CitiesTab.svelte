@@ -9,15 +9,17 @@
 	import {
 		type TableState,
 		CITY_COLUMNS,
-		TABLE_FRAME_CLASS,
-		TABLE_CLASS,
-		TABLE_HEADER_TH_CLASS,
-		TABLE_CELL_TD_CLASS,
 		cityOwner,
 		formatCityCell,
 		resolveCityRows,
 		toggleSort,
 	} from "./helpers";
+	import {
+		TABLE_FRAME_CLASS,
+		TABLE_CLASS,
+		TABLE_HEADER_TH_CLASS,
+		TABLE_CELL_TD_CLASS,
+	} from "$lib/ui/classes";
 
 	let {
 		cityStatistics,
