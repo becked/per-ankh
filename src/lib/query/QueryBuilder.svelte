@@ -321,7 +321,7 @@
 	// INPUT_CLASS as it stands, with no padding of its own layered on: two
 	// padding utilities in one class attribute are decided by Tailwind's
 	// emission order and not by the order they are written in (see Select).
-	const INPUT = `${INPUT_CLASS} text-xs text-tan placeholder:opacity-50 disabled:opacity-50`;
+	const INPUT = `${INPUT_CLASS} text-xs text-tan disabled:opacity-50`;
 	const GHOST =
 		"rounded bg-surface-raised px-2 py-1 text-xs text-tan transition-colors hover:bg-surface-raised-hover disabled:opacity-40";
 	const ASK =
@@ -393,11 +393,6 @@
 					draft.dimensions.length >= source.dimensions.length}
 				onclick={addDimension}>+ Grouping</button
 			>
-			{#if draft.dimensions.length === 0}
-				<p class="pt-1.5 text-xs italic text-tan opacity-70">
-					No grouping — one row for the whole corpus.
-				</p>
-			{/if}
 		</div>
 	</div>
 
@@ -467,9 +462,6 @@
 									.filter((o) => !filter.values.includes(o))
 									.map((o) => ({ value: o, label: vocab.label(o) }))}
 								onChange={(v) => addValue(i, v)}
-								placeholder={atValueCap
-									? `At ${catalog.limits.max_filter_values} values`
-									: "Add a value…"}
 								disabled={atValueCap}
 								resetAfterSelect
 								ariaLabel="Filter value"
@@ -477,9 +469,6 @@
 						{:else}
 							<input
 								class={INPUT}
-								placeholder={atValueCap
-									? `At ${catalog.limits.max_filter_values} values`
-									: (vocab?.example ?? "Type a value, then Enter")}
 								disabled={atValueCap}
 								aria-label="Filter value"
 								onkeydown={(e) => onValueKey(e, i)}
@@ -556,14 +545,5 @@
 			disabled={incomplete || !dirty}
 			onclick={run}>Ask</button
 		>
-		{#if incomplete}
-			<span class="text-xs italic text-tan opacity-70">
-				A filter still needs a value.
-			</span>
-		{:else if dirty && asked !== null}
-			<span class="text-xs italic text-tan opacity-70">
-				The question has changed.
-			</span>
-		{/if}
 	</div>
 </div>

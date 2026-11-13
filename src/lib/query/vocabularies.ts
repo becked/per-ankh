@@ -41,8 +41,6 @@ export interface Vocabulary {
 	// The values to offer, or null where there is no roster to offer.
 	options: string[] | null;
 	label: (value: string) => string;
-	// Shown as the placeholder when there is no roster.
-	example?: string;
 }
 
 // Sorted by the name they display under, not by zType: a picker is read in the
@@ -132,7 +130,7 @@ const VOCABULARIES: Readonly<Record<string, Vocabulary>> = {
 	},
 	// Info-list order, which is the order the victory screen lists them in.
 	victory_type: { options: [...VICTORY_ORDERING], label: victoryLabel },
-	tech: { options: null, label: techName, example: "TECH_IRONWORKING" },
+	tech: { options: null, label: techName },
 };
 
 export function vocabularyFor(name: string | undefined): Vocabulary | null {

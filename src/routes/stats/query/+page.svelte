@@ -47,10 +47,6 @@
 							<QueryResults result={data.result} {source} />
 						</div>
 					</Panel>
-				{:else}
-					<p class="px-1 text-sm italic text-tan opacity-70">
-						Compose a question above, then ask it.
-					</p>
 				{/if}
 			</div>
 		</div>
