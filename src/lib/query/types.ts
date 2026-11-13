@@ -12,13 +12,7 @@
 // game's own name for it — independent of whether `vocabulary` names a roster
 // to pick from. `text` is the two genuinely free-text columns.
 export type ValueType =
-	| "enum"
-	| "text"
-	| "number"
-	| "boolean"
-	| "date"
-	| "identity"
-	| "tournament";
+	"enum" | "text" | "number" | "boolean" | "date" | "identity" | "tournament";
 
 export type FilterOp = "in" | "not_in" | "gte" | "lte";
 
@@ -75,10 +69,6 @@ export interface QueryCatalog {
 		max_filters: number;
 		max_filter_values: number;
 	};
-	// The corpus every selection runs over, in one sentence. Shown beneath the
-	// results rather than restated in the page, so this surface cannot
-	// describe a scope the compiler isn't applying.
-	corpus: string;
 }
 
 export interface ResultColumn {

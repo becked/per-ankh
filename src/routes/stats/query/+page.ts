@@ -26,7 +26,8 @@ const QUERY_PARAMS = ["source", "dim", "measure", "f", "sort", "limit"];
 function selectionFrom(url: URL): string {
 	const params = new URLSearchParams();
 	for (const name of QUERY_PARAMS) {
-		for (const value of url.searchParams.getAll(name)) params.append(name, value);
+		for (const value of url.searchParams.getAll(name))
+			params.append(name, value);
 	}
 	return params.toString().replace(/%3A/g, ":").replace(/%2C/g, ",");
 }

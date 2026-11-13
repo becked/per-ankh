@@ -31,8 +31,9 @@ describe("the corpus every selection runs over", () => {
 	it("is not expressible, so it cannot be turned off", () => {
 		// There is no catalog entry for is_public, which is what makes the
 		// predicate a visibility rule rather than a facet.
-		expect(() => compile("source=games&measure=matches&f=is_public:in:0"))
-			.toThrow();
+		expect(() =>
+			compile("source=games&measure=matches&f=is_public:in:0"),
+		).toThrow();
 	});
 });
 
@@ -222,10 +223,6 @@ describe("the issue's acceptance questions", () => {
 		// The count the issue names as inflated by the double upload. Deduped
 		// here because the measure's unit is a match.
 		expect(flattened).toContain("COUNT(DISTINCT g.xml_game_id)");
-		expect(binds).toEqual([
-			"NATION_CARTHAGE",
-			"TRAIT_SCHEMER_ARCHETYPE",
-			50,
-		]);
+		expect(binds).toEqual(["NATION_CARTHAGE", "TRAIT_SCHEMER_ARCHETYPE", 50]);
 	});
 });

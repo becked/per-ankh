@@ -13,15 +13,17 @@
 		type TableState,
 		type DetailPlayer,
 		type BuildItem,
-		TABLE_FRAME_CLASS,
-		TABLE_CLASS,
-		TABLE_HEADER_TH_CLASS,
-		TABLE_CELL_TD_CLASS,
 		comparisonRowKeys,
 		orderPlayersLeadFirst,
 		ownedByPlayer,
 		toggleSort,
 	} from "./helpers";
+	import {
+		TABLE_FRAME_CLASS,
+		TABLE_CLASS,
+		TABLE_HEADER_TH_CLASS,
+		TABLE_CELL_TD_CLASS,
+	} from "$lib/ui/classes";
 	import {
 		type KindFilter,
 		KIND_LABELS,

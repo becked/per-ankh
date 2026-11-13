@@ -27,15 +27,13 @@
 	import TableFilterColumn from "./TableFilterColumn.svelte";
 	import TableFilterSelect from "./TableFilterSelect.svelte";
 	import { PIN_REMOVAL_NOTE, resolveMapPins, type MapPin } from "./map-pins";
+	import { type TableState, type DetailPlayer, toggleSort } from "./helpers";
 	import {
-		type TableState,
-		type DetailPlayer,
 		TABLE_FRAME_CLASS,
 		TABLE_CLASS,
 		TABLE_HEADER_TH_CLASS,
 		TABLE_CELL_TD_CLASS,
-		toggleSort,
-	} from "./helpers";
+	} from "$lib/ui/classes";
 
 	let {
 		game,

@@ -11,6 +11,7 @@
 	// bundle correctly omits them.
 
 	import { navigating } from "$app/state";
+	import { resolve } from "$app/paths";
 	import { cloudApi } from "$lib/api-cloud";
 	import GlobalFacetRow from "$lib/stats/GlobalFacetRow.svelte";
 	import {
@@ -77,11 +78,23 @@
 			<div class="mx-auto max-w-screen-2xl">
 				<div class="mb-4 flex flex-wrap items-center justify-between gap-3">
 					<h1 class="text-2xl font-bold text-gray-200">Global Stats</h1>
-					<GlobalFacetRow
-						slice={data.slice}
-						nation={data.nation}
-						period={data.period}
-					/>
+					<div class="flex flex-wrap items-center gap-3">
+						<GlobalFacetRow
+							slice={data.slice}
+							nation={data.nation}
+							period={data.period}
+						/>
+						<!-- The other door onto this corpus: these are the charts
+						     somebody already drew, and /stats/query is the same corpus
+						     asked a question nobody drew one for. The link back is on
+						     that page, so the pair reads both ways. -->
+						<a
+							href={resolve("/stats/query")}
+							class="text-xs text-tan underline-offset-2 transition-colors hover:text-orange hover:underline"
+						>
+							Ask the corpus
+						</a>
+					</div>
 				</div>
 
 				<div

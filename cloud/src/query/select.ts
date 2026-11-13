@@ -19,8 +19,9 @@
 // widens is the wrong failure mode (parseAdminGameFilter, games-scope.ts), and
 // the same holds for a question — an answer over more games than were asked
 // for reads exactly like the right answer. So an unknown key is a 400 naming
-// it, and the one value that is clamped rather than refused is the row cap,
-// which can only narrow.
+// it, a repeated filter pair is a 400 rather than an AND that matches nothing,
+// and the one value that is clamped rather than refused is the row cap, which
+// can only narrow.
 
 import {
 	DEFAULT_ROWS,
@@ -140,7 +141,10 @@ function parseFilter(
 	}
 	const op = spec.ops.find((o) => o === opRaw);
 	if (!op) {
-		return { ok: false, message: `Filter '${key}' does not support '${opRaw}'` };
+		return {
+			ok: false,
+			message: `Filter '${key}' does not support '${opRaw}'`,
+		};
 	}
 
 	const values: string[] = [];
@@ -209,9 +213,24 @@ export function parseSelection(params: URLSearchParams): SelectionParse {
 	}
 
 	const filters: QueryFilter[] = [];
+	const seen = new Set<string>();
 	for (const raw of params.getAll("f")) {
 		const parsed = parseFilter(source, raw);
 		if (!parsed.ok) return parsed;
+		// Refused by (key, operator) pair, not by key: a window on one column is
+		// two filters (`total_turns:gte` and `total_turns:lte`) and so is an
+		// include beside an exclude. A *repeated* pair is the one that can't
+		// mean anything — `col IN (A) AND col IN (B)` is an empty answer the
+		// page renders as "No games match this question", which reads like a
+		// result rather than like the malformed question it is.
+		const pair = `${parsed.filter.key}:${parsed.filter.op}`;
+		if (seen.has(pair)) {
+			return {
+				ok: false,
+				message: `Filter '${parsed.filter.key}' appears twice with '${parsed.filter.op}'`,
+			};
+		}
+		seen.add(pair);
 		filters.push(parsed.filter);
 	}
 	if (filters.length > MAX_FILTERS) {
@@ -245,7 +264,14 @@ export function parseSelection(params: URLSearchParams): SelectionParse {
 	return {
 		ok: true,
 		source,
-		selection: { source: source.key, dimensions, measure, filters, sort, limit },
+		selection: {
+			source: source.key,
+			dimensions,
+			measure,
+			filters,
+			sort,
+			limit,
+		},
 	};
 }
 

@@ -44,7 +44,10 @@ const VOCABULARIES: Readonly<Record<string, Vocabulary>> = {
 	// A wonder is an improvement flagged `<bWonder>`, which is what the baked
 	// culture-prereq table is keyed by.
 	wonder: {
-		options: byLabel(Object.keys(WONDER_CULTURE_PREREQ), improvementDisplayName),
+		options: byLabel(
+			Object.keys(WONDER_CULTURE_PREREQ),
+			improvementDisplayName,
+		),
 		label: improvementDisplayName,
 	},
 	law: {

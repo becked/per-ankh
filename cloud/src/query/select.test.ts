@@ -28,9 +28,7 @@ describe("parseSelection", () => {
 			source: "player_summaries",
 			dimensions: ["player", "nation"],
 			measure: "matches",
-			filters: [
-				{ key: "nation", op: "in", values: ["NATION_CARTHAGE"] },
-			],
+			filters: [{ key: "nation", op: "in", values: ["NATION_CARTHAGE"] }],
 			sort: "measure_asc",
 			limit: 10,
 		});
@@ -53,9 +51,7 @@ describe("parseSelection", () => {
 
 	it("refuses an entry the source cannot reach", () => {
 		// `nation` lives on a seat; the games source has no player_index.
-		expect(err("source=games&measure=matches&dim=nation")).toContain(
-			"nation",
-		);
+		expect(err("source=games&measure=matches&dim=nation")).toContain("nation");
 	});
 
 	it("refuses an operator the filter does not offer", () => {
@@ -87,10 +83,30 @@ describe("parseSelection", () => {
 		).toContain("twice");
 	});
 
-	it("refuses sorting by a grouping there isn't", () => {
+	it("refuses a repeated filter pair", () => {
 		expect(
-			err("source=games&measure=matches&sort=dimension_asc"),
-		).toContain("grouping");
+			err("source=games&measure=matches&f=map_class:in:A&f=map_class:in:B"),
+		).toContain("twice");
+	});
+
+	it("takes the two bounds of a window on one column", () => {
+		// A pair is (key, operator), so `gte` and `lte` on one column are two
+		// filters rather than a repeat — and so is an include beside an exclude.
+		expect(
+			ok(
+				"source=games&measure=matches&f=total_turns:gte:10&f=total_turns:lte:80",
+			).selection.filters,
+		).toHaveLength(2);
+		expect(
+			ok("source=games&measure=matches&f=map_class:in:A&f=map_class:not_in:B")
+				.selection.filters,
+		).toHaveLength(2);
+	});
+
+	it("refuses sorting by a grouping there isn't", () => {
+		expect(err("source=games&measure=matches&sort=dimension_asc")).toContain(
+			"grouping",
+		);
 	});
 
 	it("clamps the row cap instead of refusing it", () => {
@@ -143,9 +159,7 @@ describe("canonicalSelection", () => {
 
 	it("drops the defaults", () => {
 		const { selection } = ok("source=games&measure=matches");
-		expect(canonicalSelection(selection)).toBe(
-			"source=games&measure=matches",
-		);
+		expect(canonicalSelection(selection)).toBe("source=games&measure=matches");
 	});
 
 	it("round-trips through the parser", () => {

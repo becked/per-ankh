@@ -10,14 +10,12 @@
 	// one.
 
 	import ProfileLink from "$lib/ProfileLink.svelte";
+	import { TABLE_CLASS, TABLE_FRAME_CLASS } from "$lib/ui/classes";
 	import type { CatalogSource, QueryResult } from "./types";
 	import { valueLabel } from "./vocabularies";
 
-	let {
-		result,
-		source,
-		corpus,
-	}: { result: QueryResult; source: CatalogSource; corpus: string } = $props();
+	let { result, source }: { result: QueryResult; source: CatalogSource } =
+		$props();
 
 	// The columns the table draws. `key` columns carry the identity
 	// dimension's user_id and slug for the profile link and are never a column
@@ -55,7 +53,7 @@
 
 	const CELL = "px-3 py-2 text-right tabular-nums";
 	const HEAD =
-		"px-3 py-1 text-left text-[10px] font-bold uppercase text-gray-400";
+		"px-3 py-1 text-left text-[10px] font-bold uppercase tracking-wide text-gray-100";
 </script>
 
 {#if result.rows.length === 0}
@@ -63,60 +61,68 @@
 		No games match this question.
 	</p>
 {:else}
-	<div class="overflow-x-auto rounded-lg bg-blue-gray p-3">
-		<table class="w-full border-separate border-spacing-y-1.5 text-sm">
-			<thead>
-				<tr>
-					{#each dimensions as column (column.key)}
-						<th scope="col" class={HEAD}>{column.label}</th>
-					{/each}
-					{#if measure}
-						<th scope="col" class="{HEAD} text-right">{measure.label}</th>
-					{/if}
-				</tr>
-			</thead>
-			<tbody>
-				{#each result.rows as row, i (i)}
+	<div class={TABLE_FRAME_CLASS}>
+		<div class="min-w-0 flex-1 overflow-x-auto">
+			<table class="{TABLE_CLASS} text-sm">
+				<thead>
 					<tr>
-						{#each dimensions as column, c (column.key)}
-							<td
-								class="bg-surface px-3 py-2 text-left text-tan {c === 0
-									? 'rounded-l-lg'
-									: ''}"
-							>
-								{#if isIdentity(column.key)}
-									{@const label = valueLabel(
-										row[column.key],
-										column.type,
-										undefined,
-										"Unlinked seat",
-									)}
-									<ProfileLink
-										userId={asString(row[`${column.key}_id`])}
-										slug={asString(row[`${column.key}_slug`])}
-										class="font-semibold text-gray-200 transition-colors hover:text-orange"
-									>
-										{label}
-									</ProfileLink>
-								{:else}
-									{valueLabel(
-										row[column.key],
-										column.type,
-										vocabularyOf(column.key),
-										"Not recorded",
-									)}
-								{/if}
-							</td>
+						{#each dimensions as column (column.key)}
+							<th scope="col" class={HEAD}>{column.label}</th>
 						{/each}
 						{#if measure}
-							<td class="{CELL} rounded-r-lg bg-surface font-bold text-gray-200">
-								{formatMeasure(row[measure.key])}
-							</td>
+							<th scope="col" class="{HEAD} text-right">{measure.label}</th>
 						{/if}
 					</tr>
-				{/each}
-			</tbody>
-		</table>
+				</thead>
+				<tbody>
+					{#each result.rows as row, i (i)}
+						<tr>
+							{#each dimensions as column, c (column.key)}
+								<td
+									class="bg-surface px-3 py-2 text-left {isIdentity(column.key)
+										? 'font-semibold text-gray-200'
+										: 'text-tan'} {c === 0 ? 'rounded-l-lg' : ''}"
+								>
+									{#if isIdentity(column.key)}
+										{@const label = valueLabel(
+											row[column.key],
+											column.type,
+											undefined,
+											"Unlinked seat",
+										)}
+										<!-- The weight and colour are on the cell, not here:
+									     `class` styles the anchor only, so an unlinked seat
+									     renders bare and would otherwise sit lighter than the
+									     rows that link. -->
+										<ProfileLink
+											userId={asString(row[`${column.key}_id`])}
+											slug={asString(row[`${column.key}_slug`])}
+											class="transition-colors hover:text-orange"
+										>
+											{label}
+										</ProfileLink>
+									{:else}
+										{valueLabel(
+											row[column.key],
+											column.type,
+											vocabularyOf(column.key),
+											"Not recorded",
+										)}
+									{/if}
+								</td>
+							{/each}
+							{#if measure}
+								<td
+									class="{CELL} rounded-r-lg bg-surface font-bold text-gray-200"
+								>
+									{formatMeasure(row[measure.key])}
+								</td>
+							{/if}
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+		</div>
 	</div>
 {/if}
 
@@ -125,7 +131,6 @@
 	     collapsed a match both players uploaded, and one that did not, are
 	     different numbers over the same corpus. -->
 	<p>{result.measure.note}</p>
-	<p>{corpus}</p>
 	{#if result.truncated}
 		<p class="not-italic text-orange opacity-100">
 			Showing the first {result.limit} rows — there may be more.

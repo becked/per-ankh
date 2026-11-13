@@ -14,6 +14,7 @@
 	import { goto } from "$app/navigation";
 	import { page } from "$app/state";
 	import Select from "$lib/ui/Select.svelte";
+	import { INPUT_CLASS } from "$lib/ui/classes";
 	import type { SelectOption } from "$lib/ui/types";
 	import {
 		canonicalQuery,
@@ -29,10 +30,8 @@
 	import { vocabularyFor } from "./vocabularies";
 	import type { CatalogFilter, FilterOp, QueryCatalog } from "./types";
 
-	let {
-		catalog,
-		draft: initial,
-	}: { catalog: QueryCatalog; draft: Draft } = $props();
+	let { catalog, draft: initial }: { catalog: QueryCatalog; draft: Draft } =
+		$props();
 
 	// Writable derived: tracks the load's draft, but stays reassignable so the
 	// builder can edit it until the next one arrives. A new draft arriving —
@@ -77,16 +76,59 @@
 					draft.dimensions[atIndex] === d.key,
 			)
 			.map((d) => ({ value: d.key, label: d.label }));
-	const filterOptions = $derived<SelectOption[]>(
-		source.filters.map((f) => ({ value: f.key, label: f.label })),
+	// A (key, operator) pair already in the draft is offered only in its own
+	// row. Two `in` filters on one column compile to `col IN (A) AND col IN
+	// (B)`, which matches nothing, and the Worker refuses the repeated pair
+	// outright — so the builder can't compose one. The exclusion is by pair
+	// rather than by key because a range is two rows on one column: `gte` and
+	// `lte` on `total_turns` is how a window is asked for.
+	const opsTakenElsewhere = (key: string, atIndex: number): string[] =>
+		draft.filters
+			.filter((f, i) => i !== atIndex && f.key === key)
+			.map((f) => f.op);
+
+	const freeOp = (
+		spec: CatalogFilter,
+		atIndex: number,
+	): FilterOp | undefined => {
+		const taken = opsTakenElsewhere(spec.key, atIndex);
+		return spec.ops.find((o) => !taken.includes(o));
+	};
+
+	const filterOptions = (atIndex: number): SelectOption[] =>
+		source.filters
+			.filter((f) => freeOp(f, atIndex) !== undefined)
+			.map((f) => ({ value: f.key, label: f.label }));
+
+	const opOptions = (filter: DraftFilter, atIndex: number): SelectOption[] => {
+		const spec = specFor(filter);
+		if (!spec) return [];
+		const taken = opsTakenElsewhere(filter.key, atIndex);
+		return spec.ops
+			.filter((o) => o === filter.op || !taken.includes(o))
+			.map((o) => ({ value: o, label: opLabel(o) }));
+	};
+
+	// Whether any (key, operator) pair is left to add, the way the grouping
+	// button checks for a column it hasn't used.
+	const canAddFilter = $derived(
+		source.filters.some((f) => freeOp(f, -1) !== undefined),
 	);
 
 	const ROW_CHOICES = [10, 25, 50, 100, 200];
+	// A hand-edited or bookmarked `?limit=` the picker doesn't offer is still
+	// the cap the answer was computed at — the Worker is asked with the URL's
+	// own params — so the control carries it rather than falling back to the
+	// placeholder and reading as though no cap were set.
 	const limitOptions = $derived<SelectOption[]>(
-		ROW_CHOICES.filter((n) => n <= catalog.limits.max_rows).map((n) => ({
-			value: String(n),
-			label: `${n} rows`,
-		})),
+		[
+			...new Set([
+				...ROW_CHOICES.filter((n) => n <= catalog.limits.max_rows),
+				draft.limit,
+			]),
+		]
+			.sort((a, b) => a - b)
+			.map((n) => ({ value: String(n), label: `${n} rows` })),
 	);
 	const sortOptions = $derived<SelectOption[]>(
 		SORTS.filter(
@@ -109,9 +151,7 @@
 	);
 	const dirty = $derived(query !== asked);
 
-	const incomplete = $derived(
-		draft.filters.some((f) => !filterIsComplete(f)),
-	);
+	const incomplete = $derived(draft.filters.some((f) => !filterIsComplete(f)));
 
 	function specFor(filter: DraftFilter): CatalogFilter | null {
 		return source.filters.find((f) => f.key === filter.key) ?? null;
@@ -147,23 +187,22 @@
 	}
 
 	function addFilter(): void {
-		const spec = source.filters.find(
-			(f) => !draft.filters.some((df) => df.key === f.key),
-		);
-		if (!spec) return;
-		patch({
-			filters: [
-				...draft.filters,
-				{ key: spec.key, op: spec.ops[0], values: [] },
-			],
-		});
+		for (const spec of source.filters) {
+			const op = freeOp(spec, -1);
+			if (op === undefined) continue;
+			patch({ filters: [...draft.filters, { key: spec.key, op, values: [] }] });
+			return;
+		}
 	}
 
 	function setFilterKey(index: number, key: string | null): void {
-		const spec = key === null ? null : source.filters.find((f) => f.key === key);
+		const spec =
+			key === null ? null : source.filters.find((f) => f.key === key);
 		if (!spec) return;
+		const op = freeOp(spec, index);
+		if (op === undefined) return;
 		// A new column means new values: a nation token is not a turn number.
-		patchFilter(index, { key: spec.key, op: spec.ops[0], values: [] });
+		patchFilter(index, { key: spec.key, op, values: [] });
 	}
 
 	function setFilterOp(index: number, op: string | null): void {
@@ -180,6 +219,10 @@
 		});
 	}
 
+	// The two controls that feed this never offer a value it would drop: the
+	// picker lists only what isn't already a chip, and both controls go
+	// disabled at the value cap. The guards stay because `onValueKey` can
+	// still send the same typed word twice.
 	function addValue(index: number, value: string | null): void {
 		const trimmed = value?.trim();
 		if (!trimmed) return;
@@ -213,13 +256,21 @@
 		await goto(next, { keepFocus: true, noScroll: true });
 	}
 
-	const LABEL = "w-24 shrink-0 pt-1.5 text-xs font-bold uppercase text-gray-400";
+	const LABEL =
+		"w-24 shrink-0 pt-1.5 text-xs font-bold uppercase text-gray-400";
+	// The picked-value chip and its remove button, as the challenge rules
+	// editor renders them.
 	const CHIP =
-		"flex items-center gap-1 rounded bg-surface-raised px-2 py-0.5 text-xs text-tan";
-	const INPUT =
-		"rounded border border-black bg-surface-raised px-2 py-1.5 text-xs text-tan placeholder:opacity-50";
+		"flex items-center gap-1 rounded bg-surface-raised px-1.5 py-0.5 text-xs text-gray-200";
+	const CHIP_REMOVE = "text-gray-400 hover:text-danger";
+	// INPUT_CLASS as it stands, with no padding of its own layered on: two
+	// padding utilities in one class attribute are decided by Tailwind's
+	// emission order and not by the order they are written in (see Select).
+	const INPUT = `${INPUT_CLASS} text-xs text-tan placeholder:opacity-50 disabled:opacity-50`;
 	const GHOST =
-		"rounded bg-surface-raised px-2 py-1 text-xs text-tan transition-colors hover:bg-surface-hover disabled:opacity-40";
+		"rounded bg-surface-raised px-2 py-1 text-xs text-tan transition-colors hover:bg-surface-raised-hover disabled:opacity-40";
+	const ASK =
+		"rounded bg-orange px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-orange/80 disabled:opacity-40";
 </script>
 
 <div class="flex flex-col gap-3">
@@ -264,9 +315,7 @@
 						onChange={(v) => {
 							if (v !== null)
 								patch({
-									dimensions: draft.dimensions.map((d, j) =>
-										j === i ? v : d,
-									),
+									dimensions: draft.dimensions.map((d, j) => (j === i ? v : d)),
 								});
 						}}
 						ariaLabel="Grouping {i + 1}"
@@ -278,8 +327,7 @@
 						onclick={() =>
 							patch({
 								dimensions: draft.dimensions.filter((_, j) => j !== i),
-							})}
-						>×</button
+							})}>×</button
 					>
 				</div>
 			{/each}
@@ -305,16 +353,18 @@
 				{@const spec = specFor(filter)}
 				{#if spec}
 					{@const vocab = vocabularyFor(spec.vocabulary)}
+					{@const atValueCap =
+						filter.values.length >= catalog.limits.max_filter_values}
 					<div class="flex flex-wrap items-center gap-1">
 						<Select
 							value={filter.key}
-							options={filterOptions}
+							options={filterOptions(i)}
 							onChange={(v) => setFilterKey(i, v)}
 							ariaLabel="Filter column"
 						/>
 						<Select
 							value={filter.op}
-							options={spec.ops.map((o) => ({ value: o, label: opLabel(o) }))}
+							options={opOptions(filter, i)}
 							onChange={(v) => setFilterOp(i, v)}
 							ariaLabel="Filter comparison"
 						/>
@@ -345,21 +395,29 @@
 								ariaLabel="Filter value"
 							/>
 						{:else if vocab?.options}
+							<!-- Minus what's already a chip, so every value the picker
+							     offers is one it can add — the same move the challenge
+							     rules editor's `without` makes. -->
 							<Select
 								value=""
-								options={vocab.options.map((o) => ({
-									value: o,
-									label: vocab.label(o),
-								}))}
+								options={vocab.options
+									.filter((o) => !filter.values.includes(o))
+									.map((o) => ({ value: o, label: vocab.label(o) }))}
 								onChange={(v) => addValue(i, v)}
-								placeholder="Add a value…"
+								placeholder={atValueCap
+									? `At ${catalog.limits.max_filter_values} values`
+									: "Add a value…"}
+								disabled={atValueCap}
 								resetAfterSelect
 								ariaLabel="Filter value"
 							/>
 						{:else}
 							<input
 								class={INPUT}
-								placeholder={vocab?.example ?? "Type a value, then Enter"}
+								placeholder={atValueCap
+									? `At ${catalog.limits.max_filter_values} values`
+									: (vocab?.example ?? "Type a value, then Enter")}
+								disabled={atValueCap}
 								aria-label="Filter value"
 								onkeydown={(e) => onValueKey(e, i)}
 							/>
@@ -371,7 +429,7 @@
 									{vocab ? vocab.label(value) : value}
 									<button
 										type="button"
-										class="opacity-60 transition-opacity hover:opacity-100"
+										class={CHIP_REMOVE}
 										aria-label="Remove {value}"
 										onclick={() => removeValue(i, value)}>×</button
 									>
@@ -386,8 +444,7 @@
 							onclick={() =>
 								patch({
 									filters: draft.filters.filter((_, j) => j !== i),
-								})}
-							>×</button
+								})}>×</button
 						>
 					</div>
 					{#if spec.help}
@@ -399,7 +456,8 @@
 				<button
 					type="button"
 					class={GHOST}
-					disabled={draft.filters.length >= catalog.limits.max_filters}
+					disabled={draft.filters.length >= catalog.limits.max_filters ||
+						!canAddFilter}
 					onclick={addFilter}>+ Filter</button
 				>
 			</div>
@@ -431,7 +489,7 @@
 	<div class="flex items-center gap-2">
 		<button
 			type="button"
-			class="rounded bg-orange px-3 py-1.5 text-xs font-bold text-blue-gray transition-opacity hover:opacity-90 disabled:opacity-40"
+			class={ASK}
 			disabled={incomplete || !dirty}
 			onclick={run}>Ask</button
 		>

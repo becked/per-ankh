@@ -1,6 +1,6 @@
 // The class strings the app's surfaces share — buttons and inputs in the dark
 // scheme the game-detail tabs use (tan text on dark surfaces, no bright
-// accents), and the framed-table chrome at the foot of the file. One place so
+// accents), and the two table families at the foot of the file. One place so
 // the create page, the challenge page, the upload modal and the tournament
 // settings popover can't drift.
 
@@ -28,9 +28,9 @@ export const INPUT_CLASS =
 // ramp's darkest tone), a contiguous zebra body with no per-cell rounding,
 // and transparent cells so the row's stripe shows through.
 //
-// Distinct from game-detail's TABLE_CLASS family ($lib/game-detail/helpers),
-// which is the border-separate look with a rounded box per row. A table picks
-// one family or the other; these four move together.
+// Distinct from the card-row family below, which is the border-separate look
+// with a rounded box per row. A table picks one family or the other; these
+// four move together.
 //
 // Each mount layers its own modifiers on top (a sticky header offset, the
 // pointer affordance on a sortable column) — those depend on the pane the
@@ -49,3 +49,24 @@ export const FRAMED_TABLE_TD =
 // The <tr> carries the stripe + hover background (the cells stay transparent).
 export const FRAMED_TABLE_ROW =
 	"transition-colors odd:bg-surface even:bg-surface-raised hover:bg-surface-hover";
+
+// ─── The card-row table ──────────────────────────────────────────────
+//
+// The other family, which the game-detail data tabs and the ad-hoc query's
+// results table use: a blue-gray frame holding one rounded card row per
+// record, under a sunken header bar. Round the first and last cell of each row inline with
+// `rounded-l-lg border-l` / `rounded-r-lg border-r`.
+//
+// The frame is a flex row because the data tabs stand a filter column beside
+// the table; the table goes in a `min-w-0 flex-1 overflow-x-auto` child, and
+// a mount with no filter column keeps that child so the two read the same.
+//
+// Here rather than in $lib/game-detail/helpers because a surface outside the
+// game-detail tabs needs these four strings and not that module's baked
+// tables.
+export const TABLE_FRAME_CLASS = "flex gap-4 rounded-lg bg-blue-gray p-3";
+export const TABLE_CLASS = "w-full border-separate border-spacing-y-1.5";
+export const TABLE_HEADER_TH_CLASS =
+	"sticky -top-4 z-10 cursor-pointer select-none whitespace-nowrap border-y border-surface bg-surface-sunken px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wide text-gray-100 shadow-lg transition-colors hover:text-orange";
+export const TABLE_CELL_TD_CLASS =
+	"bg-surface p-3 text-left text-tan transition-colors duration-200 group-hover:bg-surface-hover";

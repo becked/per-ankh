@@ -106,13 +106,7 @@ export type Reach = "games" | "player" | "identity" | "source";
 // zTypes. `text` is the two columns that are genuinely free text: a seat's
 // in-save `player_name`, and the year off a save date.
 export type ValueType =
-	| "enum"
-	| "text"
-	| "number"
-	| "boolean"
-	| "date"
-	| "identity"
-	| "tournament";
+	"enum" | "text" | "number" | "boolean" | "date" | "identity" | "tournament";
 
 export interface CatalogDimension {
 	key: string;
@@ -579,7 +573,8 @@ const SOURCE_DEFS: QuerySource[] = [
 		label: "Wonders built",
 		table: "wonder_events",
 		alias: "we",
-		grain: "One row per wonder completed in a save, with who built it and when.",
+		grain:
+			"One row per wonder completed in a save, with who built it and when.",
 		joinsPlayer: true,
 		eventKeySql: "g.xml_game_id || ':' || we.wonder",
 		dimensions: [
@@ -689,7 +684,8 @@ const SOURCE_DEFS: QuerySource[] = [
 		label: "Laws adopted",
 		table: "law_events",
 		alias: "le",
-		grain: "One row per adoption — a law repealed and re-adopted appears twice.",
+		grain:
+			"One row per adoption — a law repealed and re-adopted appears twice.",
 		joinsPlayer: true,
 		eventKeySql:
 			"g.xml_game_id || ':' || le.player_index || ':' || le.law || ':' || le.turn",
@@ -745,7 +741,8 @@ const SOURCE_DEFS: QuerySource[] = [
 		label: "Leader reigns",
 		table: "leader_reigns",
 		alias: "lr",
-		grain: "One row per leader who held a seat's throne, and the turn they took it.",
+		grain:
+			"One row per leader who held a seat's throne, and the turn they took it.",
 		joinsPlayer: true,
 		eventKeySql:
 			"g.xml_game_id || ':' || lr.player_index || ':' || lr.character_xml_id",
@@ -849,7 +846,8 @@ const SOURCE_DEFS: QuerySource[] = [
 		label: "Per-turn series",
 		table: "game_player_turn",
 		alias: "gpt",
-		grain: "One row per (seat, turn) — the widest table here, and the slowest to ask of.",
+		grain:
+			"One row per (seat, turn) — the widest table here, and the slowest to ask of.",
 		joinsPlayer: true,
 		eventKeySql: "g.xml_game_id || ':' || gpt.player_index || ':' || gpt.turn",
 		dimensions: [
@@ -918,7 +916,8 @@ const SOURCE_DEFS: QuerySource[] = [
 		label: "Wonders available",
 		table: "game_wonder_pool",
 		alias: "gwp",
-		grain: "One row per wonder enabled in a save — the eligibility denominator, not a completion.",
+		grain:
+			"One row per wonder enabled in a save — the eligibility denominator, not a completion.",
 		joinsPlayer: false,
 		eventKeySql: "g.xml_game_id || ':' || gwp.wonder",
 		dimensions: [
@@ -1059,10 +1058,6 @@ export interface CatalogWire {
 		max_filters: number;
 		max_filter_values: number;
 	};
-	// The corpus every selection runs over, in one sentence the builder shows
-	// beneath the results. Stated here rather than in the UI so the page cannot
-	// describe a scope the compiler isn't applying.
-	corpus: string;
 }
 
 export function serializeCatalog(): CatalogWire {
@@ -1103,8 +1098,6 @@ export function serializeCatalog(): CatalogWire {
 			max_filters: MAX_FILTERS,
 			max_filter_values: MAX_FILTER_VALUES,
 		},
-		corpus:
-			"Public games only, challenge runs excluded — the same corpus the global stats slices cover.",
 	};
 }
 
