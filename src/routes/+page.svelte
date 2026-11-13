@@ -161,9 +161,9 @@
 				<!--
 					The action, widening left to right from the whole public corpus to your
 					own games, the profile link carrying the same avatar the header shows so
-					it reads as "you". Signed out none of that is openable — /stats and
-					/stats/query both bounce an anonymous visitor to login — so the cluster is
-					the same button the header's Login is, sized as a call to action. The
+					it reads as "you". Signed out neither is openable — /stats bounces an
+					anonymous visitor to login — so the cluster is the same button the
+					header's Login is, sized as a call to action. The
 					players roster is not here: the season standings panel below is the link
 					to it.
 					-->
@@ -177,17 +177,6 @@
 						>
 							<SpriteIcon category="icons" value="STATS" size={24} alt="" />
 							Global Stats
-						</a>
-						<!-- Beside Global Stats and before Your Games, as the same
-						     whole-corpus step: the charts somebody already drew, then the
-						     same corpus asked a question nobody drew one for. Inside the
-						     same session gate, since /stats/query bounces an anonymous
-						     visitor exactly as /stats does. -->
-						<a
-							href={resolve("/stats/query")}
-							class="inline-flex items-center gap-2 rounded-md bg-[#292623] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:text-orange"
-						>
-							Ask the Corpus
 						</a>
 						<ProfileLink
 							userId={user.user_id}

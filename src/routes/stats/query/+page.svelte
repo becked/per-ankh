@@ -1,5 +1,6 @@
 <script lang="ts">
-	// /stats/query — the builder over the catalog, and the answer under it.
+	// /stats/query — Explore, the second view of Global Stats: the builder over
+	// the catalog, and the answer under it.
 	//
 	// The page is two panels: the question, and what the corpus said. Nothing
 	// is asked until "Ask" is pressed, so arriving here costs no read budget
@@ -7,7 +8,7 @@
 	// nobody asked for.
 
 	import { navigating } from "$app/state";
-	import { resolve } from "$app/paths";
+	import StatsHeader from "$lib/stats/StatsHeader.svelte";
 	import Panel from "$lib/ui/Panel.svelte";
 	import QueryBuilder from "$lib/query/QueryBuilder.svelte";
 	import QueryResults from "$lib/query/QueryResults.svelte";
@@ -29,17 +30,9 @@
 <div class="flex flex-1 overflow-hidden">
 	<main class="isolate flex flex-1 flex-col overflow-hidden">
 		<div class="flex-1 overflow-y-auto px-4 pb-8 pt-4">
-			<div class="mx-auto flex max-w-screen-lg flex-col gap-4">
-				<div class="flex flex-wrap items-baseline justify-between gap-3">
-					<h1 class="text-2xl font-bold text-gray-200">Ask the corpus</h1>
-					<a
-						href={resolve("/stats")}
-						class="text-xs text-tan underline-offset-2 transition-colors hover:text-orange hover:underline"
-					>
-						Global stats
-					</a>
-				</div>
+			<StatsHeader />
 
+			<div class="mx-auto flex max-w-screen-lg flex-col gap-4">
 				<Panel title="Question">
 					<QueryBuilder catalog={data.catalog} draft={data.draft} />
 				</Panel>

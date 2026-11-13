@@ -56,7 +56,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
 			result: null as QueryResult | null,
 			error: null as string | null,
 			meta: {
-				title: "Ask the corpus - Per-Ankh",
+				title: "Global Stats · Explore - Per-Ankh",
 				description:
 					"Ask Per-Ankh's Old World save corpus a question no chart was built for — compose it from a catalog of dimensions and measures.",
 			},
@@ -87,10 +87,11 @@ export const load: PageLoad = async ({ fetch, url }) => {
 		result,
 		error,
 		meta: {
-			// The selection is in the URL rather than in the title: this page's
+			// The selection is in the URL rather than in the title: this view's
 			// subject is the corpus, and what varies is which question you are
-			// asking of it — which the builder and the heading already say.
-			title: "Ask the corpus - Per-Ankh",
+			// putting to it — which the builder on screen already says. Named the
+			// way the tournament sub-views are, "<parent> · <view>".
+			title: "Global Stats · Explore - Per-Ankh",
 			description:
 				"Ask Per-Ankh's Old World save corpus a question no chart was built for — compose it from a catalog of dimensions and measures.",
 		},

@@ -237,20 +237,6 @@
 						>
 							Global Stats
 						</a>
-						<!--
-							Under Global Stats rather than beside it: the catalog is the
-							corpus answered in charts somebody already drew, and this is
-							the same corpus asked a question nobody drew one for. It sits
-							inside the same session gate — /stats/query bounces an
-							anonymous visitor to login exactly as /stats does.
-						-->
-						<a
-							href={resolve("/stats/query")}
-							class="block w-full px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-surface-raised"
-							onclick={closeMenu}
-						>
-							Ask the Corpus
-						</a>
 						<div class="border-t border-black"></div>
 						<a
 							href={resolve("/account")}

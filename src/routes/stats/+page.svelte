@@ -11,9 +11,9 @@
 	// bundle correctly omits them.
 
 	import { navigating } from "$app/state";
-	import { resolve } from "$app/paths";
 	import { cloudApi } from "$lib/api-cloud";
 	import GlobalFacetRow from "$lib/stats/GlobalFacetRow.svelte";
+	import StatsHeader from "$lib/stats/StatsHeader.svelte";
 	import {
 		parseGlobalPeriod,
 		parseGlobalSlice,
@@ -75,28 +75,19 @@
 <div class="flex flex-1 overflow-hidden">
 	<main class="isolate flex flex-1 flex-col overflow-hidden">
 		<div class="flex-1 overflow-y-auto px-4 pb-8 pt-4">
-			<div class="mx-auto max-w-screen-2xl">
-				<div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-					<h1 class="text-2xl font-bold text-gray-200">Global Stats</h1>
-					<div class="flex flex-wrap items-center gap-3">
-						<GlobalFacetRow
-							slice={data.slice}
-							nation={data.nation}
-							period={data.period}
-						/>
-						<!-- The other door onto this corpus: these are the charts
-						     somebody already drew, and /stats/query is the same corpus
-						     asked a question nobody drew one for. The link back is on
-						     that page, so the pair reads both ways. -->
-						<a
-							href={resolve("/stats/query")}
-							class="text-xs text-tan underline-offset-2 transition-colors hover:text-orange hover:underline"
-						>
-							Ask the corpus
-						</a>
-					</div>
-				</div>
+			<!-- The facet row belongs to this view, not to the pair: Explore narrows
+			     the corpus from its own builder, so a slice carried across the tabs
+			     would show a filter that view never applied. -->
+			{#snippet facets()}
+				<GlobalFacetRow
+					slice={data.slice}
+					nation={data.nation}
+					period={data.period}
+				/>
+			{/snippet}
+			<StatsHeader controls={facets} />
 
+			<div class="mx-auto max-w-screen-2xl">
 				<div
 					class="stats-catalog"
 					class:swapping={isSwapping}
