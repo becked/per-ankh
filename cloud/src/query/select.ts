@@ -220,9 +220,8 @@ export function parseSelection(params: URLSearchParams): SelectionParse {
 		// Refused by (key, operator) pair, not by key: a window on one column is
 		// two filters (`total_turns:gte` and `total_turns:lte`) and so is an
 		// include beside an exclude. A *repeated* pair is the one that can't
-		// mean anything — `col IN (A) AND col IN (B)` is an empty answer the
-		// page renders as "No games match this question", which reads like a
-		// result rather than like the malformed question it is.
+		// mean anything — `col IN (A) AND col IN (B)` is an empty answer, which
+		// reads like a result rather than like the malformed question it is.
 		const pair = `${parsed.filter.key}:${parsed.filter.op}`;
 		if (seen.has(pair)) {
 			return {

@@ -241,7 +241,6 @@ const GAME_DIMENSIONS: CatalogDimension[] = [
 		sql: "g.difficulty",
 		vocabulary: "prosperity",
 		filterable: true,
-		help: "The game's Prosperity setting — not the headline Difficulty preset.",
 	},
 	{
 		// "AI Aggression" is the label the setup screen's OpponentLevel row
@@ -326,7 +325,6 @@ const GAME_FILTERS: CatalogFilter[] = [
 		reach: "games",
 		type: "tournament",
 		ops: ["in"],
-		help: "The games attached to one tournament's completed matches — the same set that tournament's stats bundle reads.",
 	},
 	{
 		// One key with both bounds rather than a `played_from` and a
@@ -339,7 +337,6 @@ const GAME_FILTERS: CatalogFilter[] = [
 		type: "date",
 		sql: "g.save_date",
 		ops: RANGE_OPS,
-		help: "YYYY-MM-DD, against the save's own date. A game with no date drops out of either bound.",
 	},
 	{
 		key: "total_turns",
@@ -366,7 +363,6 @@ const PLAYER_DIMENSIONS: CatalogDimension[] = [
 			{ suffix: "slug", sql: "ud.slug" },
 		],
 		filterable: false,
-		help: "The Per-Ankh account behind the seat. Seats nothing resolves — AI, and humans nobody has linked — group under one Unlinked row rather than vanishing.",
 	},
 	{
 		key: "player_name",

@@ -56,11 +56,7 @@
 		"px-3 py-1 text-left text-[10px] font-bold uppercase tracking-wide text-gray-100";
 </script>
 
-{#if result.rows.length === 0}
-	<p class="p-6 text-center italic text-tan opacity-60">
-		No games match this question.
-	</p>
-{:else}
+{#if result.rows.length > 0}
 	<div class={TABLE_FRAME_CLASS}>
 		<div class="min-w-0 flex-1 overflow-x-auto">
 			<table class="{TABLE_CLASS} text-sm">
