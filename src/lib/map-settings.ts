@@ -73,7 +73,12 @@ export function mapAspectRatioLabel(zType: string): string {
 // name them (TEXT_MP_WIZARD_SCREEN_LAN_MODE_BUTTON "LAN",
 // TEXT_MP_WIZARD_SCREEN_SERVER_MODE_BUTTON "Server Mode"), where formatEnum
 // produced "Lan" and "Server".
-const GAME_MODE_NAMES: Readonly<Record<string, string>> = {
+//
+// Exported because that completeness makes it a ROSTER as well as a name
+// table: the ad-hoc query builder's game-mode picker is its keys
+// ($lib/query/vocabularies). A value list that fell through to formatEnum for
+// part of the enum could not be used that way.
+export const GAME_MODE_NAMES: Readonly<Record<string, string>> = {
 	SINGLE_PLAYER: "Single Player",
 	SINGLE_PLAYER_SIMPLE: "Single Player (Simple)",
 	NETWORK: "Multiplayer",

@@ -102,9 +102,9 @@ export type Reach = "games" | "player" | "identity" | "source";
 // `enum` means the value is a game zType — so a client displays it through the
 // game's own name for it rather than raw — and is independent of whether
 // `vocabulary` names a roster to pick from. Several zType columns have no
-// baked roster (map scripts, difficulties, family classes) and are still
-// zTypes. `text` is the two columns that are genuinely free text: a seat's
-// in-save `player_name`, and the year off a save date.
+// baked roster (family classes, opponent levels, techs) and are still zTypes.
+// `text` is the two columns that are genuinely free text: a seat's in-save
+// `player_name`, and the year off a save date.
 export type ValueType =
 	"enum" | "text" | "number" | "boolean" | "date" | "identity" | "tournament";
 
@@ -207,6 +207,7 @@ const GAME_DIMENSIONS: CatalogDimension[] = [
 		reach: "games",
 		type: "enum",
 		sql: "g.map_class",
+		vocabulary: "map_class",
 		filterable: true,
 	},
 	{
@@ -215,6 +216,7 @@ const GAME_DIMENSIONS: CatalogDimension[] = [
 		reach: "games",
 		type: "enum",
 		sql: "g.map_size",
+		vocabulary: "map_size",
 		filterable: true,
 	},
 	{
@@ -223,20 +225,29 @@ const GAME_DIMENSIONS: CatalogDimension[] = [
 		reach: "games",
 		type: "enum",
 		sql: "g.game_mode",
+		vocabulary: "game_mode",
 		filterable: true,
-		help: "The save's own GameMode, read verbatim — NETWORK and PLAY_BY_CLOUD are the two remote modes.",
+		help: "How the match was played. Multiplayer and Play By Cloud are the two remote modes.",
 	},
 	{
+		// Labelled Prosperity, which is what the game calls the setting
+		// (TEXT_SP_SETUP_ADVANCED_DIFFICULTY). The key stays `difficulty`: it
+		// is the column name, and it is already in every shared link. Not the
+		// headline Difficulty preset, which this corpus does not carry.
 		key: "difficulty",
-		label: "Difficulty",
+		label: "Prosperity",
 		reach: "games",
 		type: "enum",
 		sql: "g.difficulty",
+		vocabulary: "prosperity",
 		filterable: true,
+		help: "The game's Prosperity setting — not the headline Difficulty preset.",
 	},
 	{
+		// "AI Aggression" is the label the setup screen's OpponentLevel row
+		// carries (SETUP_PARAMETERS, $lib/generated/game-setup-sections).
 		key: "opponent_level",
-		label: "Opponent level",
+		label: "AI Aggression",
 		reach: "games",
 		type: "enum",
 		sql: "g.opponent_level",
@@ -248,6 +259,7 @@ const GAME_DIMENSIONS: CatalogDimension[] = [
 		reach: "games",
 		type: "enum",
 		sql: "g.victory_type",
+		vocabulary: "victory_type",
 		filterable: true,
 	},
 	{
