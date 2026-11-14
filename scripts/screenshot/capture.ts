@@ -22,7 +22,7 @@ import type { Breakpoint, OsManifest, OsShot, PageSpec } from "./types";
 
 export const DEFAULT_BASE_URL = getEnv("staging").frontendOrigin;
 
-// The three surfaces this matrix exists to compare.
+// The four surfaces this matrix exists to compare.
 //
 // The profile is `/users/<user_id>`, not `/u/becked`: a released slug is
 // immediately claimable by anyone, so `/u/<name>` can come to point at a
@@ -36,6 +36,26 @@ export const DEFAULT_BASE_URL = getEnv("staging").frontendOrigin;
 // row — which is the one thing the grid can't survive. The cost is that the
 // id has to exist in whatever origin is captured, and `capturePage` says so
 // on a 404.
+//
+// The game is here because it is the surface where the chrome the platform
+// paints itself actually shows. `color-scheme` is still absent from all of
+// `src/` (#295 §3), and a game page stacks scroll containers the way no
+// other page does: the analysis tab strip over a pane whose table sits in
+// its own horizontal scroller. Of the 12 `overflow-x-auto` wrappers in
+// `src/`, 10 are in `src/lib/game-detail/`; the tournament's two are the
+// brackets, declaring `overflow-x: auto` in their own `<style>` blocks
+// (ChampionshipBracketTree, SwissFlowBracket), and home and the profile
+// have neither. It is the densest surface for §2's rasterization too,
+// carrying the small muted type of table headers and chart axes at a volume
+// the other three don't.
+//
+// It has to be a *public* game, because this pass is signed out. The Worker
+// answers `GET /v1/games/:id` with 401 for a private one, which the game
+// layout (`src/routes/games/[id]/+layout.ts`) turns into a bounce to
+// `/?next=…`, and `capturePage` files that as "is this page public?" rather
+// than screenshotting the landing page. Same fixed-id argument as the
+// profile: `GET /v1/games/public-recent` would answer, but a feed moves
+// between legs and would put two different saves in one row.
 const PAGES: PageSpec[] = [
 	{ id: "home", title: "Home", route: "/" },
 	{
@@ -47,6 +67,13 @@ const PAGES: PageSpec[] = [
 		id: "profile",
 		title: "Public profile",
 		route: "/users/rkHvk1UV8SbUSCF505YEV",
+	},
+	{
+		id: "game",
+		// "Analysis" is what the view switcher calls this one of a game's
+		// three views (GameHeader.svelte).
+		title: "Game analysis",
+		route: "/games/nT1yYQ-hhg7pN2BgCYU-z",
 	},
 ];
 
