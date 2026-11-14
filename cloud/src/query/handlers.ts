@@ -263,7 +263,6 @@ export async function handleQuery(
 				key: measure.key,
 				label: measure.label,
 				unit: measure.unit,
-				note: measure.note,
 			},
 		},
 		cors,

@@ -74,7 +74,7 @@ interface QueryBody {
 	rows: Record<string, string | number | null>[];
 	row_count: number;
 	truncated: boolean;
-	measure: { key: string; unit: string; note: string };
+	measure: { key: string; unit: string };
 }
 
 async function rowsOf(qs: string): Promise<QueryBody["rows"]> {
@@ -300,7 +300,6 @@ describe("the response", () => {
 			{ key: "value", label: "Matches", role: "measure", type: "number" },
 		]);
 		expect(body.measure.unit).toBe("match");
-		expect(body.measure.note.length).toBeGreaterThan(0);
 	});
 
 	it("says when the row cap cut the answer short", async () => {

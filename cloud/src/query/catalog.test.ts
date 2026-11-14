@@ -49,14 +49,6 @@ describe("the catalog's shape", () => {
 				expect(source.measures.length).toBeGreaterThan(0);
 			});
 
-			it("gives every measure a unit note", () => {
-				// The note is where a count says whether it deduped a match both
-				// players uploaded. A blank one is a number read without it.
-				for (const m of source.measures) {
-					expect(m.note.length, m.key).toBeGreaterThan(0);
-				}
-			});
-
 			it("only reaches a seat where it has a player_index", () => {
 				const seatish = [
 					...source.dimensions.filter(

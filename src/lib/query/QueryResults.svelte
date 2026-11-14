@@ -137,10 +137,3 @@
 		</div>
 	</div>
 {/if}
-
-<div class="mt-2 flex flex-col gap-0.5 text-xs italic text-tan opacity-70">
-	<!-- The measure's own sentence about what it counted. A count that
-	     collapsed a match both players uploaded, and one that did not, are
-	     different numbers over the same corpus. -->
-	<p>{result.measure.note}</p>
-</div>

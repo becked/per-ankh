@@ -219,8 +219,7 @@ export interface CatalogDimension {
 }
 
 // What one counted or averaged thing is. The compiler derives a count's
-// DISTINCT key from it, and the builder shows `note` beside the column, so a
-// number that is per-save rather than per-match says so where it is read.
+// DISTINCT key from it.
 export type MeasureUnit = "match" | "save" | "seat" | "event";
 
 export interface CatalogMeasure {
@@ -236,7 +235,6 @@ export interface CatalogMeasure {
 	//                 that is a count with a predicate rather than either.
 	agg?: { fn: "AVG" | "MIN" | "MAX"; sql: string };
 	countSql?: string;
-	note: string;
 }
 
 export interface CatalogFilter {
@@ -379,7 +377,6 @@ const GAME_MEASURES: CatalogMeasure[] = [
 		label: "Matches",
 		reach: "games",
 		unit: "match",
-		note: "Distinct matches. A match both players uploaded counts once.",
 	},
 	{
 		key: "avg_turns",
@@ -391,7 +388,6 @@ const GAME_MEASURES: CatalogMeasure[] = [
 		// many of them record it.
 		unit: "match",
 		agg: { fn: "AVG", sql: "g.total_turns" },
-		note: "Averaged over matches, one upload each. Turns.",
 	},
 	{
 		key: "max_turns",
@@ -399,7 +395,6 @@ const GAME_MEASURES: CatalogMeasure[] = [
 		reach: "games",
 		unit: "save",
 		agg: { fn: "MAX", sql: "g.total_turns" },
-		note: "Turns. A maximum is unaffected by a match being uploaded twice.",
 	},
 ];
 
@@ -544,7 +539,6 @@ const PLAYER_MEASURES: CatalogMeasure[] = [
 		label: "Seats",
 		reach: "player",
 		unit: "seat",
-		note: "Distinct seats in distinct matches. A match both players uploaded counts each seat once.",
 	},
 	{
 		key: "wins",
@@ -557,7 +551,6 @@ const PLAYER_MEASURES: CatalogMeasure[] = [
 		// its match was uploaded twice, and summing the flag counts it twice.
 		countSql:
 			"COUNT(DISTINCT CASE WHEN ps.is_winner = 1 THEN g.xml_game_id || ':' || ps.player_index END)",
-		note: "Distinct winning seats in distinct matches. Counts a seat's win once however many uploads the match has.",
 	},
 	{
 		key: "avg_points",
@@ -565,7 +558,6 @@ const PLAYER_MEASURES: CatalogMeasure[] = [
 		reach: "player",
 		unit: "seat",
 		agg: { fn: "AVG", sql: "ps.final_points" },
-		note: "Averaged over seats, one upload per match.",
 	},
 	{
 		key: "max_points",
@@ -573,7 +565,6 @@ const PLAYER_MEASURES: CatalogMeasure[] = [
 		reach: "player",
 		unit: "seat",
 		agg: { fn: "MAX", sql: "ps.final_points" },
-		note: "A maximum is unaffected by a match being uploaded twice.",
 	},
 	{
 		key: "avg_techs",
@@ -581,7 +572,6 @@ const PLAYER_MEASURES: CatalogMeasure[] = [
 		reach: "player",
 		unit: "seat",
 		agg: { fn: "AVG", sql: "ps.techs_completed" },
-		note: "Averaged over seats, one upload per match.",
 	},
 	{
 		key: "avg_cities",
@@ -589,7 +579,6 @@ const PLAYER_MEASURES: CatalogMeasure[] = [
 		reach: "player",
 		unit: "seat",
 		agg: { fn: "AVG", sql: "ps.cities_total" },
-		note: "End-of-game holdings, averaged over seats, one upload per match.",
 	},
 	{
 		key: "avg_military",
@@ -597,7 +586,6 @@ const PLAYER_MEASURES: CatalogMeasure[] = [
 		reach: "player",
 		unit: "seat",
 		agg: { fn: "AVG", sql: "ps.final_military_power" },
-		note: "Averaged over seats, one upload per match.",
 	},
 ];
 
@@ -700,7 +688,6 @@ const SOURCE_DEFS: QuerySource[] = [
 				label: "Seat-family pairs",
 				reach: "source",
 				unit: "event",
-				note: "Distinct (match, seat, family class) triples.",
 			},
 			{
 				key: "avg_family_cities",
@@ -708,7 +695,6 @@ const SOURCE_DEFS: QuerySource[] = [
 				reach: "source",
 				unit: "event",
 				agg: { fn: "AVG", sql: "pfc.cities" },
-				note: "End-of-game holdings, averaged over rows, one upload per match.",
 			},
 			{
 				key: "avg_first_founded",
@@ -716,7 +702,6 @@ const SOURCE_DEFS: QuerySource[] = [
 				reach: "source",
 				unit: "event",
 				agg: { fn: "AVG", sql: "pfc.first_founded_turn" },
-				note: "Earliest founding among that class's cities, averaged over rows, one upload per match.",
 			},
 		],
 		filters: [
@@ -757,7 +742,6 @@ const SOURCE_DEFS: QuerySource[] = [
 				label: "Reigns",
 				reach: "source",
 				unit: "event",
-				note: "Distinct (match, seat, leader) triples — successors included, unlike the starting-ruler columns on a seat.",
 			},
 			{
 				key: "avg_accession_turn",
@@ -765,7 +749,6 @@ const SOURCE_DEFS: QuerySource[] = [
 				reach: "source",
 				unit: "event",
 				agg: { fn: "AVG", sql: "lr.start_turn" },
-				note: "Averaged over reigns, one upload per match.",
 			},
 		],
 		filters: [
@@ -805,7 +788,6 @@ const SOURCE_DEFS: QuerySource[] = [
 				label: "Adoptions",
 				reach: "source",
 				unit: "event",
-				note: "Distinct (match, seat, law, turn) rows — a re-adoption is its own row, which is what the table's key says it is.",
 			},
 			{
 				key: "avg_law_turn",
@@ -813,7 +795,6 @@ const SOURCE_DEFS: QuerySource[] = [
 				reach: "source",
 				unit: "event",
 				agg: { fn: "AVG", sql: "le.turn" },
-				note: "Averaged over adoptions, one upload per match.",
 			},
 			{
 				key: "earliest_law_turn",
@@ -821,7 +802,6 @@ const SOURCE_DEFS: QuerySource[] = [
 				reach: "source",
 				unit: "event",
 				agg: { fn: "MIN", sql: "le.turn" },
-				note: "A minimum is unaffected by a match being uploaded twice.",
 			},
 		],
 		filters: [
@@ -860,7 +840,6 @@ const SOURCE_DEFS: QuerySource[] = [
 				label: "Techs researched",
 				reach: "source",
 				unit: "event",
-				note: "Distinct (match, seat, tech) triples.",
 			},
 			{
 				key: "avg_tech_turn",
@@ -868,7 +847,6 @@ const SOURCE_DEFS: QuerySource[] = [
 				reach: "source",
 				unit: "event",
 				agg: { fn: "AVG", sql: "te.turn" },
-				note: "Averaged over techs researched, one upload per match.",
 			},
 			{
 				key: "earliest_tech_turn",
@@ -876,7 +854,6 @@ const SOURCE_DEFS: QuerySource[] = [
 				reach: "source",
 				unit: "event",
 				agg: { fn: "MIN", sql: "te.turn" },
-				note: "A minimum is unaffected by a match being uploaded twice.",
 			},
 		],
 		filters: [
@@ -914,7 +891,6 @@ const SOURCE_DEFS: QuerySource[] = [
 				label: "Turn rows",
 				reach: "source",
 				unit: "event",
-				note: "Distinct (match, seat, turn) triples.",
 			},
 			{
 				key: "avg_military_power",
@@ -922,7 +898,6 @@ const SOURCE_DEFS: QuerySource[] = [
 				reach: "source",
 				unit: "event",
 				agg: { fn: "AVG", sql: "gpt.military_power" },
-				note: "Averaged over turn rows, one upload per match.",
 			},
 			{
 				key: "max_military_power",
@@ -930,7 +905,6 @@ const SOURCE_DEFS: QuerySource[] = [
 				reach: "source",
 				unit: "event",
 				agg: { fn: "MAX", sql: "gpt.military_power" },
-				note: "A maximum is unaffected by a match being uploaded twice.",
 			},
 			{
 				key: "avg_legitimacy",
@@ -938,7 +912,6 @@ const SOURCE_DEFS: QuerySource[] = [
 				reach: "source",
 				unit: "event",
 				agg: { fn: "AVG", sql: "gpt.legitimacy" },
-				note: "Averaged over turn rows, one upload per match.",
 			},
 			{
 				key: "avg_science",
@@ -946,7 +919,6 @@ const SOURCE_DEFS: QuerySource[] = [
 				reach: "source",
 				unit: "event",
 				agg: { fn: "AVG", sql: "gpt.science_per_turn" },
-				note: "Averaged over turn rows, one upload per match.",
 			},
 			{
 				// The running total rather than the rate, which is what "how
@@ -964,7 +936,6 @@ const SOURCE_DEFS: QuerySource[] = [
 				reach: "source",
 				unit: "event",
 				agg: { fn: "MAX", sql: "gpt.science_cumulative" },
-				note: "The highest cumulative science any turn row in the group reached. Grouped by seat, that is its end-of-game total.",
 			},
 			{
 				key: "avg_money",
@@ -972,7 +943,6 @@ const SOURCE_DEFS: QuerySource[] = [
 				reach: "source",
 				unit: "event",
 				agg: { fn: "AVG", sql: "gpt.money_per_turn" },
-				note: "Averaged over turn rows, one upload per match.",
 			},
 		],
 		filters: [],
@@ -1002,7 +972,6 @@ const SOURCE_DEFS: QuerySource[] = [
 				label: "Wonders available",
 				reach: "source",
 				unit: "event",
-				note: "Distinct (match, wonder) pairs. A save written before parser 2.12.0 has no rows and is absent from this source entirely.",
 			},
 		],
 		filters: [],
@@ -1032,7 +1001,6 @@ const SOURCE_DEFS: QuerySource[] = [
 				label: "Wonders built",
 				reach: "source",
 				unit: "event",
-				note: "Distinct (match, wonder) pairs. A wonder is unique within a game, so this counts completions.",
 			},
 			{
 				key: "avg_wonder_turn",
@@ -1040,7 +1008,6 @@ const SOURCE_DEFS: QuerySource[] = [
 				reach: "source",
 				unit: "event",
 				agg: { fn: "AVG", sql: "we.turn" },
-				note: "Averaged over builds, one upload per match.",
 			},
 			{
 				key: "earliest_wonder_turn",
@@ -1048,7 +1015,6 @@ const SOURCE_DEFS: QuerySource[] = [
 				reach: "source",
 				unit: "event",
 				agg: { fn: "MIN", sql: "we.turn" },
-				note: "A minimum is unaffected by a match being uploaded twice.",
 			},
 		],
 		filters: [
@@ -1148,7 +1114,6 @@ export interface CatalogMeasureWire {
 	key: string;
 	label: string;
 	unit: MeasureUnit;
-	note: string;
 }
 
 export interface CatalogFilterWire {
@@ -1218,7 +1183,6 @@ export function serializeCatalog(
 				key: m.key,
 				label: m.label,
 				unit: m.unit,
-				note: m.note,
 			})),
 			filters: s.filters.map((f) => ({
 				key: f.key,

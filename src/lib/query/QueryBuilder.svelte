@@ -62,10 +62,6 @@
 		catalog.sources.find((s) => s.key === draft.source) ?? catalog.sources[0],
 	);
 
-	const measure = $derived(
-		source.measures.find((m) => m.key === draft.measure) ?? source.measures[0],
-	);
-
 	// The picker's headings, built by walking the catalog in order: sources
 	// sharing a group arrive contiguously (pinned in catalog.test.ts), so a
 	// run of them is a group and no second ordering lives here. A map keyed by
@@ -430,9 +426,6 @@
 			}}
 			ariaLabel="What to measure"
 		/>
-		<!-- Where a count says whether it collapsed a match both players
-		     uploaded. The number is unreadable without it. -->
-		<p class="mt-1 text-xs italic text-tan opacity-70">{measure.note}</p>
 	</PanelInset>
 
 	<PanelInset label="Grouped by">

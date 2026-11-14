@@ -38,7 +38,6 @@ export interface CatalogMeasure {
 	key: string;
 	label: string;
 	unit: MeasureUnit;
-	note: string;
 }
 
 export interface CatalogFilter {
