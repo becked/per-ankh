@@ -12,6 +12,10 @@
 	// The columns and that frame are what the page is, not what a first answer
 	// turns it into: the builder doesn't move sideways under the pointer the
 	// moment it is used, and the rows land in a box that was already there.
+	//
+	// A refused selection is drawn in that same box. The Worker's message is
+	// what this query returned, so it belongs where the rows would be rather
+	// than loose on the panel above an empty frame.
 
 	import { navigating } from "$app/state";
 	import StatsHeader from "$lib/stats/StatsHeader.svelte";
@@ -32,6 +36,11 @@
 	// on screen belongs to the query you just left — the same move /stats
 	// makes across a facet change.
 	const isAsking = $derived(navigating.to !== null);
+
+	// The rows' own frame at the height an empty one needs to read as a table
+	// waiting rather than as a seam. QueryResults draws this frame itself once
+	// there are rows, so the constant is shared rather than restyled here.
+	const FRAME = `${TABLE_FRAME_CLASS} min-h-[16rem]`;
 </script>
 
 <div class="flex flex-1 overflow-hidden">
@@ -48,7 +57,9 @@
 
 				<Panel title="Results">
 					{#if data.error}
-						<p class="p-4 text-center text-sm text-orange">{data.error}</p>
+						<div class="{FRAME} items-center">
+							<p class="flex-1 text-center text-sm text-orange">{data.error}</p>
+						</div>
 					{:else if data.result && source}
 						<div class="results" class:asking={isAsking} aria-busy={isAsking}>
 							<QueryResults
@@ -61,7 +72,7 @@
 						<!-- The frame the rows land in, with nothing in it yet. No copy
 						     inside it: a line here would be read as the answer to a
 						     question nobody has asked. -->
-						<div class="{TABLE_FRAME_CLASS} min-h-[16rem]"></div>
+						<div class={FRAME}></div>
 					{/if}
 				</Panel>
 			</div>
