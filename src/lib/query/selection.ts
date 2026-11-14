@@ -104,12 +104,16 @@ export function recentCutoff(months: number): string {
 	return new Date(Date.UTC(year, month, day)).toISOString().slice(0, 10);
 }
 
-// The windows the date filter offers as one click, and the one a fresh draft
+// The windows the date filter's dropdown offers, and the one a fresh draft
 // opens on. Old World changes between releases, so a question asked of the
 // whole corpus is partly a question about a game that no longer exists — and
 // the last six months is 633 of the 851 public matches, so the narrowing costs
 // about a quarter of the corpus rather than most of it.
-export const RECENT_WINDOW_MONTHS: readonly number[] = [6, 12];
+//
+// Widest first, the order GLOBAL_PERIODS lists the /stats windows in. "All
+// time" is the row with no bound on it rather than a month count, so it is not
+// a member here.
+export const RECENT_WINDOW_MONTHS: readonly number[] = [12, 6];
 const DEFAULT_WINDOW_MONTHS = 6;
 
 // Every source that reaches a seat carries AI seats too, and almost every
@@ -262,8 +266,18 @@ export function isRangeOp(op: FilterOp): boolean {
  * Whether a filter row can be sent as it stands. A range bound is one value by
  * definition — the Worker refuses two rather than taking the first — so the
  * builder holds the row to that here instead of letting it 400.
+ *
+ * A date row is the exception. Its control is a closed list of windows with
+ * "All time" among them, so an empty one is a selection somebody made rather
+ * than a row they are still filling in: `canonicalQuery` drops it and the rest
+ * of the draft is still askable. Two values on one is still unaskable, because
+ * that is a URL the Worker refuses rather than anything the list can produce.
  */
-export function filterIsComplete(filter: DraftFilter): boolean {
+export function filterIsComplete(
+	filter: DraftFilter,
+	type?: ValueType,
+): boolean {
+	if (type === "date") return filter.values.length <= 1;
 	return isRangeOp(filter.op)
 		? filter.values.length === 1
 		: filter.values.length > 0;

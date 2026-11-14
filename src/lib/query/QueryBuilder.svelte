@@ -15,7 +15,6 @@
 	import { page } from "$app/state";
 	import Combobox from "$lib/ui/Combobox.svelte";
 	import PanelInset from "$lib/ui/PanelInset.svelte";
-	import SegmentedChips from "$lib/ui/SegmentedChips.svelte";
 	import Select from "$lib/ui/Select.svelte";
 	import { INPUT_CLASS } from "$lib/ui/classes";
 	import type { SelectOption } from "$lib/ui/types";
@@ -94,12 +93,20 @@
 			.filter((f, i) => i !== atIndex && f.key === key)
 			.map((f) => f.op);
 
+	// The operators a column is offered with. A date bound is a window, and a
+	// window is a lower bound, so `lte` has no control left to set it with and
+	// is not offered. That also keeps `played` out of the column picker once
+	// its one row exists, rather than leaving a free operator for a second row
+	// the Worker would refuse.
+	const opsFor = (spec: CatalogFilter): readonly FilterOp[] =>
+		spec.type === "date" ? spec.ops.filter((o) => o === "gte") : spec.ops;
+
 	const freeOp = (
 		spec: CatalogFilter,
 		atIndex: number,
 	): FilterOp | undefined => {
 		const taken = opsTakenElsewhere(spec.key, atIndex);
-		return spec.ops.find((o) => !taken.includes(o));
+		return opsFor(spec).find((o) => !taken.includes(o));
 	};
 
 	const filterOptions = (atIndex: number): SelectOption[] =>
@@ -111,7 +118,7 @@
 		const spec = specFor(filter);
 		if (!spec) return [];
 		const taken = opsTakenElsewhere(filter.key, atIndex);
-		return spec.ops
+		return opsFor(spec)
 			.filter((o) => o === filter.op || !taken.includes(o))
 			.map((o) => ({ value: o, label: opLabel(o, spec.type) }));
 	};
@@ -158,7 +165,9 @@
 	);
 	const dirty = $derived(query !== asked);
 
-	const incomplete = $derived(draft.filters.some((f) => !filterIsComplete(f)));
+	const incomplete = $derived(
+		draft.filters.some((f) => !filterIsComplete(f, specFor(f)?.type)),
+	);
 
 	function specFor(filter: DraftFilter): CatalogFilter | null {
 		return source.filters.find((f) => f.key === filter.key) ?? null;
@@ -253,34 +262,53 @@
 			sameFilters(draft.filters, fresh.filters),
 	);
 
-	// The date bound's quick windows, beside the day input rather than instead
-	// of it: picking one fills the input with that day, pressing the lit one
-	// again clears it, and typing a day of your own unlights both. So there is
-	// no third "custom" item and no mode for the control to remember — what is
-	// lit is read back off the value every time.
+	// The date bound is a window picked from a closed list — "All time", or the
+	// last N months — and that one control is the whole row: there is no day
+	// input to compose an ad-hoc bound in, and so no comparison dropdown
+	// either, the upper half of a hand-built window having nothing left to set
+	// it with.
 	//
 	// A window is resolved to a fixed day on the way in (recentCutoff), never
 	// carried as the word: the selection is the URL here, so "last 6 months"
 	// as a token would be one address answering a different question each
 	// month, and one edge entry holding whichever answer got there first.
-	const WINDOW_ITEMS: { key: string; label: string }[] =
-		RECENT_WINDOW_MONTHS.map((m) => ({
-			key: String(m),
-			label: `Last ${m} months`,
-		}));
+	const ALL_TIME = "all";
+	// Stands for a bound this list does not offer. Picking it changes nothing;
+	// it exists so the control can name the bound the rows were computed at.
+	const CARRIED_BOUND = "carried";
 
-	// A window is a lower bound, so it is offered only where this row can hold
-	// `gte` — the upper half of a hand-built window already holds `lte`.
-	const windowOffered = (filter: DraftFilter, atIndex: number): boolean =>
-		filter.op === "gte" ||
-		!opsTakenElsewhere(filter.key, atIndex).includes("gte");
+	// Which item is selected, read back off the row's own value every time, so
+	// there is no mode for the control to remember.
+	const windowValue = (filter: DraftFilter): string => {
+		if (filter.values.length === 0) return ALL_TIME;
+		const months =
+			filter.op === "gte" && filter.values.length === 1
+				? RECENT_WINDOW_MONTHS.find((m) => recentCutoff(m) === filter.values[0])
+				: undefined;
+		return months === undefined ? CARRIED_BOUND : String(months);
+	};
 
-	const windowValue = (filter: DraftFilter): string | null => {
-		if (filter.op !== "gte") return null;
-		const months = RECENT_WINDOW_MONTHS.find(
-			(m) => recentCutoff(m) === filter.values[0],
-		);
-		return months === undefined ? null : String(months);
+	// A hand-edited or bookmarked `f=played:lte:2026-01-01` is still the bound
+	// the rows below were computed at — the Worker is asked with the URL's own
+	// params — so the list carries it rather than reading as "All time" over a
+	// corpus that is narrowed. Same move limitOptions makes for an off-menu
+	// `?limit=`.
+	const windowOptions = (filter: DraftFilter): SelectOption[] => {
+		const options: SelectOption[] = [
+			{ value: ALL_TIME, label: "All time" },
+			...RECENT_WINDOW_MONTHS.map((m) => ({
+				value: String(m),
+				label: `Last ${m} months`,
+			})),
+		];
+		if (windowValue(filter) === CARRIED_BOUND) {
+			const op = opLabel(filter.op, "date");
+			options.push({
+				value: CARRIED_BOUND,
+				label: `${op[0].toUpperCase()}${op.slice(1)} ${filter.values.join(", ")}`,
+			});
+		}
+		return options;
 	};
 
 	function setWindow(
@@ -288,12 +316,12 @@
 		filter: DraftFilter,
 		key: string | null,
 	): void {
-		patchFilter(
-			index,
-			key === null
-				? { ...filter, values: [] }
-				: { ...filter, op: "gte", values: [recentCutoff(Number(key))] },
-		);
+		if (key === null || key === CARRIED_BOUND) return;
+		patchFilter(index, {
+			...filter,
+			op: "gte",
+			values: key === ALL_TIME ? [] : [recentCutoff(Number(key))],
+		});
 	}
 
 	function setFilterKey(index: number, key: string | null): void {
@@ -448,17 +476,28 @@
 							onChange={(v) => setFilterKey(i, v)}
 							ariaLabel="Filter column"
 						/>
-						<Select
-							value={filter.op}
-							options={opOptions(filter, i)}
-							onChange={(v) => setFilterOp(i, v)}
-							ariaLabel="Filter comparison"
-						/>
+						{#if spec.type !== "date"}
+							<Select
+								value={filter.op}
+								options={opOptions(filter, i)}
+								onChange={(v) => setFilterOp(i, v)}
+								ariaLabel="Filter comparison"
+							/>
+						{/if}
 
-						{#if isRangeOp(filter.op)}
+						{#if spec.type === "date"}
+							<!-- One control for the rest of the row: the comparison and
+							     the day are both inside the window it names. -->
+							<Select
+								value={windowValue(filter)}
+								options={windowOptions(filter)}
+								onChange={(v) => setWindow(i, filter, v)}
+								ariaLabel="Date window"
+							/>
+						{:else if isRangeOp(filter.op)}
 							<input
 								class={INPUT}
-								type={spec.type === "date" ? "date" : "number"}
+								type="number"
 								value={filter.values[0] ?? ""}
 								aria-label="Filter value"
 								oninput={(e) =>
@@ -469,14 +508,6 @@
 											: [],
 									})}
 							/>
-							{#if spec.type === "date" && windowOffered(filter, i)}
-								<SegmentedChips
-									items={WINDOW_ITEMS}
-									value={windowValue(filter)}
-									onChange={(k) => setWindow(i, filter, k)}
-									ariaLabel="Recent window"
-								/>
-							{/if}
 						{:else if spec.type === "boolean"}
 							<Select
 								value={filter.values[0] ?? "1"}
