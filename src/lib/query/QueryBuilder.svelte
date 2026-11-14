@@ -426,50 +426,58 @@
 	</PanelInset>
 
 	<PanelInset label="Grouped by">
-		<div class="flex flex-wrap items-start gap-2 pl-3">
-			{#each draft.dimensions as dim, i (dim)}
-				<div class="flex items-center gap-1">
-					<Select
-						value={dim}
-						options={dimensionOptions(i)}
-						onChange={(v) => {
-							if (v !== null)
-								patch({
-									dimensions: draft.dimensions.map((d, j) => (j === i ? v : d)),
-								});
-						}}
-						ariaLabel="Grouping {i + 1}"
-					/>
-					<button
-						type="button"
-						class={GHOST}
-						aria-label="Remove grouping"
-						onclick={() =>
-							patch({
-								dimensions: draft.dimensions.filter((_, j) => j !== i),
-							})}>×</button
-					>
+		<div class="flex flex-col gap-2">
+			{#if draft.dimensions.length > 0}
+				<div class="flex flex-wrap items-start gap-2 pl-3">
+					{#each draft.dimensions as dim, i (dim)}
+						<div class="flex items-center gap-1">
+							<Select
+								value={dim}
+								options={dimensionOptions(i)}
+								onChange={(v) => {
+									if (v !== null)
+										patch({
+											dimensions: draft.dimensions.map((d, j) =>
+												j === i ? v : d,
+											),
+										});
+								}}
+								ariaLabel="Grouping {i + 1}"
+							/>
+							<button
+								type="button"
+								class={GHOST}
+								aria-label="Remove grouping"
+								onclick={() =>
+									patch({
+										dimensions: draft.dimensions.filter((_, j) => j !== i),
+									})}>×</button
+							>
+						</div>
+					{/each}
 				</div>
-			{/each}
-			<button
-				type="button"
-				class={GHOST}
-				disabled={draft.dimensions.length >= catalog.limits.max_dimensions ||
-					draft.dimensions.length >= source.dimensions.length}
-				onclick={addDimension}>+ Grouping</button
-			>
+			{/if}
+			<div>
+				<button
+					type="button"
+					class={GHOST}
+					disabled={draft.dimensions.length >= catalog.limits.max_dimensions ||
+						draft.dimensions.length >= source.dimensions.length}
+					onclick={addDimension}>+ Grouping</button
+				>
+			</div>
 		</div>
 	</PanelInset>
 
 	<PanelInset label="Where">
-		<div class="flex flex-col gap-2 pl-3">
+		<div class="flex flex-col gap-2">
 			{#each draft.filters as filter, i (i)}
 				{@const spec = specFor(filter)}
 				{#if spec}
 					{@const vocab = vocabularyFor(spec.vocabulary, catalog.rosters)}
 					{@const atValueCap =
 						filter.values.length >= catalog.limits.max_filter_values}
-					<div class="flex flex-wrap items-center gap-1">
+					<div class="flex flex-wrap items-center gap-1 pl-3">
 						<Select
 							value={filter.key}
 							options={filterOptions(i)}
@@ -574,7 +582,7 @@
 						>
 					</div>
 					{#if spec.help}
-						<p class="text-xs italic text-tan opacity-70">{spec.help}</p>
+						<p class="pl-3 text-xs italic text-tan opacity-70">{spec.help}</p>
 					{/if}
 				{/if}
 			{/each}
