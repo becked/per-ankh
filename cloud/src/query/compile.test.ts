@@ -97,6 +97,18 @@ describe("measure units", () => {
 			flat(compile("source=wonder_events&measure=wonders_built").sql),
 		).toContain("COUNT(DISTINCT g.xml_game_id || ':' || we.wonder)");
 	});
+
+	it("reads total science off the cumulative column, not the rate", () => {
+		// The two science measures answer different questions and must not
+		// compile to the same column: `avg_science` is the per-turn rate,
+		// `max_science` the running total it accumulates into.
+		expect(
+			flat(compile("source=game_player_turn&measure=max_science").sql),
+		).toContain("MAX(gpt.science_cumulative)");
+		expect(
+			flat(compile("source=game_player_turn&measure=avg_science").sql),
+		).toContain("AVG(gpt.science_per_turn)");
+	});
 });
 
 describe("joins", () => {
@@ -153,6 +165,35 @@ describe("identity", () => {
 		expect(
 			flat(compile("source=player_summaries&measure=matches&dim=player").sql),
 		).toContain("WHERE NOT EXISTS");
+	});
+
+	it("narrows to one account by the same expression it groups on", () => {
+		// A filter that resolved a seat's owner differently from the grouping
+		// would answer "Siontific's games" over a different set of seats than
+		// the row labelled Siontific holds.
+		const { sql, binds } = compile(
+			"source=player_summaries&measure=matches" +
+				"&f=player:in:O-1ONgvfrVql0yVJiATyh",
+		);
+		expect(flat(sql)).toContain(
+			"COALESCE(CASE WHEN ps.is_uploader = 1 THEN g.user_id END, uo.user_id) IN (?)",
+		);
+		expect(binds).toContain("O-1ONgvfrVql0yVJiATyh");
+	});
+
+	it("brings the identity joins in for a filter, not only a grouping", () => {
+		// `reach` carries from the dimension to the filter derived from it, so
+		// a question that only narrows by player still gets `uo` and `ud` in
+		// scope. Without them the WHERE names an alias that is not there.
+		const sql = flat(
+			compile(
+				"source=wonder_events&measure=matches&dim=wonder" +
+					"&f=player:in:O-1ONgvfrVql0yVJiATyh",
+			).sql,
+		);
+		expect(sql).toContain("user_online_ids");
+		expect(sql).toContain("LEFT JOIN users ud");
+		expect(sql).toContain("JOIN player_summaries ps");
 	});
 });
 

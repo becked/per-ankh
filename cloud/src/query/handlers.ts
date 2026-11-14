@@ -21,6 +21,7 @@ import { compileQuery } from "./compile";
 import { canonicalSelection, parseSelection } from "./select";
 import {
 	measureByKey,
+	PLAYER_ROSTER_SQL,
 	serializeCatalog,
 	TOURNAMENT_ROSTER_SQL,
 	type CatalogRosterOption,
@@ -103,25 +104,28 @@ function queryResponse(
 // name, per source, and the value rosters only this side knows.
 //
 // Public and outside every read budget, and the same bytes for everyone: the
-// columns are constant data, and the one roster served with them — the
-// tournaments a question can be asked about (TOURNAMENT_ROSTER_SQL) — is
-// viewer-independent by construction. One indexed read behind a 300s edge TTL,
-// so a hit answers it and a miss is a scan of `tournaments`.
+// columns are constant data, and both rosters served with them — the
+// tournaments a question can be asked about (TOURNAMENT_ROSTER_SQL) and the
+// accounts it can be asked about (PLAYER_ROSTER_SQL) — are viewer-independent
+// by construction. Two reads behind a 300s edge TTL, so a hit answers both and
+// a miss is a scan of `tournaments` and one of `users`.
 //
 // It still takes a longer edge TTL than a question does. A question's answer
-// moves whenever a game is uploaded; this moves only on a deploy or when a
-// tournament's first match is reported.
+// moves whenever a game is uploaded; this moves only on a deploy, when a
+// tournament's first match is reported, or when an account's first public game
+// lands.
 //
-// A failed roster read serves the columns with an empty one rather than a 500:
-// the builder's other fifteen pickers and every typed filter still work, and
-// the tournament filter falls back to the typed token it took before it had a
-// roster at all.
+// A failed roster read serves the columns with an empty one rather than a 500,
+// and the two fail independently: the builder's other fifteen pickers and every
+// typed filter still work, and a filter whose roster is missing falls back to
+// the typed token every one of them took before it had a roster at all.
 export async function handleQueryCatalog(
 	request: Request,
 	env: Pick<QueryEnv, "ALLOWED_ORIGINS" | "SHARE_DB">,
 ): Promise<Response> {
 	const cors = cloudCorsHeaders(env, request);
 	let tournaments: CatalogRosterOption[] = [];
+	let players: CatalogRosterOption[] = [];
 	try {
 		const { results } = await env.SHARE_DB.prepare(TOURNAMENT_ROSTER_SQL).all<{
 			tournament_id: string;
@@ -134,11 +138,23 @@ export async function handleQueryCatalog(
 	} catch (err) {
 		logError("query_catalog_roster_failed", err);
 	}
+	try {
+		const { results } = await env.SHARE_DB.prepare(PLAYER_ROSTER_SQL).all<{
+			user_id: string;
+			display_name: string;
+		}>();
+		players = results.map((r) => ({
+			value: r.user_id,
+			label: r.display_name,
+		}));
+	} catch (err) {
+		logError("query_catalog_player_roster_failed", err);
+	}
 	return queryResponse(
-		serializeCatalog({ tournament: tournaments }) as unknown as Record<
-			string,
-			unknown
-		>,
+		serializeCatalog({
+			tournament: tournaments,
+			player: players,
+		}) as unknown as Record<string, unknown>,
 		cors,
 		"public, max-age=0, s-maxage=300",
 	);

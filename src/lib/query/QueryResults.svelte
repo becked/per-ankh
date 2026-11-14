@@ -14,10 +14,13 @@
 	import type { CatalogSource, QueryCatalog, QueryResult } from "./types";
 	import { valueLabel } from "./vocabularies";
 
-	// `rosters` is the half of the vocabulary the Worker serves — a tournament's
-	// name. No dimension names one today, but the labels are resolved through
-	// the one function the builder's chips use, so the table cannot drift into
-	// showing an id where the chip above it shows a name.
+	// `rosters` is the half of the vocabulary the Worker serves — a
+	// tournament's name, an account's. Neither reaches a cell: the one
+	// dimension that names a served vocabulary is `player`, whose roster is
+	// there for the filter picker, and whose own column already arrives as a
+	// display name. The labels are resolved through the one function the
+	// builder's chips use anyway, so the table cannot drift into showing an id
+	// where the chip above it shows a name.
 	let {
 		result,
 		source,

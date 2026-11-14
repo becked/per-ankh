@@ -78,8 +78,9 @@ const NANOID_RE = /^[A-Za-z0-9_-]{21}$/;
 
 // `key:op:v1,v2` — one `f` param per filter. `:` and `,` are the separators
 // because no value can contain either: catalog keys are lowercase words, the
-// zTypes are `[A-Z0-9_]`, a tournament id is a nanoid (`[A-Za-z0-9_-]`), and
-// the two free-text columns are checked against this below rather than assumed.
+// zTypes are `[A-Z0-9_]`, a tournament id and a user_id are both nanoids
+// (`[A-Za-z0-9_-]`), and the two free-text columns are checked against this
+// below rather than assumed.
 const FILTER_SEPARATOR = ":";
 const VALUE_SEPARATOR = ",";
 

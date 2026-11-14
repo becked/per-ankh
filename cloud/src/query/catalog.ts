@@ -29,7 +29,11 @@
 // nobody can read; what is here is the subset that answers questions people
 // actually ask, and adding to it is a one-line change with a label attached.
 
-import { TOURNAMENT_GAME_IDS_SQL, TOURNAMENT_ROSTER_SQL } from "../games-scope";
+import {
+	noChallengeRunsSql,
+	TOURNAMENT_GAME_IDS_SQL,
+	TOURNAMENT_ROSTER_SQL,
+} from "../games-scope";
 import { UNAMBIGUOUS_ONLINE_ID_OWNERS_SQL } from "../online-ids";
 import { displayNameSql } from "../identity";
 
@@ -88,6 +92,33 @@ export const IDENTITY_JOIN_SQL = `LEFT JOIN (${UNAMBIGUOUS_ONLINE_ID_OWNERS_SQL}
 	   ON uo.online_id = ps.online_id AND ps.online_id IS NOT NULL
 	 LEFT JOIN users ud ON ud.user_id = ${PLAYER_USER_ID_SQL}`;
 
+// The accounts a question can be asked about: the ones PLAYER_USER_ID_SQL
+// resolves a seat to somewhere in the corpus a question runs over, by name.
+//
+// Scoped to that corpus for the reason TOURNAMENT_ROSTER_SQL is scoped to
+// played matches — every other account is a filter value that selects nothing,
+// and offering one is offering an empty answer. So the predicate is the same
+// pair compileQuery puts in every WHERE (`is_public = 1`, no challenge runs),
+// written here against the same expression rather than restated: a roster that
+// drifted from the filter would offer a player whose own row is empty.
+//
+// Viewer-independent, which is what lets the catalog carry it, and no PII it
+// does not already publish: `GET /v1/stats/players` is anonymous and serves
+// user_id and display name for this same population. The display name is the
+// effective one (displayNameSql), so an operator-set alias is what the picker
+// shows — the name the rest of the site shows for that account.
+export const PLAYER_ROSTER_SQL = `SELECT ud.user_id, ${displayNameSql("ud")} AS display_name
+	   FROM users ud
+	  WHERE EXISTS (
+	          SELECT 1 FROM player_summaries ps
+	            JOIN games g ON g.game_id = ps.game_id
+	            LEFT JOIN (${UNAMBIGUOUS_ONLINE_ID_OWNERS_SQL}) uo
+	              ON uo.online_id = ps.online_id AND ps.online_id IS NOT NULL
+	           WHERE g.is_public = 1
+	             AND ${noChallengeRunsSql("g")}
+	             AND ${PLAYER_USER_ID_SQL} = ud.user_id)
+	  ORDER BY ${displayNameSql("ud")} COLLATE NOCASE`;
+
 // ---------- Entry shapes ----------
 
 // Which aliases an entry's expression needs in scope. `games` is always in
@@ -128,8 +159,10 @@ export interface CatalogDimension {
 	// for most of these, and shipping the roster in every catalog response
 	// would be a second copy of data the frontend already holds.
 	vocabulary?: string;
-	// Whether a selection may filter on it. False for a dimension whose values
-	// are only meaningful as a grouping (the identity label).
+	// Whether a selection may filter on it. False where a filter would be a
+	// second spelling of one the catalog already has: `played_year` is the
+	// `played` date range written as a string, and a question narrowed by a
+	// year would have two ways to ask it with different operators.
 	filterable: boolean;
 	// Shown under the picker. One sentence, present only where the key does
 	// not say the whole thing.
@@ -368,7 +401,14 @@ const PLAYER_DIMENSIONS: CatalogDimension[] = [
 			{ suffix: "id", sql: PLAYER_USER_ID_SQL },
 			{ suffix: "slug", sql: "ud.slug" },
 		],
-		filterable: false,
+		// Named for the filter `filtersFromDimensions` derives from this entry,
+		// not for the grouping: a filter value is a user_id, which nobody can
+		// type, so the picker needs the roster PLAYER_ROSTER_SQL serves. The
+		// grouping has no use for it — `labelSql` already selects the name, and
+		// `valueLabel` passes an identity value through unchanged.
+		vocabulary: "player",
+		filterable: true,
+		help: "The account a seat belongs to. A seat is credited when its uploader claimed it, or when its online id belongs to exactly one account.",
 	},
 	{
 		key: "player_name",
@@ -913,6 +953,24 @@ const SOURCE_DEFS: QuerySource[] = [
 				note: "Averaged over turn rows.",
 			},
 			{
+				// The running total rather than the rate, which is what "how
+				// much science did they get" means and what `avg_science`
+				// above cannot answer at any grouping.
+				//
+				// MAX is the end-of-game figure because the column only rises:
+				// science spent on a tech is deducted from the stock, not from
+				// the total earned. Measured over the 2026-11-10 snapshot —
+				// 5 of 258,825 turn-to-turn steps go down, all 5 on one seat.
+				// MIN-and-subtract would be the shape if it did fall, and it
+				// is not available here: the grammar has one aggregate.
+				key: "max_science",
+				label: "Highest total science",
+				reach: "source",
+				unit: "event",
+				agg: { fn: "MAX", sql: "gpt.science_cumulative" },
+				note: "The highest cumulative science any turn row in the group reached. Grouped by seat, that is its end-of-game total.",
+			},
+			{
 				key: "avg_money",
 				label: "Average money per turn",
 				reach: "source",
@@ -1070,9 +1128,9 @@ export interface CatalogRosterOption {
 export interface CatalogWire {
 	sources: CatalogSourceWire[];
 	// The vocabularies the Worker supplies, keyed by the `vocabulary` an entry
-	// names. Only the ones whose values live in D1 — a tournament — are here;
-	// a zType roster is resolved client-side against the baked tables in
-	// `src/lib/generated/`, because a second copy of those here would be the
+	// names. Only the ones whose values live in D1 — a tournament, an account —
+	// are here; a zType roster is resolved client-side against the baked tables
+	// in `src/lib/generated/`, because a second copy of those here would be the
 	// drift the catalog exists to prevent. A vocabulary absent from this map
 	// and unknown to the client is a filter that takes a typed token.
 	rosters: Record<string, CatalogRosterOption[]>;

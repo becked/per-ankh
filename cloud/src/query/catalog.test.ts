@@ -120,14 +120,18 @@ describe("the serialized catalog", () => {
 	});
 
 	it("carries the rosters it was handed", () => {
-		// The tournament roster is read from D1 by the handler and passed in,
-		// because a tournament's name is the one filter value this side knows
-		// and the client does not.
-		const withRoster = serializeCatalog({
+		// Both rosters are read from D1 by the handler and passed in, because a
+		// tournament's name and an account's display name are the filter values
+		// this side knows and the client does not.
+		const withRosters = serializeCatalog({
 			tournament: [{ value: "abc", label: "Spring Open" }],
+			player: [{ value: "O-1ONgvfrVql0yVJiATyh", label: "Siontific" }],
 		});
-		expect(withRoster.rosters.tournament).toEqual([
+		expect(withRosters.rosters.tournament).toEqual([
 			{ value: "abc", label: "Spring Open" },
+		]);
+		expect(withRosters.rosters.player).toEqual([
+			{ value: "O-1ONgvfrVql0yVJiATyh", label: "Siontific" },
 		]);
 	});
 
@@ -179,5 +183,18 @@ describe("reachability", () => {
 		const seats = sourceByKey("player_summaries") as QuerySource;
 		expect(seats.dimensions.map((d) => d.key)).toContain("map_class");
 		expect(seats.filters.map((f) => f.key)).toContain("tournament");
+	});
+
+	it("offers the player filter exactly where a seat can be named", () => {
+		// It compiles to PLAYER_USER_ID_SQL, which needs `ps` in scope. A
+		// source with no player_index cannot put it there, so the filter has to
+		// follow the same reachability rule the dimension does rather than
+		// being offered everywhere the dimension's label is.
+		for (const source of SOURCES) {
+			const hasDimension = source.dimensions.some((d) => d.key === "player");
+			const hasFilter = source.filters.some((f) => f.key === "player");
+			expect(hasFilter, source.key).toBe(hasDimension);
+			expect(hasFilter, source.key).toBe(source.joinsPlayer);
+		}
 	});
 });

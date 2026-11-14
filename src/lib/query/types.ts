@@ -69,9 +69,9 @@ export interface CatalogRosterOption {
 export interface QueryCatalog {
 	sources: CatalogSource[];
 	// The vocabularies the Worker supplies, keyed by the `vocabulary` an entry
-	// names. Only the ones whose values live in D1 — a tournament — arrive this
-	// way; a zType roster is resolved against this bundle's own baked tables
-	// ($lib/query/vocabularies). `vocabularyFor` reads both.
+	// names. Only the ones whose values live in D1 — a tournament, an account —
+	// arrive this way; a zType roster is resolved against this bundle's own
+	// baked tables ($lib/query/vocabularies). `vocabularyFor` reads both.
 	rosters: Record<string, CatalogRosterOption[]>;
 	limits: {
 		max_rows: number;
