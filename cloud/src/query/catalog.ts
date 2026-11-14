@@ -328,13 +328,6 @@ const GAME_MEASURES: CatalogMeasure[] = [
 		note: "Distinct matches. A match both players uploaded counts once.",
 	},
 	{
-		key: "saves",
-		label: "Saves uploaded",
-		reach: "games",
-		unit: "save",
-		note: "Uploads, not matches. A match both players uploaded counts twice — which is the question when you are counting uploads.",
-	},
-	{
 		key: "avg_turns",
 		label: "Average game length",
 		reach: "games",

@@ -179,13 +179,6 @@ describe("a count declares what it counts", () => {
 		expect(rows).toEqual([{ value: 1 }]);
 	});
 
-	it("counts two saves for the same pair", async () => {
-		// Not a bug in the first number — a different question, which is why
-		// the unit is on the measure rather than on the asking.
-		const rows = await rowsOf("source=games&measure=saves");
-		expect(rows).toEqual([{ value: 2 }]);
-	});
-
 	it("counts each seat of the match once", async () => {
 		const rows = await rowsOf("source=player_summaries&measure=seats");
 		expect(rows).toEqual([{ value: 2 }]);
@@ -324,7 +317,7 @@ describe("the response", () => {
 describe("the corpus", () => {
 	it("is public games only", async () => {
 		await env.SHARE_DB.prepare("UPDATE games SET is_public = 0").run();
-		const rows = await rowsOf("source=games&measure=saves");
+		const rows = await rowsOf("source=games&measure=matches");
 		expect(rows).toEqual([{ value: 0 }]);
 		await env.SHARE_DB.prepare("UPDATE games SET is_public = 1").run();
 	});

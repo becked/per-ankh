@@ -72,12 +72,6 @@ describe("measure units", () => {
 		);
 	});
 
-	it("counts uploads when the unit is a save", () => {
-		expect(flat(compile("source=games&measure=saves").sql)).toContain(
-			"COUNT(DISTINCT g.game_id)",
-		);
-	});
-
 	it("keys a seat on the match, not on the save", () => {
 		const sql = flat(compile("source=player_summaries&measure=seats").sql);
 		expect(sql).toContain(
