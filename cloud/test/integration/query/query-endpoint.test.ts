@@ -314,6 +314,47 @@ describe("the response", () => {
 	});
 });
 
+describe("an average declares what it averages", () => {
+	it("averages one upload of a match, the one that saw more turns", async () => {
+		// The fixture above is two uploads of one finished save, which weigh
+		// the same and so hide the defect in the mean. This is the other shape
+		// the corpus holds: one match uploaded at two points, 300 turns in and
+		// 320 turns in. Averaging the rows gives 310, a game length neither
+		// player played and no save records.
+		for (const [user, seat, totalTurns] of [
+			[alice, 0, 300],
+			[bob, 1, 320],
+		] as const) {
+			const res = await postMultipart({
+				path: "/v1/games",
+				form: await buildUploadFormData({
+					winnerIndex: 0,
+					uploaderIndex: seat,
+					match: { xmlGameId: "MATCH-TWO-POINTS", totalTurns },
+				}),
+				as: user,
+			});
+			expect(res.status).toBe(201);
+		}
+
+		// Narrowed to this match: every other fixture is a 100-turn save.
+		const long = "f=total_turns:gte:300";
+		expect(await rowsOf(`source=games&measure=avg_turns&${long}`)).toEqual([
+			{ value: 320 },
+		]);
+		// The count beside it already deduped, and still does.
+		expect(await rowsOf(`source=games&measure=matches&${long}`)).toEqual([
+			{ value: 1 },
+		]);
+	});
+
+	it("says a match is what it averaged over", async () => {
+		const res = await ask("source=games&measure=avg_turns");
+		const body = await res.json<QueryBody>();
+		expect(body.measure.unit).toBe("match");
+	});
+});
+
 describe("the corpus", () => {
 	it("is public games only", async () => {
 		await env.SHARE_DB.prepare("UPDATE games SET is_public = 0").run();

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { compileQuery } from "./compile";
+import { SOURCES } from "./catalog";
 import { parseSelection } from "./select";
 import type { CompiledQuery } from "./compile";
 
@@ -90,6 +91,56 @@ describe("measure units", () => {
 		expect(
 			flat(compile("source=wonder_events&measure=wonders_built").sql),
 		).toContain("COUNT(DISTINCT g.xml_game_id || ':' || we.wonder)");
+	});
+
+	it("narrows an average to one upload per match, on every source", () => {
+		// Enumerated from the catalog rather than from a list written here:
+		// the defect this guards against is an average added later that nobody
+		// remembers to dedupe, and a hand-written list would be the thing that
+		// went stale.
+		for (const source of SOURCES) {
+			for (const measure of source.measures) {
+				if (measure.agg?.fn !== "AVG") continue;
+				const sql = flat(
+					compile(`source=${source.key}&measure=${measure.key}`).sql,
+				);
+				expect(sql, `${source.key}.${measure.key}`).toContain(
+					"ROW_NUMBER() OVER (PARTITION BY xml_game_id",
+				);
+			}
+		}
+	});
+
+	it("leaves a count and an extremum reading every upload", () => {
+		// They are already invariant: a count says DISTINCT over the key its
+		// unit names, and the same extremum comes back however many copies of
+		// a row there are. Narrowing them too would be a second answer to a
+		// question that is already answered.
+		for (const source of SOURCES) {
+			for (const measure of source.measures) {
+				if (measure.agg?.fn === "AVG") continue;
+				const sql = flat(
+					compile(`source=${source.key}&measure=${measure.key}`).sql,
+				);
+				expect(sql, `${source.key}.${measure.key}`).not.toContain(
+					"ROW_NUMBER()",
+				);
+			}
+		}
+	});
+
+	it("picks the surviving upload by a property of the corpus", () => {
+		// Without the ORDER BY the pick would be D1's scan order, and the same
+		// question would answer differently between two runs.
+		const sql = flat(compile("source=player_summaries&measure=avg_techs").sql);
+		expect(sql).toContain("ORDER BY total_turns DESC, game_id ASC");
+	});
+
+	it("picks only from the corpus the question runs over", () => {
+		// A private upload that won the pick would then be filtered out by the
+		// outer WHERE, and the match would leave the answer entirely.
+		const sql = flat(compile("source=games&measure=avg_turns").sql);
+		expect(sql).toContain("FROM games WHERE is_public = 1 AND game_id NOT IN");
 	});
 
 	it("reads total science off the cumulative column, not the rate", () => {

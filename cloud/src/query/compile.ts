@@ -27,6 +27,7 @@
 import { noChallengeRunsSql } from "../games-scope";
 import {
 	IDENTITY_JOIN_SQL,
+	ONE_UPLOAD_PER_MATCH_SQL,
 	TOURNAMENT_GAME_IDS_SQL,
 	dimensionByKey,
 	filterByKey,
@@ -195,6 +196,17 @@ export function compileQuery(
 
 	const binds: (string | number)[] = [];
 	const whereParts = [`g.is_public = 1`, noChallengeRunsSql("g")];
+
+	// An average is the one aggregate whose answer moves with how many rows
+	// carry the value: a count says DISTINCT over the key its unit names, and a
+	// MIN or MAX reads the same extremum however many copies of a row are
+	// there. So the measure that needs the corpus narrowed to one upload per
+	// match is read off the aggregate function rather than declared per entry.
+	// An average added to the catalog later then gets it without anyone
+	// remembering to ask, which is the coverage gap a list of parallel entries
+	// otherwise grows.
+	if (measure.agg?.fn === "AVG") whereParts.push(ONE_UPLOAD_PER_MATCH_SQL);
+
 	for (const filter of selection.filters) {
 		const spec = filterByKey(source, filter.key);
 		if (spec?.reach === "player") needsPlayer = true;

@@ -20,9 +20,10 @@
 //     (dedupeSeatRecords, stats/aggregate.ts; ratings/duels.ts; the played-games
 //     board in stats/handlers.ts all collapse them on `xml_game_id`), so a
 //     count whose unit is a match must dedupe and a count whose unit is a save
-//     must not. Getting that wrong is invisible in the output — the number
-//     looks right — so it is a property of the catalog entry and not of the
-//     person asking.
+//     must not. A count can say DISTINCT; an average has no such form, so it
+//     narrows the rows instead (ONE_UPLOAD_PER_MATCH_SQL below). Getting
+//     either wrong is invisible in the output — the number looks right — so it
+//     is a property of the catalog entry and not of the person asking.
 //
 // The catalog is curated, not generated. `game_player_turn` has 38 columns and
 // listing all of them twice (per-turn and cumulative) would be a vocabulary
@@ -118,6 +119,52 @@ export const PLAYER_ROSTER_SQL = `SELECT ud.user_id, ${displayNameSql("ud")} AS 
 	             AND ${noChallengeRunsSql("g")}
 	             AND ${PLAYER_USER_ID_SQL} = ud.user_id)
 	  ORDER BY ${displayNameSql("ud")} COLLATE NOCASE`;
+
+// One upload per match, as a predicate over `g`.
+//
+// Both players uploading one match makes two rows in `games` carrying the same
+// seats, the same events and the same turns: 160 of the 851 public matches in
+// the 2026-11-10 snapshot have more than one upload, and 330 of the 2,035
+// human seat rows over them are a second copy of a seat already counted. A
+// count answers that with DISTINCT (countSqlFor, compile.ts). AVG has no such
+// form. It divides by however many rows it was handed, so the rows have to be
+// narrowed to one upload per match before it runs.
+//
+// The survivor is the upload that saw more turns, which is the same match with
+// more of it recorded, and on the tie the lower game_id. The tie is the normal
+// outcome rather than the edge case: 154 of those 160 matches carry one
+// total_turns across every upload. That is dedupeSeatRecords' rule
+// (stats/aggregate.ts) read off `games.total_turns` instead of the seat's own
+// last turn, which keeps every seat of one match coming from one upload. Any
+// total order would do; what matters is that it is a property of the corpus
+// and not D1's row order, which would let one question answer differently
+// between two runs.
+//
+// The pick runs over the corpus the question runs over, which is the pair
+// compileQuery puts in every WHERE, rather than over all of `games`. That is
+// the reason PLAYER_ROSTER_SQL carries the pair too. Picking first and
+// filtering after would let a private upload win the pick and then be filtered
+// out, which drops the match from the answer entirely.
+//
+// What this does not see is a filter the uploads of one match disagree on: a
+// question narrowed to the upload that lost the pick answers over neither.
+// Eight matches in that snapshot carry two `game_mode`s and six carry two
+// `total_turns`; every other filterable column is either the save's, which
+// both uploads are of, or a seat's, where the pick is per match and the seats
+// follow it.
+//
+// ROW_NUMBER rather than a self-join on `games`: the NOT EXISTS spelling reads
+// the table once per candidate upload, and over the November snapshot the same
+// per-nation average took 82ms against 6ms for this one.
+export const ONE_UPLOAD_PER_MATCH_SQL = `g.game_id IN (
+	        SELECT game_id FROM (
+	          SELECT game_id,
+	                 ROW_NUMBER() OVER (PARTITION BY xml_game_id
+	                                        ORDER BY total_turns DESC, game_id ASC) AS rn
+	            FROM games
+	           WHERE is_public = 1
+	             AND ${noChallengeRunsSql()})
+	         WHERE rn = 1)`;
 
 // ---------- Entry shapes ----------
 
@@ -331,9 +378,13 @@ const GAME_MEASURES: CatalogMeasure[] = [
 		key: "avg_turns",
 		label: "Average game length",
 		reach: "games",
-		unit: "save",
+		// A match rather than a save: the average runs over one upload per match
+		// (ONE_UPLOAD_PER_MATCH_SQL). `max_turns` beside it keeps `save`, because
+		// it reads every upload and the longest game is the longest game however
+		// many of them record it.
+		unit: "match",
 		agg: { fn: "AVG", sql: "g.total_turns" },
-		note: "Averaged over saves, so a match both players uploaded weighs twice. Turns.",
+		note: "Averaged over matches, one upload each. Turns.",
 	},
 	{
 		key: "max_turns",
@@ -503,7 +554,7 @@ const PLAYER_MEASURES: CatalogMeasure[] = [
 		reach: "player",
 		unit: "seat",
 		agg: { fn: "AVG", sql: "ps.final_points" },
-		note: "Averaged over seat rows, so a match both players uploaded weighs twice.",
+		note: "Averaged over seats, one upload per match.",
 	},
 	{
 		key: "max_points",
@@ -519,7 +570,7 @@ const PLAYER_MEASURES: CatalogMeasure[] = [
 		reach: "player",
 		unit: "seat",
 		agg: { fn: "AVG", sql: "ps.techs_completed" },
-		note: "Averaged over seat rows, so a match both players uploaded weighs twice.",
+		note: "Averaged over seats, one upload per match.",
 	},
 	{
 		key: "avg_cities",
@@ -527,7 +578,7 @@ const PLAYER_MEASURES: CatalogMeasure[] = [
 		reach: "player",
 		unit: "seat",
 		agg: { fn: "AVG", sql: "ps.cities_total" },
-		note: "End-of-game holdings, averaged over seat rows.",
+		note: "End-of-game holdings, averaged over seats, one upload per match.",
 	},
 	{
 		key: "avg_military",
@@ -535,7 +586,7 @@ const PLAYER_MEASURES: CatalogMeasure[] = [
 		reach: "player",
 		unit: "seat",
 		agg: { fn: "AVG", sql: "ps.final_military_power" },
-		note: "Averaged over seat rows, so a match both players uploaded weighs twice.",
+		note: "Averaged over seats, one upload per match.",
 	},
 ];
 
@@ -646,7 +697,7 @@ const SOURCE_DEFS: QuerySource[] = [
 				reach: "source",
 				unit: "event",
 				agg: { fn: "AVG", sql: "we.turn" },
-				note: "Averaged over rows, so a match both players uploaded weighs twice.",
+				note: "Averaged over builds, one upload per match.",
 			},
 			{
 				key: "earliest_wonder_turn",
@@ -701,7 +752,7 @@ const SOURCE_DEFS: QuerySource[] = [
 				reach: "source",
 				unit: "event",
 				agg: { fn: "AVG", sql: "te.turn" },
-				note: "Averaged over rows, so a match both players uploaded weighs twice.",
+				note: "Averaged over techs researched, one upload per match.",
 			},
 			{
 				key: "earliest_tech_turn",
@@ -758,7 +809,7 @@ const SOURCE_DEFS: QuerySource[] = [
 				reach: "source",
 				unit: "event",
 				agg: { fn: "AVG", sql: "le.turn" },
-				note: "Averaged over rows, so a match both players uploaded weighs twice.",
+				note: "Averaged over adoptions, one upload per match.",
 			},
 			{
 				key: "earliest_law_turn",
@@ -816,7 +867,7 @@ const SOURCE_DEFS: QuerySource[] = [
 				reach: "source",
 				unit: "event",
 				agg: { fn: "AVG", sql: "lr.start_turn" },
-				note: "Averaged over rows, so a match both players uploaded weighs twice.",
+				note: "Averaged over reigns, one upload per match.",
 			},
 		],
 		filters: [
@@ -864,7 +915,7 @@ const SOURCE_DEFS: QuerySource[] = [
 				reach: "source",
 				unit: "event",
 				agg: { fn: "AVG", sql: "pfc.cities" },
-				note: "End-of-game holdings, averaged over rows.",
+				note: "End-of-game holdings, averaged over rows, one upload per match.",
 			},
 			{
 				key: "avg_first_founded",
@@ -872,7 +923,7 @@ const SOURCE_DEFS: QuerySource[] = [
 				reach: "source",
 				unit: "event",
 				agg: { fn: "AVG", sql: "pfc.first_founded_turn" },
-				note: "Earliest founding among that class's cities, averaged over rows.",
+				note: "Earliest founding among that class's cities, averaged over rows, one upload per match.",
 			},
 		],
 		filters: [
@@ -919,7 +970,7 @@ const SOURCE_DEFS: QuerySource[] = [
 				reach: "source",
 				unit: "event",
 				agg: { fn: "AVG", sql: "gpt.military_power" },
-				note: "Averaged over turn rows, so a match both players uploaded weighs twice.",
+				note: "Averaged over turn rows, one upload per match.",
 			},
 			{
 				key: "max_military_power",
@@ -935,7 +986,7 @@ const SOURCE_DEFS: QuerySource[] = [
 				reach: "source",
 				unit: "event",
 				agg: { fn: "AVG", sql: "gpt.legitimacy" },
-				note: "Averaged over turn rows.",
+				note: "Averaged over turn rows, one upload per match.",
 			},
 			{
 				key: "avg_science",
@@ -943,7 +994,7 @@ const SOURCE_DEFS: QuerySource[] = [
 				reach: "source",
 				unit: "event",
 				agg: { fn: "AVG", sql: "gpt.science_per_turn" },
-				note: "Averaged over turn rows.",
+				note: "Averaged over turn rows, one upload per match.",
 			},
 			{
 				// The running total rather than the rate, which is what "how
@@ -969,7 +1020,7 @@ const SOURCE_DEFS: QuerySource[] = [
 				reach: "source",
 				unit: "event",
 				agg: { fn: "AVG", sql: "gpt.money_per_turn" },
-				note: "Averaged over turn rows.",
+				note: "Averaged over turn rows, one upload per match.",
 			},
 		],
 		filters: [],
