@@ -1,15 +1,13 @@
 <script lang="ts">
 	// The answer: one row per group, the measure last.
 	//
-	// Two things the table has to say that the numbers don't. A value the save
+	// One thing the table has to say that the numbers don't. A value the save
 	// doesn't record — a leader with no archetype, a game with no prosperity —
 	// keeps its row and is labelled, because an answer that quietly omits
 	// those reads as complete and is short. Prosperity is the case that shows
 	// it: over the 2026-11-10 snapshot its unrecorded row is 429 matches
 	// against 475 for Magnificent, and hiding it puts Magnificent at 475 of
-	// 510 where the groups sum to 939. And a row cap that was reached is said
-	// so, because a reader who can't tell a complete answer from a truncated
-	// one has been given a wrong one.
+	// 510 where the groups sum to 939.
 	//
 	// The one NULL with no row is an identity dimension's. The Worker drops
 	// the seats that resolve to no account, so every row of the Player column
@@ -145,9 +143,4 @@
 	     collapsed a match both players uploaded, and one that did not, are
 	     different numbers over the same corpus. -->
 	<p>{result.measure.note}</p>
-	{#if result.truncated}
-		<p class="not-italic text-orange opacity-100">
-			Showing the first {result.limit} rows — there may be more.
-		</p>
-	{/if}
 </div>
