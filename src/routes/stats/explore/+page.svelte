@@ -37,10 +37,21 @@
 	// makes across a facet change.
 	const isAsking = $derived(navigating.to !== null);
 
-	// The rows' own frame at the height an empty one needs to read as a table
-	// waiting rather than as a seam. QueryResults draws this frame itself once
-	// there are rows, so the constant is shared rather than restyled here.
-	const FRAME = `${TABLE_FRAME_CLASS} min-h-[16rem]`;
+	// The rows' own frame. QueryResults draws this frame itself once there are
+	// rows, so the constant is shared rather than restyled here.
+	//
+	// It grows to the panel's height so an empty one opens level with the
+	// builder's first and last subpanels rather than at a height of its own.
+	// The minimum is what the stacked single-column layout falls back on, where
+	// the panels are separate grid rows and there is no sibling height to fill.
+	const FRAME = `${TABLE_FRAME_CLASS} min-h-[16rem] flex-1`;
+
+	// The builder's Ask/Reset row, reserved. The two panels are grid siblings
+	// and stretch together, so a frame that simply filled this one would end
+	// level with those buttons — below the last subpanel, which is what the
+	// frame is being lined up with. `h-7` is the Ask button (text-xs on py-1.5)
+	// and `mt-3` is the gap the builder's column puts above its footer.
+	const FOOTER_RESERVE = "mt-3 h-7";
 </script>
 
 <div class="flex flex-1 overflow-hidden">
@@ -55,7 +66,7 @@
 					<QueryBuilder catalog={data.catalog} draft={data.draft} />
 				</Panel>
 
-				<Panel title="Results">
+				<Panel title="Results" class="flex flex-col">
 					{#if data.error}
 						<div class="{FRAME} items-center">
 							<p class="flex-1 text-center text-sm text-orange">{data.error}</p>
@@ -74,6 +85,7 @@
 						     question nobody has asked. -->
 						<div class={FRAME}></div>
 					{/if}
+					<div class={FOOTER_RESERVE}></div>
 				</Panel>
 			</div>
 		</div>

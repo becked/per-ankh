@@ -22,6 +22,7 @@
 	import {
 		canonicalQuery,
 		defaultFiltersFor,
+		emptyDraft,
 		filterIsComplete,
 		isRangeOp,
 		opLabel,
@@ -209,6 +210,49 @@
 		}
 	}
 
+	const sameFilters = (a: DraftFilter[], b: DraftFilter[]): boolean =>
+		a.length === b.length &&
+		a.every(
+			(f, i) =>
+				f.key === b[i].key &&
+				f.op === b[i].op &&
+				f.values.length === b[i].values.length &&
+				f.values.every((v, j) => v === b[i].values[j]),
+		);
+
+	// The draft a visitor with no URL gets: the whole form, source included,
+	// with this source's seeded rows still on. The human-seat and recent-window
+	// rows are what keep an answer about people and about the game as it is
+	// now, so a Reset that cleared them would quietly widen every question
+	// asked after it. Dropping either one stays a deliberate edit of its own
+	// row.
+	const fresh = $derived(emptyDraft(catalog));
+
+	// Reset navigates to the bare path rather than reassigning the draft. The
+	// selection IS the URL here, so a draft-only reset would leave the params
+	// and the answered question standing while the controls said otherwise —
+	// which is the hand-editing of the address bar this button exists to
+	// replace. Stripping the search re-runs the load, which hands back
+	// `emptyDraft` and a null result, so the rows go with the question.
+	async function reset(): Promise<void> {
+		const next = new URL(page.url.pathname, page.url);
+		// eslint-disable-next-line svelte/no-navigation-without-resolve -- search-param-only update on the current route; URL objects are SvelteKit's documented dynamic-nav API
+		await goto(next, { keepFocus: true, noScroll: true });
+	}
+
+	// Nothing to put back: no params to strip, and a form already showing the
+	// fresh draft. Edits count here even where `dirty` ignores them — a filter
+	// row with a column and no value yet is a row Reset takes away.
+	const atFresh = $derived(
+		page.url.search === "" &&
+			draft.source === fresh.source &&
+			draft.measure === fresh.measure &&
+			draft.dimensions.length === 0 &&
+			draft.sort === fresh.sort &&
+			draft.limit === fresh.limit &&
+			sameFilters(draft.filters, fresh.filters),
+	);
+
 	// The date bound's quick windows, beside the day input rather than instead
 	// of it: picking one fills the input with that day, pressing the lit one
 	// again clears it, and typing a day of your own unlights both. So there is
@@ -354,7 +398,7 @@
 	</PanelInset>
 
 	<PanelInset label="Grouped by">
-		<div class="flex flex-wrap items-start gap-2">
+		<div class="flex flex-wrap items-start gap-2 pl-3">
 			{#each draft.dimensions as dim, i (dim)}
 				<div class="flex items-center gap-1">
 					<Select
@@ -390,7 +434,7 @@
 	</PanelInset>
 
 	<PanelInset label="Where">
-		<div class="flex flex-col gap-2">
+		<div class="flex flex-col gap-2 pl-3">
 			{#each draft.filters as filter, i (i)}
 				{@const spec = specFor(filter)}
 				{#if spec}
@@ -536,7 +580,13 @@
 		</div>
 	</PanelInset>
 
-	<div class="flex items-center gap-2">
+	<!-- Reset stays at the left edge and Ask sits at the right, the far end of
+	     the controls it runs: the question is read down the panel and asked at
+	     the bottom of it. -->
+	<div class="flex items-center justify-between gap-2">
+		<button type="button" class={GHOST} disabled={atFresh} onclick={reset}
+			>Reset</button
+		>
 		<button
 			type="button"
 			class={ASK}
