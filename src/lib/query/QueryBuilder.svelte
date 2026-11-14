@@ -1,0 +1,634 @@
+<script lang="ts">
+	// The question composer: what the corpus is being asked, in the catalog's
+	// own words. A selection here is a set of catalog keys and literal values —
+	// nothing that reaches the Worker is a column name, which is what lets the
+	// compiler on the other end have no injection surface to defend.
+	//
+	// The draft is local state and the URL is the question. They are separate
+	// deliberately: a filter value is typed a character at a time, and a page
+	// that navigated on each keystroke would spend a read budget per letter.
+	// "Ask" is what makes a draft a question, and it writes the canonical URL —
+	// so the address bar, the link somebody pastes and the edge-cache key are
+	// one string.
+
+	import { goto } from "$app/navigation";
+	import { page } from "$app/state";
+	import Combobox from "$lib/ui/Combobox.svelte";
+	import PanelInset from "$lib/ui/PanelInset.svelte";
+	import Select from "$lib/ui/Select.svelte";
+	import { COMPACT_BTN, INPUT_CLASS } from "$lib/ui/classes";
+	import type { SelectGroup, SelectOption } from "$lib/ui/types";
+	import {
+		canonicalQuery,
+		defaultFiltersFor,
+		emptyDraft,
+		filterIsComplete,
+		isRangeOp,
+		opLabel,
+		recentCutoff,
+		RECENT_WINDOW_MONTHS,
+		SORTS,
+		sortLabel,
+		type Draft,
+		type DraftFilter,
+		type QuerySort,
+	} from "./selection";
+	import { vocabularyFor } from "./vocabularies";
+	import type { CatalogFilter, FilterOp, QueryCatalog } from "./types";
+
+	let { catalog, draft: initial }: { catalog: QueryCatalog; draft: Draft } =
+		$props();
+
+	// Writable derived: tracks the load's draft, but stays reassignable so the
+	// builder can edit it until the next one arrives. A new draft arriving —
+	// the back button walking to another question — replaces whatever was
+	// being edited, which is what keeps the controls showing the question the
+	// rows below them answer.
+	//
+	// Every edit below reassigns `draft` whole rather than writing through it.
+	// A derived's value is a plain object, not a `$state` proxy, so a property
+	// write would change it without telling anything that reads it.
+	let draft = $derived<Draft>(structuredClone(initial));
+
+	function patch(next: Partial<Draft>): void {
+		draft = { ...draft, ...next };
+	}
+
+	function patchFilter(index: number, next: DraftFilter): void {
+		patch({ filters: draft.filters.map((f, i) => (i === index ? next : f)) });
+	}
+
+	const source = $derived(
+		catalog.sources.find((s) => s.key === draft.source) ?? catalog.sources[0],
+	);
+
+	// The picker's headings, built by walking the catalog in order: sources
+	// sharing a group arrive contiguously (pinned in catalog.test.ts), so a
+	// run of them is a group and no second ordering lives here. A map keyed by
+	// heading would be the drift the wire field exists to prevent — a source
+	// added to the catalog would land under no heading and render nowhere.
+	const sourceOptions = $derived<SelectGroup[]>(
+		catalog.sources.reduce<SelectGroup[]>((groups, s) => {
+			const open = groups.at(-1);
+			const option = { value: s.key, label: s.label };
+			if (open?.heading === s.group) open.options.push(option);
+			else groups.push({ heading: s.group, options: [option] });
+			return groups;
+		}, []),
+	);
+	const measureOptions = $derived<SelectOption[]>(
+		source.measures.map((m) => ({ value: m.key, label: m.label })),
+	);
+	// A grouping already in the draft is offered only in its own picker, so the
+	// same column can't be added twice — which the Worker refuses outright.
+	const dimensionOptions = (atIndex: number): SelectOption[] =>
+		source.dimensions
+			.filter(
+				(d) =>
+					!draft.dimensions.includes(d.key) ||
+					draft.dimensions[atIndex] === d.key,
+			)
+			.map((d) => ({ value: d.key, label: d.label }));
+	// A (key, operator) pair already in the draft is offered only in its own
+	// row. Two `in` filters on one column compile to `col IN (A) AND col IN
+	// (B)`, which matches nothing, and the Worker refuses the repeated pair
+	// outright — so the builder can't compose one. The exclusion is by pair
+	// rather than by key because a range is two rows on one column: `gte` and
+	// `lte` on `total_turns` is how a window is asked for.
+	const opsTakenElsewhere = (key: string, atIndex: number): string[] =>
+		draft.filters
+			.filter((f, i) => i !== atIndex && f.key === key)
+			.map((f) => f.op);
+
+	// The operators a column is offered with. A date bound is a window, and a
+	// window is a lower bound, so `lte` has no control left to set it with and
+	// is not offered. That also keeps `played` out of the column picker once
+	// its one row exists, rather than leaving a free operator for a second row
+	// the Worker would refuse.
+	const opsFor = (spec: CatalogFilter): readonly FilterOp[] =>
+		spec.type === "date" ? spec.ops.filter((o) => o === "gte") : spec.ops;
+
+	const freeOp = (
+		spec: CatalogFilter,
+		atIndex: number,
+	): FilterOp | undefined => {
+		const taken = opsTakenElsewhere(spec.key, atIndex);
+		return opsFor(spec).find((o) => !taken.includes(o));
+	};
+
+	const filterOptions = (atIndex: number): SelectOption[] =>
+		source.filters
+			.filter((f) => freeOp(f, atIndex) !== undefined)
+			.map((f) => ({ value: f.key, label: f.label }));
+
+	const opOptions = (filter: DraftFilter, atIndex: number): SelectOption[] => {
+		const spec = specFor(filter);
+		if (!spec) return [];
+		const taken = opsTakenElsewhere(filter.key, atIndex);
+		return opsFor(spec)
+			.filter((o) => o === filter.op || !taken.includes(o))
+			.map((o) => ({ value: o, label: opLabel(o, spec.type) }));
+	};
+
+	// Whether any (key, operator) pair is left to add, the way the grouping
+	// button checks for a column it hasn't used.
+	const canAddFilter = $derived(
+		source.filters.some((f) => freeOp(f, -1) !== undefined),
+	);
+
+	const ROW_CHOICES = [10, 25, 50, 100, 200];
+	// A hand-edited or bookmarked `?limit=` the picker doesn't offer is still
+	// the cap the answer was computed at — the Worker is asked with the URL's
+	// own params — so the control carries it rather than falling back to the
+	// placeholder and reading as though no cap were set.
+	const limitOptions = $derived<SelectOption[]>(
+		[
+			...new Set([
+				...ROW_CHOICES.filter((n) => n <= catalog.limits.max_rows),
+				draft.limit,
+			]),
+		]
+			.sort((a, b) => a - b)
+			.map((n) => ({ value: String(n), label: `${n} rows` })),
+	);
+	const sortOptions = $derived<SelectOption[]>(
+		SORTS.filter(
+			// Ordering by a grouping there isn't is not a view — the Worker
+			// refuses it, so it is not offered either.
+			(s) => s !== "dimension_asc" || draft.dimensions.length > 0,
+		).map((s) => ({ value: s, label: sortLabel(s) })),
+	);
+
+	const query = $derived(canonicalQuery(draft, catalog));
+	// The question the rows below answer. Taken from the draft the load read
+	// out of the URL rather than from the URL's own text: a hand-edited or
+	// bookmarked link can spell the same question a different way — an
+	// explicit `sort=measure_desc` that the canonical form drops — and
+	// comparing the strings would call that a pending change.
+	const asked = $derived(
+		page.url.searchParams.get("source") === null
+			? null
+			: canonicalQuery(initial, catalog),
+	);
+	const dirty = $derived(query !== asked);
+
+	const incomplete = $derived(
+		draft.filters.some((f) => !filterIsComplete(f, specFor(f)?.type)),
+	);
+
+	function specFor(filter: DraftFilter): CatalogFilter | null {
+		return source.filters.find((f) => f.key === filter.key) ?? null;
+	}
+
+	function setSource(key: string | null): void {
+		if (key === null || key === draft.source) return;
+		const next = catalog.sources.find((s) => s.key === key);
+		if (!next) return;
+		// Everything the new source cannot reach goes with it. Keeping a
+		// grouping the source has no join for would send a selection the
+		// Worker refuses, and silently dropping it at send time would answer a
+		// wider question than the controls show.
+		const kept = draft.filters.filter((f) =>
+			next.filters.some((nf) => nf.key === f.key),
+		);
+		// The new source's own defaults, for any it doesn't already carry over.
+		// Arriving at Players from Games has no human filter to keep, so it is
+		// seeded; arriving from Techs researched already has whichever one the
+		// reader chose there, including the AI-only form, and that one wins.
+		const seeded = defaultFiltersFor(next).filter(
+			(d) => !kept.some((f) => f.key === d.key),
+		);
+		patch({
+			source: next.key,
+			measure:
+				next.measures.find((m) => m.key === draft.measure)?.key ??
+				next.measures[0].key,
+			dimensions: draft.dimensions.filter((d) =>
+				next.dimensions.some((nd) => nd.key === d),
+			),
+			filters: [...kept, ...seeded],
+		});
+	}
+
+	function addDimension(): void {
+		const next = source.dimensions.find(
+			(d) => !draft.dimensions.includes(d.key),
+		);
+		if (next) patch({ dimensions: [...draft.dimensions, next.key] });
+	}
+
+	function addFilter(): void {
+		for (const spec of source.filters) {
+			const op = freeOp(spec, -1);
+			if (op === undefined) continue;
+			patch({ filters: [...draft.filters, { key: spec.key, op, values: [] }] });
+			return;
+		}
+	}
+
+	const sameFilters = (a: DraftFilter[], b: DraftFilter[]): boolean =>
+		a.length === b.length &&
+		a.every(
+			(f, i) =>
+				f.key === b[i].key &&
+				f.op === b[i].op &&
+				f.values.length === b[i].values.length &&
+				f.values.every((v, j) => v === b[i].values[j]),
+		);
+
+	// The draft a visitor with no URL gets: the whole form, source included,
+	// with this source's seeded rows still on. The human-seat and recent-window
+	// rows are what keep an answer about people and about the game as it is
+	// now, so a Reset that cleared them would quietly widen every question
+	// asked after it. Dropping either one stays a deliberate edit of its own
+	// row.
+	const fresh = $derived(emptyDraft(catalog));
+
+	// Reset navigates to the bare path rather than reassigning the draft. The
+	// selection IS the URL here, so a draft-only reset would leave the params
+	// and the answered question standing while the controls said otherwise —
+	// which is the hand-editing of the address bar this button exists to
+	// replace. Stripping the search re-runs the load, which hands back
+	// `emptyDraft` and a null result, so the rows go with the question.
+	async function reset(): Promise<void> {
+		const next = new URL(page.url.pathname, page.url);
+		// eslint-disable-next-line svelte/no-navigation-without-resolve -- search-param-only update on the current route; URL objects are SvelteKit's documented dynamic-nav API
+		await goto(next, { keepFocus: true, noScroll: true });
+	}
+
+	// Nothing to put back: no params to strip, and a form already showing the
+	// fresh draft. Edits count here even where `dirty` ignores them — a filter
+	// row with a column and no value yet is a row Reset takes away.
+	const atFresh = $derived(
+		page.url.search === "" &&
+			draft.source === fresh.source &&
+			draft.measure === fresh.measure &&
+			draft.dimensions.length === 0 &&
+			draft.sort === fresh.sort &&
+			draft.limit === fresh.limit &&
+			sameFilters(draft.filters, fresh.filters),
+	);
+
+	// The date bound is a window picked from a closed list — "All time", or the
+	// last N months — and that one control is the whole row: there is no day
+	// input to compose an ad-hoc bound in, and so no comparison dropdown
+	// either, the upper half of a hand-built window having nothing left to set
+	// it with.
+	//
+	// A window is resolved to a fixed day on the way in (recentCutoff), never
+	// carried as the word: the selection is the URL here, so "last 6 months"
+	// as a token would be one address answering a different question each
+	// month, and one edge entry holding whichever answer got there first.
+	const ALL_TIME = "all";
+	// Stands for a bound this list does not offer. Picking it changes nothing;
+	// it exists so the control can name the bound the rows were computed at.
+	const CARRIED_BOUND = "carried";
+
+	// Which item is selected, read back off the row's own value every time, so
+	// there is no mode for the control to remember.
+	const windowValue = (filter: DraftFilter): string => {
+		if (filter.values.length === 0) return ALL_TIME;
+		const months =
+			filter.op === "gte" && filter.values.length === 1
+				? RECENT_WINDOW_MONTHS.find((m) => recentCutoff(m) === filter.values[0])
+				: undefined;
+		return months === undefined ? CARRIED_BOUND : String(months);
+	};
+
+	// A hand-edited or bookmarked `f=played:lte:2026-01-01` is still the bound
+	// the rows below were computed at — the Worker is asked with the URL's own
+	// params — so the list carries it rather than reading as "All time" over a
+	// corpus that is narrowed. Same move limitOptions makes for an off-menu
+	// `?limit=`.
+	const windowOptions = (filter: DraftFilter): SelectOption[] => {
+		const options: SelectOption[] = [
+			{ value: ALL_TIME, label: "All time" },
+			...RECENT_WINDOW_MONTHS.map((m) => ({
+				value: String(m),
+				label: `Last ${m} months`,
+			})),
+		];
+		if (windowValue(filter) === CARRIED_BOUND) {
+			const op = opLabel(filter.op, "date");
+			options.push({
+				value: CARRIED_BOUND,
+				label: `${op[0].toUpperCase()}${op.slice(1)} ${filter.values.join(", ")}`,
+			});
+		}
+		return options;
+	};
+
+	function setWindow(
+		index: number,
+		filter: DraftFilter,
+		key: string | null,
+	): void {
+		if (key === null || key === CARRIED_BOUND) return;
+		patchFilter(index, {
+			...filter,
+			op: "gte",
+			values: key === ALL_TIME ? [] : [recentCutoff(Number(key))],
+		});
+	}
+
+	function setFilterKey(index: number, key: string | null): void {
+		const spec =
+			key === null ? null : source.filters.find((f) => f.key === key);
+		if (!spec) return;
+		const op = freeOp(spec, index);
+		if (op === undefined) return;
+		// A new column means new values: a nation token is not a turn number.
+		patchFilter(index, { key: spec.key, op, values: [] });
+	}
+
+	function setFilterOp(index: number, op: string | null): void {
+		const current = draft.filters[index];
+		const spec = specFor(current);
+		if (!spec || op === null || !spec.ops.includes(op as FilterOp)) return;
+		const next = op as FilterOp;
+		// A range bound takes exactly one value, so crossing between the two
+		// shapes keeps at most the first.
+		patchFilter(index, {
+			...current,
+			op: next,
+			values: isRangeOp(next) ? current.values.slice(0, 1) : current.values,
+		});
+	}
+
+	// The two controls that feed this never offer a value it would drop: the
+	// picker lists only what isn't already a chip, and both controls go
+	// disabled at the value cap. The guards stay because `onValueKey` can
+	// still send the same typed word twice.
+	function addValue(index: number, value: string | null): void {
+		const trimmed = value?.trim();
+		if (!trimmed) return;
+		const current = draft.filters[index];
+		if (current.values.includes(trimmed)) return;
+		if (current.values.length >= catalog.limits.max_filter_values) return;
+		patchFilter(index, { ...current, values: [...current.values, trimmed] });
+	}
+
+	function removeValue(index: number, value: string): void {
+		const current = draft.filters[index];
+		patchFilter(index, {
+			...current,
+			values: current.values.filter((v) => v !== value),
+		});
+	}
+
+	function onValueKey(event: KeyboardEvent, index: number): void {
+		if (event.key !== "Enter") return;
+		event.preventDefault();
+		const input = event.currentTarget as HTMLInputElement;
+		addValue(index, input.value);
+		input.value = "";
+	}
+
+	async function run(): Promise<void> {
+		// Built rather than mutated — a URL whose search is assigned after
+		// construction is a mutable instance the lint rules refuse.
+		const next = new URL(`${page.url.pathname}?${query}`, page.url);
+		// eslint-disable-next-line svelte/no-navigation-without-resolve -- search-param-only update on the current route; URL objects are SvelteKit's documented dynamic-nav API
+		await goto(next, { keepFocus: true, noScroll: true });
+	}
+
+	// The picked-value chip and its remove button, as the challenge rules
+	// editor renders them.
+	const CHIP =
+		"flex items-center gap-1 rounded bg-surface-raised px-1.5 py-0.5 text-xs text-gray-200";
+	const CHIP_REMOVE = "text-gray-400 hover:text-danger";
+	// INPUT_CLASS as it stands, with no padding of its own layered on: two
+	// padding utilities in one class attribute are decided by Tailwind's
+	// emission order and not by the order they are written in (see Select).
+	const INPUT = `${INPUT_CLASS} text-xs text-tan disabled:opacity-50`;
+	const ASK =
+		"rounded bg-orange px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-orange/80 disabled:opacity-40";
+</script>
+
+<div class="flex flex-col gap-3">
+	<PanelInset label="About">
+		<Select
+			value={draft.source}
+			options={sourceOptions}
+			onChange={setSource}
+			ariaLabel="What the question is about"
+		/>
+	</PanelInset>
+
+	<PanelInset label="Measure">
+		<Select
+			value={draft.measure}
+			options={measureOptions}
+			onChange={(v) => {
+				if (v !== null) patch({ measure: v });
+			}}
+			ariaLabel="What to measure"
+		/>
+	</PanelInset>
+
+	<PanelInset label="Grouped by">
+		<div class="flex flex-col gap-2">
+			{#if draft.dimensions.length > 0}
+				<div class="flex flex-wrap items-start gap-2 pl-3">
+					{#each draft.dimensions as dim, i (dim)}
+						<div class="flex items-center gap-1">
+							<Select
+								value={dim}
+								options={dimensionOptions(i)}
+								onChange={(v) => {
+									if (v !== null)
+										patch({
+											dimensions: draft.dimensions.map((d, j) =>
+												j === i ? v : d,
+											),
+										});
+								}}
+								ariaLabel="Grouping {i + 1}"
+							/>
+							<button
+								type="button"
+								class={COMPACT_BTN}
+								aria-label="Remove grouping"
+								onclick={() =>
+									patch({
+										dimensions: draft.dimensions.filter((_, j) => j !== i),
+									})}>×</button
+							>
+						</div>
+					{/each}
+				</div>
+			{/if}
+			<div>
+				<button
+					type="button"
+					class={COMPACT_BTN}
+					disabled={draft.dimensions.length >= catalog.limits.max_dimensions ||
+						draft.dimensions.length >= source.dimensions.length}
+					onclick={addDimension}>+ Grouping</button
+				>
+			</div>
+		</div>
+	</PanelInset>
+
+	<PanelInset label="Where">
+		<div class="flex flex-col gap-2">
+			{#each draft.filters as filter, i (i)}
+				{@const spec = specFor(filter)}
+				{#if spec}
+					{@const vocab = vocabularyFor(spec.vocabulary, catalog.rosters)}
+					{@const atValueCap =
+						filter.values.length >= catalog.limits.max_filter_values}
+					<div class="flex flex-wrap items-center gap-1 pl-3">
+						<Select
+							value={filter.key}
+							options={filterOptions(i)}
+							onChange={(v) => setFilterKey(i, v)}
+							ariaLabel="Filter column"
+						/>
+						{#if spec.type !== "date"}
+							<Select
+								value={filter.op}
+								options={opOptions(filter, i)}
+								onChange={(v) => setFilterOp(i, v)}
+								ariaLabel="Filter comparison"
+							/>
+						{/if}
+
+						{#if spec.type === "date"}
+							<!-- One control for the rest of the row: the comparison and
+							     the day are both inside the window it names. -->
+							<Select
+								value={windowValue(filter)}
+								options={windowOptions(filter)}
+								onChange={(v) => setWindow(i, filter, v)}
+								ariaLabel="Date window"
+							/>
+						{:else if isRangeOp(filter.op)}
+							<input
+								class={INPUT}
+								type="number"
+								value={filter.values[0] ?? ""}
+								aria-label="Filter value"
+								oninput={(e) =>
+									patchFilter(i, {
+										...filter,
+										values: e.currentTarget.value
+											? [e.currentTarget.value]
+											: [],
+									})}
+							/>
+						{:else if spec.type === "boolean"}
+							<Select
+								value={filter.values[0] ?? "1"}
+								options={[
+									{ value: "1", label: "Yes" },
+									{ value: "0", label: "No" },
+								]}
+								onChange={(v) =>
+									patchFilter(i, { ...filter, values: v ? [v] : [] })}
+								ariaLabel="Filter value"
+							/>
+						{:else if vocab}
+							<!-- Minus what's already a chip, so every value the picker
+							     offers is one it can add — the same move the challenge
+							     rules editor's `without` makes.
+
+							     A Combobox rather than the Select beside it: these
+							     rosters run to 49 techs and 30-odd laws, and the one
+							     thing a reader of this row knows is the name of the
+							     value they are after. The structural pickers above stay
+							     Selects — a source, a measure, a column, an operator is
+							     chosen from what is on offer, not searched for. -->
+							<Combobox
+								value=""
+								options={vocab.options
+									.filter((o) => !filter.values.includes(o))
+									.map((o) => ({ value: o, label: vocab.label(o) }))}
+								onChange={(v) => addValue(i, v)}
+								disabled={atValueCap}
+								resetAfterSelect
+								ariaLabel="Filter value"
+							/>
+						{:else}
+							<input
+								class={INPUT}
+								disabled={atValueCap}
+								aria-label="Filter value"
+								onkeydown={(e) => onValueKey(e, i)}
+							/>
+						{/if}
+
+						{#each filter.values as value (value)}
+							{#if !isRangeOp(filter.op) && spec.type !== "boolean"}
+								<span class={CHIP}>
+									{vocab ? vocab.label(value) : value}
+									<button
+										type="button"
+										class={CHIP_REMOVE}
+										aria-label="Remove {value}"
+										onclick={() => removeValue(i, value)}>×</button
+									>
+								</span>
+							{/if}
+						{/each}
+
+						<button
+							type="button"
+							class={COMPACT_BTN}
+							aria-label="Remove filter"
+							onclick={() =>
+								patch({
+									filters: draft.filters.filter((_, j) => j !== i),
+								})}>×</button
+						>
+					</div>
+				{/if}
+			{/each}
+			<div>
+				<button
+					type="button"
+					class={COMPACT_BTN}
+					disabled={draft.filters.length >= catalog.limits.max_filters ||
+						!canAddFilter}
+					onclick={addFilter}>+ Filter</button
+				>
+			</div>
+		</div>
+	</PanelInset>
+
+	<PanelInset label="Show">
+		<div class="flex flex-wrap items-center gap-2">
+			<Select
+				value={draft.sort}
+				options={sortOptions}
+				onChange={(v) => {
+					if (v !== null) patch({ sort: v as QuerySort });
+				}}
+				ariaLabel="Row order"
+			/>
+			<Select
+				value={String(draft.limit)}
+				options={limitOptions}
+				onChange={(v) => {
+					if (v !== null) patch({ limit: Number(v) });
+				}}
+				ariaLabel="Row cap"
+			/>
+		</div>
+	</PanelInset>
+
+	<!-- Reset stays at the left edge and Ask sits at the right, the far end of
+	     the controls it runs: the question is read down the panel and asked at
+	     the bottom of it. -->
+	<div class="flex items-center justify-between gap-2">
+		<button type="button" class={COMPACT_BTN} disabled={atFresh} onclick={reset}
+			>Reset</button
+		>
+		<button
+			type="button"
+			class={ASK}
+			disabled={incomplete || !dirty}
+			onclick={run}>Ask</button
+		>
+	</div>
+</div>

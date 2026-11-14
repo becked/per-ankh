@@ -30,13 +30,15 @@ import { errorResponse, getClientIp } from "./util";
 // read. This is the shape the interface had before it was lifted out of
 // tournament/public.ts (one shape, three instances); global_stats_view was the
 // fourth read to want it, season_view the fifth and home_summary_view the
-// sixth; og_card_view, the per-game link-preview card, is the tenth.
+// sixth; og_card_view, the per-game link-preview card, is the tenth,
+// and ad_hoc_query_view, the composed-question endpoint, the eleventh.
 export type ReadEventType = Extract<
 	RateLimitedEventType,
 	| "tournament_view"
 	| "tournament_list_view"
 	| "tournament_link_view"
 	| "global_stats_view"
+	| "ad_hoc_query_view"
 	| "season_view"
 	| "home_summary_view"
 	| "challenge_view"

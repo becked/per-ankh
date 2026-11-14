@@ -6,6 +6,7 @@
 
 	import { Toolbar } from "bits-ui";
 	import ChartContainer from "$lib/ChartContainer.svelte";
+	import { TOGGLE_ITEM_CLASS } from "$lib/ui/classes";
 	import type { ChartBundleCore } from "./types";
 	import { YIELD_SERIES, yieldChartOption } from "./charts/yields";
 
@@ -63,10 +64,6 @@
 			);
 		}),
 	);
-
-	// Shared toggle-item tokens (matches the game-detail ToggleGroup).
-	const itemClass =
-		"px-2.5 py-1 text-xs text-tan transition-colors data-[state=off]:bg-surface data-[state=on]:bg-surface-raised";
 </script>
 
 {#if !hasData}
@@ -85,10 +82,13 @@
 			}}
 			class="flex overflow-hidden rounded"
 		>
-			<Toolbar.GroupItem value="rate" class="rounded-l {itemClass}">
+			<Toolbar.GroupItem value="rate" class="rounded-l {TOGGLE_ITEM_CLASS}">
 				Per Turn
 			</Toolbar.GroupItem>
-			<Toolbar.GroupItem value="cumulative" class="rounded-r {itemClass}">
+			<Toolbar.GroupItem
+				value="cumulative"
+				class="rounded-r {TOGGLE_ITEM_CLASS}"
+			>
 				Cumulative
 			</Toolbar.GroupItem>
 		</Toolbar.Group>
@@ -99,10 +99,10 @@
 			onValueChange={onDisplayChange}
 			class="flex gap-1"
 		>
-			<Toolbar.GroupItem value="band" class="rounded {itemClass}">
+			<Toolbar.GroupItem value="band" class="rounded {TOGGLE_ITEM_CLASS}">
 				P25–P75 band
 			</Toolbar.GroupItem>
-			<Toolbar.GroupItem value="count" class="rounded {itemClass}">
+			<Toolbar.GroupItem value="count" class="rounded {TOGGLE_ITEM_CLASS}">
 				Game count
 			</Toolbar.GroupItem>
 		</Toolbar.Group>
@@ -114,7 +114,7 @@
 				onValueChange={(v: string[]) => (split = v.includes("split"))}
 				class="flex gap-1"
 			>
-				<Toolbar.GroupItem value="split" class="rounded {itemClass}">
+				<Toolbar.GroupItem value="split" class="rounded {TOGGLE_ITEM_CLASS}">
 					Winners vs losers
 				</Toolbar.GroupItem>
 			</Toolbar.Group>

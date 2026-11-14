@@ -25,6 +25,7 @@ import type {
 	RecordsBundle,
 	UserScope,
 } from "$lib/stats/types";
+import type { QueryCatalog, QueryResult } from "$lib/query/types";
 
 const DEFAULT_API_BASE = "https://api.per-ankh.app/v1";
 const API_BASE = (import.meta.env.VITE_API_URL ?? DEFAULT_API_BASE) as string;
@@ -1729,6 +1730,39 @@ export const cloudApi = {
 			opts,
 		);
 		return res.json() as Promise<RecordsBundle>;
+	},
+
+	// --- Ad-hoc queries (issue #272) ---
+
+	// The vocabulary a question may be composed from: sources, and the
+	// dimensions, measures and filters each one offers.
+	//
+	// Fetched rather than baked into this bundle. The catalog is the Worker's
+	// column allowlist, so a copy here would drift from the one the compiler
+	// enforces — and the drift would surface as a picker offering a column the
+	// endpoint 400s on. Public and outside every read budget: it reads nothing
+	// and is the same bytes for every caller.
+	getQueryCatalog: async (opts?: CallOpts): Promise<QueryCatalog> => {
+		const res = await request("/query/catalog", opts);
+		return res.json() as Promise<QueryCatalog>;
+	},
+
+	// Run one composed question. `selection` is the canonical query string the
+	// builder already holds (`canonicalQuery`, $lib/query/selection) — passed
+	// through rather than rebuilt, so the URL a person copied, the address bar
+	// and the edge-cache key are one string.
+	//
+	// Session-gated, which is why this goes through the credentialed `request`.
+	// The payload is still the same bytes for every viewer: `is_public = 1` is
+	// the whole visibility rule and the catalog is the whole column allowlist,
+	// so what the session gates is who may spend an ad-hoc aggregation.
+	// An `ApiError` with code `INVALID_QUERY` names the key it refused.
+	runQuery: async (
+		selection: string,
+		opts?: CallOpts,
+	): Promise<QueryResult> => {
+		const res = await request(`/query?${selection}`, opts);
+		return res.json() as Promise<QueryResult>;
 	},
 
 	// The home page's stats panels, over the unfaceted `duel` slice — a public,

@@ -164,15 +164,27 @@ export function parseNationParam(raw: string | null): string | null {
 // and any AI is too few humans for FFA, too many for single-player and too
 // many players for a duel. That is why "all" applies no composition filter
 // rather than unioning the other three.
-export const COMPOSITION_GAME_IDS_SQL: Record<
-	Exclude<GlobalSlice, "all">,
-	string
-> = {
+export type GameComposition = Exclude<GlobalSlice, "all">;
+
+export const COMPOSITION_GAME_IDS_SQL: Record<GameComposition, string> = {
 	duel: "SELECT game_id FROM player_summaries GROUP BY game_id HAVING COUNT(*) = 2 AND SUM(is_human) = 2",
 	ffa: "SELECT game_id FROM player_summaries GROUP BY game_id HAVING SUM(is_human) >= 3",
 	single_player:
 		"SELECT game_id FROM player_summaries GROUP BY game_id HAVING SUM(is_human) = 1",
 };
+
+// The composition fragment a *caller-supplied* name selects, or null when it
+// names none. The /stats resolver indexes COMPOSITION_GAME_IDS_SQL directly
+// because its slice went through parseGlobalSlice first; the ad-hoc query
+// surface needs both halves of this question in two places — the parser asks
+// whether a filter value is a composition at all (query/select.ts) and the
+// compiler asks which fragment it means (query/compile.ts) — so it is one
+// lookup rather than a membership list beside a record indexed by it.
+export function compositionGameIdsSql(name: string): string | null {
+	return Object.hasOwn(COMPOSITION_GAME_IDS_SQL, name)
+		? COMPOSITION_GAME_IDS_SQL[name as GameComposition]
+		: null;
+}
 
 // Whether a game was played apart rather than at one machine, as a predicate
 // over `games` under the caller's alias — the same aliased-fragment shape
@@ -311,10 +323,30 @@ export function periodCutoff(
 // column. status='complete' matches resolveTournamentCorpus (which imports
 // this), so a tournament sweep and that tournament's stats bundle act on the
 // same set of saves.
+// What makes a match one of them, interpolated into both statements below so
+// the roster and the predicate cannot disagree about which matches count.
+const PLAYED_MATCH_SQL = `m.game_id IS NOT NULL AND m.status = 'complete'`;
+
 export const TOURNAMENT_GAME_IDS_SQL = `SELECT DISTINCT m.game_id FROM tournament_matches m
 	 JOIN tournament_rounds r ON r.round_id = m.round_id
-	 WHERE r.tournament_id = ? AND m.game_id IS NOT NULL
-	   AND m.status = 'complete'`;
+	 WHERE r.tournament_id = ? AND ${PLAYED_MATCH_SQL}`;
+
+// The tournaments a question can be asked about: the ones TOURNAMENT_GAME_IDS_SQL
+// would return a game for, newest first. Every other tournament is a filter
+// value that selects nothing — a setup-phase tournament has played no matches
+// at all — so offering one would be offering an empty answer.
+//
+// Viewer-independent, which is what lets the catalog carry it: the setup-phase
+// visibility rule the tournament list applies (admin-only until signups open,
+// handleTournamentList) only ever hides tournaments this excludes anyway. No
+// PII — a tournament's id and name are both already public on its own page.
+export const TOURNAMENT_ROSTER_SQL = `SELECT t.tournament_id, t.name FROM tournaments t
+	 WHERE EXISTS (
+	   SELECT 1 FROM tournament_matches m
+	   JOIN tournament_rounds r ON r.round_id = m.round_id
+	   WHERE r.tournament_id = t.tournament_id AND ${PLAYED_MATCH_SQL}
+	 )
+	 ORDER BY t.created_at DESC`;
 
 export interface AdminGameFilter {
 	userId: string | null;

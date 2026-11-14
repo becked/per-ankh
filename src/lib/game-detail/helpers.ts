@@ -257,18 +257,6 @@ export function cumulativeIsGameTotal(
 	);
 }
 
-// ─── Shared data-table styling (game-detail data tabs) ───────────────
-// Visual tokens matching the player games table: a dark blue-gray frame
-// holding surface rounded card rows under a surface-sunken toolbar-style header
-// bar. Round the first/last cell of each row inline with
-// `rounded-l-lg border-l` / `rounded-r-lg border-r`.
-export const TABLE_FRAME_CLASS = "flex gap-4 rounded-lg bg-blue-gray p-3";
-export const TABLE_CLASS = "w-full border-separate border-spacing-y-1.5";
-export const TABLE_HEADER_TH_CLASS =
-	"sticky -top-4 z-10 cursor-pointer select-none whitespace-nowrap border-y border-surface bg-surface-sunken px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wide text-gray-100 shadow-lg transition-colors hover:text-orange";
-export const TABLE_CELL_TD_CLASS =
-	"bg-surface p-3 text-left text-tan transition-colors duration-200 group-hover:bg-surface-hover";
-
 // Column order: Nation, Name, Family, Founded, Culture, Specialists, Growth, Population, Tiles Bought
 // Default visible: Nation, Name, Family, Founded, Culture
 export const CITY_COLUMNS: CityColumn[] = [

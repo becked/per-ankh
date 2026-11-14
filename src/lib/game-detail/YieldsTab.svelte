@@ -2,6 +2,7 @@
 	import type { YieldHistory } from "$lib/types/YieldHistory";
 	import { ToggleGroup } from "bits-ui";
 	import ChartContainer from "$lib/ChartContainer.svelte";
+	import { TOGGLE_ITEM_CLASS } from "$lib/ui/classes";
 	import {
 		type ChartFilterKey,
 		type YieldMode,
@@ -48,10 +49,6 @@
 		);
 		return () => cancelAnimationFrame(frame);
 	});
-
-	// Shared toggle-item tokens (matches the aggregate-stats YieldsStatsPanel).
-	const itemClass =
-		"px-2.5 py-1 text-xs text-tan transition-colors data-[state=off]:bg-surface data-[state=on]:bg-surface-raised";
 </script>
 
 <div
@@ -73,10 +70,13 @@
 			}}
 			class="flex overflow-hidden rounded"
 		>
-			<ToggleGroup.Item value="rate" class="rounded-l {itemClass}">
+			<ToggleGroup.Item value="rate" class="rounded-l {TOGGLE_ITEM_CLASS}">
 				Per Turn
 			</ToggleGroup.Item>
-			<ToggleGroup.Item value="cumulative" class="rounded-r {itemClass}">
+			<ToggleGroup.Item
+				value="cumulative"
+				class="rounded-r {TOGGLE_ITEM_CLASS}"
+			>
 				Cumulative
 			</ToggleGroup.Item>
 		</ToggleGroup.Root>

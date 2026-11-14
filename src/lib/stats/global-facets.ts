@@ -23,6 +23,17 @@ const GLOBAL_SLICE_LABELS: Readonly<Record<GlobalSlice, string>> = {
 	single_player: "Single-player",
 };
 
+// The compositions, widest-first, without the whole-corpus slice in front of
+// them. Exported because the ad-hoc query builder's Game mode filter offers
+// exactly these ($lib/query/vocabularies): its "no filter" is an empty filter
+// row rather than a value, so it has no use for "all", where this selector
+// needs one.
+export const GAME_COMPOSITIONS: readonly Exclude<GlobalSlice, "all">[] = [
+	"duel",
+	"ffa",
+	"single_player",
+];
+
 // Selector order: the whole corpus first, then the compositions widest-first.
 // The three compositions don't partition the corpus — a 2-human game with any
 // AI is too few humans for FFA, too many for single-player and too many
@@ -30,9 +41,7 @@ const GLOBAL_SLICE_LABELS: Readonly<Record<GlobalSlice, string>> = {
 // rather than the union of the other three.
 export const GLOBAL_SLICES: readonly GlobalSlice[] = [
 	"all",
-	"duel",
-	"ffa",
-	"single_player",
+	...GAME_COMPOSITIONS,
 ];
 
 // Mirrors DEFAULT_GLOBAL_SLICE in cloud/src/games-scope.ts. Duels, not "all":
@@ -43,6 +52,15 @@ export const DEFAULT_GLOBAL_SLICE: GlobalSlice = "duel";
 
 export function globalSliceLabel(slice: GlobalSlice): string {
 	return GLOBAL_SLICE_LABELS[slice];
+}
+
+// The same labels, reached from a value the compiler typed as a bare string:
+// an Explore Game mode filter value arrives off the wire, so it is looked up
+// rather than asserted into GlobalSlice. A value naming no composition is
+// refused by the Worker before it can reach a chip, so the fallback is
+// unreachable and here only to keep this a lookup.
+export function compositionLabel(value: string): string {
+	return GLOBAL_SLICE_LABELS[value as GlobalSlice] ?? value;
 }
 
 export function parseGlobalSlice(raw: string | null): GlobalSlice {

@@ -53,6 +53,13 @@ const REVIEWED: Record<string, string> = {
 	// nothing. See the route's comment.
 	"GET /v1/stats": "viewer-independent payload",
 	"GET /v1/stats/records": "viewer-independent payload",
+	// The ad-hoc query surface. The catalog is constant data serialized from a
+	// module — no session, no I/O, one body. The question endpoint is the
+	// `/v1/stats` case again: session-gated on who may spend an aggregation
+	// rather than on what they may see, with the whole selection in the query
+	// string and so in the cache key.
+	"GET /v1/query/catalog": "no session read",
+	"GET /v1/query": "viewer-independent payload",
 	// Public, sessionless, no parameters: one precomputed slice for everyone.
 	"GET /v1/home-summary": "no session read",
 	// Pre-assembled feeds, identical for every caller.
@@ -73,8 +80,8 @@ const REVIEWED: Record<string, string> = {
 // `public` without one. Counts, not routes, because the mapping isn't 1:1 in
 // either direction: `globalStatsResponse` serves two routes from one site, and
 // the card route has two sites of its own — the image, and the redirect that
-// sends a superseded version pair to the canonical URL. Eleven flags stand on
-// eleven sites, which the two mismatches make equal by arithmetic rather than
+// sends a superseded version pair to the canonical URL. Thirteen flags stand
+// on thirteen sites, which the mismatches make equal by arithmetic rather than
 // by construction.
 const PUBLIC_DIRECTIVE_SITES: Record<string, number> = {
 	// handleCreatorVideos.
@@ -91,6 +98,10 @@ const PUBLIC_DIRECTIVE_SITES: Record<string, number> = {
 	// globalStatsResponse (both /stats reads), handlePlayerLeaderboard,
 	// handleHomeSummary.
 	"stats/handlers.ts": 3,
+	// The two call sites of queryResponse: the catalog, which moves only on a
+	// deploy and takes the longer edge TTL, and a question, which moves
+	// whenever a game is uploaded.
+	"query/handlers.ts": 2,
 	// handleTournamentVideosFeed.
 	"tournament/public.ts": 1,
 };

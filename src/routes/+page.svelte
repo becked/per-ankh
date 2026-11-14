@@ -161,10 +161,11 @@
 				<!--
 					The action, widening left to right from the whole public corpus to your
 					own games, the profile link carrying the same avatar the header shows so
-					it reads as "you". Signed out none of that is openable — /stats bounces
-					an anonymous visitor to login — so the cluster is the same button the
-					header's Login is, sized as a call to action. The players roster is not
-					here: the season standings panel below is the link to it.
+					it reads as "you". Signed out neither is openable — /stats bounces an
+					anonymous visitor to login — so the cluster is the same button the
+					header's Login is, sized as a call to action. The
+					players roster is not here: the season standings panel below is the link
+					to it.
 					-->
 				<div
 					class="flex shrink-0 flex-wrap items-center gap-2 self-start sm:self-auto"
