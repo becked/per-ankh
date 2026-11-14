@@ -17,7 +17,11 @@
 	//     that text: it is declared non-bindable, a way to push a value INTO
 	//     the input rather than to read one out.
 	//   * The input is the list's anchor and the thing you read, so
-	//     `placeholder` is its placeholder where Select's is trigger text.
+	//     `placeholder` is its placeholder where Select's is trigger text — and
+	//     an `icon` reaches the list items only, where Select's also sits in the
+	//     trigger. There is nowhere in a text box to put the current value's
+	//     picture, and a picker that resets after each pick has no current value
+	//     to draw one for.
 	//   * Typing opens the list (bits-ui's own input onkeydown does it); the
 	//     trigger beside it opens it without typing, which is what keeps the
 	//     control usable as a plain dropdown.
@@ -26,7 +30,7 @@
 	// pickers need headings; nothing that filters does, and a heading whose
 	// group has been filtered to nothing is a row that says nothing.
 	import { Combobox } from "bits-ui";
-	import { tick } from "svelte";
+	import { tick, type Snippet } from "svelte";
 	import type { SelectOption } from "./types";
 
 	let {
@@ -41,6 +45,7 @@
 		resetAfterSelect = false,
 		matchTriggerWidth = false,
 		compact = false,
+		icon,
 	}: {
 		value: string;
 		// eslint-disable-next-line no-unused-vars -- parameter in callback signature
@@ -59,6 +64,11 @@
 		// its own items. A floor, not a fixed width.
 		matchTriggerWidth?: boolean;
 		compact?: boolean;
+		// A picture for one option, as Select's `icon` is, rendered ahead of the
+		// label. In the list only, where Select also puts it in the trigger: the
+		// trigger here is the text input, and the pickers that pass an icon pass
+		// `resetAfterSelect` with it, so that box is empty after every pick.
+		icon?: Snippet<[string]>;
 	} = $props();
 
 	// Writable derived, as Select's is: tracks the parent's `value` but stays
@@ -136,7 +146,10 @@
 						class="flex cursor-pointer items-center justify-between px-3 py-1.5 text-sm text-tan data-[disabled]:cursor-default data-[highlighted]:bg-surface-raised data-[disabled]:opacity-40"
 					>
 						{#snippet children({ selected })}
-							<span class="truncate">{opt.label}</span>
+							<span class="flex min-w-0 items-center gap-1.5">
+								{#if icon}{@render icon(opt.value)}{/if}
+								<span class="truncate">{opt.label}</span>
+							</span>
 							{#if selected}<span class="text-orange">✓</span>{/if}
 						{/snippet}
 					</Combobox.Item>

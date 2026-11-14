@@ -70,6 +70,10 @@ export interface CatalogSource {
 export interface CatalogRosterOption {
 	value: string;
 	label: string;
+	// The picture that names the value, where the Worker has one: the account's
+	// Discord avatar on the player roster. A baked vocabulary's icon is a sprite
+	// this bundle resolves itself, so only a served roster carries a URL here.
+	icon?: string;
 }
 
 export interface QueryCatalog {

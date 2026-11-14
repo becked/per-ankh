@@ -10,6 +10,7 @@
 // columns are constant data; the two value rosters beside them are D1 reads,
 // which is why both routes here spend the same per-IP budget.
 
+import { buildAvatarUrl } from "../auth";
 import { sessionFromRequest } from "../session";
 import type { SessionEnv } from "../session";
 import { cloudCorsHeaders, errorResponse } from "../util";
@@ -171,10 +172,17 @@ export async function handleQueryCatalog(
 		const { results } = await env.SHARE_DB.prepare(PLAYER_ROSTER_SQL).all<{
 			user_id: string;
 			display_name: string;
+			discord_id: string;
+			avatar_hash: string | null;
 		}>();
 		players = results.map((r) => ({
 			value: r.user_id,
 			label: r.display_name,
+			// The account's avatar, so a player reads here the way it reads on
+			// /players and in a game's seat list. Built from the two columns rather
+			// than stored: buildAvatarUrl is the one place that knows the CDN path
+			// and the default-avatar fallback for an account with no hash.
+			icon: buildAvatarUrl(r.discord_id, r.avatar_hash),
 		}));
 	} catch (err) {
 		logError("query_catalog_player_roster_failed", err);

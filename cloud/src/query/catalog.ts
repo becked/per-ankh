@@ -108,10 +108,19 @@ export const IDENTITY_JOIN_SQL = `LEFT JOIN (${UNAMBIGUOUS_ONLINE_ID_OWNERS_SQL}
 //
 // Viewer-independent, which is what lets the catalog carry it, and no PII it
 // does not already publish: `GET /v1/stats/players` is anonymous and serves
-// user_id and display name for this same population. The display name is the
-// effective one (displayNameSql), so an operator-set alias is what the picker
-// shows — the name the rest of the site shows for that account.
-export const PLAYER_ROSTER_SQL = `SELECT ud.user_id, ${displayNameSql("ud")} AS display_name
+// user_id, display name and avatar_url for this same population. The display
+// name is the effective one (displayNameSql), so an operator-set alias is what
+// the picker shows — the name the rest of the site shows for that account.
+//
+// `discord_id` and `avatar_hash` are read for the avatar and folded into one
+// URL by buildAvatarUrl (handleQueryCatalog), never serialized as fields of
+// their own — the select-use-don't-serialize shape that stats/handlers.ts and
+// users.ts both spell out. The snowflake does travel inside that URL, as it
+// does on every other payload that renders an avatar; the handle
+// (discord_username) is the field the PII stance keeps out, and it is not read
+// here.
+export const PLAYER_ROSTER_SQL = `SELECT ud.user_id, ${displayNameSql("ud")} AS display_name,
+	          ud.discord_id, ud.avatar_hash
 	   FROM users ud
 	  WHERE EXISTS (
 	          SELECT 1 FROM player_summaries ps
@@ -1177,6 +1186,11 @@ export interface CatalogSourceWire {
 export interface CatalogRosterOption {
 	value: string;
 	label: string;
+	// The picture that names the value, where it has one: for the player roster,
+	// the account's Discord avatar. A zType vocabulary's icon is a baked sprite
+	// the client resolves against `src/lib/generated/` ($lib/query/vocabularies),
+	// so only a served roster carries one here.
+	icon?: string;
 }
 
 export interface CatalogWire {

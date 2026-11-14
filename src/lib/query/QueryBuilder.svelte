@@ -33,6 +33,7 @@
 		type DraftFilter,
 		type QuerySort,
 	} from "./selection";
+	import ValueIcon from "./ValueIcon.svelte";
 	import { vocabularyFor } from "./vocabularies";
 	import type { CatalogFilter, FilterOp, QueryCatalog } from "./types";
 
@@ -548,7 +549,21 @@
 								disabled={atValueCap}
 								resetAfterSelect
 								ariaLabel="Filter value"
-							/>
+							>
+								<!-- The same picture the results table puts beside the value,
+								     so a value is recognised in the picker, in the chip it
+								     becomes, and in the answer. Nothing at all for a vocabulary
+								     with no art — a map script, a tournament — which is what
+								     keeps those lists from reserving room for one. -->
+								{#snippet icon(value: string)}
+									{#if vocab.icon}
+										<ValueIcon
+											src={vocab.icon(value)}
+											round={spec.type === "identity"}
+										/>
+									{/if}
+								{/snippet}
+							</Combobox>
 						{:else}
 							<input
 								class={INPUT}
@@ -561,6 +576,12 @@
 						{#each filter.values as value (value)}
 							{#if !isRangeOp(filter.op) && spec.type !== "boolean"}
 								<span class={CHIP}>
+									{#if vocab?.icon}
+										<ValueIcon
+											src={vocab.icon(value)}
+											round={spec.type === "identity"}
+										/>
+									{/if}
 									{vocab ? vocab.label(value) : value}
 									<button
 										type="button"
