@@ -66,6 +66,76 @@ describe("binding", () => {
 	});
 });
 
+describe("the game mode filter", () => {
+	// Its values are roster compositions rather than the `games.game_mode`
+	// column, so it is the one filter whose values name a predicate instead of
+	// being compared against a column. What is checked here is that each value
+	// compiles to the composition /stats slices by, and that the two set
+	// operators mean what they say over a set of subqueries.
+	it("compiles a value to the composition predicate it names", () => {
+		const { sql, binds } = compile(
+			"source=games&measure=matches&f=game_mode:in:duel",
+		);
+		const flattened = flat(sql);
+		expect(flattened).toContain(
+			"g.game_id IN (SELECT game_id FROM player_summaries " +
+				"GROUP BY game_id HAVING COUNT(*) = 2 AND SUM(is_human) = 2)",
+		);
+		// Nothing bound but the row cap: the value picked a compiled-in
+		// fragment, so there is no literal of the caller's in the statement.
+		expect(binds).toEqual([50]);
+		expect(flattened).not.toContain("duel");
+	});
+
+	it("joins several values with OR, and their negation with AND", () => {
+		expect(
+			flat(compile("source=games&measure=matches&f=game_mode:in:duel,ffa").sql),
+		).toContain("HAVING COUNT(*) = 2 AND SUM(is_human) = 2) OR g.game_id IN (");
+
+		const negated = flat(
+			compile("source=games&measure=matches&f=game_mode:not_in:duel,ffa").sql,
+		);
+		expect(negated).toContain("g.game_id NOT IN (");
+		expect(negated).toContain(
+			"HAVING COUNT(*) = 2 AND SUM(is_human) = 2) AND g.game_id NOT IN (",
+		);
+	});
+
+	it("refuses a value that names no composition", () => {
+		// Refused at the parse rather than left to select nothing: a value
+		// compared against a column can name nothing and return no rows, but a
+		// composition value with no fragment has no predicate to compile to.
+		// NETWORK is the test case on purpose — it is a value the column this
+		// filter replaced did take.
+		expect(() =>
+			compile("source=games&measure=matches&f=game_mode:in:NETWORK"),
+		).toThrow();
+	});
+
+	it("is offered at every grain, because it is a property of the game", () => {
+		for (const source of SOURCES) {
+			expect(
+				source.filters.map((f) => f.key),
+				source.key,
+			).toContain("game_mode");
+		}
+	});
+
+	it("is a filter and not a grouping", () => {
+		// The three compositions do not partition the corpus — a game with two
+		// humans and any AI matches none of them — so a grouping on it would
+		// carry a NULL row for a bucket with no name. This also pins that the
+		// `games.game_mode` dimension it replaced is gone: one key, and it is
+		// not groupable.
+		for (const source of SOURCES) {
+			expect(
+				source.dimensions.map((d) => d.key),
+				source.key,
+			).not.toContain("game_mode");
+		}
+	});
+});
+
 describe("measure units", () => {
 	it("dedupes a match both players uploaded", () => {
 		expect(flat(compile("source=games&measure=matches").sql)).toContain(

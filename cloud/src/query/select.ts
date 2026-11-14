@@ -29,6 +29,7 @@ import {
 	MAX_FILTERS,
 	MAX_FILTER_VALUES,
 	MAX_ROWS,
+	compositionGameIdsSql,
 	dimensionByKey,
 	filterByKey,
 	measureByKey,
@@ -109,6 +110,13 @@ function normalizeValue(filter: CatalogFilter, raw: string): string | null {
 			return DAY_RE.test(raw) ? raw : null;
 		case "tournament":
 			return NANOID_RE.test(raw) ? raw : null;
+		case "game_mode":
+			// The one filter whose roster is checked here rather than left to
+			// select nothing. Every other value is compared against a column, so
+			// a token naming nothing returns no rows; a game-mode value names a
+			// composition subquery instead, and one that names none has no
+			// predicate to compile to at all.
+			return compositionGameIdsSql(raw) === null ? null : raw;
 		case "enum":
 		case "text":
 		case "identity":

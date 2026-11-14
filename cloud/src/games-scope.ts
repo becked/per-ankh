@@ -164,15 +164,27 @@ export function parseNationParam(raw: string | null): string | null {
 // and any AI is too few humans for FFA, too many for single-player and too
 // many players for a duel. That is why "all" applies no composition filter
 // rather than unioning the other three.
-export const COMPOSITION_GAME_IDS_SQL: Record<
-	Exclude<GlobalSlice, "all">,
-	string
-> = {
+export type GameComposition = Exclude<GlobalSlice, "all">;
+
+export const COMPOSITION_GAME_IDS_SQL: Record<GameComposition, string> = {
 	duel: "SELECT game_id FROM player_summaries GROUP BY game_id HAVING COUNT(*) = 2 AND SUM(is_human) = 2",
 	ffa: "SELECT game_id FROM player_summaries GROUP BY game_id HAVING SUM(is_human) >= 3",
 	single_player:
 		"SELECT game_id FROM player_summaries GROUP BY game_id HAVING SUM(is_human) = 1",
 };
+
+// The composition fragment a *caller-supplied* name selects, or null when it
+// names none. The /stats resolver indexes COMPOSITION_GAME_IDS_SQL directly
+// because its slice went through parseGlobalSlice first; the ad-hoc query
+// surface needs both halves of this question in two places — the parser asks
+// whether a filter value is a composition at all (query/select.ts) and the
+// compiler asks which fragment it means (query/compile.ts) — so it is one
+// lookup rather than a membership list beside a record indexed by it.
+export function compositionGameIdsSql(name: string): string | null {
+	return Object.hasOwn(COMPOSITION_GAME_IDS_SQL, name)
+		? COMPOSITION_GAME_IDS_SQL[name as GameComposition]
+		: null;
+}
 
 // Whether a game was played apart rather than at one machine, as a predicate
 // over `games` under the caller's alias — the same aliased-fragment shape

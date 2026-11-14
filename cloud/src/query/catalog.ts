@@ -31,6 +31,7 @@
 // actually ask, and adding to it is a one-line change with a label attached.
 
 import {
+	compositionGameIdsSql,
 	noChallengeRunsSql,
 	TOURNAMENT_GAME_IDS_SQL,
 	TOURNAMENT_ROSTER_SQL,
@@ -149,11 +150,18 @@ export const PLAYER_ROSTER_SQL = `SELECT ud.user_id, ${displayNameSql("ud")} AS 
 // out, which drops the match from the answer entirely.
 //
 // What this does not see is a filter the uploads of one match disagree on: a
-// question narrowed to the upload that lost the pick answers over neither.
-// Eight matches in that snapshot carry two `game_mode`s and six carry two
-// `total_turns`; every other filterable column is either the save's, which
-// both uploads are of, or a seat's, where the pick is per match and the seats
-// follow it.
+// question narrowed to the upload that lost the pick answers over neither. Of
+// the 851 matches in that snapshot, 160 have more than one upload, and the
+// disagreements among them fall into two kinds. On 88 matches the uploads
+// differ on `difficulty` and on one they differ on `victory_type` because one
+// upload recorded the value and the other did not — a parser-version
+// difference rather than two readings of the game. On 19 they differ on
+// `played`, on six on `total_turns` and on two on `winner_nation`, where both
+// uploads recorded a value and the values are not the same. `map_class`,
+// `map_size` and `opponent_level` agree on every match, and so does the
+// `game_mode` filter, which compiles to a predicate over the roster rather
+// than to a column and both uploads of a match carry the same roster. A seat's
+// columns follow the pick, because it is made per match.
 //
 // ROW_NUMBER rather than a self-join on `games`: the NOT EXISTS spelling reads
 // the table once per candidate upload, and over the November snapshot the same
@@ -186,7 +194,14 @@ export type Reach = "games" | "player" | "identity" | "source";
 // `text` is the two columns that are genuinely free text: a seat's in-save
 // `player_name`, and the year off a save date.
 export type ValueType =
-	"enum" | "text" | "number" | "boolean" | "date" | "identity" | "tournament";
+	| "enum"
+	| "text"
+	| "number"
+	| "boolean"
+	| "date"
+	| "identity"
+	| "tournament"
+	| "game_mode";
 
 export interface CatalogDimension {
 	key: string;
@@ -240,7 +255,8 @@ export interface CatalogFilter {
 	reach: Reach;
 	type: ValueType;
 	// The column expression a value is compared against. Absent for
-	// `tournament`, whose predicate is a subquery rather than a comparison.
+	// `tournament` and `game_mode`, whose predicates are subqueries rather
+	// than comparisons.
 	sql?: string;
 	vocabulary?: string;
 	ops: readonly FilterOp[];
@@ -298,15 +314,6 @@ const GAME_DIMENSIONS: CatalogDimension[] = [
 		type: "enum",
 		sql: "g.map_size",
 		vocabulary: "map_size",
-		filterable: true,
-	},
-	{
-		key: "game_mode",
-		label: "Game mode",
-		reach: "games",
-		type: "enum",
-		sql: "g.game_mode",
-		vocabulary: "game_mode",
 		filterable: true,
 	},
 	{
@@ -393,6 +400,43 @@ const GAME_MEASURES: CatalogMeasure[] = [
 ];
 
 const GAME_FILTERS: CatalogFilter[] = [
+	{
+		// Single-player, duel or FFA — how many humans sat down to the game,
+		// which is what someone picking a game mode here is after.
+		//
+		// NOT the `games.game_mode` column, which this entry replaced. That
+		// column is the save's `@_GameMode` read verbatim: how the players
+		// connected, not how many of them there were, so it cannot tell a duel
+		// from an FFA. In the 2026-11-10 snapshot its 678 NETWORK games are 668
+		// duels, four FFAs, four single-human games and two with two humans and
+		// AI beside them, and its 71 HOTSEAT games split 36 single-human to 31
+		// duels. No relabelling of that column produces the three modes people
+		// ask for, so the filter is built on the roster instead. The column
+		// stays where it answers its own question — the game-detail Settings
+		// tab, and the remote/local split the rating model and the played-games
+		// board read (remoteGameModeSql).
+		//
+		// The three values are the roster compositions the /stats slices
+		// already cut the corpus by (COMPOSITION_GAME_IDS_SQL, games-scope.ts),
+		// under the names that selector already gives them. One vocabulary
+		// across both surfaces: a duel there and a duel here are the same test
+		// on the same corpus.
+		//
+		// A filter and not a dimension, because the three do not partition the
+		// corpus — a game with two humans and any AI matches none of them, five
+		// games in that snapshot — so a grouping would carry a NULL row for a
+		// bucket with no name. As a filter those games match no value, which is
+		// the answer /stats gives them too.
+		key: "game_mode",
+		label: "Game mode",
+		reach: "games",
+		type: "game_mode",
+		// No `sql`: a value names one of three subqueries over `game_id` rather
+		// than a column to compare against, which is how `tournament` below
+		// compiles too.
+		vocabulary: "game_mode",
+		ops: SET_OPS,
+	},
 	{
 		key: "tournament",
 		label: "Tournament",
@@ -1189,5 +1233,11 @@ export function serializeCatalog(
 
 // Re-exported so the compiler reads the tournament predicate, and the catalog
 // handler the roster that matches it, from the one place that defines them
-// rather than restating the join through tournament_rounds.
-export { TOURNAMENT_GAME_IDS_SQL, TOURNAMENT_ROSTER_SQL };
+// rather than restating the join through tournament_rounds. The composition
+// lookup travels the same way, so that the parser and the compiler both read
+// the filter's vocabulary from the module the filter is declared in.
+export {
+	compositionGameIdsSql,
+	TOURNAMENT_GAME_IDS_SQL,
+	TOURNAMENT_ROSTER_SQL,
+};

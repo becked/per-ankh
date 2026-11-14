@@ -27,13 +27,12 @@ import { MAP_OPTION_DEFS } from "$lib/generated/map-option-defs";
 import { TREE_TECHS } from "$lib/generated/tech-tree";
 import { VICTORY_ORDERING } from "$lib/generated/victory-ordering";
 import {
-	GAME_MODE_NAMES,
-	gameModeLabel,
 	mapScriptLabel,
 	mapSizeLabel,
 	prosperityName,
 	setupValueName,
 } from "$lib/map-settings";
+import { compositionLabel, GAME_COMPOSITIONS } from "$lib/stats/global-facets";
 import { KNOWN_MAP_SCRIPTS } from "$lib/tournament/map-scripts-table";
 import { improvementDisplayName, techName } from "$lib/game-detail/helpers";
 import { formatArchetype, formatEnum, nationName } from "$lib/utils/formatting";
@@ -119,9 +118,17 @@ const VOCABULARIES: Readonly<Record<string, Vocabulary>> = {
 	},
 	// Smallest to largest, as the setup screen lists them.
 	map_size: { options: MAP_SIZES, label: mapSizeLabel },
+	// The one vocabulary that is not a zType roster. The Game mode filter's
+	// values are roster compositions — single-player, duel, FFA — rather than
+	// the `games.game_mode` column it replaced, which records how the players
+	// connected and cannot tell a duel from an FFA (cloud/src/query/catalog.ts
+	// has the counts). So the roster and the labels are the ones the /stats
+	// slice selector already shows ($lib/stats/global-facets), and a duel reads
+	// the same on both surfaces. Not re-sorted by label: that selector's order
+	// is widest composition first, which is the order to read the list in.
 	game_mode: {
-		options: byLabel(Object.keys(GAME_MODE_NAMES), gameModeLabel),
-		label: gameModeLabel,
+		options: [...GAME_COMPOSITIONS],
+		label: compositionLabel,
 	},
 	// Affluent to Fragile, as the setup screen lists them — descending
 	// prosperity, which is ascending difficulty. The roster's own order is the
@@ -218,10 +225,11 @@ export function valueLabel(
 	// A zType with no roster: its prefix is its own first token
 	// (OCCURRENCELEVEL_, …), so strip up to the first underscore rather than
 	// keeping a list of prefixes in step with the catalog. Every column this
-	// still reaches spells its prefix that way; the ones that did not —
-	// game_mode's bare NETWORK, SINGLE_PLAYER's two-word prefix — are the ones
-	// that now have a vocabulary above. It also still catches a value a roster
-	// is missing, which is why it is not an exhaustiveness check.
+	// still reaches spells its prefix that way; a column whose values did not —
+	// the bare NETWORK and two-word SINGLE_PLAYER the old `games.game_mode`
+	// filter offered — is one to give a vocabulary above rather than a case
+	// here. It also still catches a value a roster is missing, which is why it
+	// is not an exhaustiveness check.
 	const underscore = value.indexOf("_");
 	return underscore === -1
 		? value

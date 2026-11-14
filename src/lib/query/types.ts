@@ -12,7 +12,14 @@
 // game's own name for it — independent of whether `vocabulary` names a roster
 // to pick from. `text` is the two genuinely free-text columns.
 export type ValueType =
-	"enum" | "text" | "number" | "boolean" | "date" | "identity" | "tournament";
+	| "enum"
+	| "text"
+	| "number"
+	| "boolean"
+	| "date"
+	| "identity"
+	| "tournament"
+	| "game_mode";
 
 export type FilterOp = "in" | "not_in" | "gte" | "lte";
 

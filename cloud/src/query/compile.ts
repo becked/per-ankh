@@ -29,6 +29,7 @@ import {
 	IDENTITY_JOIN_SQL,
 	ONE_UPLOAD_PER_MATCH_SQL,
 	TOURNAMENT_GAME_IDS_SQL,
+	compositionGameIdsSql,
 	dimensionByKey,
 	filterByKey,
 	measureByKey,
@@ -97,6 +98,34 @@ function compileFilter(
 	// second caller of this module would not have gone through it.
 	const spec = filterByKey(source, filter.key);
 	if (!spec) throw new Error(`unknown filter ${filter.key}`);
+
+	if (spec.type === "game_mode") {
+		// One subquery per value. The game mode this filter offers is the
+		// roster's composition, not the `games.game_mode` column — the catalog
+		// entry says why — so each value is read from the one place that
+		// defines the three compositions (games-scope.ts), and a duel here is
+		// the duel /stats slices by and the rating model rates. Nothing is
+		// bound: a value selects which compiled-in fragment to name, and
+		// `normalizeValue` refused any value that names none — resolved again
+		// here rather than trusted, for the reason the key resolution above
+		// gives.
+		//
+		// `in` joins the arms with OR and `not_in` with AND, which is what the
+		// operators mean over a set of subqueries: "a duel or an FFA" against
+		// "neither a duel nor an FFA". Neither form has the NULL hole the
+		// column comparison below has, because `g.game_id` is never null.
+		if (filter.op !== "in" && filter.op !== "not_in") {
+			throw new Error(`filter ${filter.key} takes a set operator`);
+		}
+		const negated = filter.op === "not_in";
+		const arms = filter.values.map((v) => {
+			const ids = compositionGameIdsSql(v);
+			if (!ids) throw new Error(`unknown game mode ${v}`);
+			return `g.game_id ${negated ? "NOT IN" : "IN"} (${ids})`;
+		});
+		if (arms.length === 1) return arms[0];
+		return `(${arms.join(negated ? " AND " : " OR ")})`;
+	}
 
 	if (spec.type === "tournament") {
 		// The games attached to one tournament's completed matches, read from

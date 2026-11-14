@@ -129,6 +129,17 @@ describe("parseSelection", () => {
 		expect(
 			err("source=player_summaries&measure=matches&f=is_human:in:maybe"),
 		).toContain("is_human");
+		// The game mode roster is checked here too, where an enum value is not:
+		// a token that names no column value selects nothing, but one that
+		// names no composition has no predicate to compile to. NETWORK is a
+		// value the `games.game_mode` column this filter replaced did take.
+		expect(
+			err("source=games&measure=matches&f=game_mode:in:NETWORK"),
+		).toContain("game_mode");
+		expect(
+			ok("source=games&measure=matches&f=game_mode:in:duel,single_player")
+				.selection.filters[0].values,
+		).toEqual(["duel", "single_player"]);
 	});
 
 	it("normalizes a boolean to the spelling it stores", () => {
