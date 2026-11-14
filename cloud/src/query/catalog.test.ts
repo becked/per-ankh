@@ -118,6 +118,39 @@ describe("the serialized catalog", () => {
 		const player = seats?.dimensions.find((d) => d.key === "player");
 		expect(player?.key_columns).toEqual(["player_id", "player_slug"]);
 	});
+
+	it("carries the rosters it was handed", () => {
+		// The tournament roster is read from D1 by the handler and passed in,
+		// because a tournament's name is the one filter value this side knows
+		// and the client does not.
+		const withRoster = serializeCatalog({
+			tournament: [{ value: "abc", label: "Spring Open" }],
+		});
+		expect(withRoster.rosters.tournament).toEqual([
+			{ value: "abc", label: "Spring Open" },
+		]);
+	});
+
+	it("serves an empty roster map when handed none", () => {
+		// What a failed roster read falls back to: the filter takes a typed
+		// token, which is what it took before it had a roster.
+		expect(wire.rosters).toEqual({});
+	});
+
+	it("names a vocabulary on every filter a picker can offer values for", () => {
+		// The two halves of the vocabulary split, checked together so a filter
+		// can't quietly lose its roster: a zType column names one the client
+		// resolves against `src/lib/generated/`, and the tournament names the
+		// one served above. What is left without a vocabulary is a number, a
+		// date, a boolean, or genuinely free text.
+		const TYPED = new Set(["number", "date", "boolean", "text"]);
+		for (const source of SOURCES) {
+			for (const filter of source.filters) {
+				if (TYPED.has(filter.type)) continue;
+				expect(filter.vocabulary, `${source.key}.${filter.key}`).toBeTruthy();
+			}
+		}
+	});
 });
 
 describe("sourceByKey", () => {

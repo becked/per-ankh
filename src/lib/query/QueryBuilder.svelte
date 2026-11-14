@@ -13,6 +13,7 @@
 
 	import { goto } from "$app/navigation";
 	import { page } from "$app/state";
+	import Combobox from "$lib/ui/Combobox.svelte";
 	import SegmentedChips from "$lib/ui/SegmentedChips.svelte";
 	import Select from "$lib/ui/Select.svelte";
 	import { INPUT_CLASS } from "$lib/ui/classes";
@@ -402,7 +403,7 @@
 			{#each draft.filters as filter, i (i)}
 				{@const spec = specFor(filter)}
 				{#if spec}
-					{@const vocab = vocabularyFor(spec.vocabulary)}
+					{@const vocab = vocabularyFor(spec.vocabulary, catalog.rosters)}
 					{@const atValueCap =
 						filter.values.length >= catalog.limits.max_filter_values}
 					<div class="flex flex-wrap items-center gap-1">
@@ -455,8 +456,15 @@
 						{:else if vocab?.options}
 							<!-- Minus what's already a chip, so every value the picker
 							     offers is one it can add — the same move the challenge
-							     rules editor's `without` makes. -->
-							<Select
+							     rules editor's `without` makes.
+
+							     A Combobox rather than the Select beside it: these
+							     rosters run to 49 techs and 30-odd laws, and the one
+							     thing a reader of this row knows is the name of the
+							     value they are after. The structural pickers above stay
+							     Selects — a source, a measure, a column, an operator is
+							     chosen from what is on offer, not searched for. -->
+							<Combobox
 								value=""
 								options={vocab.options
 									.filter((o) => !filter.values.includes(o))

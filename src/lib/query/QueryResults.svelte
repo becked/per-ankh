@@ -11,11 +11,22 @@
 
 	import ProfileLink from "$lib/ProfileLink.svelte";
 	import { TABLE_CLASS, TABLE_FRAME_CLASS } from "$lib/ui/classes";
-	import type { CatalogSource, QueryResult } from "./types";
+	import type { CatalogSource, QueryCatalog, QueryResult } from "./types";
 	import { valueLabel } from "./vocabularies";
 
-	let { result, source }: { result: QueryResult; source: CatalogSource } =
-		$props();
+	// `rosters` is the half of the vocabulary the Worker serves — a tournament's
+	// name. No dimension names one today, but the labels are resolved through
+	// the one function the builder's chips use, so the table cannot drift into
+	// showing an id where the chip above it shows a name.
+	let {
+		result,
+		source,
+		rosters,
+	}: {
+		result: QueryResult;
+		source: CatalogSource;
+		rosters: QueryCatalog["rosters"];
+	} = $props();
 
 	// The columns the table draws. `key` columns carry the identity
 	// dimension's user_id and slug for the profile link and are never a column
@@ -103,6 +114,7 @@
 											column.type,
 											vocabularyOf(column.key),
 											"Not recorded",
+											rosters,
 										)}
 									{/if}
 								</td>

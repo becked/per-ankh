@@ -10,7 +10,11 @@
 
 import { applyD1Migrations, env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
-import { makeUser, type TestUser } from "../../helpers/builders";
+import {
+	makeTournament,
+	makeUser,
+	type TestUser,
+} from "../../helpers/builders";
 import { postMultipart, request } from "../../helpers/requests";
 import { buildUploadFormData } from "../../helpers/save-blob";
 
@@ -60,10 +64,7 @@ beforeAll(async () => {
 
 // `null` is the anonymous caller. Not `undefined`, which a default parameter
 // cannot tell from an omitted argument.
-async function ask(
-	qs: string,
-	as: TestUser | null = alice,
-): Promise<Response> {
+async function ask(qs: string, as: TestUser | null = alice): Promise<Response> {
 	return request.get({ path: `/v1/query?${qs}`, as: as ?? undefined });
 }
 
@@ -89,12 +90,64 @@ describe("the gate", () => {
 	});
 
 	it("serves the catalog without one", async () => {
-		// The vocabulary reads nothing and is the same bytes for everyone, so
-		// it is not behind the door that spending an aggregation is behind.
+		// The vocabulary is the same bytes for everyone — the columns are
+		// constant and the roster it reads is viewer-independent — so it is not
+		// behind the door that spending an aggregation is behind.
 		const res = await request.get({ path: "/v1/query/catalog" });
 		expect(res.status).toBe(200);
 		const body = await res.json<{ sources: { key: string }[] }>();
 		expect(body.sources.map((s) => s.key)).toContain("wonder_events");
+	});
+});
+
+describe("the catalog's tournament roster", () => {
+	it("offers a tournament with a played match and no other", async () => {
+		// TOURNAMENT_ROSTER_SQL is the filter's own predicate read the other
+		// way round, which is what keeps every value the picker offers one that
+		// can return a row: a tournament with no completed match carrying a
+		// game is a value that selects nothing.
+		const played = await makeTournament({ name: "Roster Played Open" });
+		await makeTournament({ name: "Roster Empty Open" });
+
+		const game = await env.SHARE_DB.prepare(
+			`SELECT game_id FROM games LIMIT 1`,
+		).first<{ game_id: string }>();
+		expect(game?.game_id).toBeTruthy();
+
+		await env.SHARE_DB.prepare(
+			`INSERT INTO tournament_rounds
+			   (round_id, tournament_id, phase, round_number, status)
+			 VALUES ('roster-r1', ?, 'swiss', 1, 'complete')`,
+		)
+			.bind(played.tournamentId)
+			.run();
+		await env.SHARE_DB.prepare(
+			`INSERT INTO tournament_matches
+			   (match_id, round_id, slot_a_id, status, game_id)
+			 VALUES ('roster-m1', 'roster-r1', ?, 'complete', ?)`,
+		)
+			.bind(played.slotsByDivision.A[0].slotId, game?.game_id)
+			.run();
+
+		const res = await request.get({ path: "/v1/query/catalog" });
+		expect(res.status).toBe(200);
+		const body = await res.json<{
+			rosters: Record<string, { value: string; label: string }[]>;
+			sources: {
+				key: string;
+				filters: { key: string; vocabulary?: string }[];
+			}[];
+		}>();
+
+		expect(body.rosters.tournament).toEqual([
+			{ value: played.tournamentId, label: "Roster Played Open" },
+		]);
+
+		// And the filter names the roster, or the builder has one it never
+		// looks for.
+		const games = body.sources.find((s) => s.key === "games");
+		const filter = games?.filters.find((f) => f.key === "tournament");
+		expect(filter?.vocabulary).toBe("tournament");
 	});
 });
 
@@ -236,9 +289,7 @@ describe("the response", () => {
 	});
 
 	it("says which column is which", async () => {
-		const res = await ask(
-			"source=player_summaries&dim=nation&measure=matches",
-		);
+		const res = await ask("source=player_summaries&dim=nation&measure=matches");
 		const body = await res.json<QueryBody>();
 		expect(body.columns).toEqual([
 			{ key: "nation", label: "Nation", role: "dimension", type: "enum" },

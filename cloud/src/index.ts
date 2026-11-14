@@ -1359,16 +1359,19 @@ const ROUTES: RouteSpec[] = [
 	// compose anything, and the vocabulary changes only when this Worker is
 	// deployed where an answer changes whenever a game is uploaded.
 	//
-	// The catalog is public, sessionless and outside every read budget: it
-	// reads nothing at all — no D1, no KV — and is the same bytes for every
+	// The catalog is public, sessionless and outside every read budget: the
+	// columns are constant data, and the one roster it reads from D1 — the
+	// tournaments a question can be asked about — is the same bytes for every
 	// caller.
 	{
 		method: "GET",
 		match: { kind: "path", path: "/v1/query/catalog" },
 		route: "GET /v1/query/catalog",
 		handler: (r, e) => handleQueryCatalog(r, e),
-		// Constant data serialized from a module. There is no second body to
-		// serve and nothing viewer-dependent to leak.
+		// Constant data serialized from a module, plus a roster that is
+		// viewer-independent by construction (TOURNAMENT_ROSTER_SQL covers only
+		// tournaments with a played match, which is a subset of what any
+		// caller may see). There is no second body to serve.
 		sharedCache: true,
 	},
 	// One composed question. Session-gated for the reason `/v1/stats` is — the

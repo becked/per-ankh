@@ -60,8 +60,19 @@ export interface CatalogSource {
 	filters: CatalogFilter[];
 }
 
+// One value a filter can take, where the Worker is what knows the name for it.
+export interface CatalogRosterOption {
+	value: string;
+	label: string;
+}
+
 export interface QueryCatalog {
 	sources: CatalogSource[];
+	// The vocabularies the Worker supplies, keyed by the `vocabulary` an entry
+	// names. Only the ones whose values live in D1 — a tournament — arrive this
+	// way; a zType roster is resolved against this bundle's own baked tables
+	// ($lib/query/vocabularies). `vocabularyFor` reads both.
+	rosters: Record<string, CatalogRosterOption[]>;
 	limits: {
 		max_rows: number;
 		default_rows: number;

@@ -19,7 +19,12 @@ import { logError, setLogField } from "../log";
 import type { EventsEnv, QueryableD1 } from "../d1";
 import { compileQuery } from "./compile";
 import { canonicalSelection, parseSelection } from "./select";
-import { measureByKey, serializeCatalog } from "./catalog";
+import {
+	measureByKey,
+	serializeCatalog,
+	TOURNAMENT_ROSTER_SQL,
+	type CatalogRosterOption,
+} from "./catalog";
 
 export interface QueryEnv extends SessionEnv, EventsEnv {
 	SHARE_DB: QueryableD1;
@@ -95,19 +100,45 @@ function queryResponse(
 }
 
 // GET /v1/query/catalog — the dimensions, measures and filters a selection may
-// name, per source.
+// name, per source, and the value rosters only this side knows.
 //
-// Public and outside every read budget: it reads nothing, it is the same bytes
-// for everyone, and it changes only when this Worker is deployed. Which is
-// also why it takes a longer edge TTL than a question does — the answer to a
-// question moves when a game is uploaded, and this one does not.
+// Public and outside every read budget, and the same bytes for everyone: the
+// columns are constant data, and the one roster served with them — the
+// tournaments a question can be asked about (TOURNAMENT_ROSTER_SQL) — is
+// viewer-independent by construction. One indexed read behind a 300s edge TTL,
+// so a hit answers it and a miss is a scan of `tournaments`.
+//
+// It still takes a longer edge TTL than a question does. A question's answer
+// moves whenever a game is uploaded; this moves only on a deploy or when a
+// tournament's first match is reported.
+//
+// A failed roster read serves the columns with an empty one rather than a 500:
+// the builder's other fifteen pickers and every typed filter still work, and
+// the tournament filter falls back to the typed token it took before it had a
+// roster at all.
 export async function handleQueryCatalog(
 	request: Request,
-	env: Pick<QueryEnv, "ALLOWED_ORIGINS">,
+	env: Pick<QueryEnv, "ALLOWED_ORIGINS" | "SHARE_DB">,
 ): Promise<Response> {
 	const cors = cloudCorsHeaders(env, request);
+	let tournaments: CatalogRosterOption[] = [];
+	try {
+		const { results } = await env.SHARE_DB.prepare(TOURNAMENT_ROSTER_SQL).all<{
+			tournament_id: string;
+			name: string;
+		}>();
+		tournaments = results.map((r) => ({
+			value: r.tournament_id,
+			label: r.name,
+		}));
+	} catch (err) {
+		logError("query_catalog_roster_failed", err);
+	}
 	return queryResponse(
-		serializeCatalog() as unknown as Record<string, unknown>,
+		serializeCatalog({ tournament: tournaments }) as unknown as Record<
+			string,
+			unknown
+		>,
 		cors,
 		"public, max-age=0, s-maxage=300",
 	);

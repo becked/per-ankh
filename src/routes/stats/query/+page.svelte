@@ -44,7 +44,11 @@
 				{:else if data.result && source}
 					<Panel title="Answer">
 						<div class="answer" class:asking={isAsking} aria-busy={isAsking}>
-							<QueryResults result={data.result} {source} />
+							<QueryResults
+								result={data.result}
+								{source}
+								rosters={data.catalog.rosters}
+							/>
 						</div>
 					</Panel>
 				{/if}

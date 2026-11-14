@@ -29,7 +29,7 @@
 // nobody can read; what is here is the subset that answers questions people
 // actually ask, and adding to it is a one-line change with a label attached.
 
-import { TOURNAMENT_GAME_IDS_SQL } from "../games-scope";
+import { TOURNAMENT_GAME_IDS_SQL, TOURNAMENT_ROSTER_SQL } from "../games-scope";
 import { UNAMBIGUOUS_ONLINE_ID_OWNERS_SQL } from "../online-ids";
 import { displayNameSql } from "../identity";
 
@@ -250,6 +250,7 @@ const GAME_DIMENSIONS: CatalogDimension[] = [
 		reach: "games",
 		type: "enum",
 		sql: "g.opponent_level",
+		vocabulary: "opponent_level",
 		filterable: true,
 	},
 	{
@@ -324,6 +325,11 @@ const GAME_FILTERS: CatalogFilter[] = [
 		label: "Tournament",
 		reach: "games",
 		type: "tournament",
+		// The one vocabulary the Worker supplies rather than the client: a
+		// tournament's name is in D1 and nowhere in src/lib/generated/, which
+		// is the same "the roster lives where the data is" rule that keeps the
+		// zType rosters client-side. Served as `rosters.tournament` below.
+		vocabulary: "tournament",
 		ops: ["in"],
 	},
 	{
@@ -398,6 +404,7 @@ const PLAYER_DIMENSIONS: CatalogDimension[] = [
 		reach: "player",
 		type: "enum",
 		sql: "ps.capital_family_class",
+		vocabulary: "family_class",
 		filterable: true,
 	},
 	{
@@ -806,6 +813,7 @@ const SOURCE_DEFS: QuerySource[] = [
 				reach: "source",
 				type: "enum",
 				sql: "pfc.family_class",
+				vocabulary: "family_class",
 				filterable: true,
 			},
 		],
@@ -1053,8 +1061,21 @@ export interface CatalogSourceWire {
 	filters: CatalogFilterWire[];
 }
 
+// One value a filter can take, where the Worker is what knows the name for it.
+export interface CatalogRosterOption {
+	value: string;
+	label: string;
+}
+
 export interface CatalogWire {
 	sources: CatalogSourceWire[];
+	// The vocabularies the Worker supplies, keyed by the `vocabulary` an entry
+	// names. Only the ones whose values live in D1 — a tournament — are here;
+	// a zType roster is resolved client-side against the baked tables in
+	// `src/lib/generated/`, because a second copy of those here would be the
+	// drift the catalog exists to prevent. A vocabulary absent from this map
+	// and unknown to the client is a filter that takes a typed token.
+	rosters: Record<string, CatalogRosterOption[]>;
 	limits: {
 		max_rows: number;
 		default_rows: number;
@@ -1064,8 +1085,11 @@ export interface CatalogWire {
 	};
 }
 
-export function serializeCatalog(): CatalogWire {
+export function serializeCatalog(
+	rosters: Record<string, CatalogRosterOption[]> = {},
+): CatalogWire {
 	return {
+		rosters,
 		sources: SOURCES.map((s) => ({
 			key: s.key,
 			label: s.label,
@@ -1105,7 +1129,7 @@ export function serializeCatalog(): CatalogWire {
 	};
 }
 
-// Re-exported so the compiler reads the tournament predicate from the one
-// place that defines it rather than restating the join through
-// tournament_rounds.
-export { TOURNAMENT_GAME_IDS_SQL };
+// Re-exported so the compiler reads the tournament predicate, and the catalog
+// handler the roster that matches it, from the one place that defines them
+// rather than restating the join through tournament_rounds.
+export { TOURNAMENT_GAME_IDS_SQL, TOURNAMENT_ROSTER_SQL };

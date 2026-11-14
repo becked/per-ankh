@@ -7,23 +7,25 @@
 // bound either way, and a token that names nothing selects nothing — and only
 // the labels live here.
 //
-// `options: null` means the vocabulary has a name wrapper but no roster worth
-// offering: the builder falls back to a typed token for it.
+// Two sources, because that is where the data already is. A zType roster is
+// baked into this bundle and resolved here. A tournament's name is in D1 and
+// nowhere in $lib/generated, so the Worker serves that roster with the catalog
+// (`rosters`, cloud/src/query/catalog.ts) and `vocabularyFor` reads it from
+// there — the same rule, applied the other way round.
 //
-// TECH_NAMES is that case, and not for the reason this comment gave before
-// (#373): it is a DIVERGENCE table, the shape SETUP_VALUE_NAMES has, not a
-// roster. 66 of its 67 keys carry a `_BONUS` token and TECH_BATTLELINE is the
-// only researchable tech in it, which is why `techName` falls through to
-// formatEnum for TECH_IRONWORKING and every other real tech. No roster of
-// researchable techs exists in $lib/generated — baking one over tech.xml is
-// what a picker here needs.
+// `options: null` means the vocabulary has a name wrapper but no roster worth
+// offering: the builder falls back to a typed token for it. Nothing is in that
+// state today.
 
 import { CULTURE_LEVELS, WONDER_CULTURE_PREREQ } from "$lib/generated/wonders";
 import { BASE_NATIONS } from "$lib/generated/civilization-colors";
+import { FAMILY_CLASSES } from "$lib/generated/family-classes";
 import { SETUP_VALUE_NAMES } from "$lib/generated/game-setup";
+import { SETUP_VALUE_ORDER } from "$lib/generated/setup-value-order";
 import { LAW_CLASSES } from "$lib/generated/law-classes";
 import { LEADER_TRAITS } from "$lib/generated/leader-traits";
 import { MAP_OPTION_DEFS } from "$lib/generated/map-option-defs";
+import { TREE_TECHS } from "$lib/generated/tech-tree";
 import { VICTORY_ORDERING } from "$lib/generated/victory-ordering";
 import {
 	GAME_MODE_NAMES,
@@ -31,11 +33,12 @@ import {
 	mapScriptLabel,
 	mapSizeLabel,
 	prosperityName,
+	setupValueName,
 } from "$lib/map-settings";
 import { KNOWN_MAP_SCRIPTS } from "$lib/tournament/map-scripts-table";
 import { improvementDisplayName, techName } from "$lib/game-detail/helpers";
 import { formatArchetype, formatEnum, nationName } from "$lib/utils/formatting";
-import type { ValueType } from "./types";
+import type { CatalogRosterOption, ValueType } from "./types";
 
 export interface Vocabulary {
 	// The values to offer, or null where there is no roster to offer.
@@ -53,6 +56,15 @@ const byLabel = (
 const lawLabel = (value: string): string => formatEnum(value, "LAW_");
 const cultureLabel = (value: string): string => formatEnum(value, "CULTURE_");
 const victoryLabel = (value: string): string => formatEnum(value, "VICTORY_");
+const familyClassLabel = (value: string): string =>
+	formatEnum(value, "FAMILYCLASS_");
+// The setup screen's own name for an AI Aggression tier, which matches
+// formatEnum for all five — opponentLevel.xml names each one TEXT_<zType> and
+// the text is the word in the zType ("Peaceful", "Competitive"). Routed
+// through `setupValueName` anyway, so a tier the game renames is relabelled by
+// a re-bake rather than by an edit here.
+const opponentLevelLabel = (value: string): string =>
+	setupValueName(value, "OPPONENTLEVEL_");
 
 // The map sizes the game declares, in its own ascending order. Narrowed
 // because MapOptionDef is a union and only the `select` arm has choices.
@@ -130,11 +142,58 @@ const VOCABULARIES: Readonly<Record<string, Vocabulary>> = {
 	},
 	// Info-list order, which is the order the victory screen lists them in.
 	victory_type: { options: [...VICTORY_ORDERING], label: victoryLabel },
-	tech: { options: null, label: techName },
+	// The techs on the tech tree. `tech_events` also records the bonus and
+	// upgrade cards a tech hands out — 71 of the 121 distinct values and
+	// 10,727 of the 78,733 rows in the 2026-11-10 snapshot — and those are not
+	// offered: they are not a research choice, and the game keeps them off the
+	// tree itself (`isTechShown`, Game.cs:8274). They stay typable, the way an
+	// aliased map script does. One tree tech is out of the picker for the
+	// mirror-image reason the aliases are: TECH_CARTHAGINIAN_TRAINING is in the
+	// corpus and not in the build this table was baked from.
+	tech: { options: byLabel(TREE_TECHS, techName), label: techName },
+	family_class: {
+		options: byLabel(FAMILY_CLASSES, familyClassLabel),
+		label: familyClassLabel,
+	},
+	// Passive to Competitive, as the setup screen lists them — the roster's own
+	// order is the meaningful one for a scale, so it is not re-sorted by name.
+	opponent_level: {
+		options: [...(SETUP_VALUE_ORDER["OPPONENTLEVEL_"] ?? [])],
+		label: opponentLevelLabel,
+	},
 };
 
-export function vocabularyFor(name: string | undefined): Vocabulary | null {
-	return name === undefined ? null : (VOCABULARIES[name] ?? null);
+/** The rosters the Worker served with the catalog, as `QueryCatalog.rosters`. */
+export type ServedRosters = Readonly<
+	Record<string, readonly CatalogRosterOption[]>
+>;
+
+/**
+ * The vocabulary a column names, from whichever side holds its values.
+ *
+ * The baked table wins where there is one, so a `vocabulary` the Worker starts
+ * serving a roster for does not silently change which labels a zType column
+ * reads under. `served` is only consulted for a name no baked table has.
+ */
+export function vocabularyFor(
+	name: string | undefined,
+	served: ServedRosters = {},
+): Vocabulary | null {
+	if (name === undefined) return null;
+	const baked = VOCABULARIES[name];
+	if (baked) return baked;
+	const roster = served[name];
+	if (!roster) return null;
+	// Order is the Worker's — TOURNAMENT_ROSTER_SQL hands them over newest
+	// first, which is the order a tournament picker is read in.
+	const labels = new Map(roster.map((o) => [o.value, o.label]));
+	return {
+		options: roster.map((o) => o.value),
+		// A value the roster no longer carries is still the value a shared link
+		// asked about, so it labels itself rather than disappearing from the
+		// chip that holds it.
+		label: (value) => labels.get(value) ?? value,
+	};
 }
 
 /**
@@ -152,6 +211,7 @@ export function valueLabel(
 	type: ValueType | "number",
 	vocabulary: string | undefined,
 	nullLabel: string,
+	served: ServedRosters = {},
 ): string {
 	if (value === null) return nullLabel;
 	if (type === "boolean") return value === 1 || value === "1" ? "Yes" : "No";
@@ -160,14 +220,15 @@ export function valueLabel(
 	// a seat's in-save name, an account's display name. Formatting those would
 	// cut a name containing an underscore in half.
 	if (type !== "enum") return value;
-	const vocab = vocabularyFor(vocabulary);
+	const vocab = vocabularyFor(vocabulary, served);
 	if (vocab) return vocab.label(value);
-	// A zType with no roster: its prefix is its own first token (FAMILYCLASS_,
-	// OPPONENTLEVEL_, …), so strip up to the first underscore rather than
+	// A zType with no roster: its prefix is its own first token
+	// (OCCURRENCELEVEL_, …), so strip up to the first underscore rather than
 	// keeping a list of prefixes in step with the catalog. Every column this
 	// still reaches spells its prefix that way; the ones that did not —
 	// game_mode's bare NETWORK, SINGLE_PLAYER's two-word prefix — are the ones
-	// that now have a vocabulary above.
+	// that now have a vocabulary above. It also still catches a value a roster
+	// is missing, which is why it is not an exhaustiveness check.
 	const underscore = value.indexOf("_");
 	return underscore === -1
 		? value

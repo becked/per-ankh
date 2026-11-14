@@ -311,10 +311,30 @@ export function periodCutoff(
 // column. status='complete' matches resolveTournamentCorpus (which imports
 // this), so a tournament sweep and that tournament's stats bundle act on the
 // same set of saves.
+// What makes a match one of them, interpolated into both statements below so
+// the roster and the predicate cannot disagree about which matches count.
+const PLAYED_MATCH_SQL = `m.game_id IS NOT NULL AND m.status = 'complete'`;
+
 export const TOURNAMENT_GAME_IDS_SQL = `SELECT DISTINCT m.game_id FROM tournament_matches m
 	 JOIN tournament_rounds r ON r.round_id = m.round_id
-	 WHERE r.tournament_id = ? AND m.game_id IS NOT NULL
-	   AND m.status = 'complete'`;
+	 WHERE r.tournament_id = ? AND ${PLAYED_MATCH_SQL}`;
+
+// The tournaments a question can be asked about: the ones TOURNAMENT_GAME_IDS_SQL
+// would return a game for, newest first. Every other tournament is a filter
+// value that selects nothing — a setup-phase tournament has played no matches
+// at all — so offering one would be offering an empty answer.
+//
+// Viewer-independent, which is what lets the catalog carry it: the setup-phase
+// visibility rule the tournament list applies (admin-only until signups open,
+// handleTournamentList) only ever hides tournaments this excludes anyway. No
+// PII — a tournament's id and name are both already public on its own page.
+export const TOURNAMENT_ROSTER_SQL = `SELECT t.tournament_id, t.name FROM tournaments t
+	 WHERE EXISTS (
+	   SELECT 1 FROM tournament_matches m
+	   JOIN tournament_rounds r ON r.round_id = m.round_id
+	   WHERE r.tournament_id = t.tournament_id AND ${PLAYED_MATCH_SQL}
+	 )
+	 ORDER BY t.created_at DESC`;
 
 export interface AdminGameFilter {
 	userId: string | null;
