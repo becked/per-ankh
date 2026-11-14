@@ -14,6 +14,7 @@
 	import { goto } from "$app/navigation";
 	import { page } from "$app/state";
 	import Combobox from "$lib/ui/Combobox.svelte";
+	import PanelInset from "$lib/ui/PanelInset.svelte";
 	import SegmentedChips from "$lib/ui/SegmentedChips.svelte";
 	import Select from "$lib/ui/Select.svelte";
 	import { INPUT_CLASS } from "$lib/ui/classes";
@@ -312,8 +313,6 @@
 		await goto(next, { keepFocus: true, noScroll: true });
 	}
 
-	const LABEL =
-		"w-24 shrink-0 pt-1.5 text-xs font-bold uppercase text-gray-400";
 	// The picked-value chip and its remove button, as the challenge rules
 	// editor renders them.
 	const CHIP =
@@ -330,39 +329,32 @@
 </script>
 
 <div class="flex flex-col gap-3">
-	<div class="flex gap-2">
-		<span class={LABEL}>About</span>
-		<div class="min-w-0 flex-1">
-			<Select
-				value={draft.source}
-				options={sourceOptions}
-				onChange={setSource}
-				ariaLabel="What the question is about"
-			/>
-			<p class="mt-1 text-xs italic text-tan opacity-70">{source.grain}</p>
-		</div>
-	</div>
+	<PanelInset label="About">
+		<Select
+			value={draft.source}
+			options={sourceOptions}
+			onChange={setSource}
+			ariaLabel="What the question is about"
+		/>
+		<p class="mt-1 text-xs italic text-tan opacity-70">{source.grain}</p>
+	</PanelInset>
 
-	<div class="flex gap-2">
-		<span class={LABEL}>Measure</span>
-		<div class="min-w-0 flex-1">
-			<Select
-				value={draft.measure}
-				options={measureOptions}
-				onChange={(v) => {
-					if (v !== null) patch({ measure: v });
-				}}
-				ariaLabel="What to measure"
-			/>
-			<!-- Where a count says whether it collapsed a match both players
-			     uploaded. The number is unreadable without it. -->
-			<p class="mt-1 text-xs italic text-tan opacity-70">{measure.note}</p>
-		</div>
-	</div>
+	<PanelInset label="Measure">
+		<Select
+			value={draft.measure}
+			options={measureOptions}
+			onChange={(v) => {
+				if (v !== null) patch({ measure: v });
+			}}
+			ariaLabel="What to measure"
+		/>
+		<!-- Where a count says whether it collapsed a match both players
+		     uploaded. The number is unreadable without it. -->
+		<p class="mt-1 text-xs italic text-tan opacity-70">{measure.note}</p>
+	</PanelInset>
 
-	<div class="flex gap-2">
-		<span class={LABEL}>Grouped by</span>
-		<div class="flex min-w-0 flex-1 flex-wrap items-start gap-2">
+	<PanelInset label="Grouped by">
+		<div class="flex flex-wrap items-start gap-2">
 			{#each draft.dimensions as dim, i (dim)}
 				<div class="flex items-center gap-1">
 					<Select
@@ -395,11 +387,10 @@
 				onclick={addDimension}>+ Grouping</button
 			>
 		</div>
-	</div>
+	</PanelInset>
 
-	<div class="flex gap-2">
-		<span class={LABEL}>Where</span>
-		<div class="flex min-w-0 flex-1 flex-col gap-2">
+	<PanelInset label="Where">
+		<div class="flex flex-col gap-2">
 			{#each draft.filters as filter, i (i)}
 				{@const spec = specFor(filter)}
 				{#if spec}
@@ -522,11 +513,10 @@
 				>
 			</div>
 		</div>
-	</div>
+	</PanelInset>
 
-	<div class="flex gap-2">
-		<span class={LABEL}>Show</span>
-		<div class="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+	<PanelInset label="Show">
+		<div class="flex flex-wrap items-center gap-2">
 			<Select
 				value={draft.sort}
 				options={sortOptions}
@@ -544,7 +534,7 @@
 				ariaLabel="Row cap"
 			/>
 		</div>
-	</div>
+	</PanelInset>
 
 	<div class="flex items-center gap-2">
 		<button
