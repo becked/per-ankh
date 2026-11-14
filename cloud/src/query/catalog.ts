@@ -480,7 +480,7 @@ const GAME_FILTERS: CatalogFilter[] = [
 const PLAYER_DIMENSIONS: CatalogDimension[] = [
 	{
 		key: "player",
-		label: "Player",
+		label: "Account",
 		reach: "identity",
 		type: "identity",
 		sql: PLAYER_USER_ID_SQL,
@@ -543,7 +543,7 @@ const PLAYER_DIMENSIONS: CatalogDimension[] = [
 	},
 	{
 		key: "is_human",
-		label: "Human seat",
+		label: "Human",
 		reach: "player",
 		type: "boolean",
 		sql: "ps.is_human",
@@ -559,7 +559,7 @@ const PLAYER_DIMENSIONS: CatalogDimension[] = [
 	},
 	{
 		key: "is_uploader",
-		label: "Uploader's seat",
+		label: "Uploader",
 		reach: "player",
 		type: "boolean",
 		sql: "ps.is_uploader",
@@ -570,7 +570,7 @@ const PLAYER_DIMENSIONS: CatalogDimension[] = [
 const PLAYER_MEASURES: CatalogMeasure[] = [
 	{
 		key: "seats",
-		label: "Seats",
+		label: "Players",
 		reach: "player",
 		unit: "seat",
 	},
@@ -718,7 +718,7 @@ const SOURCE_DEFS: QuerySource[] = [
 		measures: [
 			{
 				key: "family_rows",
-				label: "Seat-family pairs",
+				label: "Family rows",
 				reach: "source",
 				unit: "event",
 			},
