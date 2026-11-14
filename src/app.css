@@ -85,6 +85,23 @@
  * use of a --color-* var as a CSS value must therefore be wrapped in rgb().
  */
 :root {
+	/*
+	 * The theme is dark in CSS only: every surface below is painted from a
+	 * token, but what the browser paints for itself kept its light defaults
+	 * (#295 §3). Measured in headless Chrome, that reaches two controls here —
+	 * the `<progress>` bars in UploadModal and BulkUploadModal, which carry
+	 * `class="w-full"` and nothing else, drew a near-white track across a dark
+	 * modal; and the calendar glyph Chrome draws inside the admin page's two
+	 * `<input type="date">` came out near-black on their `bg-surface-raised`
+	 * box, present but invisible. Both follow the declared scheme instead.
+	 *
+	 * Not the scrollbars: those are painted by the ::-webkit-scrollbar rules
+	 * below, and where a browser ignores those pseudos a scheme recolours its
+	 * native bar without narrowing it — complementary to #192's geometry work,
+	 * not a substitute for it.
+	 */
+	color-scheme: dark;
+
 	--color-black: 0 0 0;
 	--color-brown: 165 42 42;
 	--color-dark-brown: 121 38 29;

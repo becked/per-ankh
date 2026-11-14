@@ -402,7 +402,7 @@
 						style:grid-column={b.round}
 						style:grid-row={rowForBucket(b.wins, b.losses)}
 					>
-						<div class="record-label">{b.wins}-{b.losses}</div>
+						<div class="record-label font-mono">{b.wins}-{b.losses}</div>
 						<div class="match-list">
 							{#each b.matches as m (m.match_id)}
 								{@const aWon = matchSlotOutcome(m, "a") === "won"}
@@ -561,7 +561,9 @@
 										<PlayerAvatar avatarUrl={avatarOf[a.slot_id]} size={12} />
 										<span class="chip-name">{slotLabel(a.slot_id)}</span>
 									</ProfileLink>
-									<span class="chip-record">{a.finalWins}-{a.finalLosses}</span>
+									<span class="chip-record font-mono"
+										>{a.finalWins}-{a.finalLosses}</span
+									>
 								</li>
 							{/each}
 						</ul>
@@ -595,7 +597,9 @@
 										<PlayerAvatar avatarUrl={avatarOf[e.slot_id]} size={12} />
 										<span class="chip-name">{slotLabel(e.slot_id)}</span>
 									</ProfileLink>
-									<span class="chip-record">{e.finalWins}-{e.finalLosses}</span>
+									<span class="chip-record font-mono"
+										>{e.finalWins}-{e.finalLosses}</span
+									>
 								</li>
 							{/each}
 						</ul>
@@ -687,7 +691,6 @@
 		font-size: 0.7rem;
 		font-weight: 700;
 		opacity: 0.6;
-		font-family: ui-monospace, monospace;
 	}
 
 	.match-list {
@@ -908,7 +911,6 @@
 	}
 
 	.chip-record {
-		font-family: ui-monospace, monospace;
 		opacity: 0.7;
 		flex-shrink: 0;
 	}
