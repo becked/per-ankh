@@ -480,7 +480,7 @@ const GAME_FILTERS: CatalogFilter[] = [
 const PLAYER_DIMENSIONS: CatalogDimension[] = [
 	{
 		key: "player",
-		label: "Account",
+		label: "Player",
 		reach: "identity",
 		type: "identity",
 		sql: PLAYER_USER_ID_SQL,
@@ -569,8 +569,15 @@ const PLAYER_DIMENSIONS: CatalogDimension[] = [
 
 const PLAYER_MEASURES: CatalogMeasure[] = [
 	{
+		// Named for what it counts, which is runs and not people: the `seat`
+		// unit compiles to COUNT(DISTINCT match:player_index) (countSqlFor,
+		// compile.ts), so grouped by nation it answers how many times that
+		// nation was played. "Players" said it counted people, and read as a
+		// tautology beside the `player` dimension. This is `wins` without the
+		// predicate, so the two labels are a pair at one grain, under the
+		// game-grain `matches` above.
 		key: "seats",
-		label: "Players",
+		label: "Matches played",
 		reach: "player",
 		unit: "seat",
 	},
