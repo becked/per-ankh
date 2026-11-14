@@ -20,7 +20,6 @@
 import { CULTURE_LEVELS, WONDER_CULTURE_PREREQ } from "$lib/generated/wonders";
 import { BASE_NATIONS } from "$lib/generated/civilization-colors";
 import { FAMILY_CLASSES } from "$lib/generated/family-classes";
-import { SETUP_VALUE_NAMES } from "$lib/generated/game-setup";
 import { SETUP_VALUE_ORDER } from "$lib/generated/setup-value-order";
 import { LAW_CLASSES } from "$lib/generated/law-classes";
 import { LEADER_TRAITS } from "$lib/generated/leader-traits";
@@ -71,18 +70,6 @@ const opponentLevelLabel = (value: string): string =>
 const MAPSIZE_DEF = MAP_OPTION_DEFS.MAPSIZE;
 const MAP_SIZES =
 	MAPSIZE_DEF?.kind === "select" ? MAPSIZE_DEF.choices.map((c) => c.value) : [];
-
-// The Prosperity tiers. SETUP_VALUE_NAMES is a divergence table, so reading a
-// roster off it only holds while every tier diverges — which all seven do,
-// and not by accident: the game renamed the setting and every tier with it, so
-// the enum tokens (ABLE, MAGNIFICENT) and the display names (Affluent, Modest)
-// are disjoint word-sets. A tier Mohawk renamed back to its enum would drop
-// out of this list silently; baking difficulty.xml is what makes it a roster.
-// That bake is also where the tier ORDER would come from — it is not in this
-// table, so the picker falls back to alphabetical by display name.
-const PROSPERITY_TIERS = Object.keys(SETUP_VALUE_NAMES).filter((k) =>
-	k.startsWith("DIFFICULTY_"),
-);
 
 const VOCABULARIES: Readonly<Record<string, Vocabulary>> = {
 	nation: { options: byLabel(BASE_NATIONS, nationName), label: nationName },
@@ -136,8 +123,11 @@ const VOCABULARIES: Readonly<Record<string, Vocabulary>> = {
 		options: byLabel(Object.keys(GAME_MODE_NAMES), gameModeLabel),
 		label: gameModeLabel,
 	},
+	// Affluent to Fragile, as the setup screen lists them — descending
+	// prosperity, which is ascending difficulty. The roster's own order is the
+	// meaningful one for a scale, so it is not re-sorted by name.
 	prosperity: {
-		options: byLabel(PROSPERITY_TIERS, prosperityName),
+		options: [...(SETUP_VALUE_ORDER["DIFFICULTY_"] ?? [])],
 		label: prosperityName,
 	},
 	// Info-list order, which is the order the victory screen lists them in.
