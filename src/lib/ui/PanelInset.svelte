@@ -7,12 +7,14 @@
 	//
 	// The label is the inset's own heading — `h3`, under the panel's `h2` — and
 	// it is optional: an inset that is its panel's only child is already named
-	// by the heading above it.
+	// by the heading above it. A control that acts on the inset as a whole goes
+	// in `action`, at the right end of that heading row.
 	import type { Snippet } from "svelte";
 
 	let {
 		label,
 		icon,
+		action,
 		overArt = false,
 		class: className = "",
 		children,
@@ -22,6 +24,9 @@
 		// smaller than a row icon so it reads as the inset's marker rather than
 		// as its first entry.
 		icon?: Snippet;
+		// Optional control at the right end of the heading row — the button that
+		// adds a row to the inset's own list, kept out of the list it adds to.
+		action?: Snippet;
 		// Nearly opaque rather than opaque, for an inset sitting on a tile's
 		// backdrop art: the art is the tile's backdrop, not a texture behind the
 		// inset's rows, and at any less the still's lit half fights the text in
@@ -40,13 +45,18 @@
 		? 'bg-surface-deep/90'
 		: 'bg-surface-deep'} {className}"
 >
-	{#if label}
-		<h3
-			class="mb-1 flex items-center gap-1.5 text-[10px] font-bold uppercase text-gray-400"
-		>
-			{@render icon?.()}
-			{label}
-		</h3>
+	{#if label || action}
+		<div class="mb-1 flex items-center justify-between gap-2">
+			{#if label}
+				<h3
+					class="flex items-center gap-1.5 text-[10px] font-bold uppercase text-gray-400"
+				>
+					{@render icon?.()}
+					{label}
+				</h3>
+			{/if}
+			{@render action?.()}
+		</div>
 	{/if}
 	{@render children()}
 </div>

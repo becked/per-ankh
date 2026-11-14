@@ -428,50 +428,57 @@
 	</PanelInset>
 
 	<PanelInset label="Grouped by">
-		<div class="flex flex-col gap-2">
-			{#if draft.dimensions.length > 0}
-				<div class="flex flex-wrap items-start gap-2 pl-3">
-					{#each draft.dimensions as dim, i (dim)}
-						<div class="flex items-center gap-1">
-							<Select
-								value={dim}
-								options={dimensionOptions(i)}
-								onChange={(v) => {
-									if (v !== null)
-										patch({
-											dimensions: draft.dimensions.map((d, j) =>
-												j === i ? v : d,
-											),
-										});
-								}}
-								ariaLabel="Grouping {i + 1}"
-							/>
-							<button
-								type="button"
-								class={COMPACT_BTN}
-								aria-label="Remove grouping"
-								onclick={() =>
+		{#snippet action()}
+			<button
+				type="button"
+				class={COMPACT_BTN}
+				disabled={draft.dimensions.length >= catalog.limits.max_dimensions ||
+					draft.dimensions.length >= source.dimensions.length}
+				onclick={addDimension}>+ Grouping</button
+			>
+		{/snippet}
+		{#if draft.dimensions.length > 0}
+			<div class="flex flex-wrap items-start gap-2 pl-3">
+				{#each draft.dimensions as dim, i (dim)}
+					<div class="flex items-center gap-1">
+						<Select
+							value={dim}
+							options={dimensionOptions(i)}
+							onChange={(v) => {
+								if (v !== null)
 									patch({
-										dimensions: draft.dimensions.filter((_, j) => j !== i),
-									})}>×</button
-							>
-						</div>
-					{/each}
-				</div>
-			{/if}
-			<div>
-				<button
-					type="button"
-					class={COMPACT_BTN}
-					disabled={draft.dimensions.length >= catalog.limits.max_dimensions ||
-						draft.dimensions.length >= source.dimensions.length}
-					onclick={addDimension}>+ Grouping</button
-				>
+										dimensions: draft.dimensions.map((d, j) =>
+											j === i ? v : d,
+										),
+									});
+							}}
+							ariaLabel="Grouping {i + 1}"
+						/>
+						<button
+							type="button"
+							class={COMPACT_BTN}
+							aria-label="Remove grouping"
+							onclick={() =>
+								patch({
+									dimensions: draft.dimensions.filter((_, j) => j !== i),
+								})}>×</button
+						>
+					</div>
+				{/each}
 			</div>
-		</div>
+		{/if}
 	</PanelInset>
 
 	<PanelInset label="Where">
+		{#snippet action()}
+			<button
+				type="button"
+				class={COMPACT_BTN}
+				disabled={draft.filters.length >= catalog.limits.max_filters ||
+					!canAddFilter}
+				onclick={addFilter}>+ Filter</button
+			>
+		{/snippet}
 		<div class="flex flex-col gap-2">
 			{#each draft.filters as filter, i (i)}
 				{@const spec = specFor(filter)}
@@ -605,15 +612,6 @@
 					</div>
 				{/if}
 			{/each}
-			<div>
-				<button
-					type="button"
-					class={COMPACT_BTN}
-					disabled={draft.filters.length >= catalog.limits.max_filters ||
-						!canAddFilter}
-					onclick={addFilter}>+ Filter</button
-				>
-			</div>
 		</div>
 	</PanelInset>
 
