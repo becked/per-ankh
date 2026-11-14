@@ -39,8 +39,8 @@
 	const tabs: { routeId: RouteId; href: ResolvedPathname; label: string }[] = [
 		{ routeId: "/stats", href: resolve("/stats"), label: "Charts" },
 		{
-			routeId: "/stats/query",
-			href: resolve("/stats/query"),
+			routeId: "/stats/explore",
+			href: resolve("/stats/explore"),
 			label: "Explore",
 		},
 	];

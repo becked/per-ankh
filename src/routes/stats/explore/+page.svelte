@@ -1,5 +1,5 @@
 <script lang="ts">
-	// /stats/query — Explore, the second view of Global Stats: the builder over
+	// /stats/explore — Explore, the second view of Global Stats: the builder over
 	// the catalog, and the answer under it.
 	//
 	// The page is two panels: the question, and what the corpus said. Nothing
