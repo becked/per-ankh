@@ -584,9 +584,6 @@
 								})}>×</button
 						>
 					</div>
-					{#if spec.help}
-						<p class="pl-3 text-xs italic text-tan opacity-70">{spec.help}</p>
-					{/if}
 				{/if}
 			{/each}
 			<div>

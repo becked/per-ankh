@@ -213,9 +213,6 @@ export interface CatalogDimension {
 	// `played` date range written as a string, and a question narrowed by a
 	// year would have two ways to ask it with different operators.
 	filterable: boolean;
-	// Shown under the picker. One sentence, present only where the key does
-	// not say the whole thing.
-	help?: string;
 }
 
 // What one counted or averaged thing is. The compiler derives a count's
@@ -247,7 +244,6 @@ export interface CatalogFilter {
 	sql?: string;
 	vocabulary?: string;
 	ops: readonly FilterOp[];
-	help?: string;
 }
 
 export type FilterOp = "in" | "not_in" | "gte" | "lte";
@@ -312,7 +308,6 @@ const GAME_DIMENSIONS: CatalogDimension[] = [
 		sql: "g.game_mode",
 		vocabulary: "game_mode",
 		filterable: true,
-		help: "How the match was played. Multiplayer and Play By Cloud are the two remote modes.",
 	},
 	{
 		// Labelled Prosperity, which is what the game calls the setting
@@ -367,7 +362,6 @@ const GAME_DIMENSIONS: CatalogDimension[] = [
 		// that doesn't carries nothing at all, so the prefix is the year.
 		sql: "substr(g.save_date, 1, 4)",
 		filterable: false,
-		help: "When the game was played, from the save's own date — not when it was uploaded.",
 	},
 ];
 
@@ -458,7 +452,6 @@ const PLAYER_DIMENSIONS: CatalogDimension[] = [
 		// `valueLabel` passes an identity value through unchanged.
 		vocabulary: "player",
 		filterable: true,
-		help: "The account a seat belongs to. A seat is credited when its uploader claimed it, or when its online id belongs to exactly one account.",
 	},
 	{
 		key: "player_name",
@@ -467,7 +460,6 @@ const PLAYER_DIMENSIONS: CatalogDimension[] = [
 		type: "text",
 		sql: "ps.player_name",
 		filterable: true,
-		help: "The name written in the save file. Free text, so one person can appear under several spellings — group by Player instead to count people.",
 	},
 	{
 		key: "nation",
@@ -486,7 +478,6 @@ const PLAYER_DIMENSIONS: CatalogDimension[] = [
 		sql: "ps.starting_ruler_archetype",
 		vocabulary: "archetype",
 		filterable: true,
-		help: "The ruler the seat opened with. Successors are in Leaders.",
 	},
 	{
 		key: "capital_family_class",
@@ -505,7 +496,6 @@ const PLAYER_DIMENSIONS: CatalogDimension[] = [
 		sql: "ps.best_culture_level",
 		vocabulary: "culture_level",
 		filterable: true,
-		help: "Highest level reached by any city the seat still held at the end.",
 	},
 	{
 		key: "is_human",
@@ -631,7 +621,6 @@ function filtersFromDimensions(dims: CatalogDimension[]): CatalogFilter[] {
 			sql: d.sql,
 			vocabulary: d.vocabulary,
 			ops: d.type === "number" ? [...SET_OPS, ...RANGE_OPS] : SET_OPS,
-			help: d.help,
 		}));
 }
 
@@ -733,7 +722,6 @@ const SOURCE_DEFS: QuerySource[] = [
 				sql: "lr.archetype",
 				vocabulary: "archetype",
 				filterable: true,
-				help: "Null for a leader the save records no archetype for — a child ruler, or a save old enough that the archetype can't be read.",
 			},
 		],
 		measures: [
@@ -1105,7 +1093,6 @@ export interface CatalogDimensionWire {
 	label: string;
 	type: ValueType;
 	vocabulary?: string;
-	help?: string;
 	// Present on an identity dimension: the extra column keys its rows carry.
 	key_columns?: string[];
 }
@@ -1122,7 +1109,6 @@ export interface CatalogFilterWire {
 	type: ValueType;
 	ops: FilterOp[];
 	vocabulary?: string;
-	help?: string;
 }
 
 export interface CatalogSourceWire {
@@ -1174,7 +1160,6 @@ export function serializeCatalog(
 				label: d.label,
 				type: d.type,
 				...(d.vocabulary ? { vocabulary: d.vocabulary } : {}),
-				...(d.help ? { help: d.help } : {}),
 				...(d.keyColumns
 					? { key_columns: d.keyColumns.map((k) => `${d.key}_${k.suffix}`) }
 					: {}),
@@ -1190,7 +1175,6 @@ export function serializeCatalog(
 				type: f.type,
 				ops: [...f.ops],
 				...(f.vocabulary ? { vocabulary: f.vocabulary } : {}),
-				...(f.help ? { help: f.help } : {}),
 			})),
 		})),
 		limits: {

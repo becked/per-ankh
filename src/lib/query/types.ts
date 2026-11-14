@@ -28,7 +28,6 @@ export interface CatalogDimension {
 	// ($lib/query/vocabularies). Absent — or naming one with no roster — means
 	// the filter takes a typed token.
 	vocabulary?: string;
-	help?: string;
 	// On the identity dimension: the extra column keys its result rows carry,
 	// which is what lets the table link a row to a profile.
 	key_columns?: string[];
@@ -46,7 +45,6 @@ export interface CatalogFilter {
 	type: ValueType;
 	ops: FilterOp[];
 	vocabulary?: string;
-	help?: string;
 }
 
 export interface CatalogSource {
