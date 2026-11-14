@@ -1,17 +1,24 @@
 <script lang="ts">
-	// /stats/explore — Explore, the second view of Global Stats: the builder over
-	// the catalog, and the answer under it.
+	// /stats/explore — Explore, the second view of Global Stats: the builder
+	// over the catalog, and the rows it returns.
 	//
-	// The page is two panels: the question, and what the corpus said. Nothing
-	// is asked until "Ask" is pressed, so arriving here costs no read budget
-	// and the first thing on screen is an empty builder rather than a number
-	// nobody asked for.
+	// The page is two panels side by side: the query on the left, the results
+	// filling the rest. Nothing is asked until "Ask" is pressed, so arriving
+	// here costs no read budget and the first thing on screen is an empty
+	// builder rather than a number nobody asked for.
+	//
+	// Both panels render on arrival, and so does the frame the rows sit in —
+	// empty, at a height that reads as a waiting table rather than as a seam.
+	// The columns and that frame are what the page is, not what a first answer
+	// turns it into: the builder doesn't move sideways under the pointer the
+	// moment it is used, and the rows land in a box that was already there.
 
 	import { navigating } from "$app/state";
 	import StatsHeader from "$lib/stats/StatsHeader.svelte";
 	import Panel from "$lib/ui/Panel.svelte";
 	import QueryBuilder from "$lib/query/QueryBuilder.svelte";
 	import QueryResults from "$lib/query/QueryResults.svelte";
+	import { TABLE_FRAME_CLASS } from "$lib/ui/classes";
 	import type { PageData } from "./$types";
 
 	let { data }: { data: PageData } = $props();
@@ -21,9 +28,9 @@
 	);
 
 	// A new question re-runs the load, so the page keeps showing the outgoing
-	// answer until the new one lands. Dimming for the duration says the rows
-	// still on screen belong to the question you just left — the same move
-	// /stats makes across a facet change.
+	// rows until the new ones land. Dimming for the duration says what is still
+	// on screen belongs to the query you just left — the same move /stats
+	// makes across a facet change.
 	const isAsking = $derived(navigating.to !== null);
 </script>
 
@@ -32,26 +39,31 @@
 		<div class="flex-1 overflow-y-auto px-4 pb-8 pt-4">
 			<StatsHeader />
 
-			<div class="mx-auto flex max-w-screen-lg flex-col gap-4">
-				<Panel title="Question">
+			<div
+				class="mx-auto grid max-w-screen-2xl grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,24rem)_minmax(0,1fr)]"
+			>
+				<Panel title="Query">
 					<QueryBuilder catalog={data.catalog} draft={data.draft} />
 				</Panel>
 
-				{#if data.error}
-					<Panel title="Answer">
+				<Panel title="Results">
+					{#if data.error}
 						<p class="p-4 text-center text-sm text-orange">{data.error}</p>
-					</Panel>
-				{:else if data.result && source}
-					<Panel title="Answer">
-						<div class="answer" class:asking={isAsking} aria-busy={isAsking}>
+					{:else if data.result && source}
+						<div class="results" class:asking={isAsking} aria-busy={isAsking}>
 							<QueryResults
 								result={data.result}
 								{source}
 								rosters={data.catalog.rosters}
 							/>
 						</div>
-					</Panel>
-				{/if}
+					{:else}
+						<!-- The frame the rows land in, with nothing in it yet. No copy
+						     inside it: a line here would be read as the answer to a
+						     question nobody has asked. -->
+						<div class="{TABLE_FRAME_CLASS} min-h-[16rem]"></div>
+					{/if}
+				</Panel>
 			</div>
 		</div>
 	</main>
@@ -59,14 +71,14 @@
 
 <style>
 	/* 200ms to match the view crossfades the stats pages use. */
-	.answer {
+	.results {
 		transition: opacity 200ms ease-out;
 	}
 
-	.answer.asking {
+	.results.asking {
 		opacity: 0.3;
-		/* What's under the fade is the outgoing question's answer — a click
-		   would follow a link off rows that are about to be replaced. */
+		/* What's under the fade is the outgoing query's rows — a click would
+		   follow a link off rows that are about to be replaced. */
 		pointer-events: none;
 	}
 </style>

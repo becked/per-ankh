@@ -3,12 +3,11 @@
 	// group centred beneath it, and whatever control the current view hangs on
 	// the title row.
 	//
-	// One shared component rather than a block on each page because the two views
-	// have different body widths — Charts fills screen-2xl, Explore's builder is
-	// held to screen-lg — so a header inside each page's own container put the
-	// title at a different left edge on each, and "Global Stats" jumped when you
-	// switched tabs. Here the header has a width of its own, the same on both,
-	// and only the body below it changes.
+	// One shared component rather than a block on each page, and one with a width
+	// of its own. Both bodies are screen-2xl today, but a header laid out inside
+	// each page's own container takes the title's left edge from whatever that
+	// page is holding itself to, and "Global Stats" jumped between the tabs the
+	// last time those two widths differed. Here only the body below changes.
 	//
 	// The tabs sit centred on a row of their own, the same shape and the same
 	// wrapper as the game views in GameHeader: SegmentedNav is a grid of equal
