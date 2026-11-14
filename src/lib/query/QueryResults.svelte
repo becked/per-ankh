@@ -1,13 +1,19 @@
 <script lang="ts">
 	// The answer: one row per group, the measure last.
 	//
-	// Two things the table has to say that the numbers don't. A row the
-	// question could not name — a seat with no resolved account, a leader whose
-	// archetype the save doesn't record — is kept and labelled rather than
-	// dropped, because an answer that quietly omits those reads as complete and
-	// is short. And a row cap that was reached is said so, because a reader who
-	// can't tell a complete answer from a truncated one has been given a wrong
-	// one.
+	// Two things the table has to say that the numbers don't. A value the save
+	// doesn't record — a leader with no archetype, a game with no prosperity —
+	// keeps its row and is labelled, because an answer that quietly omits
+	// those reads as complete and is short. Prosperity is the case that shows
+	// it: over the 2026-11-10 snapshot its unrecorded row is 429 matches
+	// against 475 for Magnificent, and hiding it puts Magnificent at 475 of
+	// 510 where the groups sum to 939. And a row cap that was reached is said
+	// so, because a reader who can't tell a complete answer from a truncated
+	// one has been given a wrong one.
+	//
+	// The one NULL with no row is an identity dimension's. The Worker drops
+	// the seats that resolve to no account, so every row of the Player column
+	// names one (PLAYER_USER_ID_SQL, cloud/src/query/catalog.ts).
 
 	import ProfileLink from "$lib/ProfileLink.svelte";
 	import { TABLE_CLASS, TABLE_FRAME_CLASS } from "$lib/ui/classes";
@@ -94,22 +100,19 @@
 										: 'text-tan'} {c === 0 ? 'rounded-l-lg' : ''}"
 								>
 									{#if isIdentity(column.key)}
-										{@const label = valueLabel(
-											row[column.key],
-											column.type,
-											undefined,
-											"Unlinked seat",
-										)}
-										<!-- The weight and colour are on the cell, not here:
-									     `class` styles the anchor only, so an unlinked seat
-									     renders bare and would otherwise sit lighter than the
-									     rows that link. -->
+										<!-- The account's effective display name, which the
+									     Worker selects as this column; `users.display_name` is
+									     NOT NULL, so the cell always has a name to print. The
+									     weight and colour are on the cell, not here: `class`
+									     styles the anchor only, so a row ProfileLink renders
+									     bare would otherwise sit lighter than the rows that
+									     link. -->
 										<ProfileLink
 											userId={asString(row[`${column.key}_id`])}
 											slug={asString(row[`${column.key}_slug`])}
 											class="transition-colors hover:text-orange"
 										>
-											{label}
+											{row[column.key]}
 										</ProfileLink>
 									{:else}
 										{valueLabel(

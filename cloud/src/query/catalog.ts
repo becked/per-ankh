@@ -77,10 +77,12 @@ export const MAX_FILTER_VALUES = 20;
  * crediting both hands one player the other's history. One definition, read
  * here, by the played-games board and by the rating model.
  *
- * NULL is a real answer and is never dropped — an AI seat has no account, and
- * neither does a human seat nobody has linked. The builder renders those rows
- * as "Unlinked seat" rather than filtering them out, because the failure mode
- * this guards against is an answer that looks complete and is short.
+ * NULL is a real outcome — an AI seat has no account, and neither does a human
+ * seat nobody has linked. A question grouped on this expression drops those
+ * seats (compileQuery): they all share the one NULL key, so they arrive as a
+ * single row that names nobody and, on the default sort, leads the ranking. A
+ * filter on this expression excludes them too, by plain IN/NOT IN semantics
+ * rather than by a rule of its own.
  */
 export const PLAYER_USER_ID_SQL =
 	"COALESCE(CASE WHEN ps.is_uploader = 1 THEN g.user_id END, uo.user_id)";
@@ -411,9 +413,13 @@ const GAME_FILTERS: CatalogFilter[] = [
 	},
 	{
 		// One key with both bounds rather than a `played_from` and a
-		// `played_to`: the column is the same and the operator is what the
-		// comparison dropdown is for, which is how `total_turns` already reads.
-		// A window is still two rows, because a key takes each operator once.
+		// `played_to`: the column is the same and the operator is what tells
+		// the bounds apart, which is how `total_turns` already reads. A window
+		// is still two rows, because a key takes each operator once.
+		//
+		// The builder offers `gte` alone, as a window dropdown that carries
+		// the day inside it (QueryBuilder.svelte). `lte` reaches here from a
+		// hand-written or bookmarked URL.
 		key: "played",
 		label: "Played",
 		reach: "games",

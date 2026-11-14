@@ -212,6 +212,40 @@ describe("identity", () => {
 		).toContain("WHERE NOT EXISTS");
 	});
 
+	it("drops the seats that resolve to no account", () => {
+		// All of them share the one NULL key, so they group into a single row
+		// that names nobody and leads the default sort. 702 of the 2,051 seats
+		// in the 2026-11-10 snapshot, 116 in-save names and 346 AI seats in
+		// one row, against 227 for the top account.
+		expect(
+			flat(compile("source=player_summaries&measure=seats&dim=player").sql),
+		).toContain(
+			"COALESCE(CASE WHEN ps.is_uploader = 1 THEN g.user_id END, uo.user_id) IS NOT NULL",
+		);
+	});
+
+	it("drops them for the grouping only, not for a filter on the same column", () => {
+		// A filter is IN/NOT IN over user_ids and NULL satisfies neither, so
+		// the predicate would be a second spelling of a rule SQL already has.
+		expect(
+			flat(
+				compile(
+					"source=player_summaries&measure=seats&dim=nation" +
+						"&f=player:in:O-1ONgvfrVql0yVJiATyh",
+				).sql,
+			),
+		).not.toContain("uo.user_id) IS NOT NULL");
+	});
+
+	it("leaves a value dimension's unrecorded rows in", () => {
+		// The opposite call for the opposite reason: `difficulty` is
+		// unrecorded for 429 matches against 475 on DIFFICULTY_MAGNIFICENT in
+		// that snapshot, and dropping the row would read as 475 of 510.
+		expect(
+			flat(compile("source=games&measure=matches&dim=difficulty").sql),
+		).not.toContain("IS NOT NULL");
+	});
+
 	it("narrows to one account by the same expression it groups on", () => {
 		// A filter that resolved a seat's owner differently from the grouping
 		// would answer "Siontific's games" over a different set of seats than

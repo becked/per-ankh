@@ -191,10 +191,13 @@ export function vocabularyFor(
  * has a vocabulary, the zType formatted where it is a zType without one, and
  * the value itself where the column is free text.
  *
- * A null is the row a question could not name: a seat with no resolved
- * account, a leader whose archetype the save doesn't record, a game with no
- * recorded mode. Those rows are kept rather than dropped, so they need a label
- * that says what they are.
+ * A null is the row a question could not name: a leader whose archetype the
+ * save doesn't record, a game with no recorded mode. Those rows are kept
+ * rather than dropped, so they need a label that says what they are.
+ *
+ * An identity dimension has no such row — the Worker drops the seats that
+ * resolve to no account (PLAYER_USER_ID_SQL, cloud/src/query/catalog.ts) — so
+ * `nullLabel` is only ever reached for a value column.
  */
 export function valueLabel(
 	value: string | number | null,

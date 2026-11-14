@@ -156,6 +156,9 @@ export function compileQuery(
 	const columns: ResultColumn[] = [];
 	const selectParts: string[] = [];
 	const groupParts: string[] = [];
+	// The expressions an identity grouping keys on. Collected in the loop
+	// because the WHERE they constrain is built after it.
+	const identityGroupings: string[] = [];
 
 	let needsPlayer = measure.reach === "player" || measure.unit === "seat";
 	let needsIdentity = false;
@@ -167,6 +170,7 @@ export function compileQuery(
 		if (dim.reach === "identity") {
 			needsPlayer = true;
 			needsIdentity = true;
+			identityGroupings.push(dim.sql);
 		}
 
 		const alias = `d${i}`;
@@ -196,6 +200,30 @@ export function compileQuery(
 
 	const binds: (string | number)[] = [];
 	const whereParts = [`g.is_public = 1`, noChallengeRunsSql("g")];
+
+	// A question grouped by account answers about accounts, so a seat that
+	// resolves to none is out of its corpus.
+	//
+	// Dropped rather than labelled, which is the opposite of what a value
+	// dimension's NULL gets, because the row is not an answer. Every
+	// unresolved seat shares the one NULL key, so SQL collects all of them
+	// into a single group: over the 2026-11-10 snapshot that is one row
+	// holding 702 of the 2,051 seats the `seats` measure counts, 116 distinct
+	// in-save names, 346 AI seats and 356 human ones together. Under the
+	// default `value DESC` it leads a player ranking at 702 against 227 for
+	// the top account, and it names nobody. It is also the only player-facing
+	// surface that would show it — the played-games board joins credited seats
+	// to accounts (stats/handlers.ts), so an unresolved seat produces no row
+	// there either.
+	//
+	// What this costs: a Player grouping no longer sums to the seat total, and
+	// nothing in the response says how many seats were left out.
+	//
+	// The grouping is what needs the predicate. A `player` filter is IN/NOT IN
+	// over user_ids, and NULL satisfies neither.
+	for (const sql of new Set(identityGroupings)) {
+		whereParts.push(`${sql} IS NOT NULL`);
+	}
 
 	// An average is the one aggregate whose answer moves with how many rows
 	// carry the value: a count says DISTINCT over the key its unit names, and a

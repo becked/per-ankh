@@ -210,10 +210,12 @@ describe("identity", () => {
 		]);
 	});
 
-	it("keeps a seat nothing resolves rather than dropping it", async () => {
-		// An answer that quietly omits the seats it could not name reads as a
-		// complete answer and is short. Modelled by seating an AI, which has
-		// no account by construction.
+	it("drops a seat nothing resolves", async () => {
+		// Every unresolved seat shares the one NULL key, so they arrive as a
+		// single group that names nobody and leads the default sort. A question
+		// grouped by account answers about accounts, so they are out of its
+		// corpus. Modelled by seating an AI, which has no account by
+		// construction.
 		const res = await postMultipart({
 			path: "/v1/games",
 			form: await buildUploadFormData({
@@ -230,9 +232,18 @@ describe("identity", () => {
 			"source=player_summaries&dim=player&measure=seats" +
 				"&f=is_human:in:0&sort=dimension_asc",
 		);
-		expect(rows).toEqual([
-			{ player: null, player_id: null, player_slug: null, value: 1 },
-		]);
+		expect(rows).toEqual([]);
+	});
+
+	it("leaves the same seat in a grouping that isn't on the account", async () => {
+		// Only the identity grouping drops it. The seat is still in the corpus,
+		// so a question that doesn't ask who it belongs to still counts it —
+		// which is what keeps the drop a property of the Player column rather
+		// than of the row.
+		const rows = await rowsOf(
+			"source=player_summaries&dim=is_human&measure=seats&sort=dimension_asc",
+		);
+		expect(rows).toContainEqual({ is_human: 0, value: 1 });
 	});
 });
 
