@@ -109,8 +109,16 @@
 		<span class="ml-2 text-tan opacity-60">▼</span>
 	</Select.Trigger>
 	<Select.Portal>
+		<!-- `collisionPadding` is the gutter the list keeps off a viewport edge.
+		     bits-ui's default is 8px, which reads as flush against the page on a
+		     list wide enough to be shifted there — 16 is `px-4`, the page's own
+		     gutter, so a shifted list lines up with the content beside it.
+		     Height is capped at the viewport rather than at a fixed 18rem: a
+		     grouped list spends rows on its headings, and the source picker's
+		     five put it past that cap on a window that has room for all of it. -->
 		<Select.Content
-			class="z-50 max-h-72 overflow-y-auto rounded-lg border border-surface bg-surface-sunken shadow-lg {matchTriggerWidth
+			collisionPadding={16}
+			class="z-50 max-h-[min(28rem,70vh)] overflow-y-auto rounded-lg border border-surface bg-surface-sunken shadow-lg {matchTriggerWidth
 				? 'min-w-[var(--bits-select-anchor-width)]'
 				: ''}"
 		>
@@ -124,11 +132,11 @@
 								{entry.heading}
 							</Select.GroupHeading>
 							{#each entry.options as opt (opt.value)}
-								{@render item(opt)}
+								{@render item(opt, true)}
 							{/each}
 						</Select.Group>
 					{:else}
-						{@render item(entry)}
+						{@render item(entry, false)}
 					{/if}
 				{/each}
 			</Select.Viewport>
@@ -136,12 +144,16 @@
 	</Select.Portal>
 </Select.Root>
 
-{#snippet item(opt: SelectOption)}
+<!-- `indent` steps a grouped option in from its heading, which sits at px-3.
+     An ungrouped list has no heading to step in from, so it keeps px-3. -->
+{#snippet item(opt: SelectOption, indent: boolean)}
 	<Select.Item
 		value={opt.value}
 		label={opt.label}
 		disabled={opt.disabled}
-		class="flex cursor-pointer items-center justify-between px-3 py-1.5 text-sm text-tan data-[disabled]:cursor-default data-[highlighted]:bg-surface-raised data-[disabled]:opacity-40"
+		class="flex cursor-pointer items-center justify-between py-1.5 pr-3 text-sm text-tan data-[disabled]:cursor-default data-[highlighted]:bg-surface-raised data-[disabled]:opacity-40 {indent
+			? 'pl-6'
+			: 'pl-3'}"
 	>
 		{#snippet children({ selected })}
 			<span class="flex min-w-0 items-center gap-1.5">

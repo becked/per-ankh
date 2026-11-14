@@ -53,6 +53,10 @@ export interface CatalogFilter {
 export interface CatalogSource {
 	key: string;
 	label: string;
+	// The heading this source sits under in the builder's picker. Sources
+	// sharing one arrive contiguously, so the picker groups them by walking
+	// the list in order rather than by holding a map of its own.
+	group: string;
 	// One line naming what a row is.
 	grain: string;
 	dimensions: CatalogDimension[];

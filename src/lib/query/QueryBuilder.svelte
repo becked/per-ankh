@@ -17,7 +17,7 @@
 	import PanelInset from "$lib/ui/PanelInset.svelte";
 	import Select from "$lib/ui/Select.svelte";
 	import { INPUT_CLASS } from "$lib/ui/classes";
-	import type { SelectOption } from "$lib/ui/types";
+	import type { SelectGroup, SelectOption } from "$lib/ui/types";
 	import {
 		canonicalQuery,
 		defaultFiltersFor,
@@ -66,8 +66,19 @@
 		source.measures.find((m) => m.key === draft.measure) ?? source.measures[0],
 	);
 
-	const sourceOptions = $derived<SelectOption[]>(
-		catalog.sources.map((s) => ({ value: s.key, label: s.label })),
+	// The picker's headings, built by walking the catalog in order: sources
+	// sharing a group arrive contiguously (pinned in catalog.test.ts), so a
+	// run of them is a group and no second ordering lives here. A map keyed by
+	// heading would be the drift the wire field exists to prevent — a source
+	// added to the catalog would land under no heading and render nowhere.
+	const sourceOptions = $derived<SelectGroup[]>(
+		catalog.sources.reduce<SelectGroup[]>((groups, s) => {
+			const open = groups.at(-1);
+			const option = { value: s.key, label: s.label };
+			if (open?.heading === s.group) open.options.push(option);
+			else groups.push({ heading: s.group, options: [option] });
+			return groups;
+		}, []),
 	);
 	const measureOptions = $derived<SelectOption[]>(
 		source.measures.map((m) => ({ value: m.key, label: m.label })),

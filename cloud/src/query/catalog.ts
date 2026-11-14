@@ -260,6 +260,14 @@ const RANGE_OPS: readonly FilterOp[] = ["gte", "lte"];
 export interface QuerySource {
 	key: string;
 	label: string;
+	// The heading this source sits under in the builder's source picker.
+	// Required rather than optional so a source added later states where it
+	// belongs: `SelectOptions` is a list of groups or a list of bare options
+	// and not a mix, so one ungrouped source would have nowhere to render.
+	// `SOURCE_DEFS` is ordered by group then label, alphabetically, which is
+	// what lets the picker build its groups from this order alone — a run of
+	// one group is that group. Pinned in catalog.test.ts.
+	group: string;
 	table: string;
 	alias: string;
 	// One line naming what a row is, shown above the builder. The grain, in
@@ -646,6 +654,7 @@ const SOURCE_DEFS: QuerySource[] = [
 	{
 		key: "games",
 		label: "Games",
+		group: "Games and players",
 		table: "games",
 		alias: "g",
 		grain: "One row per save uploaded.",
@@ -660,6 +669,7 @@ const SOURCE_DEFS: QuerySource[] = [
 	{
 		key: "player_summaries",
 		label: "Players",
+		group: "Games and players",
 		table: "player_summaries",
 		alias: "ps",
 		grain: "One row per seat in a save — every player, human and AI.",
@@ -670,112 +680,109 @@ const SOURCE_DEFS: QuerySource[] = [
 		filters: [],
 	},
 	{
-		key: "wonder_events",
-		label: "Wonders built",
-		table: "wonder_events",
-		alias: "we",
-		grain:
-			"One row per wonder completed in a save, with who built it and when.",
+		key: "player_family_cities",
+		label: "Family city footprint",
+		group: "Leaders and families",
+		table: "player_family_cities",
+		alias: "pfc",
+		grain: "One row per (seat, family class) — at most three per seat.",
 		joinsPlayer: true,
-		eventKeySql: "g.xml_game_id || ':' || we.wonder",
+		eventKeySql:
+			"g.xml_game_id || ':' || pfc.player_index || ':' || pfc.family_class",
 		dimensions: [
 			{
-				key: "wonder",
-				label: "Wonder",
+				key: "family_class",
+				label: "Family class",
 				reach: "source",
 				type: "enum",
-				sql: "we.wonder",
-				vocabulary: "wonder",
+				sql: "pfc.family_class",
+				vocabulary: "family_class",
 				filterable: true,
 			},
 		],
 		measures: [
 			{
-				key: "wonders_built",
-				label: "Wonders built",
+				key: "family_rows",
+				label: "Seat-family pairs",
 				reach: "source",
 				unit: "event",
-				note: "Distinct (match, wonder) pairs. A wonder is unique within a game, so this counts completions.",
+				note: "Distinct (match, seat, family class) triples.",
 			},
 			{
-				key: "avg_wonder_turn",
-				label: "Average turn completed",
+				key: "avg_family_cities",
+				label: "Average cities of that class",
 				reach: "source",
 				unit: "event",
-				agg: { fn: "AVG", sql: "we.turn" },
-				note: "Averaged over builds, one upload per match.",
+				agg: { fn: "AVG", sql: "pfc.cities" },
+				note: "End-of-game holdings, averaged over rows, one upload per match.",
 			},
 			{
-				key: "earliest_wonder_turn",
-				label: "Earliest turn completed",
+				key: "avg_first_founded",
+				label: "Average first founding turn",
 				reach: "source",
 				unit: "event",
-				agg: { fn: "MIN", sql: "we.turn" },
-				note: "A minimum is unaffected by a match being uploaded twice.",
+				agg: { fn: "AVG", sql: "pfc.first_founded_turn" },
+				note: "Earliest founding among that class's cities, averaged over rows, one upload per match.",
 			},
 		],
 		filters: [
 			{
-				key: "wonder_turn",
-				label: "Turn completed",
+				key: "family_cities",
+				label: "Cities of that class",
 				reach: "source",
 				type: "number",
-				sql: "we.turn",
+				sql: "pfc.cities",
 				ops: RANGE_OPS,
 			},
 		],
 	},
 	{
-		key: "tech_events",
-		label: "Techs researched",
-		table: "tech_events",
-		alias: "te",
-		grain: "One row per tech a seat completed, with the turn it landed.",
+		key: "leader_reigns",
+		label: "Leader reigns",
+		group: "Leaders and families",
+		table: "leader_reigns",
+		alias: "lr",
+		grain:
+			"One row per leader who held a seat's throne, and the turn they took it.",
 		joinsPlayer: true,
-		eventKeySql: "g.xml_game_id || ':' || te.player_index || ':' || te.tech",
+		eventKeySql:
+			"g.xml_game_id || ':' || lr.player_index || ':' || lr.character_xml_id",
 		dimensions: [
 			{
-				key: "tech",
-				label: "Tech",
+				key: "reign_archetype",
+				label: "Leader archetype",
 				reach: "source",
 				type: "enum",
-				sql: "te.tech",
-				vocabulary: "tech",
+				sql: "lr.archetype",
+				vocabulary: "archetype",
 				filterable: true,
+				help: "Null for a leader the save records no archetype for — a child ruler, or a save old enough that the archetype can't be read.",
 			},
 		],
 		measures: [
 			{
-				key: "techs_researched",
-				label: "Techs researched",
+				key: "reigns",
+				label: "Reigns",
 				reach: "source",
 				unit: "event",
-				note: "Distinct (match, seat, tech) triples.",
+				note: "Distinct (match, seat, leader) triples — successors included, unlike the starting-ruler columns on a seat.",
 			},
 			{
-				key: "avg_tech_turn",
-				label: "Average turn researched",
+				key: "avg_accession_turn",
+				label: "Average accession turn",
 				reach: "source",
 				unit: "event",
-				agg: { fn: "AVG", sql: "te.turn" },
-				note: "Averaged over techs researched, one upload per match.",
-			},
-			{
-				key: "earliest_tech_turn",
-				label: "Earliest turn researched",
-				reach: "source",
-				unit: "event",
-				agg: { fn: "MIN", sql: "te.turn" },
-				note: "A minimum is unaffected by a match being uploaded twice.",
+				agg: { fn: "AVG", sql: "lr.start_turn" },
+				note: "Averaged over reigns, one upload per match.",
 			},
 		],
 		filters: [
 			{
-				key: "tech_turn",
-				label: "Turn researched",
+				key: "accession_turn",
+				label: "Accession turn",
 				reach: "source",
 				type: "number",
-				sql: "te.turn",
+				sql: "lr.start_turn",
 				ops: RANGE_OPS,
 			},
 		],
@@ -783,6 +790,7 @@ const SOURCE_DEFS: QuerySource[] = [
 	{
 		key: "law_events",
 		label: "Laws adopted",
+		group: "Techs and laws",
 		table: "law_events",
 		alias: "le",
 		grain:
@@ -838,107 +846,57 @@ const SOURCE_DEFS: QuerySource[] = [
 		],
 	},
 	{
-		key: "leader_reigns",
-		label: "Leader reigns",
-		table: "leader_reigns",
-		alias: "lr",
-		grain:
-			"One row per leader who held a seat's throne, and the turn they took it.",
+		key: "tech_events",
+		label: "Techs researched",
+		group: "Techs and laws",
+		table: "tech_events",
+		alias: "te",
+		grain: "One row per tech a seat completed, with the turn it landed.",
 		joinsPlayer: true,
-		eventKeySql:
-			"g.xml_game_id || ':' || lr.player_index || ':' || lr.character_xml_id",
+		eventKeySql: "g.xml_game_id || ':' || te.player_index || ':' || te.tech",
 		dimensions: [
 			{
-				key: "reign_archetype",
-				label: "Leader archetype",
+				key: "tech",
+				label: "Tech",
 				reach: "source",
 				type: "enum",
-				sql: "lr.archetype",
-				vocabulary: "archetype",
-				filterable: true,
-				help: "Null for a leader the save records no archetype for — a child ruler, or a save old enough that the archetype can't be read.",
-			},
-		],
-		measures: [
-			{
-				key: "reigns",
-				label: "Reigns",
-				reach: "source",
-				unit: "event",
-				note: "Distinct (match, seat, leader) triples — successors included, unlike the starting-ruler columns on a seat.",
-			},
-			{
-				key: "avg_accession_turn",
-				label: "Average accession turn",
-				reach: "source",
-				unit: "event",
-				agg: { fn: "AVG", sql: "lr.start_turn" },
-				note: "Averaged over reigns, one upload per match.",
-			},
-		],
-		filters: [
-			{
-				key: "accession_turn",
-				label: "Accession turn",
-				reach: "source",
-				type: "number",
-				sql: "lr.start_turn",
-				ops: RANGE_OPS,
-			},
-		],
-	},
-	{
-		key: "player_family_cities",
-		label: "Family city footprint",
-		table: "player_family_cities",
-		alias: "pfc",
-		grain: "One row per (seat, family class) — at most three per seat.",
-		joinsPlayer: true,
-		eventKeySql:
-			"g.xml_game_id || ':' || pfc.player_index || ':' || pfc.family_class",
-		dimensions: [
-			{
-				key: "family_class",
-				label: "Family class",
-				reach: "source",
-				type: "enum",
-				sql: "pfc.family_class",
-				vocabulary: "family_class",
+				sql: "te.tech",
+				vocabulary: "tech",
 				filterable: true,
 			},
 		],
 		measures: [
 			{
-				key: "family_rows",
-				label: "Seat-family pairs",
+				key: "techs_researched",
+				label: "Techs researched",
 				reach: "source",
 				unit: "event",
-				note: "Distinct (match, seat, family class) triples.",
+				note: "Distinct (match, seat, tech) triples.",
 			},
 			{
-				key: "avg_family_cities",
-				label: "Average cities of that class",
+				key: "avg_tech_turn",
+				label: "Average turn researched",
 				reach: "source",
 				unit: "event",
-				agg: { fn: "AVG", sql: "pfc.cities" },
-				note: "End-of-game holdings, averaged over rows, one upload per match.",
+				agg: { fn: "AVG", sql: "te.turn" },
+				note: "Averaged over techs researched, one upload per match.",
 			},
 			{
-				key: "avg_first_founded",
-				label: "Average first founding turn",
+				key: "earliest_tech_turn",
+				label: "Earliest turn researched",
 				reach: "source",
 				unit: "event",
-				agg: { fn: "AVG", sql: "pfc.first_founded_turn" },
-				note: "Earliest founding among that class's cities, averaged over rows, one upload per match.",
+				agg: { fn: "MIN", sql: "te.turn" },
+				note: "A minimum is unaffected by a match being uploaded twice.",
 			},
 		],
 		filters: [
 			{
-				key: "family_cities",
-				label: "Cities of that class",
+				key: "tech_turn",
+				label: "Turn researched",
 				reach: "source",
 				type: "number",
-				sql: "pfc.cities",
+				sql: "te.turn",
 				ops: RANGE_OPS,
 			},
 		],
@@ -946,6 +904,7 @@ const SOURCE_DEFS: QuerySource[] = [
 	{
 		key: "game_player_turn",
 		label: "Per-turn series",
+		group: "Turn by turn",
 		table: "game_player_turn",
 		alias: "gpt",
 		grain:
@@ -1034,6 +993,7 @@ const SOURCE_DEFS: QuerySource[] = [
 	{
 		key: "game_wonder_pool",
 		label: "Wonders available",
+		group: "Wonders",
 		table: "game_wonder_pool",
 		alias: "gwp",
 		grain:
@@ -1061,6 +1021,63 @@ const SOURCE_DEFS: QuerySource[] = [
 			},
 		],
 		filters: [],
+	},
+	{
+		key: "wonder_events",
+		label: "Wonders built",
+		group: "Wonders",
+		table: "wonder_events",
+		alias: "we",
+		grain:
+			"One row per wonder completed in a save, with who built it and when.",
+		joinsPlayer: true,
+		eventKeySql: "g.xml_game_id || ':' || we.wonder",
+		dimensions: [
+			{
+				key: "wonder",
+				label: "Wonder",
+				reach: "source",
+				type: "enum",
+				sql: "we.wonder",
+				vocabulary: "wonder",
+				filterable: true,
+			},
+		],
+		measures: [
+			{
+				key: "wonders_built",
+				label: "Wonders built",
+				reach: "source",
+				unit: "event",
+				note: "Distinct (match, wonder) pairs. A wonder is unique within a game, so this counts completions.",
+			},
+			{
+				key: "avg_wonder_turn",
+				label: "Average turn completed",
+				reach: "source",
+				unit: "event",
+				agg: { fn: "AVG", sql: "we.turn" },
+				note: "Averaged over builds, one upload per match.",
+			},
+			{
+				key: "earliest_wonder_turn",
+				label: "Earliest turn completed",
+				reach: "source",
+				unit: "event",
+				agg: { fn: "MIN", sql: "we.turn" },
+				note: "A minimum is unaffected by a match being uploaded twice.",
+			},
+		],
+		filters: [
+			{
+				key: "wonder_turn",
+				label: "Turn completed",
+				reach: "source",
+				type: "number",
+				sql: "we.turn",
+				ops: RANGE_OPS,
+			},
+		],
 	},
 ];
 
@@ -1163,6 +1180,9 @@ export interface CatalogFilterWire {
 export interface CatalogSourceWire {
 	key: string;
 	label: string;
+	// The picker heading. Sources sharing one arrive contiguously, so a client
+	// groups them by walking the list.
+	group: string;
 	grain: string;
 	dimensions: CatalogDimensionWire[];
 	measures: CatalogMeasureWire[];
@@ -1201,6 +1221,7 @@ export function serializeCatalog(
 		sources: SOURCES.map((s) => ({
 			key: s.key,
 			label: s.label,
+			group: s.group,
 			grain: s.grain,
 			dimensions: s.dimensions.map((d) => ({
 				key: d.key,

@@ -16,6 +16,21 @@ describe("the catalog's shape", () => {
 		expect(new Set(keys).size).toBe(keys.length);
 	});
 
+	it("lists the sources by group then label, alphabetically", () => {
+		// This order *is* the picker's: the builder renders the list as it
+		// arrives, so a source appended to SOURCE_DEFS would otherwise land
+		// out of order, or — worse — open a second heading with a name an
+		// earlier group already used. Alphabetical both levels down, which
+		// also makes the first entry `games`: the draft a visitor with no URL
+		// gets reads `catalog.sources[0]` (selection.ts).
+		const order = SOURCES.map((s) => [s.group, s.label] as const);
+		const sorted = [...order].sort(
+			(a, b) =>
+				a[0].localeCompare(b[0], "en") || a[1].localeCompare(b[1], "en"),
+		);
+		expect(order).toEqual(sorted);
+	});
+
 	for (const source of SOURCES) {
 		describe(source.key, () => {
 			it("keys its dimensions, measures and filters uniquely", () => {
@@ -106,6 +121,15 @@ describe("the serialized catalog", () => {
 
 	it("covers every source", () => {
 		expect(wire.sources.map((s) => s.key)).toEqual(SOURCES.map((s) => s.key));
+	});
+
+	it("names a picker group on every source", () => {
+		// The picker has no ungrouped slot to fall back to — `SelectOptions` is
+		// a list of groups or a list of bare options, not a mix — so a blank
+		// group is a source that renders nowhere.
+		for (const s of wire.sources) {
+			expect(s.group.length, s.key).toBeGreaterThan(0);
+		}
 	});
 
 	it("publishes the bounds a client has to respect", () => {
