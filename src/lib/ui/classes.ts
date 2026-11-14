@@ -68,8 +68,8 @@ export const FRAMED_TABLE_ROW =
 // ─── The card-row table ──────────────────────────────────────────────
 //
 // The other family, which the game-detail data tabs and the ad-hoc query's
-// results table use: a blue-gray frame holding one rounded card row per
-// record, under a sunken header bar. Round the first and last cell of each row inline with
+// results table use: a frame holding one rounded card row per record, under a
+// sunken header bar. Round the first and last cell of each row inline with
 // `rounded-l-lg border-l` / `rounded-r-lg border-r`.
 //
 // The frame is a flex row because the data tabs stand a filter column beside
@@ -79,7 +79,15 @@ export const FRAMED_TABLE_ROW =
 // Here rather than in $lib/game-detail/helpers because a surface outside the
 // game-detail tabs needs these four strings and not that module's baked
 // tables.
-export const TABLE_FRAME_CLASS = "flex gap-4 rounded-lg bg-blue-gray p-3";
+const TABLE_FRAME_BASE = "flex gap-4 rounded-lg p-3";
+export const TABLE_FRAME_CLASS = `${TABLE_FRAME_BASE} bg-blue-gray`;
+// The same frame on the inset step, for a table that sits inside a Panel
+// rather than on the page: Explore's results, where the frame is a sibling of
+// the builder's PanelInset boxes across the gap and reads as one of them. Two
+// `bg-` utilities in one class attribute resolve by Tailwind's emission order
+// and not by the order they are written, so the surface is picked here rather
+// than layered on by the caller.
+export const TABLE_FRAME_INSET_CLASS = `${TABLE_FRAME_BASE} bg-surface-deep`;
 export const TABLE_CLASS = "w-full border-separate border-spacing-y-1.5";
 export const TABLE_HEADER_TH_CLASS =
 	"sticky -top-4 z-10 cursor-pointer select-none whitespace-nowrap border-y border-surface bg-surface-sunken px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wide text-gray-100 shadow-lg transition-colors hover:text-orange";

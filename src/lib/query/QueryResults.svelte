@@ -19,7 +19,7 @@
 	// names one (PLAYER_USER_ID_SQL, cloud/src/query/catalog.ts).
 
 	import ProfileLink from "$lib/ProfileLink.svelte";
-	import { TABLE_CLASS, TABLE_FRAME_CLASS } from "$lib/ui/classes";
+	import { TABLE_CLASS, TABLE_FRAME_INSET_CLASS } from "$lib/ui/classes";
 	import type { CatalogSource, QueryCatalog, QueryResult } from "./types";
 	import ValueIcon from "./ValueIcon.svelte";
 	import { valueLabel, vocabularyFor } from "./vocabularies";
@@ -86,7 +86,7 @@
 		"px-3 py-1 text-left text-[10px] font-bold uppercase tracking-wide text-gray-100";
 </script>
 
-<div class={TABLE_FRAME_CLASS}>
+<div class={TABLE_FRAME_INSET_CLASS}>
 	<div class="min-w-0 flex-1 overflow-x-auto">
 		<table class="{TABLE_CLASS} text-sm">
 			<thead>
