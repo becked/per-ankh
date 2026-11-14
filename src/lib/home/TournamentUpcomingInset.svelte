@@ -31,6 +31,7 @@
 	import PlayerAvatar from "$lib/tournament/PlayerAvatar.svelte";
 	import { liveAndUpcoming } from "$lib/tournament/schedule";
 	import type { SlotMaps } from "$lib/tournament/slot-identity";
+	import { clockZone } from "$lib/tournament/zone-preference.svelte";
 	import { formatScheduledInZone } from "$lib/utils/formatting";
 
 	let { matches, slots }: { matches: TournamentMatch[]; slots: SlotMaps } =
@@ -56,11 +57,18 @@
 		].slice(0, MAX_ROWS),
 	);
 
-	// The viewer's own clock only, unlike the tournament pages' UTC-primary
-	// rendering: this is a glance surface, and the zone a reader can act on
-	// without converting is their own. Absolute, not relative, because "in 1 day"
-	// is what a reader has to translate and the exact instant is what they came
-	// for.
+	// The viewer's own clock preference, both halves of it — the same pa_zone and
+	// pa_clock the tournament pages' header toggles write, read here from their
+	// module singletons because this inset sits outside the [slug] layout and has
+	// no ZoneClock context to reach. Unset is the viewer's own zone, which is the
+	// right default for a glance surface: the clock a reader can act on without
+	// converting is their own. Once they have said otherwise, this honours it —
+	// a clock set to UTC on a tournament page reading GMT+3 here was issue #368.
+	//
+	// There is no toggle here: the home page reads the preference, it never writes
+	// it. Absolute, not relative, because "in 1 day" is what a reader has to
+	// translate and the exact instant is what they came for.
+	const zone = $derived(clockZone());
 	const use12Hour = $derived(clockFaceIs12Hour());
 
 	function side(m: TournamentMatch, s: "a" | "b"): string {
@@ -101,7 +109,7 @@
 							>LIVE</span
 						>{/if}{formatScheduledInZone(
 						np.part.scheduled_at,
-						"local",
+						zone,
 						use12Hour,
 					)}{#if np.split}
 						&middot; Part {np.partNumber}{/if}

@@ -1,9 +1,10 @@
 // The one place the app's client-side UI preferences agree on cookie policy:
 // app-global (path=/), a year long, SameSite=Lax, and no HttpOnly since JS both
-// writes and reads them. The UTC/local zone (pa_zone, tournament/zone-preference)
-// and the 12/24-hour clock face (pa_clock, stores/clock-face) both ride it, so
-// the policy can't drift between them — a change to the max-age or the SameSite
-// stance lands on every preference at once.
+// writes and reads them. The UTC/local zone (pa_zone,
+// tournament/zone-preference.svelte) and the 12/24-hour clock face (pa_clock,
+// stores/clock-face) both ride it, so the policy can't drift between them — a
+// change to the max-age or the SameSite stance lands on every preference at
+// once.
 //
 // Values come back raw and each caller narrows with its own type guard, so an
 // unset, unknown, or hand-edited cookie falls through to that surface's default
