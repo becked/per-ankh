@@ -2,10 +2,10 @@
 	// /stats/explore — Explore, the second view of Global Stats: the builder
 	// over the catalog, and the rows it returns.
 	//
-	// The page is two panels side by side: the query on the left, the results
-	// filling the rest. Nothing is asked until "Ask" is pressed, so arriving
-	// here costs no read budget and the first thing on screen is an empty
-	// builder rather than a number nobody asked for.
+	// The page is two panels side by side, each on its own half: the query on
+	// the left, the results on the right. Nothing is asked until "Ask" is
+	// pressed, so arriving here costs no read budget and the first thing on
+	// screen is an empty builder rather than a number nobody asked for.
 	//
 	// Both panels render on arrival, and so does the frame the rows sit in —
 	// empty, at a height that reads as a waiting table rather than as a seam.
@@ -49,7 +49,7 @@
 			<StatsHeader />
 
 			<div
-				class="mx-auto grid max-w-screen-2xl grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,24rem)_minmax(0,1fr)]"
+				class="mx-auto grid max-w-screen-2xl grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"
 			>
 				<Panel title="Query">
 					<QueryBuilder catalog={data.catalog} draft={data.draft} />
