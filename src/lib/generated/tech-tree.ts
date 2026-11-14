@@ -3,8 +3,10 @@
 
 // The techs on the tech tree, in column-then-row order. The bonus and
 // upgrade cards a tech hands out are TechTypes too and are not here:
-// the game separates them in `Game.randomizeTechs`'s `isTechShown`
-// (Game.cs:8274), which is `!mbDisable && !mbHide`.
+// the tree draws no node for a tech whose `mbHide` is set
+// (`player?.isTechHide(tech) ?? tech.mbHide`,
+// TechTreePanel.BuildTreeLayout), and this filter also drops
+// `mbDisable`, which no entry in this build sets on its own.
 //
 // A roster only — `techName` ($lib/game-detail/helpers) is the label.
 export const TREE_TECHS: readonly string[] = [

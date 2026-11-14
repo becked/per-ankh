@@ -6,12 +6,24 @@
 // (TECH_STONECUTTING_BONUS_STONE, TECH_SHIP_UPGRADE) — real TechTypes that a
 // save records and `tech_events` stores, but never a research choice.
 //
-// The game tells them apart in `Game.randomizeTechs`'s local `isTechShown`
-// (Game.cs:8274) — the method that fills the tree's columns — which is
-// `!mbDisable && !mbHide`, and that is the filter here. NOT <iColumn>: it
-// separates the same 49 in this build only by accident, because `miColumn`
-// defaults to 0 (InfoTech, InfoBase.cs:6686) and a bonus card omitting the tag
-// is indistinguishable at runtime from a column-0 tech like TECH_IRONWORKING.
+// The tree's own node test is `player?.isTechHide(tech) ?? tech.mbHide`, in
+// `TechTreePanel.BuildTreeLayout` (TechTreePanel.cs:649, the decompiled
+// client): a tech that answers true is skipped and gets no node.
+// `Player.isTechHide` (Player.cs:20529) is `mbHide || !isTechValid`, so the
+// part of it that does not depend on a player's own game is `mbHide`.
+//
+// The filter here is `!mbDisable && !mbHide`, which is the test
+// `Game.randomizeTechs`'s local `isTechShown` (Game.cs:8274) applies — that
+// function remaps prereqs within a column rather than filling the tree, so it
+// is a second reader of the same flags and not the tree itself. Both select the
+// same 49 in this build: of tech.xml's 115 entries, 66 carry <bHide> and the 3
+// that carry <bDisable> all carry <bHide> too, so no entry is separated by
+// `mbDisable` alone.
+//
+// NOT <iColumn>: it separates the same 49 in this build only by accident,
+// because `miColumn` defaults to 0 (InfoTech, InfoBase.cs:6686) and a bonus
+// card omitting the tag is indistinguishable at runtime from a column-0 tech
+// like TECH_IRONWORKING.
 //
 // Why this is not TECH_NAMES: that table is the display-name DIVERGENCES, 66
 // of whose 67 keys are bonus cards, and TECH_BATTLELINE is the only tree tech
@@ -107,8 +119,10 @@ async function main(): Promise<void> {
 		"",
 		"// The techs on the tech tree, in column-then-row order. The bonus and",
 		"// upgrade cards a tech hands out are TechTypes too and are not here:",
-		"// the game separates them in `Game.randomizeTechs`'s `isTechShown`",
-		"// (Game.cs:8274), which is `!mbDisable && !mbHide`.",
+		"// the tree draws no node for a tech whose `mbHide` is set",
+		"// (`player?.isTechHide(tech) ?? tech.mbHide`,",
+		"// TechTreePanel.BuildTreeLayout), and this filter also drops",
+		"// `mbDisable`, which no entry in this build sets on its own.",
 		"//",
 		"// A roster only — `techName` ($lib/game-detail/helpers) is the label.",
 		"export const TREE_TECHS: readonly string[] = [",

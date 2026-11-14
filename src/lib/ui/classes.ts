@@ -19,6 +19,21 @@ export const DESTRUCTIVE_BTN =
 export const INPUT_CLASS =
 	"rounded border border-input bg-surface-raised p-1.5 focus:border-input-focus focus:outline-none";
 
+// PRIMARY_BTN's surface at the size a control inside a row of inputs takes:
+// same ramp and same hover step, smaller padding and type, and no bold. Here
+// beside it so the two move together when the ramp does.
+export const COMPACT_BTN =
+	"rounded bg-surface-raised px-2 py-1 text-xs text-tan transition-colors hover:bg-surface-raised-hover disabled:opacity-40";
+
+// One item of a thumbless segmented group: off sits at the panel's surface, on
+// fills to the step above it. `SegmentedChips` ($lib/ui/SegmentedChips.svelte)
+// is the component form, and the two Yields mode toggles
+// ($lib/game-detail/YieldsTab.svelte, $lib/stats/YieldsStatsPanel.svelte) read
+// the tokens directly because their groups are markup on a Toolbar rather than
+// a ToggleGroup of their own.
+export const TOGGLE_ITEM_CLASS =
+	"px-2.5 py-1 text-xs text-tan transition-colors data-[state=off]:bg-surface data-[state=on]:bg-surface-raised";
+
 // ─── The framed table ────────────────────────────────────────────────
 //
 // The framed-box table treatment the tournament match table introduced and

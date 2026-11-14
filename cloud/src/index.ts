@@ -1357,30 +1357,34 @@ const ROUTES: RouteSpec[] = [
 	// question may be composed from; /v1/query runs one. Two routes rather than
 	// one payload because the builder needs the vocabulary before it can
 	// compose anything, and the vocabulary changes only when this Worker is
-	// deployed where an answer changes whenever a game is uploaded.
+	// deployed, a tournament's first match is reported or an account's first
+	// public game lands, where an answer changes whenever a game is uploaded.
 	//
-	// The catalog is public, sessionless and outside every read budget: the
-	// columns are constant data, and the one roster it reads from D1 — the
-	// tournaments a question can be asked about — is the same bytes for every
-	// caller.
+	// The catalog is public and sessionless — the columns are constant data and
+	// both rosters it reads from D1 are the same bytes for every caller — and on
+	// the same per-IP budget a question spends (`AD_HOC_QUERY_PER_HOUR`),
+	// because reading those rosters is two scans and the one over `users` is
+	// the more expensive of the two.
 	{
 		method: "GET",
 		match: { kind: "path", path: "/v1/query/catalog" },
 		route: "GET /v1/query/catalog",
 		handler: (r, e) => handleQueryCatalog(r, e),
-		// Constant data serialized from a module, plus a roster that is
-		// viewer-independent by construction (TOURNAMENT_ROSTER_SQL covers only
-		// tournaments with a played match, which is a subset of what any
-		// caller may see). There is no second body to serve.
+		// Constant data serialized from a module, plus two rosters that are
+		// viewer-independent by construction: TOURNAMENT_ROSTER_SQL covers only
+		// tournaments with a played match and PLAYER_ROSTER_SQL only accounts a
+		// seat in the public corpus resolves to, both subsets of what any
+		// caller may see. There is no second body to serve.
 		sharedCache: true,
 	},
 	// One composed question. Session-gated for the reason `/v1/stats` is — the
 	// payload is viewer-independent (`is_public = 1` is the whole visibility
 	// rule, and the catalog is the whole column allowlist), so what the session
-	// gates is who may spend an ad-hoc aggregation — and checked ahead of its
-	// own per-IP budget (`AD_HOC_QUERY_PER_HOUR`), which is not a share of
-	// `global_stats_view`: this is the endpoint whose cost per request the
-	// caller chooses, so its ceiling has to move on its own.
+	// gates is who may spend an ad-hoc aggregation — and checked ahead of this
+	// surface's per-IP budget (`AD_HOC_QUERY_PER_HOUR`, shared with the catalog
+	// above), which is not a share of `global_stats_view`: this is the endpoint
+	// whose cost per request the caller chooses, so its ceiling has to move on
+	// its own.
 	{
 		method: "GET",
 		match: { kind: "path", path: "/v1/query" },

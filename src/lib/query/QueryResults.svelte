@@ -9,6 +9,11 @@
 	// against 475 for Magnificent, and hiding it puts Magnificent at 475 of
 	// 510 where the groups sum to 939.
 	//
+	// Mounted only for an answer that has rows: the empty answer is the page's
+	// (src/routes/stats/explore/+page.svelte), which draws it in the same frame
+	// the rows land in. So there is no empty branch here, and a table this
+	// component drew is never a table with no body.
+	//
 	// The one NULL with no row is an identity dimension's. The Worker drops
 	// the seats that resolve to no account, so every row of the Player column
 	// names one (PLAYER_USER_ID_SQL, cloud/src/query/catalog.ts).
@@ -74,66 +79,64 @@
 		"px-3 py-1 text-left text-[10px] font-bold uppercase tracking-wide text-gray-100";
 </script>
 
-{#if result.rows.length > 0}
-	<div class={TABLE_FRAME_CLASS}>
-		<div class="min-w-0 flex-1 overflow-x-auto">
-			<table class="{TABLE_CLASS} text-sm">
-				<thead>
+<div class={TABLE_FRAME_CLASS}>
+	<div class="min-w-0 flex-1 overflow-x-auto">
+		<table class="{TABLE_CLASS} text-sm">
+			<thead>
+				<tr>
+					{#each dimensions as column (column.key)}
+						<th scope="col" class={HEAD}>{column.label}</th>
+					{/each}
+					{#if measure}
+						<th scope="col" class="{HEAD} text-right">{measure.label}</th>
+					{/if}
+				</tr>
+			</thead>
+			<tbody>
+				{#each result.rows as row, i (i)}
 					<tr>
-						{#each dimensions as column (column.key)}
-							<th scope="col" class={HEAD}>{column.label}</th>
-						{/each}
-						{#if measure}
-							<th scope="col" class="{HEAD} text-right">{measure.label}</th>
-						{/if}
-					</tr>
-				</thead>
-				<tbody>
-					{#each result.rows as row, i (i)}
-						<tr>
-							{#each dimensions as column, c (column.key)}
-								<td
-									class="bg-surface px-3 py-2 text-left {isIdentity(column.key)
-										? 'font-semibold text-gray-200'
-										: 'text-tan'} {c === 0 ? 'rounded-l-lg' : ''}"
-								>
-									{#if isIdentity(column.key)}
-										<!-- The account's effective display name, which the
+						{#each dimensions as column, c (column.key)}
+							<td
+								class="bg-surface px-3 py-2 text-left {isIdentity(column.key)
+									? 'font-semibold text-gray-200'
+									: 'text-tan'} {c === 0 ? 'rounded-l-lg' : ''}"
+							>
+								{#if isIdentity(column.key)}
+									<!-- The account's effective display name, which the
 									     Worker selects as this column; `users.display_name` is
 									     NOT NULL, so the cell always has a name to print. The
 									     weight and colour are on the cell, not here: `class`
 									     styles the anchor only, so a row ProfileLink renders
 									     bare would otherwise sit lighter than the rows that
 									     link. -->
-										<ProfileLink
-											userId={asString(row[`${column.key}_id`])}
-											slug={asString(row[`${column.key}_slug`])}
-											class="transition-colors hover:text-orange"
-										>
-											{row[column.key]}
-										</ProfileLink>
-									{:else}
-										{valueLabel(
-											row[column.key],
-											column.type,
-											vocabularyOf(column.key),
-											"Not recorded",
-											rosters,
-										)}
-									{/if}
-								</td>
-							{/each}
-							{#if measure}
-								<td
-									class="{CELL} rounded-r-lg bg-surface font-bold text-gray-200"
-								>
-									{formatMeasure(row[measure.key])}
-								</td>
-							{/if}
-						</tr>
-					{/each}
-				</tbody>
-			</table>
-		</div>
+									<ProfileLink
+										userId={asString(row[`${column.key}_id`])}
+										slug={asString(row[`${column.key}_slug`])}
+										class="transition-colors hover:text-orange"
+									>
+										{row[column.key]}
+									</ProfileLink>
+								{:else}
+									{valueLabel(
+										row[column.key],
+										column.type,
+										vocabularyOf(column.key),
+										"Not recorded",
+										rosters,
+									)}
+								{/if}
+							</td>
+						{/each}
+						{#if measure}
+							<td
+								class="{CELL} rounded-r-lg bg-surface font-bold text-gray-200"
+							>
+								{formatMeasure(row[measure.key])}
+							</td>
+						{/if}
+					</tr>
+				{/each}
+			</tbody>
+		</table>
 	</div>
-{/if}
+</div>

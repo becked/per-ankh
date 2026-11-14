@@ -73,7 +73,6 @@ interface QueryBody {
 	columns: { key: string; label: string; role: string }[];
 	rows: Record<string, string | number | null>[];
 	row_count: number;
-	truncated: boolean;
 	measure: { key: string; unit: string };
 }
 
@@ -148,6 +147,65 @@ describe("the catalog's tournament roster", () => {
 		const games = body.sources.find((s) => s.key === "games");
 		const filter = games?.filters.find((f) => f.key === "tournament");
 		expect(filter?.vocabulary).toBe("tournament");
+	});
+});
+
+describe("the catalog's player roster", () => {
+	it("offers the accounts a seat resolves to and no other", async () => {
+		// PLAYER_ROSTER_SQL is the identity filter's own predicate read the
+		// other way round, the way the tournament roster is: an account no
+		// public seat resolves to is a value that selects nothing. Both of the
+		// fixture's players are in it — each claimed a seat in their own upload
+		// — and an account that has uploaded nothing is not.
+		const stranger = await makeUser({ displayName: "Stranger" });
+
+		const res = await request.get({ path: "/v1/query/catalog" });
+		expect(res.status).toBe(200);
+		const body = await res.json<{
+			rosters: Record<string, { value: string; label: string }[]>;
+			sources: {
+				key: string;
+				filters: { key: string; vocabulary?: string }[];
+			}[];
+		}>();
+
+		expect(body.rosters.player).toEqual([
+			{ value: alice.userId, label: "Alice" },
+			{ value: bob.userId, label: "Bob" },
+		]);
+		expect(body.rosters.player.map((o) => o.value)).not.toContain(
+			stranger.userId,
+		);
+
+		// And the filter names the roster, or the builder has one it never
+		// looks for.
+		const seats = body.sources.find((s) => s.key === "player_summaries");
+		const filter = seats?.filters.find((f) => f.key === "player");
+		expect(filter?.vocabulary).toBe("player");
+	});
+
+	it("labels an account by the alias an operator set", async () => {
+		// The effective display name (displayNameSql), which is what the rest
+		// of the site shows for that account — not the stored display_name the
+		// roster would read off `users` alone.
+		await env.SHARE_DB.prepare(`UPDATE users SET alias = ? WHERE user_id = ?`)
+			.bind("Alias Of Bob", bob.userId)
+			.run();
+		try {
+			const res = await request.get({ path: "/v1/query/catalog" });
+			const body = await res.json<{
+				rosters: Record<string, { value: string; label: string }[]>;
+			}>();
+			expect(
+				body.rosters.player.find((o) => o.value === bob.userId)?.label,
+			).toBe("Alias Of Bob");
+		} finally {
+			await env.SHARE_DB.prepare(
+				`UPDATE users SET alias = NULL WHERE user_id = ?`,
+			)
+				.bind(bob.userId)
+				.run();
+		}
 	});
 });
 
@@ -302,16 +360,19 @@ describe("the response", () => {
 		expect(body.measure.unit).toBe("match");
 	});
 
-	it("says when the row cap cut the answer short", async () => {
+	it("bounds the answer by the row cap", async () => {
+		// The cap is what the answer says about itself: there is no truncation
+		// flag on the response, so the only claim here is that a selection
+		// never returns more groups than it asked for.
 		const full = await ask("source=player_summaries&dim=nation&measure=seats");
-		expect((await full.json<QueryBody>()).truncated).toBe(false);
+		expect((await full.json<QueryBody>()).rows.length).toBeGreaterThan(1);
 
 		const capped = await ask(
 			"source=player_summaries&dim=nation&measure=seats&limit=1",
 		);
 		const body = await capped.json<QueryBody>();
 		expect(body.rows).toHaveLength(1);
-		expect(body.truncated).toBe(true);
+		expect(body.row_count).toBe(1);
 	});
 
 	it("is storable by a shared cache, with no browser cache", async () => {

@@ -5,17 +5,22 @@
 	// inside a row of other inputs rather than heading a panel — SegmentedSwitch
 	// is heavier on purpose and reads as the thing the panel is switched by.
 	//
-	// Hand-rolled twice before this, with the item tokens copied between them:
-	// game detail's Specialists kind filter and the Yields tab's Per Turn /
-	// Cumulative toggle. src/CLAUDE.md asks for the next copy to be this
-	// extraction, so the tokens below are theirs verbatim; those two still
-	// carry their own markup.
+	// Hand-rolled three times before this, with the item tokens copied between
+	// them: game detail's Specialists kind filter, which is now this
+	// component's one consumer, and the two Per Turn / Cumulative toggles in
+	// YieldsTab and YieldsStatsPanel, which still carry their own markup — each
+	// is a group inside a wider toolbar rather than a control of its own, and
+	// the stats one's toolbar holds two more multi-select groups on the same
+	// tokens. Those tokens are TOGGLE_ITEM_CLASS, read from $lib/ui/classes by
+	// all three, so the shape has one definition even where the markup does
+	// not.
 	//
 	// Unlike SegmentedSwitch, the lit item can be toggled back off. bits-ui
 	// reports that as the empty string and this hands back `null`, which is
 	// the state a caller needs where the group is a shortcut for a value that
 	// can also be entered some other way.
 	import { ToggleGroup } from "bits-ui";
+	import { TOGGLE_ITEM_CLASS } from "./classes";
 
 	let {
 		items,
@@ -33,9 +38,6 @@
 		// Container extras: the margins and width the caller's row needs.
 		class?: string;
 	} = $props();
-
-	const ITEM =
-		"px-2.5 py-1 text-xs text-tan transition-colors data-[state=off]:bg-surface data-[state=on]:bg-surface-raised";
 </script>
 
 <ToggleGroup.Root
@@ -50,7 +52,7 @@
 			value={item.key}
 			class="{i === 0 ? 'rounded-l' : ''} {i === items.length - 1
 				? 'rounded-r'
-				: ''} {ITEM}"
+				: ''} {TOGGLE_ITEM_CLASS}"
 		>
 			{item.label}
 		</ToggleGroup.Item>

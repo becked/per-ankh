@@ -7,7 +7,7 @@
 	// The draft is local state and the URL is the question. They are separate
 	// deliberately: a filter value is typed a character at a time, and a page
 	// that navigated on each keystroke would spend a read budget per letter.
-	// "Run" is what makes a draft a question, and it writes the canonical URL —
+	// "Ask" is what makes a draft a question, and it writes the canonical URL —
 	// so the address bar, the link somebody pastes and the edge-cache key are
 	// one string.
 
@@ -16,7 +16,7 @@
 	import Combobox from "$lib/ui/Combobox.svelte";
 	import PanelInset from "$lib/ui/PanelInset.svelte";
 	import Select from "$lib/ui/Select.svelte";
-	import { INPUT_CLASS } from "$lib/ui/classes";
+	import { COMPACT_BTN, INPUT_CLASS } from "$lib/ui/classes";
 	import type { SelectGroup, SelectOption } from "$lib/ui/types";
 	import {
 		canonicalQuery,
@@ -401,8 +401,6 @@
 	// padding utilities in one class attribute are decided by Tailwind's
 	// emission order and not by the order they are written in (see Select).
 	const INPUT = `${INPUT_CLASS} text-xs text-tan disabled:opacity-50`;
-	const GHOST =
-		"rounded bg-surface-raised px-2 py-1 text-xs text-tan transition-colors hover:bg-surface-raised-hover disabled:opacity-40";
 	const ASK =
 		"rounded bg-orange px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-orange/80 disabled:opacity-40";
 </script>
@@ -449,7 +447,7 @@
 							/>
 							<button
 								type="button"
-								class={GHOST}
+								class={COMPACT_BTN}
 								aria-label="Remove grouping"
 								onclick={() =>
 									patch({
@@ -463,7 +461,7 @@
 			<div>
 				<button
 					type="button"
-					class={GHOST}
+					class={COMPACT_BTN}
 					disabled={draft.dimensions.length >= catalog.limits.max_dimensions ||
 						draft.dimensions.length >= source.dimensions.length}
 					onclick={addDimension}>+ Grouping</button
@@ -530,7 +528,7 @@
 									patchFilter(i, { ...filter, values: v ? [v] : [] })}
 								ariaLabel="Filter value"
 							/>
-						{:else if vocab?.options}
+						{:else if vocab}
 							<!-- Minus what's already a chip, so every value the picker
 							     offers is one it can add — the same move the challenge
 							     rules editor's `without` makes.
@@ -576,7 +574,7 @@
 
 						<button
 							type="button"
-							class={GHOST}
+							class={COMPACT_BTN}
 							aria-label="Remove filter"
 							onclick={() =>
 								patch({
@@ -589,7 +587,7 @@
 			<div>
 				<button
 					type="button"
-					class={GHOST}
+					class={COMPACT_BTN}
 					disabled={draft.filters.length >= catalog.limits.max_filters ||
 						!canAddFilter}
 					onclick={addFilter}>+ Filter</button
@@ -623,7 +621,7 @@
 	     the controls it runs: the question is read down the panel and asked at
 	     the bottom of it. -->
 	<div class="flex items-center justify-between gap-2">
-		<button type="button" class={GHOST} disabled={atFresh} onclick={reset}
+		<button type="button" class={COMPACT_BTN} disabled={atFresh} onclick={reset}
 			>Reset</button
 		>
 		<button

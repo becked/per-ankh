@@ -57,22 +57,29 @@ export interface CompiledQuery {
 	columns: ResultColumn[];
 }
 
-// What one counted thing is, as SQL. Every one of these leads with
-// `g.xml_game_id` except `save`, which is the point: both players uploading one
-// match makes two rows in `games`, and three surfaces already collapse them on
-// the save's own id (dedupeSeatRecords and the played-games board in stats/,
-// the rating model in ratings/duels.ts). A measure that counts matches must
-// agree with them; a measure that counts uploads must not.
+// What one counted thing is, as SQL. Every one of these keys on
+// `g.xml_game_id` rather than on `g.game_id`, which is the point: both players
+// uploading one match makes two rows in `games`, and three surfaces already
+// collapse them on the save's own id (dedupeSeatRecords and the played-games
+// board in stats/, the rating model in ratings/duels.ts). A measure that counts
+// matches has to agree with them.
+//
+// No count is denominated in uploads. `save` is still a unit — `max_turns`
+// carries it, because it reads every upload and the longest game is the longest
+// game however many of them record it — but it is an aggregate, so measureSql
+// returns before this point. A save-unit count added later is what the refusal
+// below is for, in the shape compileFilter uses for a key the catalog did not
+// mint: resolved here rather than assumed.
 function countSqlFor(measure: CatalogMeasure, source: QuerySource): string {
 	switch (measure.unit) {
 		case "match":
 			return "COUNT(DISTINCT g.xml_game_id)";
-		case "save":
-			return "COUNT(DISTINCT g.game_id)";
 		case "seat":
 			return "COUNT(DISTINCT g.xml_game_id || ':' || ps.player_index)";
 		case "event":
 			return `COUNT(DISTINCT ${source.eventKeySql})`;
+		case "save":
+			throw new Error(`measure ${measure.key} has no count expression`);
 	}
 }
 

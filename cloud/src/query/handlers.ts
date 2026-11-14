@@ -6,9 +6,9 @@
 // The catalog is served rather than baked into the client for the reason the
 // Worker's own notes give about second implementations: a copy of the
 // allowlist in the frontend would drift from the one the compiler enforces,
-// and the drift would show up as a picker offering a column that 400s. It is
-// constant data with no I/O behind it, so it costs a Worker invocation and
-// nothing else.
+// and the drift would show up as a picker offering a column that 400s. Its
+// columns are constant data; the two value rosters beside them are D1 reads,
+// which is why both routes here spend the same per-IP budget.
 
 import { sessionFromRequest } from "../session";
 import type { SessionEnv } from "../session";
@@ -47,14 +47,23 @@ export interface QueryEnv extends SessionEnv, EventsEnv {
 // to the ceiling and are not the same query — so its ceiling has to move
 // independently of the stats bundles'.
 //
+// Both routes of this surface spend it: a question, and the catalog the
+// builder needs before it can compose one. The catalog takes this budget
+// rather than one of its own for the reason `/v1/stats/records` shares
+// `global_stats_view` — it is the same surface and the same visitor asking, so
+// a separate ceiling would only let one of the page's two reads starve the
+// other. It is also a D1 reader, not the constant-data route it started as:
+// it runs TOURNAMENT_ROSTER_SQL and PLAYER_ROSTER_SQL, and the second is a
+// scan of `users` with a correlated scan of `player_summaries` per row.
+//
 // 300, not the 600 the other read budgets share, because the fan-out is
-// different in both directions: one question is one read (the catalog is a
-// separate, un-budgeted route), so 300 is 300 questions an hour per address,
-// and a question is the most expensive read here rather than the cheapest.
-// What the right number is depends on the per-request cost nobody has measured
-// yet — which is the number this surface exists to produce — so it is a var
-// (`AD_HOC_QUERY_PER_HOUR`) and expected to move once there is data to move it
-// against.
+// different in both directions: an Explore load is one catalog read and each
+// question after it is one more, so 300 is a page load and 299 questions an
+// hour per address, and a question is the most expensive read here rather than
+// the cheapest. What the right number is depends on the per-request cost nobody
+// has measured yet — which is the number this surface exists to produce — so it
+// is a var (`AD_HOC_QUERY_PER_HOUR`) and expected to move once there is data to
+// move it against.
 //
 // The default only — read the effective ceiling with adHocQueryPerHour().
 export const AD_HOC_QUERY_PER_HOUR = 300;
@@ -103,12 +112,19 @@ function queryResponse(
 // GET /v1/query/catalog — the dimensions, measures and filters a selection may
 // name, per source, and the value rosters only this side knows.
 //
-// Public and outside every read budget, and the same bytes for everyone: the
-// columns are constant data, and both rosters served with them — the
-// tournaments a question can be asked about (TOURNAMENT_ROSTER_SQL) and the
-// accounts it can be asked about (PLAYER_ROSTER_SQL) — are viewer-independent
-// by construction. Two reads behind a 300s edge TTL, so a hit answers both and
-// a miss is a scan of `tournaments` and one of `users`.
+// Public, and the same bytes for everyone: the columns are constant data, and
+// both rosters served with them — the tournaments a question can be asked
+// about (TOURNAMENT_ROSTER_SQL) and the accounts it can be asked about
+// (PLAYER_ROSTER_SQL) — are viewer-independent by construction. So there is no
+// aggregation to gate and no session required.
+//
+// On the ad-hoc budget even so, because it is two D1 reads rather than the
+// constant-data route it started as: a scan of `tournaments` and one of
+// `users` with a correlated scan of `player_summaries` per row. The edge TTL is
+// not a substitute — matchRoute keys on the pathname alone, so
+// `/v1/query/catalog?x=1` reaches this handler and is its own cache entry —
+// which is what the per-IP gate bounds. Charged before the reads, as a question
+// is charged before its own.
 //
 // It still takes a longer edge TTL than a question does. A question's answer
 // moves whenever a game is uploaded; this moves only on a deploy, when a
@@ -121,9 +137,22 @@ function queryResponse(
 // the typed token every one of them took before it had a roster at all.
 export async function handleQueryCatalog(
 	request: Request,
-	env: Pick<QueryEnv, "ALLOWED_ORIGINS" | "SHARE_DB">,
+	env: Pick<
+		QueryEnv,
+		"ALLOWED_ORIGINS" | "SHARE_DB" | "EVENTS_DB" | "AD_HOC_QUERY_PER_HOUR"
+	>,
 ): Promise<Response> {
 	const cors = cloudCorsHeaders(env, request);
+
+	const limited = await enforceReadRateLimit(
+		env,
+		request,
+		cors,
+		QUERY_BUDGET,
+		adHocQueryPerHour(env),
+	);
+	if (limited) return limited;
+
 	let tournaments: CatalogRosterOption[] = [];
 	let players: CatalogRosterOption[] = [];
 	try {
@@ -253,12 +282,6 @@ export async function handleQuery(
 			columns: wireColumns,
 			rows,
 			row_count: rows.length,
-			// The cap was reached, so there may be more groups than are here.
-			// Reported rather than inferred client-side: a reader who cannot
-			// tell a complete answer from a truncated one has been given a
-			// wrong one.
-			truncated: rows.length >= selection.limit,
-			limit: selection.limit,
 			measure: {
 				key: measure.key,
 				label: measure.label,

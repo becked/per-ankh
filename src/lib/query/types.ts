@@ -106,8 +106,5 @@ export interface QueryResult {
 	columns: ResultColumn[];
 	rows: ResultRow[];
 	row_count: number;
-	// The row cap was reached, so there may be more groups than are here.
-	truncated: boolean;
-	limit: number;
 	measure: CatalogMeasure;
 }

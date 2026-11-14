@@ -13,9 +13,9 @@
 // (`rosters`, cloud/src/query/catalog.ts) and `vocabularyFor` reads it from
 // there — the same rule, applied the other way round.
 //
-// `options: null` means the vocabulary has a name wrapper but no roster worth
-// offering: the builder falls back to a typed token for it. Nothing is in that
-// state today.
+// Every vocabulary here carries a roster, and a served one with no entries is
+// not a vocabulary at all (vocabularyFor): either way, the builder offers a
+// picker where a vocabulary resolves and a typed token where none does.
 
 import { CULTURE_LEVELS, WONDER_CULTURE_PREREQ } from "$lib/generated/wonders";
 import { BASE_NATIONS } from "$lib/generated/civilization-colors";
@@ -39,8 +39,9 @@ import { formatArchetype, formatEnum, nationName } from "$lib/utils/formatting";
 import type { CatalogRosterOption, ValueType } from "./types";
 
 export interface Vocabulary {
-	// The values to offer, or null where there is no roster to offer.
-	options: string[] | null;
+	// The values to offer, never empty — a vocabulary is what a picker is built
+	// from, so a name with nothing to offer resolves to none at all.
+	options: string[];
 	label: (value: string) => string;
 }
 
@@ -142,9 +143,10 @@ const VOCABULARIES: Readonly<Record<string, Vocabulary>> = {
 	// The techs on the tech tree. `tech_events` also records the bonus and
 	// upgrade cards a tech hands out — 71 of the 121 distinct values and
 	// 10,727 of the 78,733 rows in the 2026-11-10 snapshot — and those are not
-	// offered: they are not a research choice, and the game keeps them off the
-	// tree itself (`isTechShown`, Game.cs:8274). They stay typable, the way an
-	// aliased map script does. One tree tech is out of the picker for the
+	// offered: they are not a research choice, and the game draws no tree node
+	// for them (`player?.isTechHide(tech) ?? tech.mbHide`,
+	// TechTreePanel.BuildTreeLayout — scripts/bake-tech-tree.ts cites it in
+	// full). They stay typable, the way an aliased map script does. One tree tech is out of the picker for the
 	// mirror-image reason the aliases are: TECH_CARTHAGINIAN_TRAINING is in the
 	// corpus and not in the build this table was baked from.
 	tech: { options: byLabel(TREE_TECHS, techName), label: techName },
@@ -180,7 +182,11 @@ export function vocabularyFor(
 	const baked = VOCABULARIES[name];
 	if (baked) return baked;
 	const roster = served[name];
-	if (!roster) return null;
+	// An empty roster is a failed read on the Worker's side — handleQueryCatalog
+	// serves the columns with one rather than a 500 — so it resolves to no
+	// vocabulary and that filter falls back to the typed token, which is what
+	// every one of them took before it had a roster at all.
+	if (!roster || roster.length === 0) return null;
 	// Order is the Worker's — TOURNAMENT_ROSTER_SQL hands them over newest
 	// first, which is the order a tournament picker is read in.
 	const labels = new Map(roster.map((o) => [o.value, o.label]));

@@ -13,9 +13,11 @@
 	// turns it into: the builder doesn't move sideways under the pointer the
 	// moment it is used, and the rows land in a box that was already there.
 	//
-	// A refused selection is drawn in that same box. The Worker's message is
-	// what this query returned, so it belongs where the rows would be rather
-	// than loose on the panel above an empty frame.
+	// A refused selection is drawn in that same box, and so is an answer with
+	// no rows. Both are what this query returned, so they belong where the rows
+	// would be rather than loose on the panel above an empty frame — and an
+	// empty answer that drew nothing at all would leave less on screen than
+	// arriving here does.
 
 	import { navigating } from "$app/state";
 	import StatsHeader from "$lib/stats/StatsHeader.svelte";
@@ -72,13 +74,31 @@
 							<p class="flex-1 text-center text-sm text-orange">{data.error}</p>
 						</div>
 					{:else if data.result && source}
-						<div class="results" class:asking={isAsking} aria-busy={isAsking}>
-							<QueryResults
-								result={data.result}
-								{source}
-								rosters={data.catalog.rosters}
-							/>
-						</div>
+						{#if data.result.rows.length > 0}
+							<div class="results" class:asking={isAsking} aria-busy={isAsking}>
+								<QueryResults
+									result={data.result}
+									{source}
+									rosters={data.catalog.rosters}
+								/>
+							</div>
+						{:else}
+							<!-- An answer with no rows. QueryResults draws a frame only
+							     around a table, so the frame is drawn here instead: a
+							     question that matched nothing lands in the same box as
+							     one that did, rather than emptying the panel. -->
+							<div
+								class="{FRAME} results items-center"
+								class:asking={isAsking}
+								aria-busy={isAsking}
+							>
+								<p
+									class="flex-1 text-center text-sm italic text-tan opacity-60"
+								>
+									No games match this question.
+								</p>
+							</div>
+						{/if}
 					{:else}
 						<!-- The frame the rows land in, with nothing in it yet. No copy
 						     inside it: a line here would be read as the answer to a
