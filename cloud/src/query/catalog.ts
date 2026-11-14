@@ -270,9 +270,6 @@ export interface QuerySource {
 	group: string;
 	table: string;
 	alias: string;
-	// One line naming what a row is, shown above the builder. The grain, in
-	// the words the issue's catalog needs it in.
-	grain: string;
 	// Whether `player_summaries` (and so identity) is reachable. A source with
 	// no `player_index` cannot name a seat, which is what keeps a per-game
 	// average from being silently weighted by roster size.
@@ -288,7 +285,7 @@ export interface QuerySource {
 	filters: CatalogFilter[];
 }
 
-// ---------- Shared entries: the games grain ----------
+// ---------- Shared entries: games ----------
 
 const GAME_DIMENSIONS: CatalogDimension[] = [
 	{
@@ -445,7 +442,7 @@ const GAME_FILTERS: CatalogFilter[] = [
 	},
 ];
 
-// ---------- Shared entries: the seat grain ----------
+// ---------- Shared entries: seats ----------
 
 const PLAYER_DIMENSIONS: CatalogDimension[] = [
 	{
@@ -494,7 +491,7 @@ const PLAYER_DIMENSIONS: CatalogDimension[] = [
 		sql: "ps.starting_ruler_archetype",
 		vocabulary: "archetype",
 		filterable: true,
-		help: "The ruler the seat opened with. Successors are in Leader reigns.",
+		help: "The ruler the seat opened with. Successors are in Leaders.",
 	},
 	{
 		key: "capital_family_class",
@@ -657,7 +654,6 @@ const SOURCE_DEFS: QuerySource[] = [
 		group: "Games and players",
 		table: "games",
 		alias: "g",
-		grain: "One row per save uploaded.",
 		// No player_index, so no seat and no identity: an average over games
 		// joined to seats would be weighted by roster size without saying so.
 		joinsPlayer: false,
@@ -672,7 +668,6 @@ const SOURCE_DEFS: QuerySource[] = [
 		group: "Games and players",
 		table: "player_summaries",
 		alias: "ps",
-		grain: "One row per seat in a save — every player, human and AI.",
 		joinsPlayer: true,
 		eventKeySql: "g.xml_game_id || ':' || ps.player_index",
 		dimensions: [],
@@ -681,11 +676,10 @@ const SOURCE_DEFS: QuerySource[] = [
 	},
 	{
 		key: "player_family_cities",
-		label: "Family city footprint",
+		label: "Family cities",
 		group: "Leaders and families",
 		table: "player_family_cities",
 		alias: "pfc",
-		grain: "One row per (seat, family class) — at most three per seat.",
 		joinsPlayer: true,
 		eventKeySql:
 			"g.xml_game_id || ':' || pfc.player_index || ':' || pfc.family_class",
@@ -738,12 +732,10 @@ const SOURCE_DEFS: QuerySource[] = [
 	},
 	{
 		key: "leader_reigns",
-		label: "Leader reigns",
+		label: "Leaders",
 		group: "Leaders and families",
 		table: "leader_reigns",
 		alias: "lr",
-		grain:
-			"One row per leader who held a seat's throne, and the turn they took it.",
 		joinsPlayer: true,
 		eventKeySql:
 			"g.xml_game_id || ':' || lr.player_index || ':' || lr.character_xml_id",
@@ -793,8 +785,6 @@ const SOURCE_DEFS: QuerySource[] = [
 		group: "Techs and laws",
 		table: "law_events",
 		alias: "le",
-		grain:
-			"One row per adoption — a law repealed and re-adopted appears twice.",
 		joinsPlayer: true,
 		eventKeySql:
 			"g.xml_game_id || ':' || le.player_index || ':' || le.law || ':' || le.turn",
@@ -851,7 +841,6 @@ const SOURCE_DEFS: QuerySource[] = [
 		group: "Techs and laws",
 		table: "tech_events",
 		alias: "te",
-		grain: "One row per tech a seat completed, with the turn it landed.",
 		joinsPlayer: true,
 		eventKeySql: "g.xml_game_id || ':' || te.player_index || ':' || te.tech",
 		dimensions: [
@@ -907,8 +896,6 @@ const SOURCE_DEFS: QuerySource[] = [
 		group: "Turn by turn",
 		table: "game_player_turn",
 		alias: "gpt",
-		grain:
-			"One row per (seat, turn) — the widest table here, and the slowest to ask of.",
 		joinsPlayer: true,
 		eventKeySql: "g.xml_game_id || ':' || gpt.player_index || ':' || gpt.turn",
 		dimensions: [
@@ -996,8 +983,6 @@ const SOURCE_DEFS: QuerySource[] = [
 		group: "Wonders",
 		table: "game_wonder_pool",
 		alias: "gwp",
-		grain:
-			"One row per wonder enabled in a save — the eligibility denominator, not a completion.",
 		joinsPlayer: false,
 		eventKeySql: "g.xml_game_id || ':' || gwp.wonder",
 		dimensions: [
@@ -1028,8 +1013,6 @@ const SOURCE_DEFS: QuerySource[] = [
 		group: "Wonders",
 		table: "wonder_events",
 		alias: "we",
-		grain:
-			"One row per wonder completed in a save, with who built it and when.",
 		joinsPlayer: true,
 		eventKeySql: "g.xml_game_id || ':' || we.wonder",
 		dimensions: [
@@ -1183,7 +1166,6 @@ export interface CatalogSourceWire {
 	// The picker heading. Sources sharing one arrive contiguously, so a client
 	// groups them by walking the list.
 	group: string;
-	grain: string;
 	dimensions: CatalogDimensionWire[];
 	measures: CatalogMeasureWire[];
 	filters: CatalogFilterWire[];
@@ -1222,7 +1204,6 @@ export function serializeCatalog(
 			key: s.key,
 			label: s.label,
 			group: s.group,
-			grain: s.grain,
 			dimensions: s.dimensions.map((d) => ({
 				key: d.key,
 				label: d.label,

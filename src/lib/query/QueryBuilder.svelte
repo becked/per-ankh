@@ -419,7 +419,6 @@
 			onChange={setSource}
 			ariaLabel="What the question is about"
 		/>
-		<p class="mt-1 text-xs italic text-tan opacity-70">{source.grain}</p>
 	</PanelInset>
 
 	<PanelInset label="Measure">
