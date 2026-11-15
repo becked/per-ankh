@@ -431,7 +431,7 @@ interface SeatRow {
 	nation: string | null;
 	is_human: number;
 	is_uploader: number;
-	is_winner: number | null;
+	is_winner: number;
 }
 
 interface SetUploaderGameRow {
@@ -533,11 +533,7 @@ export async function runSetUploader(
 	// distinct from "played and lost".
 	const nextNation = next?.nation ?? null;
 	const nextWon =
-		next === null || next === undefined
-			? null
-			: game.winner_seats === 0
-				? null
-				: (next.is_winner ?? 0);
+		next == null ? null : game.winner_seats === 0 ? null : next.is_winner;
 
 	const label = (s: SeatRow | null): string =>
 		s === null

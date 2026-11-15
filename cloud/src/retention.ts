@@ -188,6 +188,16 @@ export const KEEP_FOREVER: readonly string[] = [
 	"tournament_export",
 	"delete_game",
 	"nuke_user",
+	// Seat attribution, both written by the admin CLI (scripts/admin): an
+	// operator dropping a user_online_ids link, and an operator changing which
+	// seat a game's owner claimed. Here rather than in general_audit for the
+	// reason delete_game is: the user-facing halves (`online_id_remove`,
+	// `uploader_change`) are a different actor and age out with that bucket,
+	// and these two are the only record that an operator moved a seat's credit
+	// — neither user_online_ids nor player_summaries.is_uploader keeps a
+	// history of its own.
+	"unlink_online_id",
+	"set_uploader",
 	// Screenshot moderation (screenshots/moderation.ts). A report is one
 	// person saying a published image is wrong and a `screenshot_moderate` row
 	// is an admin deciding what to do about it — the two halves of an

@@ -81,6 +81,12 @@ const seatNameIsAccountSql = (alias: string): string =>
 // says how many there are, which is also what separates a one-off misclaim
 // from the real owner — in the staging snapshot every wrong link had exactly
 // one claim and every correct owner had dozens.
+//
+// `save_date IS NULL` leads the ORDER BY because a null sorts first under a
+// bare ASC, which would name an undated game as the earliest one. Not
+// hypothetical: one of the 1,240 games in the 2026-11-15 production snapshot
+// has no save_date, it carries a claimed seat whose id is linked, and its
+// partition holds 118 claims.
 const CLAIM_JOIN_SQL = `LEFT JOIN (
 		 SELECT g.user_id,
 		        ps.online_id,
@@ -90,7 +96,7 @@ const CLAIM_JOIN_SQL = `LEFT JOIN (
 		        COUNT(*) OVER (PARTITION BY g.user_id, ps.online_id) AS claim_count,
 		        ROW_NUMBER() OVER (
 		          PARTITION BY g.user_id, ps.online_id
-		          ORDER BY g.save_date, ps.game_id) AS rn
+		          ORDER BY g.save_date IS NULL, g.save_date, ps.game_id) AS rn
 		   FROM player_summaries ps
 		   JOIN games g ON g.game_id = ps.game_id
 		  WHERE ps.is_uploader = 1
@@ -103,7 +109,7 @@ const EVIDENCE_COLUMNS_SQL = `${CREDITED_SEATS_SQL} AS credited_seats,
 		 cl.player_index AS claim_seat_index,
 		 cl.player_name AS claim_seat_name`;
 
-export interface LinkRow {
+interface LinkRow {
 	user_id: string;
 	online_id: string;
 	display_name: string;
@@ -119,7 +125,7 @@ export interface LinkRow {
 	claim_seat_name: string | null;
 }
 
-export interface AmbiguousRow extends LinkRow {
+interface AmbiguousRow extends LinkRow {
 	owners: number;
 }
 
@@ -249,10 +255,7 @@ function evidenceCells(r: LinkRow): string[] {
 
 // ---------- online-ids check ----------
 
-export async function runCheck(
-	argv: string[],
-	opts: CommandOpts,
-): Promise<void> {
+async function runCheck(argv: string[], opts: CommandOpts): Promise<void> {
 	const { flags } = parseFlags(argv);
 	const kindFlag = flagString(flags, "kind");
 	if (kindFlag !== undefined && !CHECK_KINDS.includes(kindFlag as CheckKind)) {
@@ -389,12 +392,7 @@ function printSection(title: string, why: string, count: number): void {
 
 // ---------- online-ids unlink ----------
 
-type UnlinkTargetRow = LinkRow;
-
-export async function runUnlink(
-	argv: string[],
-	opts: CommandOpts,
-): Promise<void> {
+async function runUnlink(argv: string[], opts: CommandOpts): Promise<void> {
 	const { positional } = parseFlags(argv);
 	const userId = positional[0];
 	const onlineId = positional[1];
@@ -406,7 +404,7 @@ export async function runUnlink(
 
 	// Read the row first so the command can report what it removed and no-op
 	// cleanly when there is nothing linked — the shape remove-channel uses.
-	const rows = await d1Query<UnlinkTargetRow>(`
+	const rows = await d1Query<LinkRow>(`
 		SELECT uo.user_id,
 		       uo.online_id,
 		       COALESCE(u.alias, u.display_name) AS display_name,
@@ -511,13 +509,41 @@ export async function run(argv: string[], opts: CommandOpts): Promise<void> {
 			return runCheck(rest, opts);
 		case "unlink":
 			return runUnlink(rest, opts);
+		case undefined:
+		case "--help":
+		case "-h":
+			printHelp();
+			return;
 		default:
-			throw new Error(
-				[
-					"Usage:",
-					"  ./per-ankh admin online-ids check [--kind uncorroborated|ambiguous|name-mismatch]",
-					"  ./per-ankh admin online-ids unlink <user_id> <online_id>",
-				].join("\n"),
-			);
+			throw new Error(`Unknown online-ids subcommand: ${sub}`);
 	}
+}
+
+function printHelp(): void {
+	process.stdout.write(
+		[
+			"./per-ankh admin online-ids <subcommand>",
+			"",
+			"  check [--kind K]                 Flag links that credit seats to the",
+			"                                   wrong account",
+			"  unlink <user_id> <online_id>     Remove one link (type 'unlink' to",
+			"                                   confirm; --yes skips it)",
+			"",
+			"  --kind   uncorroborated | ambiguous | name-mismatch  (default: all)",
+			"             uncorroborated  no claimed seat of that user carries the id",
+			"             ambiguous       two accounts claim it, so it credits nobody",
+			"             name-mismatch   its seats never play under a name the",
+			"                             account answers to, though its own",
+			"                             claimed seats do",
+			"",
+			"SEATS is how many public seats the link credits; SEAT NAMES is every",
+			"name those seats played under, which is the evidence to read before",
+			"unlinking anything. CLAIMS is how many seats the user claimed that",
+			"carry the id, and a link with a claim behind it comes back on the next",
+			"reparse until the claim moves:",
+			"",
+			"  ./per-ankh admin set-uploader <game_id> <player_index | observer>",
+			"",
+		].join("\n"),
+	);
 }
