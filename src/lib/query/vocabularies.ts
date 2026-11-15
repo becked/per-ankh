@@ -1,11 +1,11 @@
-// Value rosters and display names for the catalog's enum columns.
+// Value rosters, display names and icons for the catalog's enum columns.
 //
 // The Worker's catalog names a vocabulary; this resolves it. The split is
 // where the data already is: the Worker has no name table for a tech or a law,
 // and the baked rosters it would have to ship are ones this bundle already
 // carries ($lib/generated). So the allowlist stays server-side — a value is
-// bound either way, and a token that names nothing selects nothing — and only
-// the labels live here.
+// bound either way, and a token that names nothing selects nothing — and the
+// names and the pictures live here.
 //
 // Two sources, because that is where the data already is. A zType roster is
 // baked into this bundle and resolved here. A tournament's name is in D1 and
@@ -34,8 +34,17 @@ import {
 } from "$lib/map-settings";
 import { compositionLabel, GAME_COMPOSITIONS } from "$lib/stats/global-facets";
 import { KNOWN_MAP_SCRIPTS } from "$lib/tournament/map-scripts-table";
-import { improvementDisplayName, techName } from "$lib/game-detail/helpers";
-import { formatArchetype, formatEnum, nationName } from "$lib/utils/formatting";
+import {
+	getSpritePath,
+	improvementDisplayName,
+	techName,
+} from "$lib/game-detail/helpers";
+import {
+	archetypeSpriteKey,
+	formatArchetype,
+	formatEnum,
+	nationName,
+} from "$lib/utils/formatting";
 import type { CatalogRosterOption, ValueType } from "./types";
 
 export interface Vocabulary {
@@ -43,6 +52,13 @@ export interface Vocabulary {
 	// from, so a name with nothing to offer resolves to none at all.
 	options: string[];
 	label: (value: string) => string;
+	// The game's own picture for one value, where the art ships: the sprite for
+	// a zType, the account's avatar for a served identity roster. Null for a
+	// value inside a vocabulary that has art but not for this one — the bonus
+	// and upgrade cards in `tech` are the case — and the whole function is
+	// absent from a vocabulary with no art at all, which is what tells a surface
+	// whether to reserve room for icons in that column.
+	icon?: (value: string) => string | null;
 }
 
 // Sorted by the name they display under, not by zType: a picker is read in the
@@ -72,7 +88,11 @@ const MAP_SIZES =
 	MAPSIZE_DEF?.kind === "select" ? MAPSIZE_DEF.choices.map((c) => c.value) : [];
 
 const VOCABULARIES: Readonly<Record<string, Vocabulary>> = {
-	nation: { options: byLabel(BASE_NATIONS, nationName), label: nationName },
+	nation: {
+		options: byLabel(BASE_NATIONS, nationName),
+		label: nationName,
+		icon: (value) => getSpritePath("crests", value),
+	},
 	// A wonder is an improvement flagged `<bWonder>`, which is what the baked
 	// culture-prereq table is keyed by.
 	wonder: {
@@ -81,6 +101,9 @@ const VOCABULARIES: Readonly<Record<string, Vocabulary>> = {
 			improvementDisplayName,
 		),
 		label: improvementDisplayName,
+		// A wonder's 2D icon is the improvement's, which is filed under its
+		// zIconName rather than its zType — the indirection getSpritePath applies.
+		icon: (value) => getSpritePath("improvements", value),
 	},
 	law: {
 		options: byLabel(
@@ -88,14 +111,24 @@ const VOCABULARIES: Readonly<Record<string, Vocabulary>> = {
 			lawLabel,
 		),
 		label: lawLabel,
+		icon: (value) => getSpritePath("laws", value),
 	},
 	archetype: {
 		options: byLabel(LEADER_TRAITS.archetype, formatArchetype),
 		label: formatArchetype,
+		// The trimmed-and-squared glyph, which is the copy a tournament match row
+		// draws beside a seat (MatchTable) — so an archetype reads the same here
+		// as it does there. The key is the trait without its _ARCHETYPE suffix.
+		icon: (value) => getSpritePath("traits-trimmed", archetypeSpriteKey(value)),
 	},
 	// Ascending, as the levels themselves are — the roster's own order is the
 	// meaningful one here, so it is not re-sorted by name.
-	culture_level: { options: [...CULTURE_LEVELS], label: cultureLabel },
+	culture_level: {
+		options: [...CULTURE_LEVELS],
+		label: cultureLabel,
+		// The four level glyphs ship in the icons set, named by the level itself.
+		icon: (value) => getSpritePath("icons", value),
+	},
 	// Only the canonical zType of each script is offered, never an alias. The
 	// table keeps a superseded spelling so both READ alike, and offering both
 	// would put two "Inland Sea" entries in one picker. Two consequences,
@@ -149,10 +182,22 @@ const VOCABULARIES: Readonly<Record<string, Vocabulary>> = {
 	// full). They stay typable, the way an aliased map script does. One tree tech is out of the picker for the
 	// mirror-image reason the aliases are: TECH_CARTHAGINIAN_TRAINING is in the
 	// corpus and not in the build this table was baked from.
-	tech: { options: byLabel(TREE_TECHS, techName), label: techName },
+	tech: {
+		options: byLabel(TREE_TECHS, techName),
+		label: techName,
+		// Null for the bonus and upgrade cards the picker doesn't offer but a
+		// grouping still returns — 14 of the 121 values and 347 of the 78,733 rows
+		// in the 2026-11-10 snapshot ship no art of their own.
+		icon: (value) => getSpritePath("techs", value),
+	},
 	family_class: {
 		options: byLabel(FAMILY_CLASSES, familyClassLabel),
 		label: familyClassLabel,
+		// A class's crest is filed under the archetype of the same name
+		// (FAMILYCLASS_LANDOWNERS → crests/CREST_ARCHETYPE_LANDOWNERS), which is
+		// the key the family charts on /stats read it under too.
+		icon: (value) =>
+			getSpritePath("crests", value.replace(/^FAMILYCLASS_/, "ARCHETYPE_")),
 	},
 	// Passive to Competitive, as the setup screen lists them — the roster's own
 	// order is the meaningful one for a scale, so it is not re-sorted by name.
@@ -189,13 +234,19 @@ export function vocabularyFor(
 	if (!roster || roster.length === 0) return null;
 	// Order is the Worker's — TOURNAMENT_ROSTER_SQL hands them over newest
 	// first, which is the order a tournament picker is read in.
-	const labels = new Map(roster.map((o) => [o.value, o.label]));
+	const byValue = new Map(roster.map((o) => [o.value, o]));
+	// Icons only where the Worker sent some. The player roster carries an avatar
+	// per account; the tournament roster carries none, and leaving `icon` off
+	// there is what keeps a column of tournament names from reserving room for a
+	// picture that never arrives.
+	const hasIcons = roster.some((o) => o.icon !== undefined);
 	return {
 		options: roster.map((o) => o.value),
 		// A value the roster no longer carries is still the value a shared link
 		// asked about, so it labels itself rather than disappearing from the
 		// chip that holds it.
-		label: (value) => labels.get(value) ?? value,
+		label: (value) => byValue.get(value)?.label ?? value,
+		icon: hasIcons ? (value) => byValue.get(value)?.icon ?? null : undefined,
 	};
 }
 
@@ -211,13 +262,17 @@ export function vocabularyFor(
  * An identity dimension has no such row — the Worker drops the seats that
  * resolve to no account (PLAYER_USER_ID_SQL, cloud/src/query/catalog.ts) — so
  * `nullLabel` is only ever reached for a value column.
+ *
+ * Takes the vocabulary already resolved rather than the name of one, because
+ * resolving a served roster's vocabulary builds a Map over the whole roster
+ * and the answer is the same for every row of a column. The caller resolves
+ * one per column.
  */
 export function valueLabel(
 	value: string | number | null,
 	type: ValueType | "number",
-	vocabulary: string | undefined,
+	vocab: Vocabulary | null,
 	nullLabel: string,
-	served: ServedRosters = {},
 ): string {
 	if (value === null) return nullLabel;
 	if (type === "boolean") return value === 1 || value === "1" ? "Yes" : "No";
@@ -226,7 +281,6 @@ export function valueLabel(
 	// a seat's in-save name, an account's display name. Formatting those would
 	// cut a name containing an underscore in half.
 	if (type !== "enum") return value;
-	const vocab = vocabularyFor(vocabulary, served);
 	if (vocab) return vocab.label(value);
 	// A zType with no roster: its prefix is its own first token
 	// (OCCURRENCELEVEL_, …), so strip up to the first underscore rather than

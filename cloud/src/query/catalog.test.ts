@@ -138,16 +138,28 @@ describe("the serialized catalog", () => {
 	it("carries the rosters it was handed", () => {
 		// Both rosters are read from D1 by the handler and passed in, because a
 		// tournament's name and an account's display name are the filter values
-		// this side knows and the client does not.
+		// this side knows and the client does not. An account's avatar comes with
+		// its name — the client has no way to build that URL — and a tournament
+		// has no picture, which is the asymmetry the optional `icon` carries.
 		const withRosters = serializeCatalog({
 			tournament: [{ value: "abc", label: "Spring Open" }],
-			player: [{ value: "O-1ONgvfrVql0yVJiATyh", label: "Siontific" }],
+			player: [
+				{
+					value: "O-1ONgvfrVql0yVJiATyh",
+					label: "Siontific",
+					icon: "https://cdn.discordapp.com/avatars/1/abc.png",
+				},
+			],
 		});
 		expect(withRosters.rosters.tournament).toEqual([
 			{ value: "abc", label: "Spring Open" },
 		]);
 		expect(withRosters.rosters.player).toEqual([
-			{ value: "O-1ONgvfrVql0yVJiATyh", label: "Siontific" },
+			{
+				value: "O-1ONgvfrVql0yVJiATyh",
+				label: "Siontific",
+				icon: "https://cdn.discordapp.com/avatars/1/abc.png",
+			},
 		]);
 	});
 

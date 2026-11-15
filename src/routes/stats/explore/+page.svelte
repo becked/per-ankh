@@ -24,7 +24,7 @@
 	import Panel from "$lib/ui/Panel.svelte";
 	import QueryBuilder from "$lib/query/QueryBuilder.svelte";
 	import QueryResults from "$lib/query/QueryResults.svelte";
-	import { TABLE_FRAME_CLASS } from "$lib/ui/classes";
+	import { TABLE_FRAME_INSET_CLASS } from "$lib/ui/classes";
 	import type { PageData } from "./$types";
 
 	let { data }: { data: PageData } = $props();
@@ -46,7 +46,7 @@
 	// builder's first and last subpanels rather than at a height of its own.
 	// The minimum is what the stacked single-column layout falls back on, where
 	// the panels are separate grid rows and there is no sibling height to fill.
-	const FRAME = `${TABLE_FRAME_CLASS} min-h-[16rem] flex-1`;
+	const FRAME = `${TABLE_FRAME_INSET_CLASS} min-h-[16rem] flex-1`;
 
 	// The builder's Ask/Reset row, reserved. The two panels are grid siblings
 	// and stretch together, so a frame that simply filled this one would end

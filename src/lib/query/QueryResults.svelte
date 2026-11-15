@@ -19,17 +19,24 @@
 	// names one (PLAYER_USER_ID_SQL, cloud/src/query/catalog.ts).
 
 	import ProfileLink from "$lib/ProfileLink.svelte";
-	import { TABLE_CLASS, TABLE_FRAME_CLASS } from "$lib/ui/classes";
+	import { TABLE_CLASS, TABLE_FRAME_INSET_CLASS } from "$lib/ui/classes";
 	import type { CatalogSource, QueryCatalog, QueryResult } from "./types";
-	import { valueLabel } from "./vocabularies";
+	import ValueIcon from "./ValueIcon.svelte";
+	import { valueLabel, vocabularyFor } from "./vocabularies";
 
 	// `rosters` is the half of the vocabulary the Worker serves — a
-	// tournament's name, an account's. Neither reaches a cell: the one
-	// dimension that names a served vocabulary is `player`, whose roster is
-	// there for the filter picker, and whose own column already arrives as a
-	// display name. The labels are resolved through the one function the
-	// builder's chips use anyway, so the table cannot drift into showing an id
-	// where the chip above it shows a name.
+	// tournament's name, an account's name and avatar. One of them reaches a
+	// cell: the Player column's name arrives on the row, but its avatar does
+	// not, so the picture is looked up in the `player` roster by the user_id the
+	// row carries beside the name. That roster is scoped to the accounts a
+	// question can return (PLAYER_ROSTER_SQL, cloud/src/query/catalog.ts), so
+	// every Player row has an entry; a failed roster read serves an empty one,
+	// which drops the avatars from this table and the builder's picker together
+	// and leaves the reserved boxes empty.
+	//
+	// Labels and icons both resolve through the functions the builder's chips
+	// use, so the table cannot drift into showing an id where the chip above it
+	// shows a name, or a picture the picker doesn't.
 	let {
 		result,
 		source,
@@ -40,26 +47,32 @@
 		rosters: QueryCatalog["rosters"];
 	} = $props();
 
-	// The columns the table draws. `key` columns carry the identity
-	// dimension's user_id and slug for the profile link and are never a column
-	// of their own.
-	const dimensions = $derived(
-		result.columns.filter((c) => c.role === "dimension"),
+	// The columns the table draws, each with what every one of its cells needs.
+	// `key` columns carry the identity dimension's user_id and slug for the
+	// profile link and are never a column of their own.
+	//
+	// The vocabulary is resolved here rather than in the cell: resolving a
+	// served roster's builds a Map over the whole roster, and the answer is the
+	// same for all 200 rows (MAX_ROWS) of one column.
+	const columns = $derived(
+		result.columns
+			.filter((c) => c.role === "dimension")
+			.map((c) => {
+				const dim = source.dimensions.find((d) => d.key === c.key);
+				return {
+					...c,
+					// What the column's values are named and pictured in, so a nation
+					// reads as Rome and a wonder as The Pyramids.
+					vocab: vocabularyFor(dim?.vocabulary, rosters),
+					// An identity dimension is the one that links: it declares the extra
+					// columns its rows carry, and they are what the anchor needs.
+					identity: dim?.key_columns !== undefined,
+				};
+			}),
 	);
 	const measure = $derived(
 		result.columns.find((c) => c.role === "measure") ?? null,
 	);
-
-	// What a dimension's values are named in, so a nation reads as Rome and a
-	// wonder as The Pyramids. Looked up by key against the source the answer
-	// was built from.
-	const vocabularyOf = (key: string): string | undefined =>
-		source.dimensions.find((d) => d.key === key)?.vocabulary;
-
-	// An identity dimension is the one that links: it declares the extra
-	// columns its rows carry, and they are what the anchor needs.
-	const isIdentity = (key: string): boolean =>
-		source.dimensions.find((d) => d.key === key)?.key_columns !== undefined;
 
 	// Integers keep their grouping separators; an average keeps one decimal.
 	// Branching on the value rather than on the measure's name, because a
@@ -79,12 +92,12 @@
 		"px-3 py-1 text-left text-[10px] font-bold uppercase tracking-wide text-gray-100";
 </script>
 
-<div class={TABLE_FRAME_CLASS}>
+<div class={TABLE_FRAME_INSET_CLASS}>
 	<div class="min-w-0 flex-1 overflow-x-auto">
 		<table class="{TABLE_CLASS} text-sm">
 			<thead>
 				<tr>
-					{#each dimensions as column (column.key)}
+					{#each columns as column (column.key)}
 						<th scope="col" class={HEAD}>{column.label}</th>
 					{/each}
 					{#if measure}
@@ -95,36 +108,52 @@
 			<tbody>
 				{#each result.rows as row, i (i)}
 					<tr>
-						{#each dimensions as column, c (column.key)}
+						{#each columns as column, c (column.key)}
+							{@const iconOf = column.vocab?.icon}
+							<!-- An identity row's picture is the account's, which the roster
+							     lists under its user_id — the key column beside the name, not
+							     the name in the cell. -->
+							{@const iconKey = asString(
+								column.identity ? row[`${column.key}_id`] : row[column.key],
+							)}
 							<td
-								class="bg-surface px-3 py-2 text-left {isIdentity(column.key)
+								class="bg-surface px-3 py-2 text-left {column.identity
 									? 'font-semibold text-gray-200'
 									: 'text-tan'} {c === 0 ? 'rounded-l-lg' : ''}"
 							>
-								{#if isIdentity(column.key)}
-									<!-- The account's effective display name, which the
-									     Worker selects as this column; `users.display_name` is
-									     NOT NULL, so the cell always has a name to print. The
-									     weight and colour are on the cell, not here: `class`
-									     styles the anchor only, so a row ProfileLink renders
-									     bare would otherwise sit lighter than the rows that
-									     link. -->
-									<ProfileLink
-										userId={asString(row[`${column.key}_id`])}
-										slug={asString(row[`${column.key}_slug`])}
-										class="transition-colors hover:text-orange"
-									>
-										{row[column.key]}
-									</ProfileLink>
-								{:else}
-									{valueLabel(
-										row[column.key],
-										column.type,
-										vocabularyOf(column.key),
-										"Not recorded",
-										rosters,
-									)}
-								{/if}
+								<span class="inline-flex items-center gap-1.5">
+									{#if iconOf}
+										<!-- Drawn in every row of a column whose vocabulary has art,
+										     empty box included, so the labels keep one left edge. -->
+										<ValueIcon
+											src={iconKey === null ? null : iconOf(iconKey)}
+											round={column.identity}
+										/>
+									{/if}
+									{#if column.identity}
+										<!-- The account's effective display name, which the
+										     Worker selects as this column; `users.display_name` is
+										     NOT NULL, so the cell always has a name to print. The
+										     weight and colour are on the cell, not here: `class`
+										     styles the anchor only, so a row ProfileLink renders
+										     bare would otherwise sit lighter than the rows that
+										     link. -->
+										<ProfileLink
+											userId={asString(row[`${column.key}_id`])}
+											slug={asString(row[`${column.key}_slug`])}
+											class="transition-colors hover:text-orange"
+										>
+											{row[column.key]}
+										</ProfileLink>
+									{:else}
+										{valueLabel(
+											row[column.key],
+											column.type,
+											column.vocab,
+											"Not recorded",
+										)}
+									{/if}
+								</span>
 							</td>
 						{/each}
 						{#if measure}

@@ -33,6 +33,7 @@
 		type DraftFilter,
 		type QuerySort,
 	} from "./selection";
+	import ValueIcon from "./ValueIcon.svelte";
 	import { vocabularyFor } from "./vocabularies";
 	import type { CatalogFilter, FilterOp, QueryCatalog } from "./types";
 
@@ -427,50 +428,57 @@
 	</PanelInset>
 
 	<PanelInset label="Grouped by">
-		<div class="flex flex-col gap-2">
-			{#if draft.dimensions.length > 0}
-				<div class="flex flex-wrap items-start gap-2 pl-3">
-					{#each draft.dimensions as dim, i (dim)}
-						<div class="flex items-center gap-1">
-							<Select
-								value={dim}
-								options={dimensionOptions(i)}
-								onChange={(v) => {
-									if (v !== null)
-										patch({
-											dimensions: draft.dimensions.map((d, j) =>
-												j === i ? v : d,
-											),
-										});
-								}}
-								ariaLabel="Grouping {i + 1}"
-							/>
-							<button
-								type="button"
-								class={COMPACT_BTN}
-								aria-label="Remove grouping"
-								onclick={() =>
+		{#snippet action()}
+			<button
+				type="button"
+				class={COMPACT_BTN}
+				disabled={draft.dimensions.length >= catalog.limits.max_dimensions ||
+					draft.dimensions.length >= source.dimensions.length}
+				onclick={addDimension}>+ Grouping</button
+			>
+		{/snippet}
+		{#if draft.dimensions.length > 0}
+			<div class="flex flex-wrap items-start gap-2 pl-3">
+				{#each draft.dimensions as dim, i (dim)}
+					<div class="flex items-center gap-1">
+						<Select
+							value={dim}
+							options={dimensionOptions(i)}
+							onChange={(v) => {
+								if (v !== null)
 									patch({
-										dimensions: draft.dimensions.filter((_, j) => j !== i),
-									})}>×</button
-							>
-						</div>
-					{/each}
-				</div>
-			{/if}
-			<div>
-				<button
-					type="button"
-					class={COMPACT_BTN}
-					disabled={draft.dimensions.length >= catalog.limits.max_dimensions ||
-						draft.dimensions.length >= source.dimensions.length}
-					onclick={addDimension}>+ Grouping</button
-				>
+										dimensions: draft.dimensions.map((d, j) =>
+											j === i ? v : d,
+										),
+									});
+							}}
+							ariaLabel="Grouping {i + 1}"
+						/>
+						<button
+							type="button"
+							class={COMPACT_BTN}
+							aria-label="Remove grouping"
+							onclick={() =>
+								patch({
+									dimensions: draft.dimensions.filter((_, j) => j !== i),
+								})}>×</button
+						>
+					</div>
+				{/each}
 			</div>
-		</div>
+		{/if}
 	</PanelInset>
 
 	<PanelInset label="Where">
+		{#snippet action()}
+			<button
+				type="button"
+				class={COMPACT_BTN}
+				disabled={draft.filters.length >= catalog.limits.max_filters ||
+					!canAddFilter}
+				onclick={addFilter}>+ Filter</button
+			>
+		{/snippet}
 		<div class="flex flex-col gap-2">
 			{#each draft.filters as filter, i (i)}
 				{@const spec = specFor(filter)}
@@ -548,7 +556,21 @@
 								disabled={atValueCap}
 								resetAfterSelect
 								ariaLabel="Filter value"
-							/>
+							>
+								<!-- The same picture the results table puts beside the value,
+								     so a value is recognised in the picker, in the chip it
+								     becomes, and in the answer. Nothing at all for a vocabulary
+								     with no art — a map script, a tournament — which is what
+								     keeps those lists from reserving room for one. -->
+								{#snippet icon(value: string)}
+									{#if vocab.icon}
+										<ValueIcon
+											src={vocab.icon(value)}
+											round={spec.type === "identity"}
+										/>
+									{/if}
+								{/snippet}
+							</Combobox>
 						{:else}
 							<input
 								class={INPUT}
@@ -561,6 +583,12 @@
 						{#each filter.values as value (value)}
 							{#if !isRangeOp(filter.op) && spec.type !== "boolean"}
 								<span class={CHIP}>
+									{#if vocab?.icon}
+										<ValueIcon
+											src={vocab.icon(value)}
+											round={spec.type === "identity"}
+										/>
+									{/if}
 									{vocab ? vocab.label(value) : value}
 									<button
 										type="button"
@@ -584,15 +612,6 @@
 					</div>
 				{/if}
 			{/each}
-			<div>
-				<button
-					type="button"
-					class={COMPACT_BTN}
-					disabled={draft.filters.length >= catalog.limits.max_filters ||
-						!canAddFilter}
-					onclick={addFilter}>+ Filter</button
-				>
-			</div>
 		</div>
 	</PanelInset>
 

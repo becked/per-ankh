@@ -162,17 +162,32 @@ describe("the catalog's player roster", () => {
 		const res = await request.get({ path: "/v1/query/catalog" });
 		expect(res.status).toBe(200);
 		const body = await res.json<{
-			rosters: Record<string, { value: string; label: string }[]>;
+			rosters: Record<
+				string,
+				{ value: string; label: string; icon?: string }[]
+			>;
 			sources: {
 				key: string;
 				filters: { key: string; vocabulary?: string }[];
 			}[];
 		}>();
 
-		expect(body.rosters.player).toEqual([
+		expect(
+			body.rosters.player.map((o) => ({ value: o.value, label: o.label })),
+		).toEqual([
 			{ value: alice.userId, label: "Alice" },
 			{ value: bob.userId, label: "Bob" },
 		]);
+		// Every option carries the account's avatar, which is what lets the filter
+		// picker and the results table draw a player the way /players does. The
+		// fixture's accounts have no avatar_hash, so these are buildAvatarUrl's
+		// default-avatar arm — a URL either way, and the part of the roster the
+		// client cannot build for itself.
+		for (const option of body.rosters.player) {
+			expect(option.icon).toMatch(
+				/^https:\/\/cdn\.discordapp\.com\/embed\/avatars\/[0-5]\.png$/,
+			);
+		}
 		expect(body.rosters.player.map((o) => o.value)).not.toContain(
 			stranger.userId,
 		);
