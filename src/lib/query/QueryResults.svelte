@@ -47,26 +47,32 @@
 		rosters: QueryCatalog["rosters"];
 	} = $props();
 
-	// The columns the table draws. `key` columns carry the identity
-	// dimension's user_id and slug for the profile link and are never a column
-	// of their own.
-	const dimensions = $derived(
-		result.columns.filter((c) => c.role === "dimension"),
+	// The columns the table draws, each with what every one of its cells needs.
+	// `key` columns carry the identity dimension's user_id and slug for the
+	// profile link and are never a column of their own.
+	//
+	// The vocabulary is resolved here rather than in the cell: resolving a
+	// served roster's builds a Map over the whole roster, and the answer is the
+	// same for all 200 rows (MAX_ROWS) of one column.
+	const columns = $derived(
+		result.columns
+			.filter((c) => c.role === "dimension")
+			.map((c) => {
+				const dim = source.dimensions.find((d) => d.key === c.key);
+				return {
+					...c,
+					// What the column's values are named and pictured in, so a nation
+					// reads as Rome and a wonder as The Pyramids.
+					vocab: vocabularyFor(dim?.vocabulary, rosters),
+					// An identity dimension is the one that links: it declares the extra
+					// columns its rows carry, and they are what the anchor needs.
+					identity: dim?.key_columns !== undefined,
+				};
+			}),
 	);
 	const measure = $derived(
 		result.columns.find((c) => c.role === "measure") ?? null,
 	);
-
-	// What a dimension's values are named in, so a nation reads as Rome and a
-	// wonder as The Pyramids. Looked up by key against the source the answer
-	// was built from.
-	const vocabularyOf = (key: string): string | undefined =>
-		source.dimensions.find((d) => d.key === key)?.vocabulary;
-
-	// An identity dimension is the one that links: it declares the extra
-	// columns its rows carry, and they are what the anchor needs.
-	const isIdentity = (key: string): boolean =>
-		source.dimensions.find((d) => d.key === key)?.key_columns !== undefined;
 
 	// Integers keep their grouping separators; an average keeps one decimal.
 	// Branching on the value rather than on the measure's name, because a
@@ -91,7 +97,7 @@
 		<table class="{TABLE_CLASS} text-sm">
 			<thead>
 				<tr>
-					{#each dimensions as column (column.key)}
+					{#each columns as column (column.key)}
 						<th scope="col" class={HEAD}>{column.label}</th>
 					{/each}
 					{#if measure}
@@ -102,20 +108,16 @@
 			<tbody>
 				{#each result.rows as row, i (i)}
 					<tr>
-						{#each dimensions as column, c (column.key)}
-							{@const identity = isIdentity(column.key)}
-							{@const iconOf = vocabularyFor(
-								vocabularyOf(column.key),
-								rosters,
-							)?.icon}
+						{#each columns as column, c (column.key)}
+							{@const iconOf = column.vocab?.icon}
 							<!-- An identity row's picture is the account's, which the roster
 							     lists under its user_id — the key column beside the name, not
 							     the name in the cell. -->
 							{@const iconKey = asString(
-								identity ? row[`${column.key}_id`] : row[column.key],
+								column.identity ? row[`${column.key}_id`] : row[column.key],
 							)}
 							<td
-								class="bg-surface px-3 py-2 text-left {identity
+								class="bg-surface px-3 py-2 text-left {column.identity
 									? 'font-semibold text-gray-200'
 									: 'text-tan'} {c === 0 ? 'rounded-l-lg' : ''}"
 							>
@@ -125,10 +127,10 @@
 										     empty box included, so the labels keep one left edge. -->
 										<ValueIcon
 											src={iconKey === null ? null : iconOf(iconKey)}
-											round={identity}
+											round={column.identity}
 										/>
 									{/if}
-									{#if identity}
+									{#if column.identity}
 										<!-- The account's effective display name, which the
 										     Worker selects as this column; `users.display_name` is
 										     NOT NULL, so the cell always has a name to print. The
@@ -147,9 +149,8 @@
 										{valueLabel(
 											row[column.key],
 											column.type,
-											vocabularyOf(column.key),
+											column.vocab,
 											"Not recorded",
-											rosters,
 										)}
 									{/if}
 								</span>

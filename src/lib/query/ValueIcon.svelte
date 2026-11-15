@@ -11,35 +11,35 @@
 	// Drawn as a plain <img>, which is what the sprite URLs and the Discord CDN
 	// URLs have in common: `Vocabulary.icon` hands over a resolved path, not a
 	// (category, zType) pair, so one component covers both.
+	//
+	// One size, not a prop: every surface here draws a value at row-text size,
+	// which is the box PlayerAvatar reserves in a standings row.
+	const SIZE = 16;
 
 	let {
 		src,
-		size = 16,
 		// A circular crop, for the one vocabulary whose icons are photographs of
 		// people: an account's Discord avatar, which every other avatar on the
 		// site draws round (PlayerAvatar, the header, a save card).
 		round = false,
-		alt = "",
 	}: {
 		src: string | null;
-		size?: number;
 		round?: boolean;
-		alt?: string;
 	} = $props();
 </script>
 
 <span
 	class="inline-flex shrink-0 items-center justify-center"
-	style="width: {size}px; height: {size}px;"
+	style="width: {SIZE}px; height: {SIZE}px;"
 >
 	{#if src}
 		<img
 			{src}
-			{alt}
-			width={size}
-			height={size}
+			alt=""
+			width={SIZE}
+			height={SIZE}
 			class={round ? "rounded-full object-cover" : ""}
-			style="width: {size}px; height: {size}px;"
+			style="width: {SIZE}px; height: {SIZE}px;"
 		/>
 	{/if}
 </span>

@@ -246,9 +246,7 @@ export function vocabularyFor(
 		// asked about, so it labels itself rather than disappearing from the
 		// chip that holds it.
 		label: (value) => byValue.get(value)?.label ?? value,
-		...(hasIcons
-			? { icon: (value: string) => byValue.get(value)?.icon ?? null }
-			: {}),
+		icon: hasIcons ? (value) => byValue.get(value)?.icon ?? null : undefined,
 	};
 }
 
@@ -264,13 +262,17 @@ export function vocabularyFor(
  * An identity dimension has no such row — the Worker drops the seats that
  * resolve to no account (PLAYER_USER_ID_SQL, cloud/src/query/catalog.ts) — so
  * `nullLabel` is only ever reached for a value column.
+ *
+ * Takes the vocabulary already resolved rather than the name of one, because
+ * resolving a served roster's vocabulary builds a Map over the whole roster
+ * and the answer is the same for every row of a column. The caller resolves
+ * one per column.
  */
 export function valueLabel(
 	value: string | number | null,
 	type: ValueType | "number",
-	vocabulary: string | undefined,
+	vocab: Vocabulary | null,
 	nullLabel: string,
-	served: ServedRosters = {},
 ): string {
 	if (value === null) return nullLabel;
 	if (type === "boolean") return value === 1 || value === "1" ? "Yes" : "No";
@@ -279,7 +281,6 @@ export function valueLabel(
 	// a seat's in-save name, an account's display name. Formatting those would
 	// cut a name containing an underscore in half.
 	if (type !== "enum") return value;
-	const vocab = vocabularyFor(vocabulary, served);
 	if (vocab) return vocab.label(value);
 	// A zType with no roster: its prefix is its own first token
 	// (OCCURRENCELEVEL_, …), so strip up to the first underscore rather than
