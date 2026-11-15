@@ -26,6 +26,9 @@ metadata:
 ./per-ankh admin list-channels [--limit N]            # All linked creator channels (roster for the home strip)
 ./per-ankh admin games [--limit N] [--user U]
 ./per-ankh admin events [--type T] [--user U]
+./per-ankh admin online-ids check            # Flag links that credit seats to the wrong account
+./per-ankh admin online-ids unlink <user_id> <online_id>   # Remove one link
+./per-ankh admin set-uploader <game_id> <player_index|observer>  # Change which seat the owner claimed
 ./per-ankh admin nuke-user <user_id>         # Delete cloud user + games + R2 blobs (type "nuke")
 ```
 
@@ -54,6 +57,36 @@ It reads the raw ZIPs rather than the parsed blobs on purpose — `story_events`
 **Game version is reported, not selected.** The build version is not a column: it is in the Root `Version` attribute, alongside the `+`-separated mod tokens. So each save is parsed once it lands and the realized build and mod spread is reported — a draw cannot target a version band, and an empty band is answered by raising `--sample` or changing `--seed`, not by a filter. The parse is also what catches a save this corpus could not read.
 
 Each pulled file is named for its shape (`network-smallest-conquest-t72-<game_id>.zip`), which is also the resume marker: a name is a function of the game's D1 columns, so a re-run re-reads its own output and spends no remote reads. `pull-manifest.json` lands beside the saves with every pick, the requirements it was picked for, the realized spread and the byte total. Saves carry other players' names and `online_id`, and `.gitignore` holds `test-data/saves/` to its README, `.gitkeep` and `sample.xml` — so nothing pulled, manifest included, can be committed. Start with `--dry-run`, which prints the per-cell allocation and the per-dimension spread without downloading anything.
+
+## Seat attribution (`user_online_ids`)
+
+`./per-ankh admin online-ids check [--kind K]` reads the table that decides which account a seat belongs to, and flags the links that credit seats to the wrong one. `./per-ankh admin online-ids unlink <user_id> <online_id>` removes one.
+
+Why there is a command at all: `captureOnlineIds` (`cloud/src/online-ids.ts`) is the table's only writer and it writes one row per **claimed** seat, so a user who picks the wrong human in the upload picker links themselves to that player's id. Nothing removes the row again — `handleGamePatch` keeps ids "learned from other games" when the uploader seat moves (`cloud/src/games.ts`) — and `PLAYER_USER_ID_SQL` (`cloud/src/query/catalog.ts`) then credits that player's seats to the wrong account on **every** identity surface at once: the played-games board, the duel rating model and Explore. The user-facing escape hatch, `DELETE /v1/users/me/online-ids/:online_id`, is callable only by the account holder and no screen calls it, which leaves the cross-account cases — where the account holding the bad link is not the player it harms — reachable from nowhere else.
+
+Three checks, each reporting one row per link, `--kind` to run one alone:
+
+- **`uncorroborated`** — the user has no claimed seat carrying this id, so nothing they did says the id is theirs. Precise: 1 of 77 links in the 2026-11-15 production snapshot.
+- **`ambiguous`** — two or more accounts claim the id. `UNAMBIGUOUS_ONLINE_ID_OWNERS_SQL` resolves it to nobody rather than guess, so every seat carrying it leaves the board, the rating model and Explore at once and no surface says so. A genuinely shared account is a legitimate instance (it is one of migration 0003's reasons the table is many-to-many), so this check reports rather than condemns.
+- **`name-mismatch`** — no seat carrying the id plays under a name the account answers to, although the account's own claimed seats do. This is the one that reaches a wrong claim nobody corrected, which `uncorroborated` cannot see: the claim corroborates the link, so only the names give it away.
+
+Each flagged row also carries the **claim** behind it: CLAIMS is how many seats that user claimed carrying the id, and CLAIM names the first of them by game and seat. That column is the second half of the repair, because an unlink on its own expires — `reparse-all` posts the stored seat back verbatim (`scripts/admin/commands/reparse.ts`) and `handleGameUpload` re-runs `captureOnlineIds` on it, so a link with a claim behind it returns on the next parser bump. Six of the seven links removed from staging on 2026-11-15 had one. CLAIMS is also what separates a one-off misclaim from the real owner: in that snapshot every wrong link had exactly one claim and every correct owner had dozens.
+
+Read the SEAT NAMES column before acting. It is the whole evidence: an id whose seats are all some other player's handle is the shape a wrong claim leaves, and an in-game name that simply differs from a Discord one is not. The second half of `name-mismatch` — that the account does generally play under its own name — is what keeps it readable: 859 of 1,213 claimed seats match their account's name, and 18 of 68 users have no claimed seat that matches theirs, so a bare name comparison would flag every link those 18 hold.
+
+`unlink` prints the link, the seats it credits and whether the user has a claimed seat carrying the id, then takes a typed `unlink` confirmation (`--yes` skips it). SEATS counts public seats the user did **not** upload, which is exactly what stops being credited — the uploader's own claimed seat is credited by the other arm of `PLAYER_USER_ID_SQL` whatever the link says, so unlinking never touches it. Audited as `unlink_online_id`, distinct from the Worker's `online_id_remove` for the reason `delete_game` is distinct from `delete`: different actors, and the trail has to tell them apart. If the user's own claim still carries the id, the command warns that the link returns on their next upload.
+
+### `set-uploader`
+
+`./per-ankh admin set-uploader <game_id> <player_index | observer>` changes which seat a game's owner claimed. It is the operator half of `PATCH /v1/games/:id { uploader_player_index }`, which the owner drives from the game page's player popover (`src/lib/GameActions.svelte`) and which is owner-only with no admin override — so the cross-account repairs, where the account holding a bad claim is not the player it harms, are reachable from nowhere else.
+
+**There is no single right repair, so the command takes the seat rather than assuming one.** Of the six leftover claims on staging, four wanted `observer` (the uploader was not in the roster at all), one wanted a different seat in the same game (Siontific claimed "Nizar" while sitting in seat 1), and one wanted nothing: Akuukis claimed their own seat in a save that wrote one `online_id` onto *both* human seats, so the claim is right and only the link was wrong. That last shape is rare but real — 14 of 986 games and 28 of 1,942 human seats on staging carry a non-empty id covering more than one human.
+
+Three of `handleGamePatch`'s guards carry over, because they are rules about the data rather than about who is asking: a tournament-linked save is locked (the match's slot mapping is the historical record of which player the uploader was), a run on an open challenge is locked (its verdict is scored once and never rescored), and the index must name a human seat in that game. The per-user rate limit does not carry over — it is an abuse guard on a public endpoint.
+
+The pick is validated against `player_summaries` rather than the R2 blob the Worker reads. The table is that blob's pivot, and the two columns this writes derive identically from it: across the 798 claimed games in the 2026-11-15 local snapshot, the seat's `nation` and `is_winner` reproduce the stored `games.user_nation` and `user_won` on every row, including NULL `user_won` for the 26 games no seat won. The write clears `is_uploader` before setting it, the same ordering `handleGamePatch` uses, because migration 0053's partial unique index is checked per row.
+
+Audited as `set_uploader`. It clears that owner's stats bundles — the Worker does this on the same change and a direct D1 write bypasses it — and reports the count. Duel ratings read `is_uploader` and rebuild on the 03:47 cron (`cloud/src/ratings/rebuild.ts`), so they keep the old attribution until then or until `POST /v1/admin/ratings/rebuild`; the command says so rather than doing it, since there is no CLI surface for that rebuild.
 
 ## Tournaments
 

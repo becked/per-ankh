@@ -11,6 +11,7 @@ import * as users from "./commands/users";
 import * as channels from "./commands/channels";
 import * as games from "./commands/games";
 import * as events from "./commands/events";
+import * as onlineIds from "./commands/online-ids";
 import * as security from "./commands/security";
 import * as tournament from "./commands/tournament";
 import * as cache from "./commands/cache";
@@ -41,7 +42,21 @@ function printHelp(): void {
 			"  game <game_id>                   Show one game's detail",
 			"  delete-game <game_id>            Delete one game (D1 + R2); account stays",
 			"  purge-games --user <user_id>     Delete all of a user's games; account stays",
+			"  set-uploader <game_id> <player_index | observer>",
+			"                                   Change which seat the owner claimed; clears",
+			"                                   their stats bundles. Locked on a tournament",
+			"                                   save or an open-challenge run.",
 			"  events [--type T] [--user U] [--limit N]               Audit log",
+			"",
+			"Seat attribution (user_online_ids — which account a seat belongs to):",
+			"  online-ids check [--kind K]      Flag links that credit seats to the wrong",
+			"                                   account. Kinds: uncorroborated (no claimed",
+			"                                   seat carries the id), ambiguous (two accounts",
+			"                                   claim it, so it credits nobody), name-mismatch",
+			"                                   (its seats never play under the account's name).",
+			"  online-ids unlink <user_id> <online_id>",
+			"                                   Remove one link; prints the seats it credits",
+			"                                   first and audits as 'unlink_online_id'",
 			"",
 			"Creator video channels:",
 			"  add-channel <user_id> <url|@handle>   Link a user's YouTube channel (resolves + upserts)",
@@ -175,8 +190,12 @@ export async function main(argv: string[]): Promise<void> {
 			return games.runDelete(subArgs, opts);
 		case "purge-games":
 			return games.runPurge(subArgs, opts);
+		case "set-uploader":
+			return games.runSetUploader(subArgs, opts);
 		case "events":
 			return events.run(subArgs, opts);
+		case "online-ids":
+			return onlineIds.run(subArgs, opts);
 		case "reparse-all":
 			return reparse.run(subArgs, opts);
 		case "duel-event-titles":

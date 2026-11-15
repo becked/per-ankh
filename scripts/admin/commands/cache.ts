@@ -146,6 +146,21 @@ export async function clearStatsBundles(): Promise<number> {
 	return entries.length;
 }
 
+// Clear one user's stats bundles — the CLI equivalent of the Worker's
+// `invalidateStatsCache(env, { kind: "user", user_id })`, matched on the same
+// `:user:{id}:` anchor it filters on (cloud/src/stats/cache.ts). Exported for
+// `set-uploader`, which rewrites games.user_nation / user_won straight in D1
+// and so leaves that user's cached bundles describing the old seat.
+//
+// Narrow where clearStatsBundles is total, because the blast radius is: one
+// game's attribution changed, and the global slices do not read the column.
+export async function clearUserStatsBundles(userId: string): Promise<number> {
+	const entries = await collect(["stats"], `:user:${userId}:`);
+	if (entries.length === 0) return 0;
+	await kvBulkDelete(entries.map((e) => e.name));
+	return entries.length;
+}
+
 function formatExpiry(expiration: number | undefined): string {
 	if (expiration == null) return emdash(null);
 	return formatDate(new Date(expiration * 1000).toISOString());

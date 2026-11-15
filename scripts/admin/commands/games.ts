@@ -30,6 +30,7 @@ import {
 	printJson,
 } from "../../lib/cli";
 import { confirmTyping } from "../../lib/confirm";
+import { clearUserStatsBundles } from "./cache";
 
 interface GameListRow {
 	game_id: string;
@@ -390,5 +391,262 @@ export async function runPurge(
 
 	ok(
 		`Purged ${gameIds.length} game(s) from ${emdash(user.display_name)} (${userId}).`,
+	);
+}
+
+// ─── set-uploader (which seat the owner claimed) ──────────────────────────
+//
+// `./per-ankh admin set-uploader <game_id> <player_index | observer>`
+//
+// The operator half of `PATCH /v1/games/:id { uploader_player_index }`, which
+// the owner drives from the game page's player popover
+// (src/lib/GameActions.svelte) and which is owner-only with no admin override
+// — a 403 for anyone else (cloud/src/games.ts). That leaves the cross-account
+// repairs reachable from nowhere: `online-ids unlink` removes the link, and
+// the claim that re-creates it on the next reparse belongs to a different
+// account than the one the bad link harms.
+//
+// Why a claim has to move at all: `reparse-all` posts the stored seat back
+// verbatim (reparse.ts) and `handleGameUpload` re-runs `captureOnlineIds` on
+// that seat's id, so unlinking alone lasts until the next parser bump.
+//
+// Three guards carry over from handleGamePatch because they are rules about
+// the data, not about who is asking: a tournament-linked save is locked (the
+// match's slot mapping is the historical record of which player the uploader
+// was), a run on an open challenge is locked (the verdict is scored once and
+// never rescored), and the index must name a human seat in this game. The
+// per-user rate limit does not carry over — it is an abuse guard on a public
+// endpoint.
+//
+// The pick is validated against `player_summaries` rather than the R2 blob the
+// Worker reads. The table is that blob's pivot, rebuilt from it by every
+// reparse and reindex, and the two columns this writes derive identically:
+// across the 798 claimed games in the 2026-11-15 local snapshot, the seat's
+// `nation` and `is_winner` reproduce the stored `games.user_nation` and
+// `user_won` on every row, NULL for the 26 games no seat won included.
+
+interface SeatRow {
+	player_index: number;
+	player_name: string;
+	nation: string | null;
+	is_human: number;
+	is_uploader: number;
+	is_winner: number | null;
+}
+
+interface SetUploaderGameRow {
+	game_id: string;
+	user_id: string;
+	owner_name: string | null;
+	game_name: string | null;
+	display_name: string | null;
+	user_nation: string | null;
+	user_won: number | null;
+	tournament_linked: number;
+	open_challenge_run: number;
+	winner_seats: number;
+}
+
+export async function runSetUploader(
+	argv: string[],
+	opts: CommandOpts,
+): Promise<void> {
+	const { positional } = parseFlags(argv);
+	const gameId = positional[0];
+	const seatArg = positional[1];
+	const usage =
+		"Usage: ./per-ankh admin set-uploader <game_id> <player_index | observer>";
+	if (!gameId || seatArg === undefined) throw new Error(usage);
+
+	// `observer` rather than a bare `null`, so the argument reads as the thing
+	// the owner's own picker calls it ("I didn't play in this game") and a
+	// typo can't be mistaken for a seat.
+	let nextIndex: number | null;
+	if (seatArg === "observer") {
+		nextIndex = null;
+	} else {
+		const parsed = Number(seatArg);
+		if (!Number.isInteger(parsed) || parsed < 0) {
+			throw new Error(
+				`${usage}\n\nSeat must be a non-negative integer or 'observer'.`,
+			);
+		}
+		nextIndex = parsed;
+	}
+
+	const idStr = sqlStr(gameId);
+	const [gameRaw, seatRaw] = await d1Batch([
+		`SELECT g.game_id, g.user_id, COALESCE(u.alias, u.display_name) AS owner_name,
+		        g.game_name, g.display_name, g.user_nation, g.user_won,
+		        (SELECT COUNT(*) FROM tournament_matches tm WHERE tm.game_id = g.game_id) AS tournament_linked,
+		        (SELECT COUNT(*) FROM challenge_submissions s
+		           JOIN challenges c ON c.challenge_id = s.challenge_id
+		          WHERE s.game_id = g.game_id AND c.closes_at > datetime('now')) AS open_challenge_run,
+		        (SELECT COUNT(*) FROM player_summaries w
+		          WHERE w.game_id = g.game_id AND w.is_winner = 1) AS winner_seats
+		   FROM games g
+		   LEFT JOIN users u ON u.user_id = g.user_id
+		  WHERE g.game_id = ${idStr}`,
+		`SELECT player_index, player_name, nation, is_human, is_uploader, is_winner
+		   FROM player_summaries WHERE game_id = ${idStr} ORDER BY player_index`,
+	]);
+	const game = (gameRaw as SetUploaderGameRow[])[0];
+	if (!game) throw new Error(`Game not found: ${gameId}`);
+	const seats = seatRaw as SeatRow[];
+
+	if (game.tournament_linked > 0) {
+		throw new Error(
+			"Game is linked to a tournament match; the slot mapping is the record of which player the uploader was.",
+		);
+	}
+	if (game.open_challenge_run > 0) {
+		throw new Error(
+			"Game is a run on an open challenge; its verdict is scored once and never rescored.",
+		);
+	}
+
+	const next =
+		nextIndex === null ? null : seats.find((s) => s.player_index === nextIndex);
+	if (nextIndex !== null && (!next || !next.is_human)) {
+		throw new Error(
+			`Player index ${nextIndex} not found among humans. Human seats: ${
+				seats
+					.filter((s) => s.is_human)
+					.map((s) => `${s.player_index} (${s.player_name || "unnamed"})`)
+					.join(", ") || "none"
+			}`,
+		);
+	}
+
+	const current = seats.find((s) => s.is_uploader === 1) ?? null;
+	if ((current?.player_index ?? null) === nextIndex) {
+		info(
+			nextIndex === null
+				? "Already an observer upload. Nothing to change."
+				: `Seat ${nextIndex} is already the claimed seat. Nothing to change.`,
+		);
+		return;
+	}
+
+	// Mirrors deriveUploaderColumns (cloud/src/games.ts): observer clears both,
+	// and user_won stays NULL on a save that records no winner at all, which is
+	// distinct from "played and lost".
+	const nextNation = next?.nation ?? null;
+	const nextWon =
+		next === null || next === undefined
+			? null
+			: game.winner_seats === 0
+				? null
+				: (next.is_winner ?? 0);
+
+	const label = (s: SeatRow | null): string =>
+		s === null
+			? "observer (no claim)"
+			: `seat ${s.player_index} ${s.player_name || "unnamed"}`;
+
+	if (!opts.json) {
+		printDetail("Change claimed seat", [
+			[
+				"Game",
+				`${emdash(game.display_name ?? game.game_name)} (${game.game_id})`,
+			],
+			["Owner", `${emdash(game.owner_name)} (${game.user_id})`],
+			["From", label(current)],
+			["To", label(next ?? null)],
+			["user_nation", `${emdash(game.user_nation)} -> ${emdash(nextNation)}`],
+			[
+				"user_won",
+				`${game.user_won == null ? "—" : game.user_won ? "yes" : "no"} -> ${
+					nextWon == null ? "—" : nextWon ? "yes" : "no"
+				}`,
+			],
+		]);
+		printTable(
+			[
+				{ header: "SEAT", width: 4, align: "right" },
+				{ header: "NAME", width: 20 },
+				{ header: "NATION", width: 20 },
+				{ header: "HUMAN", width: 5 },
+				{ header: "CLAIMED", width: 7 },
+			],
+			seats.map((s) => [
+				String(s.player_index),
+				s.player_name || emdash(null),
+				emdash(s.nation),
+				s.is_human ? "yes" : "no",
+				s.is_uploader ? "yes" : "no",
+			]),
+		);
+		process.stdout.write("\n");
+	}
+
+	if (!opts.yes) {
+		const yes = await confirmTyping(
+			`Change ${emdash(game.owner_name)}'s claimed seat on this game?`,
+			"set-uploader",
+		);
+		if (!yes) {
+			info("Cancelled.");
+			return;
+		}
+	}
+
+	// Clear, then set — two statements rather than one CASE, the same reason
+	// handleGamePatch gives: migration 0053's partial unique index is checked
+	// as each row is written, so a single UPDATE moving the flag to a lower
+	// player_index would set the new row before clearing the old one and trip
+	// the index mid-statement.
+	await d1Batch([
+		`UPDATE player_summaries SET is_uploader = 0 WHERE game_id = ${idStr}`,
+		...(nextIndex === null
+			? []
+			: [
+					`UPDATE player_summaries SET is_uploader = 1
+					  WHERE game_id = ${idStr} AND player_index = ${nextIndex}`,
+				]),
+		`UPDATE games SET user_nation = ${nextNation === null ? "NULL" : sqlStr(nextNation)},
+		        user_won = ${nextWon == null ? "NULL" : nextWon ? 1 : 0},
+		        updated_at = datetime('now')
+		  WHERE game_id = ${idStr}`,
+	]);
+
+	const metadata = JSON.stringify({
+		game_id: gameId,
+		from_player_index: current?.player_index ?? null,
+		from_player_name: current?.player_name ?? null,
+		to_player_index: nextIndex,
+		to_player_name: next?.player_name ?? null,
+		user_nation: nextNation,
+	});
+	await d1Exec(`
+		INSERT INTO events (event_type, game_id, user_id, metadata)
+		VALUES ('set_uploader', ${idStr}, ${sqlStr(game.user_id)}, ${sqlStr(metadata)})
+	`);
+
+	// The Worker invalidates the owner's bundles on the same change; this write
+	// bypasses it, so the clear happens here or the owner's charts keep
+	// describing the old seat for the cache's full TTL.
+	const cleared = await clearUserStatsBundles(game.user_id);
+
+	if (opts.json) {
+		printJson({
+			game_id: gameId,
+			user_id: game.user_id,
+			from_player_index: current?.player_index ?? null,
+			to_player_index: nextIndex,
+			user_nation: nextNation,
+			user_won: nextWon,
+			stats_bundles_cleared: cleared,
+		});
+		return;
+	}
+	ok(
+		`Claimed seat on ${gameId} is now ${label(next ?? null)}; ${cleared} stats bundle(s) cleared.`,
+	);
+	// Duel ratings read is_uploader and rebuild nightly (cloud/src/ratings/
+	// rebuild.ts), so they keep the old attribution until 03:47 or an admin
+	// trigger. Said rather than done: there is no CLI surface for that rebuild.
+	info(
+		"Duel ratings follow on the next nightly rebuild (or POST /v1/admin/ratings/rebuild).",
 	);
 }
