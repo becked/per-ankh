@@ -1,5 +1,51 @@
 # Changelog
 
+## [2026-11-14-be01daa] - 2026-11-14
+
+### Features
+
+- (cloud) a semantic layer and query compiler over the projected corpus — [d7520ad](https://github.com/becked/per-ankh/commit/d7520ad564efa1625ed43077b88cee35b3305fe3)
+- (web) ask the corpus a question no chart was built for — [ca56308](https://github.com/becked/per-ankh/commit/ca56308df8ec9b2d5c05404ff6834f22f16334b7)
+- (web) default the explore surface to humans and recent games — [8088054](https://github.com/becked/per-ankh/commit/8088054757eecb066c36a0fa35a41a065946831e)
+- (query) give every filter-value picker a roster and a combobox — [a05fff4](https://github.com/becked/per-ankh/commit/a05fff454745dea650895fd718630860bf01fb57)
+- (query) filter a question by player, and measure total science — [ed81a8c](https://github.com/becked/per-ankh/commit/ed81a8c3c1aae62a2c234b2c75c0ec149d2a2792)
+- (query) lay Explore out as query left, results right — [a7c06d5](https://github.com/becked/per-ankh/commit/a7c06d589455b889686e193d8e974faba11f7e75)
+- (query) give each builder section its own panel inset — [671c19c](https://github.com/becked/per-ankh/commit/671c19c153d43f47443ad921a63b43f5d618ed43)
+- (query) size the Explore panels as equal halves — [38fa2a9](https://github.com/becked/per-ankh/commit/38fa2a97c63be82892b7a40949b052fa146e061f)
+- (query) reset the whole question from the builder's footer — [1ac78cc](https://github.com/becked/per-ankh/commit/1ac78cc3951f57b772b54ca90044c089808391e0)
+- (query) pick the date bound from a window dropdown — [7ac2a3a](https://github.com/becked/per-ankh/commit/7ac2a3a9575fad19c591929cd51fa3a851945ebb)
+- (query) drop the Saves uploaded measure — [4a6abf2](https://github.com/becked/per-ankh/commit/4a6abf27cd4479c9fd545701ff6b2b21cfda9e6b)
+- (query) group the source picker by subject — [8d11b5b](https://github.com/becked/per-ankh/commit/8d11b5ba80e3b96c464143ebfb7b9f4ae34f9c90)
+- (query) filter Explore by game mode, read off the roster — [e9dd007](https://github.com/becked/per-ankh/commit/e9dd007ec605e0d743f69265d956e6243b87fda1)
+- (query) draw the value's own icon in Explore — [c0c1113](https://github.com/becked/per-ankh/commit/c0c111332a45d5ca9d39e45ce886a1c1b95d6622)
+- (query) put the add buttons on their inset's heading row — [c10e789](https://github.com/becked/per-ankh/commit/c10e78939579ab0bdbcf347170373b31fbfcb9ac)
+
+### Fixes
+
+- (query) address the fit review on the ad-hoc query surface — [4da2584](https://github.com/becked/per-ankh/commit/4da258453e3492cc5c5fc3d88c9fd504e515c262)
+- (query) name map, mode and prosperity values in the game's words — [cc1f1a0](https://github.com/becked/per-ankh/commit/cc1f1a019ecd91d1bb61b10518a9daa2deaa4562)
+- (query) drop the hints and placeholders from the question builder — [6444339](https://github.com/becked/per-ankh/commit/6444339daa135d03d6aceb69ca7106d1d186b363)
+- (query) drop the empty-state line and four help notes — [a1e4571](https://github.com/becked/per-ankh/commit/a1e45719f4ac558d32bd3bd408a7f2f932134bb4)
+- (query) build the prosperity roster from the baked order — [1ec5470](https://github.com/becked/per-ankh/commit/1ec54707559a0743825cd0f0698b26e59bdfa039)
+- (query) draw a refused selection inside the results frame — [732d2bf](https://github.com/becked/per-ankh/commit/732d2bf15221a5cba3af6090dcebd13690fa2dee)
+- (query) put the builder's add buttons at the panel edge — [33e4d2a](https://github.com/becked/per-ankh/commit/33e4d2a860c57202b8b54973188580829cacaff9)
+- (query) average over one upload per match — [442cc49](https://github.com/becked/per-ankh/commit/442cc4906b965482b6e73fd650570a5f1e415b45)
+- (query) drop the seats a Player grouping cannot attribute — [c7a722d](https://github.com/becked/per-ankh/commit/c7a722d85aa4c703a72a0dffd4f5d661a501bb75)
+- (query) drop the row-cap notice from the results table — [ebd7904](https://github.com/becked/per-ankh/commit/ebd79041c49739344e9e5d86c2f38295a7ee6808)
+- (query) drop the source grain line, rename two sources — [4c896ca](https://github.com/becked/per-ankh/commit/4c896ca62689bf83ea336eadd8058ebcb25ea48d)
+- (query) address the second fit review's findings — [aa11e0f](https://github.com/becked/per-ankh/commit/aa11e0f2111fdd87f239e94a5b3189ca74c1b38a)
+- (query) put Explore's results frame on the inset surface — [26ae328](https://github.com/becked/per-ankh/commit/26ae328e0d3b11085b66482e0232a50295b4db54)
+
+### Other
+
+- (web) make the ad-hoc query surface a view of Global Stats — [74b2710](https://github.com/becked/per-ankh/commit/74b271099650f2c64b5e452666a2f5a08c6ef2d4)
+- (stats) rename the /stats/query route to /stats/explore — [231fe31](https://github.com/becked/per-ankh/commit/231fe3149a936cdcdad1174da09944767ef58797)
+- (query) drop the measure notes from Explore — [d35ecc2](https://github.com/becked/per-ankh/commit/d35ecc236165d4c147e687a1164f79b73e61f8a2)
+- (query) drop the column help text from Explore — [1995de2](https://github.com/becked/per-ankh/commit/1995de2d8e461dc6d39822d6e5822cfe0563488f)
+- (query) rename the seat labels in Explore — [c77abc0](https://github.com/becked/per-ankh/commit/c77abc0c02a22c64496acc33788ea51a847d8f2f)
+- (query) name the Explore identity dimension Player — [ec88db7](https://github.com/becked/per-ankh/commit/ec88db77bcb97481a2c5178d4872ce4907756b51)
+- (query) resolve a column's vocabulary once per column — [e038fee](https://github.com/becked/per-ankh/commit/e038fee62bafba7fd5a13e72aaee142895f69ab9)
+
 ## [2026-11-11-6732ade] - 2026-11-11
 
 ### Features
