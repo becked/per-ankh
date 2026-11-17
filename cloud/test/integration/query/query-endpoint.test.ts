@@ -5,8 +5,9 @@
 //
 // The corpus is one match uploaded by both of its players — the shape issue
 // #272 names as the thing a count gets wrong. Two rows in `games`, two rows in
-// `wonder_events`, four rows in `player_summaries`, one match. Everything here
-// turns on the difference between those numbers.
+// `wonder_events`, four rows in `player_summaries`, four rows in
+// `player_units_produced`, one match. Everything here turns on the difference
+// between those numbers.
 
 import { applyD1Migrations, env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -24,6 +25,7 @@ import { buildUploadFormData } from "../../helpers/save-blob";
 const EGYPT = "NATION_EGYPT";
 const PYRAMIDS = "IMPROVEMENT_PYRAMIDS";
 const SCHEMER = "TRAIT_SCHEMER_ARCHETYPE";
+const BALLISTA = "UNIT_BALLISTA";
 
 // One match, by its own GameId. Both uploads carry it, which is what makes
 // them two saves of one match rather than two matches.
@@ -38,6 +40,12 @@ const SHARED = {
 	// Alice's seat built the Pyramids and opened with a Schemer.
 	wonders: [{ player_id: 0, wonder: PYRAMIDS, completed_turn: 30 }],
 	rulers: [{ player: 0, archetype: SCHEMER }],
+	// Alice trained 7 ballistae, Bob 3. Both uploads carry both seats, so the
+	// sum over the raw rows is 20 and the answer is 7 and 3.
+	units: [
+		{ player: 0, unitType: BALLISTA, count: 7 },
+		{ player: 1, unitType: BALLISTA, count: 3 },
+	],
 };
 
 beforeAll(async () => {
@@ -350,6 +358,30 @@ describe("the issue's acceptance questions", () => {
 		expect(rows).toEqual([
 			{ player: "Alice", player_id: alice.userId, player_slug: null, value: 1 },
 		]);
+	});
+
+	it("Q3 — who built the most ballistae", async () => {
+		// The question phase two exists for. Alice trained 7 and Bob 3, and
+		// both uploads of the match carry both seats' rows — so the sum over
+		// the raw rows is 14 and 6, and the answer is the one the players
+		// played.
+		const rows = await rowsOf(
+			`source=player_units_produced&dim=player&measure=units_built` +
+				`&f=unit:in:${BALLISTA}`,
+		);
+		expect(rows).toEqual([
+			{ player: "Alice", player_id: alice.userId, player_slug: null, value: 7 },
+			{ player: "Bob", player_id: bob.userId, player_slug: null, value: 3 },
+		]);
+	});
+
+	it("Q3 — grouped by the unit instead of the player", async () => {
+		// The other way round, which is what the `unit` dimension is for: the
+		// ten ballistae of the match, once.
+		const rows = await rowsOf(
+			"source=player_units_produced&dim=unit&measure=units_built",
+		);
+		expect(rows).toEqual([{ unit: BALLISTA, value: 10 }]);
 	});
 });
 

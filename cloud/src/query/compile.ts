@@ -89,6 +89,36 @@ function measureSql(measure: CatalogMeasure, source: QuerySource): string {
 	return countSqlFor(measure, source);
 }
 
+/**
+ * Whether this measure's answer moves with how many rows carry the value, so
+ * the corpus has to be narrowed to one upload per match before it runs.
+ *
+ * An average and a sum both do. An average divides by the rows it was handed
+ * and a sum adds them up, so both double when a match was uploaded twice: the
+ * only visible symptom of a sum that skipped this is that every duel's unit
+ * count is twice what it should be, which looks like a plausible number. A
+ * count says DISTINCT over the key its unit names, and a MIN or MAX reads the
+ * same extremum however many copies of a row are there, so neither needs it —
+ * narrowing them would be a second answer to a question already answered.
+ *
+ * The criterion is read off the aggregate function rather than declared per
+ * entry, so an average or a sum added to the catalog later gets the narrowing
+ * without anyone remembering to ask. The switch is exhaustive on purpose: a
+ * function added to `agg.fn` (catalog.ts) fails to compile here until it says
+ * which side it falls on.
+ */
+export function needsOneUploadPerMatch(measure: CatalogMeasure): boolean {
+	if (!measure.agg) return false;
+	switch (measure.agg.fn) {
+		case "AVG":
+		case "SUM":
+			return true;
+		case "MIN":
+		case "MAX":
+			return false;
+	}
+}
+
 // A value as it is bound. Numbers and booleans go over as numbers rather than
 // as the strings the selection carries them in, so a comparison against an
 // INTEGER column doesn't rest on SQLite's affinity rules to mean what it says.
@@ -261,15 +291,12 @@ export function compileQuery(
 		whereParts.push(`${sql} IS NOT NULL`);
 	}
 
-	// An average is the one aggregate whose answer moves with how many rows
-	// carry the value: a count says DISTINCT over the key its unit names, and a
-	// MIN or MAX reads the same extremum however many copies of a row are
-	// there. So the measure that needs the corpus narrowed to one upload per
-	// match is read off the aggregate function rather than declared per entry.
-	// An average added to the catalog later then gets it without anyone
-	// remembering to ask, which is the coverage gap a list of parallel entries
-	// otherwise grows.
-	if (measure.agg?.fn === "AVG") whereParts.push(ONE_UPLOAD_PER_MATCH_SQL);
+	// The aggregates whose answer moves with how many rows carry the value —
+	// an average and a sum — run over one upload per match. The criterion is
+	// needsOneUploadPerMatch above, which is also what the guard tests split
+	// on, so neither side is a second spelling of the rule.
+	if (needsOneUploadPerMatch(measure))
+		whereParts.push(ONE_UPLOAD_PER_MATCH_SQL);
 
 	for (const filter of selection.filters) {
 		const spec = filterByKey(source, filter.key);

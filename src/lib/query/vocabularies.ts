@@ -25,6 +25,7 @@ import { LAW_CLASSES } from "$lib/generated/law-classes";
 import { LEADER_TRAITS } from "$lib/generated/leader-traits";
 import { MAP_OPTION_DEFS } from "$lib/generated/map-option-defs";
 import { TREE_TECHS } from "$lib/generated/tech-tree";
+import { UNIT_STATS } from "$lib/generated/unit-stats";
 import { VICTORY_ORDERING } from "$lib/generated/victory-ordering";
 import {
 	mapScriptLabel,
@@ -44,6 +45,7 @@ import {
 	formatArchetype,
 	formatEnum,
 	nationName,
+	unitName,
 } from "$lib/utils/formatting";
 import type { CatalogRosterOption, ValueType } from "./types";
 
@@ -189,6 +191,34 @@ const VOCABULARIES: Readonly<Record<string, Vocabulary>> = {
 		// grouping still returns — 14 of the 121 values and 347 of the 78,733 rows
 		// in the 2026-11-10 snapshot ship no art of their own.
 		icon: (value) => getSpritePath("techs", value),
+	},
+	// The units the game's own roster declares — all 91 of UNIT_STATS, which is
+	// the full base-game list out of unit.xml. No baker of its own, unlike
+	// `tech`: TECH_NAMES covers the display names and not the roster, which is
+	// what bake-tech-tree exists for, while UNIT_STATS is already keyed by
+	// every unit.
+	//
+	// Not narrowed to the units a given nation or tech can build: which units a
+	// player could have trained is a game rules question, and Reference/Source
+	// does not resolve in a fresh checkout (OLD_WORLD_REFERENCE_DIR covers
+	// Reference/XML alone), so it is not answerable under the citation rule.
+	//
+	// Measured over the 116 saves in test-data/saves/: 62 of the 91 appear in
+	// the corpus, and 10 unit types in the corpus are outside the roster — the
+	// Carthage and Kush DLC units, which ship in Reference/XML/Mods/ and not in
+	// the base Infos/ that bake-unit-stats reads. Those are 25 of the corpus's
+	// 3,996 production rows. They stay typable and label themselves through
+	// `unitName`'s formatEnum fallback, which is the same shape the `tech`
+	// vocabulary carries for TECH_CARTHAGINIAN_TRAINING.
+	unit: {
+		options: byLabel(Object.keys(UNIT_STATS), unitName),
+		label: unitName,
+		// The painted portrait rather than the `__ICON` glyph. The glyph is the
+		// Military rail's marker, where it replaces a colored dot and 3 of the
+		// 91 units ship none; here the box is a value's picture beside its name,
+		// which is the slot a crest and an improvement icon fill too, and 90 of
+		// the 91 have a portrait.
+		icon: (value) => getSpritePath("units", value),
 	},
 	family_class: {
 		options: byLabel(FAMILY_CLASSES, familyClassLabel),

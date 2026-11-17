@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { compileQuery } from "./compile";
+import { compileQuery, needsOneUploadPerMatch } from "./compile";
 import { SOURCES } from "./catalog";
 import { parseSelection } from "./select";
 import type { CompiledQuery } from "./compile";
@@ -163,14 +163,20 @@ describe("measure units", () => {
 		).toContain("COUNT(DISTINCT g.xml_game_id || ':' || we.wonder)");
 	});
 
-	it("narrows an average to one upload per match, on every source", () => {
-		// Enumerated from the catalog rather than from a list written here:
-		// the defect this guards against is an average added later that nobody
-		// remembers to dedupe, and a hand-written list would be the thing that
-		// went stale.
+	it("narrows the aggregates that need it to one upload per match, on every source", () => {
+		// Split on needsOneUploadPerMatch rather than on the string "AVG":
+		// the defect this guards against is an aggregate added later that
+		// nobody remembers to dedupe, and a sum is one — it adds up however
+		// many rows it was handed, so a match uploaded twice doubles it. Under
+		// the old split a sum fell into the other bucket, so the suite passed
+		// on a sum that double-counted and failed on one that did not.
+		//
+		// Enumerated from the catalog rather than from a list written here,
+		// for the same reason: a hand-written list is the thing that goes
+		// stale.
 		for (const source of SOURCES) {
 			for (const measure of source.measures) {
-				if (measure.agg?.fn !== "AVG") continue;
+				if (!needsOneUploadPerMatch(measure)) continue;
 				const sql = flat(
 					compile(`source=${source.key}&measure=${measure.key}`).sql,
 				);
@@ -188,7 +194,7 @@ describe("measure units", () => {
 		// question that is already answered.
 		for (const source of SOURCES) {
 			for (const measure of source.measures) {
-				if (measure.agg?.fn === "AVG") continue;
+				if (needsOneUploadPerMatch(measure)) continue;
 				const sql = flat(
 					compile(`source=${source.key}&measure=${measure.key}`).sql,
 				);
@@ -197,6 +203,18 @@ describe("measure units", () => {
 				);
 			}
 		}
+	});
+
+	it("narrows a sum, named rather than derived", () => {
+		// The one assertion here that does not read needsOneUploadPerMatch, so
+		// the rule is pinned against the SQL and not only against its own
+		// predicate. A sum over two uploads of one match is double the units
+		// that match's seats trained.
+		const sql = flat(
+			compile("source=player_units_produced&measure=units_built").sql,
+		);
+		expect(sql).toContain("SUM(pup.count)");
+		expect(sql).toContain("ROW_NUMBER() OVER (PARTITION BY xml_game_id");
 	});
 
 	it("picks the surviving upload by a property of the corpus", () => {
@@ -379,9 +397,9 @@ describe("grouping and ordering", () => {
 	});
 });
 
-// The three questions issue #272 sets as the acceptance test. Q3 needs a
-// projection that does not exist yet (units_produced) and is phase two; these
-// are the two that are answerable over the eight projected tables.
+// The three questions issue #272 sets as the acceptance test, over the nine
+// game-derived tables D1 projects — `player_units_produced` (migration 0057)
+// being the ninth, added for Q3.
 describe("the issue's acceptance questions", () => {
 	it("Q1 — which players in tournament X built the Pyramids", () => {
 		const { sql, binds } = compile(
@@ -414,5 +432,25 @@ describe("the issue's acceptance questions", () => {
 		// here because the measure's unit is a match.
 		expect(flattened).toContain("COUNT(DISTINCT g.xml_game_id)");
 		expect(binds).toEqual(["NATION_CARTHAGE", "TRAIT_SCHEMER_ARCHETYPE", 50]);
+	});
+
+	it("Q3 — who built the most ballistae in the tournament", () => {
+		const { sql, binds } = compile(
+			"source=player_units_produced&dim=player&measure=units_built" +
+				"&f=unit:in:UNIT_BALLISTA" +
+				"&f=tournament:in:bbbbbbbbbbbbbbbbbbbbb",
+		);
+		const flattened = flat(sql);
+		expect(flattened).toContain("FROM player_units_produced pup");
+		expect(flattened).toContain("pup.unit_type IN (?)");
+		expect(flattened).toContain("g.game_id IN (SELECT DISTINCT m.game_id");
+		// The seat join is what carries the account the question groups on:
+		// the table holds a player_index and nothing else about the seat.
+		expect(flattened).toContain("JOIN player_summaries ps");
+		// Summed over one upload per match, or a duel both players uploaded
+		// reports twice the ballistae either of them built.
+		expect(flattened).toContain("SUM(pup.count)");
+		expect(flattened).toContain("ROW_NUMBER() OVER (PARTITION BY xml_game_id");
+		expect(binds).toEqual(["UNIT_BALLISTA", "bbbbbbbbbbbbbbbbbbbbb", 50]);
 	});
 });
