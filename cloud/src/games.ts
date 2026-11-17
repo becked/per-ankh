@@ -1132,6 +1132,49 @@ function buildWonderEventStatements(
 	return statements;
 }
 
+// Units trained (PlayerUnitProduced wire shape: { player_id, player_name,
+// nation, unit_type, count }). One row per seat per unit type, which is the
+// grain deriveUnitsProduced emits (src/lib/parser/derive/units-produced.ts):
+// across the 116 saves in test-data/saves/ no (player, unit type) pair appears
+// twice in a blob, so the primary key never collides inside one upload.
+//
+// The seat's nation and in-save name are dropped. player_summaries carries
+// both and joins on (game_id, player_index), so repeating them here would be a
+// second copy to drift.
+//
+// Four columns, so TECH_LAW_ROWS_PER_INSERT is the chunk — the same bound the
+// wonder, tech and law inserts above take.
+function buildPlayerUnitsProducedStatements(
+	db: QueryableD1,
+	gameId: string,
+	blob: FullGameData,
+): D1PreparedStatement[] {
+	const produced = blob.units_produced as Array<{
+		player_id: number;
+		unit_type: string;
+		count: number;
+	}>;
+	if (!produced || produced.length === 0) return [];
+
+	const columns = ["game_id", "player_index", "unit_type", "count"];
+	const statements: D1PreparedStatement[] = [];
+
+	for (const chunk of chunked(produced, TECH_LAW_ROWS_PER_INSERT)) {
+		const sql = buildMultiRowInsert(
+			"player_units_produced",
+			columns,
+			chunk.length,
+		);
+		const bindings: unknown[] = [];
+		for (const u of chunk) {
+			bindings.push(gameId, u.player_id, u.unit_type, u.count);
+		}
+		statements.push(db.prepare(sql).bind(...bindings));
+	}
+
+	return statements;
+}
+
 function buildLawEventStatements(
 	db: QueryableD1,
 	gameId: string,
@@ -2261,6 +2304,11 @@ export async function handleGameUpload(
 		...buildWonderEventStatements(env.SHARE_DB, gameId, blob),
 		...buildWonderPoolStatements(env.SHARE_DB, gameId, blob),
 	];
+	const unitStmts = buildPlayerUnitsProducedStatements(
+		env.SHARE_DB,
+		gameId,
+		blob,
+	);
 
 	const allStatements: D1PreparedStatement[] = [
 		env.SHARE_DB.prepare(gameRow.sql).bind(...gameRow.bindings),
@@ -2271,6 +2319,7 @@ export async function handleGameUpload(
 		...techStmts,
 		...lawStmts,
 		...wonderStmts,
+		...unitStmts,
 	];
 
 	// Restore tournament_matches.game_id for any matches that referenced this
@@ -4329,6 +4378,9 @@ export async function handleAdminReindex(
 		env.SHARE_DB.prepare("DELETE FROM leader_reigns WHERE game_id = ?").bind(
 			gameId,
 		),
+		env.SHARE_DB.prepare(
+			"DELETE FROM player_units_produced WHERE game_id = ?",
+		).bind(gameId),
 		...buildSummaryStatements(env.SHARE_DB, {
 			gameId,
 			blob,
@@ -4342,6 +4394,7 @@ export async function handleAdminReindex(
 		...buildLawEventStatements(env.SHARE_DB, gameId, blob),
 		...buildWonderEventStatements(env.SHARE_DB, gameId, blob),
 		...buildWonderPoolStatements(env.SHARE_DB, gameId, blob),
+		...buildPlayerUnitsProducedStatements(env.SHARE_DB, gameId, blob),
 	];
 
 	try {
