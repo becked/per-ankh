@@ -207,9 +207,13 @@ const VOCABULARIES: Readonly<Record<string, Vocabulary>> = {
 	// the corpus, and 10 unit types in the corpus are outside the roster — the
 	// Carthage and Kush DLC units, which ship in Reference/XML/Mods/ and not in
 	// the base Infos/ that bake-unit-stats reads. Those are 25 of the corpus's
-	// 3,996 production rows. They stay typable and label themselves through
-	// `unitName`'s formatEnum fallback, which is the same shape the `tech`
-	// vocabulary carries for TECH_CARTHAGINIAN_TRAINING.
+	// 3,996 production rows. They are not reachable from the builder at all:
+	// a resolved vocabulary replaces the filter's text input with the picker
+	// (QueryBuilder.svelte), so a value off the roster cannot be typed either,
+	// and only a hand-written URL selects one. A grouping on `unit` still
+	// returns their rows, labelled through `unitName`'s formatEnum fallback —
+	// the same shape the `tech` vocabulary carries for
+	// TECH_CARTHAGINIAN_TRAINING.
 	unit: {
 		options: byLabel(Object.keys(UNIT_STATS), unitName),
 		label: unitName,
