@@ -366,7 +366,7 @@ describe("the issue's acceptance questions", () => {
 		// the raw rows is 14 and 6, and the answer is the one the players
 		// played.
 		const rows = await rowsOf(
-			`source=player_units_produced&dim=player&measure=units_built` +
+			`source=player_units_produced&dim=player&measure=units_produced` +
 				`&f=unit:in:${BALLISTA}`,
 		);
 		expect(rows).toEqual([
@@ -379,7 +379,7 @@ describe("the issue's acceptance questions", () => {
 		// The other way round, which is what the `unit` dimension is for: the
 		// ten ballistae of the match, once.
 		const rows = await rowsOf(
-			"source=player_units_produced&dim=unit&measure=units_built",
+			"source=player_units_produced&dim=unit&measure=units_produced",
 		);
 		expect(rows).toEqual([{ unit: BALLISTA, value: 10 }]);
 	});

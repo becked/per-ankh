@@ -211,7 +211,7 @@ describe("measure units", () => {
 		// predicate. A sum over two uploads of one match is double the units
 		// that match's seats trained.
 		const sql = flat(
-			compile("source=player_units_produced&measure=units_built").sql,
+			compile("source=player_units_produced&measure=units_produced").sql,
 		);
 		expect(sql).toContain("SUM(pup.count)");
 		expect(sql).toContain("ROW_NUMBER() OVER (PARTITION BY xml_game_id");
@@ -436,7 +436,7 @@ describe("the issue's acceptance questions", () => {
 
 	it("Q3 — who built the most ballistae in the tournament", () => {
 		const { sql, binds } = compile(
-			"source=player_units_produced&dim=player&measure=units_built" +
+			"source=player_units_produced&dim=player&measure=units_produced" +
 				"&f=unit:in:UNIT_BALLISTA" +
 				"&f=tournament:in:bbbbbbbbbbbbbbbbbbbbb",
 		);

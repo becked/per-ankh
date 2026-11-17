@@ -1005,13 +1005,13 @@ const SOURCE_DEFS: QuerySource[] = [
 	},
 	{
 		key: "player_units_produced",
-		label: "Units built",
+		label: "Units produced",
 		group: "Units",
 		table: "player_units_produced",
 		alias: "pup",
 		joinsPlayer: true,
 		// A match in which this unit type was built. The source offers no
-		// `event`-unit measure — `units_built` sums a column rather than
+		// `event`-unit measure — `units_produced` sums a column rather than
 		// counting rows — so nothing compiles this today; the field is required
 		// by `QuerySource`, and it is the key a count here would have to take.
 		eventKeySql: "g.xml_game_id || ':' || pup.unit_type",
@@ -1030,8 +1030,19 @@ const SOURCE_DEFS: QuerySource[] = [
 			{
 				// The table's whole point: issue #272's Q3 is this measure
 				// grouped by player and narrowed to a tournament.
-				key: "units_built",
-				label: "Units built",
+				//
+				// What it sums is the units a city finished training, and
+				// nothing else: `Player.incrementUnitsProduced`
+				// (Player.cs:10197) has one caller in the game's source, the
+				// UNIT_BUILD branch of `City.finishBuild` (City.cs:8580). A
+				// unit that arrived any other way — an event's grant, a
+				// mercenary, a capture, a seat's starting units — never reaches
+				// the counter, so this is narrower than every unit a player
+				// ever had. Named for the tally the game's own stats screen
+				// names "Military Units Produced"
+				// (TEXT_UI_STATS_TOTAL_MILITARY, text-ui.xml).
+				key: "units_produced",
+				label: "Units produced",
 				reach: "source",
 				// A match rather than an event, mirroring `avg_turns`: the sum
 				// runs over one upload per match (needsOneUploadPerMatch,
@@ -1046,7 +1057,7 @@ const SOURCE_DEFS: QuerySource[] = [
 		filters: [
 			{
 				key: "unit_count",
-				label: "Units of that type built",
+				label: "Units of that type produced",
 				reach: "source",
 				type: "number",
 				sql: "pup.count",

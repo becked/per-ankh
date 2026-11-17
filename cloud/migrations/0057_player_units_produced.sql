@@ -1,4 +1,5 @@
--- One row per seat per unit type trained, and how many of that type it built.
+-- One row per seat per unit type, and how many of that type the seat
+-- finished training.
 --
 -- The ninth game-derived table, and the one issue #272's third acceptance
 -- question needs: "who built the most ballistae in the tournament" has no
