@@ -20,8 +20,9 @@
 //     (dedupeSeatRecords, stats/aggregate.ts; ratings/duels.ts; the played-games
 //     board in stats/handlers.ts all collapse them on `xml_game_id`), so a
 //     count whose unit is a match must dedupe and a count whose unit is a save
-//     must not. A count can say DISTINCT; an average has no such form, so it
-//     narrows the rows instead (ONE_UPLOAD_PER_MATCH_SQL below). Getting
+//     must not. A count can say DISTINCT; an average and a sum have no such
+//     form, so they narrow the rows instead (ONE_UPLOAD_PER_MATCH_SQL below,
+//     applied by needsOneUploadPerMatch in compile.ts). Getting
 //     either wrong is invisible in the output — the number looks right — so it
 //     is a property of the catalog entry and not of the person asking.
 //
@@ -138,9 +139,11 @@ export const PLAYER_ROSTER_SQL = `SELECT ud.user_id, ${displayNameSql("ud")} AS 
 // seats, the same events and the same turns: 160 of the 851 public matches in
 // the 2026-11-10 snapshot have more than one upload, and 330 of the 2,035
 // human seat rows over them are a second copy of a seat already counted. A
-// count answers that with DISTINCT (countSqlFor, compile.ts). AVG has no such
-// form. It divides by however many rows it was handed, so the rows have to be
-// narrowed to one upload per match before it runs.
+// count answers that with DISTINCT (countSqlFor, compile.ts). AVG and SUM have
+// no such form. Each reads however many rows it was handed — an average
+// divides by them, a sum adds them up — so the rows have to be narrowed to one
+// upload per match before either runs. Which aggregates those are is
+// needsOneUploadPerMatch (compile.ts).
 //
 // The survivor is the upload that saw more turns, which is the same match with
 // more of it recorded, and on the tie the lower game_id. The tie is the normal
@@ -254,7 +257,12 @@ export interface CatalogMeasure {
 	//                 what one contributing row is;
 	//   `countSql`  ⇒ a complete aggregate expression, for the one measure
 	//                 that is a count with a predicate rather than either.
-	agg?: { fn: "AVG" | "MIN" | "MAX"; sql: string };
+	//
+	// Adding a function to this union is a type error in
+	// `needsOneUploadPerMatch` (compile.ts) until it says whether the new
+	// aggregate needs the corpus narrowed, which is the one question an
+	// aggregate cannot be added without answering.
+	agg?: { fn: "AVG" | "SUM" | "MIN" | "MAX"; sql: string };
 	countSql?: string;
 }
 
@@ -994,6 +1002,68 @@ const SOURCE_DEFS: QuerySource[] = [
 			},
 		],
 		filters: [],
+	},
+	{
+		key: "player_units_produced",
+		label: "Units produced",
+		group: "Units",
+		table: "player_units_produced",
+		alias: "pup",
+		joinsPlayer: true,
+		// A match in which this unit type was built. The source offers no
+		// `event`-unit measure — `units_produced` sums a column rather than
+		// counting rows — so nothing compiles this today; the field is required
+		// by `QuerySource`, and it is the key a count here would have to take.
+		eventKeySql: "g.xml_game_id || ':' || pup.unit_type",
+		dimensions: [
+			{
+				key: "unit",
+				label: "Unit",
+				reach: "source",
+				type: "enum",
+				sql: "pup.unit_type",
+				vocabulary: "unit",
+				filterable: true,
+			},
+		],
+		measures: [
+			{
+				// The table's whole point: issue #272's Q3 is this measure
+				// grouped by player and narrowed to a tournament.
+				//
+				// What it sums is the units a city finished training, and
+				// nothing else: `Player.incrementUnitsProduced`
+				// (Player.cs:10197) has one caller in the game's source, the
+				// UNIT_BUILD branch of `City.finishBuild` (City.cs:8580). A
+				// unit that arrived any other way — an event's grant, a
+				// mercenary, a capture, a seat's starting units — never reaches
+				// the counter, so this is narrower than every unit a player
+				// ever had. Named for the tally the game's own stats screen
+				// names "Military Units Produced"
+				// (TEXT_UI_STATS_TOTAL_MILITARY, text-ui.xml).
+				key: "units_produced",
+				label: "Units produced",
+				reach: "source",
+				// A match rather than an event, mirroring `avg_turns`: the sum
+				// runs over one upload per match (needsOneUploadPerMatch,
+				// compile.ts), so a match is what one contributing row belongs
+				// to. Documentation rather than behaviour — measureSql returns
+				// on `agg` before it reaches countSqlFor — but a different
+				// value would be a false statement in the catalog.
+				unit: "match",
+				agg: { fn: "SUM", sql: "pup.count" },
+			},
+		],
+		filters: [
+			{
+				key: "unit_count",
+				label: "Units of that type produced",
+				reach: "source",
+				type: "number",
+				sql: "pup.count",
+				ops: RANGE_OPS,
+			},
+		],
 	},
 	{
 		key: "game_wonder_pool",

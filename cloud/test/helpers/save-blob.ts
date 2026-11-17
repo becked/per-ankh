@@ -182,6 +182,15 @@ export interface UploadFixtureOpts {
 		readonly tech: string;
 		readonly turn: number;
 	}>;
+	// Units trained → player_units_produced, one row per (seat, unit type).
+	// Omitted, a fixture produces no production rows at all, which is a save
+	// whose seats trained nothing rather than a missing section — the blob
+	// field is required, so it is an empty array either way.
+	readonly units?: ReadonlyArray<{
+		readonly player: number;
+		readonly unitType: string;
+		readonly count: number;
+	}>;
 	// The player's starting ruler → player_summaries.starting_ruler_archetype
 	// and .starting_ruler_traits. An archetype is itself a trait — the game
 	// records it as a self-named TRAIT_*_ARCHETYPE — so it is stamped on the
@@ -421,7 +430,17 @@ function buildMinimalGameBlob(
 			tech: t.tech,
 			completed_turn: t.turn,
 		})),
-		units_produced: [],
+		// The wire shape deriveUnitsProduced emits
+		// (src/lib/parser/derive/units-produced.ts): the seat's name and nation
+		// travel with each row, though the indexer drops both — player_summaries
+		// already holds them.
+		units_produced: (opts.units ?? []).map((u) => ({
+			player_id: u.player,
+			player_name: `Player ${u.player}`,
+			nation: NATIONS[u.player],
+			unit_type: u.unitType,
+			count: u.count,
+		})),
 		city_statistics: {
 			cities: (opts.cities ?? []).map((c, i) => ({
 				city_id: i + 1,
