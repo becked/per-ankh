@@ -9,6 +9,7 @@ import {
 	dedupeSeatRecords,
 	emptySeatRecord,
 	foldRecordRow,
+	openingLawSet,
 	rankRecords,
 } from "./aggregate";
 import { TURN_LENGTH_BUCKET } from "./types";
@@ -77,6 +78,37 @@ describe("boundOpeningLaws", () => {
 
 		expect(kept(rows)).toHaveLength(OPENING_LAWS_TOP_N);
 		expect(kept([...rows].reverse()).sort()).toEqual(kept(rows).sort());
+	});
+});
+
+describe("openingLawSet", () => {
+	// Five adoption events and four law classes: turn 15 switches Slavery to
+	// Freedom, which is the same class.
+	const adoptions = [
+		{ law: "LAW_SLAVERY", turn: 10 },
+		{ law: "LAW_FREEDOM", turn: 15 },
+		{ law: "LAW_EPICS", turn: 20 },
+		{ law: "LAW_CENTRALIZATION", turn: 30 },
+		{ law: "LAW_DIVINE_RULE", turn: 40 },
+	];
+
+	it("gives a switch within a class no slot", () => {
+		expect(openingLawSet(adoptions)).toEqual([
+			"LAW_CENTRALIZATION",
+			"LAW_DIVINE_RULE",
+			"LAW_EPICS",
+			"LAW_SLAVERY",
+		]);
+	});
+
+	it("reads the adoptions in turn order", () => {
+		expect(openingLawSet([...adoptions].reverse())).toEqual(
+			openingLawSet(adoptions),
+		);
+	});
+
+	it("is null below four law classes", () => {
+		expect(openingLawSet(adoptions.slice(0, 4))).toBeNull();
 	});
 });
 

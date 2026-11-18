@@ -329,8 +329,9 @@ export interface ChartBundleCore {
 		count: number;
 	}>;
 
-	// Opening laws per nation: the first four laws a player enacted as an
-	// order-insensitive set (laws sorted), grouped by nation. count = players
+	// Opening laws per nation: the first law a player enacted in each of its
+	// first four law classes, as an order-insensitive set (laws sorted),
+	// grouped by nation. count = players
 	// who opened with exactly that set. Excludes succession laws; includes
 	// turn-1 laws (the four track the in-game unit-unlock breakpoint).
 	openingLaws: Array<{
