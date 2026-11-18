@@ -29,6 +29,9 @@ export interface RequestOpts {
 	// it must NOT do is reach the admin GETs, and proving that means sending
 	// it at one.
 	readonly bearer?: string;
+	// Omits the Origin header, the way a non-browser client does. Default is a
+	// browser-shaped request, which is what every other caller here is.
+	readonly noOrigin?: boolean;
 }
 
 type Method = "GET" | "POST" | "PATCH" | "DELETE";
@@ -36,9 +39,10 @@ type Method = "GET" | "POST" | "PATCH" | "DELETE";
 const DEFAULT_ORIGIN = "http://localhost:1420";
 
 async function send(method: Method, opts: RequestOpts): Promise<Response> {
-	const headers: Record<string, string> = {
-		Origin: opts.origin ?? DEFAULT_ORIGIN,
-	};
+	const headers: Record<string, string> = {};
+	if (!opts.noOrigin) {
+		headers["Origin"] = opts.origin ?? DEFAULT_ORIGIN;
+	}
 	if (opts.as) {
 		headers["Cookie"] = `session=${opts.as.sessionToken}`;
 	}

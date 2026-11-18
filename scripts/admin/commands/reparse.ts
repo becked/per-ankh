@@ -26,9 +26,10 @@
 // makes the Worker recognize the game instead of creating a second one.
 //
 // Reads go through wrangler like every other admin command — D1 for the stale
-// list, R2 for `saves/<game_id>.zip` — so the token is scoped to the one write
-// the CLI cannot do for itself. Downloads are cached on disk and reused, so a
-// re-run after a failure costs no further remote reads.
+// list, R2 for `saves/<game_id>.zip` — so the token is scoped to the writes
+// the CLI cannot do for itself: this one and reindex-all's (worker-sweep.ts).
+// Downloads are cached on disk and reused, so a re-run after a failure costs
+// no further remote reads.
 //
 // One write is the command's own, and it is a cache clear rather than a
 // record: the stats bundles in KV, once at the end of a run that rewrote
@@ -44,13 +45,21 @@ import { clearStatsBundles } from "./cache";
 import { readCachedSave } from "../saves";
 import {
 	ADMIN_AUTH_REJECTED,
+	OUTCOME_COLUMNS,
 	gameLabel,
+	readWorkerError,
 	resolveAdminCliToken,
 	warnNoAdminCliToken,
 } from "../worker-sweep";
 import { uploaderPlayerIndexSql } from "../../../cloud/src/games-scope";
 import type { CommandOpts } from "../../lib/cli";
-import { flagInt, flagString, parseFlags, printJson } from "../../lib/cli";
+import {
+	flagInt,
+	flagPositiveInt,
+	flagString,
+	parseFlags,
+	printJson,
+} from "../../lib/cli";
 import { confirmTyping } from "../../lib/confirm";
 import {
 	bold,
@@ -61,7 +70,6 @@ import {
 	printTable,
 	trunc,
 	warn,
-	type Column,
 } from "../../lib/format";
 import { mapLimit } from "../../lib/map-limit";
 import { ParseError } from "../../../src/lib/parser/extract-zip";
@@ -148,11 +156,6 @@ async function loadStale(
 	);
 }
 
-interface ApiError {
-	error?: string;
-	code?: string;
-}
-
 async function postReparse(
 	game: StaleGame,
 	zip: Buffer,
@@ -185,13 +188,7 @@ async function postReparse(
 			? { kind: "reimported", from: game.parser_version }
 			: { kind: "created" };
 	}
-	let body: ApiError = {};
-	try {
-		body = (await res.json()) as ApiError;
-	} catch {
-		// Non-JSON error (a proxy, or a 404 from the route table) — the status
-		// is all there is to report.
-	}
+	const body = await readWorkerError(res);
 	const detail = `${res.status} ${body.code ?? ""}`.trim();
 	// A same-or-older parse is the Worker refusing to downgrade a blob, which
 	// is correct and not a sweep failure: it happens when this checkout is
@@ -250,12 +247,6 @@ async function processOne(
 	}
 }
 
-const OUTCOME_COLUMNS: Column[] = [
-	{ header: "Game", width: 34 },
-	{ header: "Owner", width: 22 },
-	{ header: "Result", width: 44 },
-];
-
 function describe(outcome: Outcome): string {
 	switch (outcome.kind) {
 		case "reimported":
@@ -284,14 +275,7 @@ export async function run(args: string[], opts: CommandOpts): Promise<void> {
 		);
 	}
 	const userId = flagString(flags, "user");
-	let limit: number | undefined;
-	if (flags.limit !== undefined) {
-		// flagInt falls back for a bare `--limit`, `--limit 0` and `--limit abc`,
-		// and a LIMIT 0 sweep would report "nothing to do" the way a corpus
-		// already at PARSER_VERSION does.
-		limit = flagInt(flags, "limit", 0);
-		if (limit <= 0) throw new Error("--limit takes a positive integer");
-	}
+	const limit = flagPositiveInt(flags, "limit");
 	const concurrency = flagInt(flags, "concurrency", DEFAULT_CONCURRENCY);
 	const dryRun = flags["dry-run"] !== undefined;
 	const cacheDir = resolve(

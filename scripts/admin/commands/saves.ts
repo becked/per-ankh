@@ -65,7 +65,13 @@ import { uploaderPlayerIndexSql } from "../../../cloud/src/games-scope";
 // draw a re-run reproduces. Its only import is a type, so `tsx` can load it.
 import { createRng, shuffle } from "../../../cloud/src/tournament/rng";
 import type { CommandOpts } from "../../lib/cli";
-import { flagInt, flagString, parseFlags, printJson } from "../../lib/cli";
+import {
+	flagInt,
+	flagPositiveInt,
+	flagString,
+	parseFlags,
+	printJson,
+} from "../../lib/cli";
 import {
 	bold,
 	dim,
@@ -615,16 +621,8 @@ interface PullFlags {
 
 function readPullFlags(args: string[]): PullFlags {
 	const { flags } = parseFlags(args);
-	let sample = DEFAULT_SAMPLE;
-	if (flags.sample !== undefined) {
-		// flagInt falls back for a bare `--sample`, `--sample 0` and
-		// `--sample abc`, and silently drawing the default 100 when an operator
-		// asked for something else is the one case worth refusing.
-		sample = flagInt(flags, "sample", 0);
-		if (sample <= 0) throw new Error("--sample takes a positive integer");
-	}
 	return {
-		sample,
+		sample: flagPositiveInt(flags, "sample") ?? DEFAULT_SAMPLE,
 		seed: flagString(flags, "seed") ?? DEFAULT_SEED,
 		outDir: resolve(flagString(flags, "out") ?? DEFAULT_OUT),
 		cacheDir: resolve(

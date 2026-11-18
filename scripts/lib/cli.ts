@@ -49,6 +49,21 @@ export function flagInt(
 	return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
+// A flag that must be a positive integer when it is given, or undefined when
+// it is absent. flagInt falls back for a bare `--flag`, `--flag 0` and
+// `--flag abc`. For a cap or a sample size that fallback runs something the
+// operator didn't ask for: a LIMIT 0 that reports "nothing to do", or the
+// default sample. So this refuses instead.
+export function flagPositiveInt(
+	flags: Record<string, string | true>,
+	name: string,
+): number | undefined {
+	if (flags[name] === undefined) return undefined;
+	const n = flagInt(flags, name, 0);
+	if (n <= 0) throw new Error(`--${name} takes a positive integer`);
+	return n;
+}
+
 // An empty value reads as absent, so a `?? fallback` at the call site fires
 // for `--flag ""` the way it does for an omitted flag. That shape arrives from
 // CI, not from a typo: `gh workflow run ... -f base-url=` passes the input

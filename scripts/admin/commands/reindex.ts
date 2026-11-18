@@ -18,12 +18,20 @@
 import { apiBase, d1Query, getTarget, sqlStr } from "../wrangler";
 import {
 	ADMIN_AUTH_REJECTED,
+	OUTCOME_COLUMNS,
 	gameLabel,
+	readWorkerError,
 	resolveAdminCliToken,
 	warnNoAdminCliToken,
 } from "../worker-sweep";
 import type { CommandOpts } from "../../lib/cli";
-import { flagInt, flagString, parseFlags, printJson } from "../../lib/cli";
+import {
+	flagInt,
+	flagPositiveInt,
+	flagString,
+	parseFlags,
+	printJson,
+} from "../../lib/cli";
 import { confirmTyping } from "../../lib/confirm";
 import {
 	bold,
@@ -34,7 +42,6 @@ import {
 	printTable,
 	trunc,
 	warn,
-	type Column,
 } from "../../lib/format";
 import { mapLimit } from "../../lib/map-limit";
 
@@ -81,11 +88,6 @@ async function loadGames(
 	);
 }
 
-interface ApiError {
-	error?: string;
-	code?: string;
-}
-
 async function postReindex(game: SweepGame, token: string): Promise<Outcome> {
 	try {
 		const res = await fetch(
@@ -96,13 +98,7 @@ async function postReindex(game: SweepGame, token: string): Promise<Outcome> {
 			},
 		);
 		if (res.ok) return { kind: "reindexed" };
-		let body: ApiError = {};
-		try {
-			body = (await res.json()) as ApiError;
-		} catch {
-			// Non-JSON error (a proxy, or a 404 from the route table) — the
-			// status is all there is to report.
-		}
+		const body = await readWorkerError(res);
 		if (res.status === 404 && body.code === "BLOB_MISSING") {
 			return { kind: "missing" };
 		}
@@ -125,12 +121,6 @@ async function postReindex(game: SweepGame, token: string): Promise<Outcome> {
 	}
 }
 
-const OUTCOME_COLUMNS: Column[] = [
-	{ header: "Game", width: 34 },
-	{ header: "Owner", width: 22 },
-	{ header: "Result", width: 44 },
-];
-
 function describe(outcome: Outcome): string {
 	switch (outcome.kind) {
 		case "reindexed":
@@ -145,14 +135,7 @@ function describe(outcome: Outcome): string {
 export async function run(args: string[], opts: CommandOpts): Promise<void> {
 	const { flags } = parseFlags(args);
 	const userId = flagString(flags, "user");
-	let limit: number | undefined;
-	if (flags.limit !== undefined) {
-		// flagInt falls back for a bare `--limit`, `--limit 0` and `--limit abc`,
-		// and a LIMIT 0 sweep would report "nothing to do" the way an empty
-		// corpus does.
-		limit = flagInt(flags, "limit", 0);
-		if (limit <= 0) throw new Error("--limit takes a positive integer");
-	}
+	const limit = flagPositiveInt(flags, "limit");
 	const concurrency = flagInt(flags, "concurrency", DEFAULT_CONCURRENCY);
 	const dryRun = flags["dry-run"] !== undefined;
 

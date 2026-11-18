@@ -46,11 +46,12 @@ ADMIN_DISCORD_ID=
 #   npx wrangler secret put YOUTUBE_API_KEY   (and again with --env staging)
 YOUTUBE_API_KEY=
 
-# Optional: bearer token for `./per-ankh admin reparse-all --local`, the
-# headless reparse sweep. It has no session, so POST
-# /v1/admin/games/:user_id/reparse-upload accepts this instead
-# (siteAdminFromCliToken, cloud/src/admin.ts); no other admin route does.
-# The sweep reads this same file when targeting --local, so the value below
+# Optional: bearer token for `./per-ankh admin reparse-all --local` and
+# `reindex-all --local`, the headless corpus sweeps. They have no session, so
+# POST /v1/admin/games/:user_id/reparse-upload and POST
+# /v1/admin/games/:id/reindex accept this instead (siteAdminActor,
+# cloud/src/admin.ts); no other admin route does.
+# Both sweeps read this same file when targeting --local, so the value below
 # is all there is to set — but ADMIN_DISCORD_ID above must also be set, and
 # you must have logged in as it once, since the audit row names that user.
 # In prod/staging it's a real secret:

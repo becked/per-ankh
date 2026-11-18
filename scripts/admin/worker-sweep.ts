@@ -11,14 +11,14 @@
 
 import { isLocal } from "./wrangler";
 import { DEV_VARS_PATH, readDotVars } from "../lib/dotvars";
-import { warn } from "../lib/format";
+import { warn, type Column } from "../lib/format";
 
 // The credential, by the same split purge.ts documents: committed config comes
 // from the environment table, a secret comes from the process environment,
 // because the CLI has no secret store of its own and the Worker holds its own
 // copy as a `wrangler secret`. Same name on both sides so there is no
 // translation to remember.
-export const ADMIN_CLI_TOKEN_ENV = "ADMIN_CLI_TOKEN";
+const ADMIN_CLI_TOKEN_ENV = "ADMIN_CLI_TOKEN";
 
 export function resolveAdminCliToken(): string | null {
 	const fromEnv = process.env[ADMIN_CLI_TOKEN_ENV];
@@ -55,6 +55,31 @@ export function warnNoAdminCliToken(): void {
 export const ADMIN_AUTH_REJECTED =
 	`admin auth rejected (is ${ADMIN_CLI_TOKEN_ENV} the value the Worker ` +
 	`holds, and has that Discord account signed in?)`;
+
+// The body of a Worker error response (errorResponse, cloud/src/util.ts).
+export interface WorkerError {
+	error?: string;
+	code?: string;
+}
+
+// Reads a failed response's error body. A non-JSON error (a proxy, or a 404
+// from the route table) reads as empty, and the status is all there is to
+// report.
+export async function readWorkerError(res: Response): Promise<WorkerError> {
+	try {
+		return (await res.json()) as WorkerError;
+	} catch {
+		return {};
+	}
+}
+
+// The table of games that need a human, after a sweep. Each sweep reports
+// only its non-routine outcomes here and summarises the rest as a count.
+export const OUTCOME_COLUMNS: Column[] = [
+	{ header: "Game", width: 34 },
+	{ header: "Owner", width: 22 },
+	{ header: "Result", width: 44 },
+];
 
 // A game's label in a sweep's tables: the owner's rename first, the way
 // handleAdminListAllGames does it.

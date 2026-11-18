@@ -4,7 +4,8 @@
 //
 // These are the two admin endpoints reachable without a session, so the tests
 // that matter are about the edges of that sentence: the token works with no
-// cookie (the shape `./per-ankh admin reparse-all` and `reindex-all` send), a
+// cookie and no Origin (the shape `./per-ankh admin reparse-all` and
+// `reindex-all` send), a
 // wrong token is indistinguishable from no credential, and the token does NOT
 // open any other /v1/admin/* endpoint. The audit assertions pin the
 // `acting_via` discriminator on both branches — a token sweep and a browser
@@ -188,7 +189,7 @@ describe("POST /v1/admin/games/:id/reindex — CLI token", () => {
 		return row?.n ?? 0;
 	}
 
-	it("accepts the token with no session, rebuilds, and audits as the CLI", async () => {
+	it("accepts the token with no session and no Origin, rebuilds, and audits as the CLI", async () => {
 		const gameId = await uploadGame("cli-reindex-owner");
 		// Model what a reindex exists to repair: derived rows that are missing
 		// from a game whose blob holds them.
@@ -200,6 +201,7 @@ describe("POST /v1/admin/games/:id/reindex — CLI token", () => {
 		const res = await request.post({
 			path: `/v1/admin/games/${gameId}/reindex`,
 			bearer: ADMIN_CLI_TEST_TOKEN,
+			noOrigin: true,
 		});
 		const body = await expectOk<{ reindexed: boolean }>(res);
 		expect(body.reindexed).toBe(true);
@@ -230,7 +232,7 @@ describe("POST /v1/admin/games/:id/reindex — CLI token", () => {
 		const path = `/v1/admin/games/${gameId}/reindex`;
 
 		for (const bearer of ["not-the-token", "", undefined]) {
-			const res = await request.post({ path, bearer });
+			const res = await request.post({ path, bearer, noOrigin: true });
 			expect(res.status, `bearer ${JSON.stringify(bearer)}`).toBe(404);
 		}
 

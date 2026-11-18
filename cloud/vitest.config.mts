@@ -116,9 +116,9 @@ export default defineConfig({
 								// makeUser-generated id can collide with it.
 								ADMIN_DISCORD_ID: SITE_ADMIN_DISCORD_ID,
 								// The operator CLI's bearer token, so tests can post a
-								// reparse the way `./per-ankh admin reparse-all` does —
-								// with no session at all (siteAdminFromCliToken in
-								// src/admin.ts).
+								// reparse or a reindex the way `./per-ankh admin
+								// reparse-all` and `reindex-all` do — with no session
+								// at all (siteAdminActor in src/admin.ts).
 								ADMIN_CLI_TOKEN: ADMIN_CLI_TEST_TOKEN,
 								// The frontend Worker's shared key, so tests can send a
 								// server-rendered request the way per-ankh.app does and
