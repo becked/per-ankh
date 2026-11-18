@@ -12,7 +12,6 @@
 // which is why both routes here spend the same per-IP budget.
 
 import { buildAvatarUrl } from "../auth";
-import { countEventsSince } from "../games";
 import { sessionFromRequest } from "../session";
 import type { SessionEnv } from "../session";
 import {
@@ -33,6 +32,13 @@ import {
 	writeCachedAnswer,
 	type CachedAnswer,
 } from "./ask-cache";
+import {
+	countQuestionsSince,
+	monthToDateCostUsd,
+	reserveQuestion,
+	settledUsage,
+	settleQuestion,
+} from "./ask-usage";
 import {
 	ASK_DISABLED_KEY,
 	ASK_MODEL,
@@ -347,80 +353,68 @@ export async function handleQuery(
 export interface QueryAskEnv extends QueryEnv {
 	// Workers AI, for the model call that translates the question.
 	AI: Ai;
-	// The three hourly ceilings on model calls. Optional: unset falls back to
-	// the constants below.
-	PER_USER_QUERY_ASKS_PER_HOUR?: string;
+	// The ask limits. Optional: unset falls back to the constants below.
+	PER_USER_QUERY_ASKS_PER_DAY?: string;
 	PER_IP_QUERY_ASKS_PER_HOUR?: string;
 	GLOBAL_QUERY_ASKS_PER_HOUR?: string;
+	ASK_MONTHLY_BUDGET_USD?: string;
 }
 
-// Hourly ceilings on ask MODEL CALLS — not on questions. Each call is charged
-// before it runs, so the retry after a failed check is a second charge, and an
-// unsupported reply or a failed check spends the same tokens as a success.
-// That is the shape the screenshot gate charges in (PER_USER_SCREENSHOTS_PER_
-// HOUR, screenshots/handlers.ts).
+// The ask limits, all counted over `query_asks` rows (ask-usage.ts): one row
+// per question that reaches the model, so a retry is not a second question
+// and a question answered from the answer cache is not one at all.
 //
-// Three of them, as for uploads, because each bounds something different. The
-// per-account and per-IP ceilings bound one visitor. Only the global one bounds
-// total spend: Discord accounts are free and IPs rotate. When the global
-// ceiling refuses, only the ask input stops working; the builder does not
-// spend this budget.
+//   * Per account, questions in the last 24 hours. Shares the month's budget
+//     between accounts.
+//   * Per IP and global, questions in the last hour. The per-IP one bounds one
+//     visitor holding several accounts. The global one bounds how fast the
+//     month's budget can be spent.
+//   * The monthly budget, in USD, over the current UTC calendar month. The
+//     only one that bounds total spend: Discord accounts are free and IPs
+//     rotate. Usage is priced at ASK_PRICES, and a question in flight counts
+//     at its reservation.
 //
-// The numbers come from the eval (scripts/eval-query-ask.ts), as the hourly
-// spend each one allows. The derivation is in cloud/wrangler.toml above the
-// three vars.
+// When one refuses, only the ask input stops working; the builder does not
+// spend these. The derivation is in cloud/wrangler.toml above the vars.
 //
-// The defaults only — read the effective ceilings with askCeilings().
-export const PER_USER_QUERY_ASKS_PER_HOUR = 30;
+// The defaults only — read the effective values with askLimits().
+export const PER_USER_QUERY_ASKS_PER_DAY = 10;
 export const PER_IP_QUERY_ASKS_PER_HOUR = 60;
 export const GLOBAL_QUERY_ASKS_PER_HOUR = 300;
+export const ASK_MONTHLY_BUDGET_USD = 5;
 
-export function askCeilings(env: QueryAskEnv): {
-	perUser: number;
-	perIp: number;
-	global: number;
+export function askLimits(env: QueryAskEnv): {
+	perUserPerDay: number;
+	perIpPerHour: number;
+	globalPerHour: number;
+	monthlyBudgetUsd: number;
 } {
 	return {
-		perUser: ceilingFrom(
-			env.PER_USER_QUERY_ASKS_PER_HOUR,
-			PER_USER_QUERY_ASKS_PER_HOUR,
-			"PER_USER_QUERY_ASKS_PER_HOUR",
+		perUserPerDay: ceilingFrom(
+			env.PER_USER_QUERY_ASKS_PER_DAY,
+			PER_USER_QUERY_ASKS_PER_DAY,
+			"PER_USER_QUERY_ASKS_PER_DAY",
 		),
-		perIp: ceilingFrom(
+		perIpPerHour: ceilingFrom(
 			env.PER_IP_QUERY_ASKS_PER_HOUR,
 			PER_IP_QUERY_ASKS_PER_HOUR,
 			"PER_IP_QUERY_ASKS_PER_HOUR",
 		),
-		global: ceilingFrom(
+		globalPerHour: ceilingFrom(
 			env.GLOBAL_QUERY_ASKS_PER_HOUR,
 			GLOBAL_QUERY_ASKS_PER_HOUR,
 			"GLOBAL_QUERY_ASKS_PER_HOUR",
+		),
+		monthlyBudgetUsd: ceilingFrom(
+			env.ASK_MONTHLY_BUDGET_USD,
+			ASK_MONTHLY_BUDGET_USD,
+			"ASK_MONTHLY_BUDGET_USD",
 		),
 	};
 }
 
 const ASK_UNAVAILABLE_MESSAGE =
 	"Asking in plain language is unavailable right now";
-
-// One row per model call, before the call runs. A failed insert is logged and
-// the call goes ahead, as recordScreenshotEvent does it: the row bounds spend,
-// and refusing the question over an audit write would make the limits a
-// dependency of the feature rather than a bound on it.
-async function chargeAskCall(
-	env: QueryAskEnv,
-	userId: string,
-	ip: string | null,
-): Promise<void> {
-	try {
-		await env.EVENTS_DB.prepare(
-			`INSERT INTO events (event_type, user_id, ip_address) VALUES ('query_ask', ?, ?)`,
-		)
-			.bind(userId, ip)
-			.run();
-	} catch (e) {
-		logError("audit_event_log_failed", e, { event_type: "query_ask" });
-	}
-}
 
 function logAskOutcome(outcome: AskOutcome): void {
 	setLogField("ask_outcome", outcome.kind);
@@ -445,12 +439,17 @@ function logAskOutcome(outcome: AskOutcome): void {
 //
 // Session required, as for GET /v1/query: the session gates who may spend a
 // model call. Then, cheapest refusal first and all of them before the model
-// runs: the body, the off switch, the three hourly limits.
+// runs: the body, the off switch, the limits (askLimits).
 //
 // The answer cache (ask-cache.ts) is read after the off switch and before the
 // limits. A hit makes no model call, so it is not charged and a spent limit
 // does not refuse it. The off switch still refuses a hit, because turning the
 // feature off covers the answers it gave earlier.
+//
+// A question that passes the limits is reserved in `query_asks` before its
+// first call and settled after its last (ask-usage.ts). A reservation that
+// cannot be written refuses the question: the row is what the monthly budget
+// counts, so a question without one would be spend the budget never sees.
 //
 // A refusal the reader can act on is a 4xx with its own code, so the page can
 // show one line under the input and leave the builder working: the switch is
@@ -501,13 +500,16 @@ export async function handleQueryAsk(
 
 	const userId = session.data.user_id;
 	const ip = getClientIp(request);
-	const ceilings = askCeilings(env);
+	const limits = askLimits(env);
 	if (
-		(await countEventsSince(env.EVENTS_DB, "query_ask", "user_id", userId)) >=
-		ceilings.perUser
+		(await countQuestionsSince(
+			env.EVENTS_DB,
+			{ column: "user_id", value: userId },
+			"-24 hours",
+		)) >= limits.perUserPerDay
 	) {
 		return errorResponse(
-			"You've asked a lot of questions this hour — try again later",
+			`You've asked ${limits.perUserPerDay} questions in the last 24 hours — try again later`,
 			429,
 			cors,
 			"RATE_LIMIT_ASK_USER",
@@ -515,8 +517,11 @@ export async function handleQueryAsk(
 	}
 	if (
 		ip &&
-		(await countEventsSince(env.EVENTS_DB, "query_ask", "ip_address", ip)) >=
-			ceilings.perIp
+		(await countQuestionsSince(
+			env.EVENTS_DB,
+			{ column: "ip_address", value: ip },
+			"-1 hour",
+		)) >= limits.perIpPerHour
 	) {
 		return errorResponse(
 			"Too many questions from this network this hour — try again later",
@@ -526,8 +531,8 @@ export async function handleQueryAsk(
 		);
 	}
 	if (
-		(await countEventsSince(env.EVENTS_DB, "query_ask", null, null)) >=
-		ceilings.global
+		(await countQuestionsSince(env.EVENTS_DB, null, "-1 hour")) >=
+		limits.globalPerHour
 	) {
 		return errorResponse(
 			"Asking in plain language is busy this hour — try again later",
@@ -535,6 +540,22 @@ export async function handleQueryAsk(
 			cors,
 			"RATE_LIMIT_ASK_GLOBAL",
 		);
+	}
+	if ((await monthToDateCostUsd(env.EVENTS_DB)) >= limits.monthlyBudgetUsd) {
+		return errorResponse(
+			"Asking in plain language is paused until next month",
+			429,
+			cors,
+			"RATE_LIMIT_ASK_BUDGET",
+		);
+	}
+
+	let reservation: number;
+	try {
+		reservation = await reserveQuestion(env.EVENTS_DB, userId, ip);
+	} catch (e) {
+		logError("query_ask_reserve_failed", e);
+		return errorResponse(ASK_UNAVAILABLE_MESSAGE, 503, cors, "ASK_UNAVAILABLE");
 	}
 
 	// The question text, verbatim. A deliberate exception to the shape-only
@@ -554,14 +575,26 @@ export async function handleQueryAsk(
 				vocabulary === "player"
 					? loadPlayerRoster(env.SHARE_DB)
 					: loadTournamentRoster(env.SHARE_DB),
-			beforeCall: () => chargeAskCall(env, userId, ip),
 			today,
 		});
 	} catch (e) {
+		// The reservation stands: a call that threw may still have been billed,
+		// and its usage is not known.
 		logError("query_ask_failed", e);
 		return errorResponse(ASK_UNAVAILABLE_MESSAGE, 503, cors, "ASK_UNAVAILABLE");
 	}
 	logAskOutcome(outcome);
+	try {
+		await settleQuestion(
+			env.EVENTS_DB,
+			reservation,
+			settledUsage(outcome.usage),
+		);
+	} catch (e) {
+		// The reservation stands, which over-counts the question. The answer
+		// is still good, so it is still returned.
+		logError("query_ask_settle_failed", e);
+	}
 	await writeCachedAnswer(env.SESSIONS_KV, cacheKey, outcome);
 
 	if (outcome.kind === "failed") {

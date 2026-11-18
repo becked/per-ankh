@@ -222,7 +222,6 @@ export type RateLimitedEventType =
 	| "tournament_schedule"
 	| "global_stats_view"
 	| "ad_hoc_query_view"
-	| "query_ask"
 	| "season_view"
 	| "home_summary_view"
 	| "user_search"

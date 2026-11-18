@@ -57,6 +57,23 @@ export const ASK_MODELS = {
 	pro: "@cf/deepseek-ai/deepseek-v4-pro-0813",
 } as const;
 
+// USD per million tokens, from the Workers AI pricing page
+// (developers.cloudflare.com/workers-ai/platform/pricing/), read 2026-11-17.
+// Cached input is the share of input the prompt-prefix cache served, which a
+// reply reports as prompt_tokens_details.cached_tokens. The monthly budget
+// (ask-usage.ts) charges the shipped model's tokens at these prices, and the
+// eval prices both models from them.
+export interface AskPrices {
+	input: number;
+	cachedInput: number;
+	output: number;
+}
+
+export const ASK_MODEL_PRICES: Record<keyof typeof ASK_MODELS, AskPrices> = {
+	flash: { input: 0.3, cachedInput: 0.006, output: 1.2 },
+	pro: { input: 1.32, cachedInput: 0.044, output: 3.96 },
+};
+
 // The levels both models accept. The installed workers-types also lists them.
 export type ReasoningEffort = "none" | "low" | "high" | "max";
 export const REASONING_EFFORTS: readonly ReasoningEffort[] = [
@@ -88,7 +105,9 @@ export const REASONING_EFFORTS: readonly ReasoningEffort[] = [
 // Typed `string` rather than as one of ASK_MODELS' literals, so the AI binding
 // takes its unknown-model overload. The installed workers-types knows the Pro
 // model's input type and not the Flash one's.
-export const ASK_MODEL: string = ASK_MODELS.flash;
+const SHIPPED_MODEL: keyof typeof ASK_MODELS = "flash";
+export const ASK_MODEL: string = ASK_MODELS[SHIPPED_MODEL];
+export const ASK_PRICES: AskPrices = ASK_MODEL_PRICES[SHIPPED_MODEL];
 export const ASK_REASONING_EFFORT: ReasoningEffort = "none";
 
 // THE SHIPPED TEMPERATURE, from a second eval on 2026-11-17: Flash/none, three
@@ -105,7 +124,8 @@ export const ASK_REASONING_EFFORT: ReasoningEffort = "none";
 export const ASK_TEMPERATURE = 0;
 
 // The cap on one call's output, reasoning included. It bounds what one call
-// can cost, which the hourly ceilings' worst case is derived from. The eval's
+// can cost, which the monthly budget's reservation is derived from
+// (ask-usage.ts). The eval's
 // largest Flash/none output was 188 tokens, so the cap is never what ends a
 // reply; it is what stops a runaway one.
 export const ASK_MAX_OUTPUT_TOKENS = 2048;
@@ -716,9 +736,6 @@ export interface AskDeps {
 	// One model call. Throws when the model is unavailable.
 	callModel: (inputs: AskModelInputs) => Promise<unknown>;
 	loadRoster: RosterLoader;
-	// Runs before each model call. The endpoint charges the hourly limits here,
-	// so a retry is a second charge.
-	beforeCall?: () => Promise<void>;
 	// YYYY-MM-DD, for questions about recent games.
 	today: string;
 	effort?: ReasoningEffort;
@@ -739,8 +756,9 @@ export type AskOutcome = {
 	| { kind: "failed"; message: string }
 );
 
-// The first call, and one retry that carries the failure's message.
-const MAX_ATTEMPTS = 2;
+// The first call, and one retry that carries the failure's message. The
+// monthly budget reserves this many calls for a question before it runs.
+export const ASK_MAX_ATTEMPTS = 2;
 
 /**
  * Translate one question. A failed check is retried once with its message; a
@@ -759,8 +777,7 @@ export async function askQuestion(
 	let lastArguments: string | null = null;
 	let failure = "";
 
-	for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-		await deps.beforeCall?.();
+	for (let attempt = 1; attempt <= ASK_MAX_ATTEMPTS; attempt++) {
 		const reply = readModelReply(
 			await deps.callModel(buildAskInputs(messages, effort, temperature)),
 		);
@@ -806,7 +823,7 @@ export async function askQuestion(
 	return {
 		kind: "failed",
 		message: failure,
-		attempts: MAX_ATTEMPTS,
+		attempts: ASK_MAX_ATTEMPTS,
 		usage,
 		lastArguments,
 	};

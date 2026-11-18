@@ -1768,7 +1768,8 @@ export const cloudApi = {
 	// Translate a question in plain language into a selection (issue #380).
 	// Answers the canonical query string, which the page navigates to and
 	// runQuery then answers. A refusal is an `ApiError` whose code says which:
-	// ASK_DISABLED (the off switch), RATE_LIMIT_ASK_USER / _IP / _GLOBAL,
+	// ASK_DISABLED (the off switch), RATE_LIMIT_ASK_USER / _IP / _GLOBAL /
+	// _BUDGET,
 	// ASK_UNAVAILABLE, ASK_UNSUPPORTED (the question names something the
 	// catalog cannot express, and the message says what) or ASK_UNMATCHED (a
 	// name or value matched nothing, and the message names it).

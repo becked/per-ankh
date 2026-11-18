@@ -36,11 +36,13 @@
 			case "ASK_UNAVAILABLE":
 				return `Asking in plain language is unavailable right now. ${BUILDER_WORKS}`;
 			case "RATE_LIMIT_ASK_USER":
-				return `You've asked a lot of questions this hour. Try again later. ${BUILDER_WORKS}`;
+				return `You've reached the daily limit on questions. Try again later. ${BUILDER_WORKS}`;
 			case "RATE_LIMIT_ASK_IP":
 				return `Too many questions have come from this network this hour. Try again later. ${BUILDER_WORKS}`;
 			case "RATE_LIMIT_ASK_GLOBAL":
 				return `Asking in plain language is busy this hour. Try again later. ${BUILDER_WORKS}`;
+			case "RATE_LIMIT_ASK_BUDGET":
+				return `Asking in plain language is paused until next month. ${BUILDER_WORKS}`;
 			case "ASK_UNSUPPORTED":
 				return `Explore can't answer that. ${err.message}`;
 			case "ASK_UNMATCHED":

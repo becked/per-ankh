@@ -9,12 +9,22 @@
 //
 // KV changes can take 60 seconds or more to reach every location, so a toggle
 // is in effect everywhere within about a minute.
+//
+// `status` also shows the current UTC month's questions and spend, from the
+// `query_asks` table, through the same statement and prices the endpoint's
+// monthly budget uses (cloud/src/query/ask-usage.ts).
 
 import { ASK_DISABLED_KEY } from "../../../cloud/src/query/ask";
+import {
+	askCostUsd,
+	MONTH_TO_DATE_SQL,
+	monthToDateUsage,
+	type MonthToDateRow,
+} from "../../../cloud/src/query/ask-usage";
 import { confirmYesNo } from "../../lib/confirm";
 import { type CommandOpts, printJson } from "../../lib/cli";
 import { info, ok, warn } from "../../lib/format";
-import { getTarget, kvBulkDelete, kvList, kvPut } from "../wrangler";
+import { d1Query, getTarget, kvBulkDelete, kvList, kvPut } from "../wrangler";
 
 export async function run(argv: string[], opts: CommandOpts): Promise<void> {
 	switch (argv[0]) {
@@ -39,7 +49,8 @@ function printHelp(): void {
 		[
 			"./per-ankh admin ask <subcommand>",
 			"",
-			"  status   Show whether the Explore ask input is on or off",
+			"  status   Show whether the Explore ask input is on or off, and the",
+			"           current UTC month's questions and spend",
 			"  off      Switch it off: the endpoint refuses before calling the model",
 			"  on       Switch it back on",
 			"",
@@ -60,11 +71,22 @@ async function isOff(): Promise<boolean> {
 
 async function runStatus(opts: CommandOpts): Promise<void> {
 	const off = await isOff();
+	const [row] = await d1Query<MonthToDateRow>(MONTH_TO_DATE_SQL);
+	const month = monthToDateUsage(row ?? null);
+	const spendUsd = askCostUsd(month.usage);
 	if (opts.json) {
-		printJson({ target: getTarget(), ask: off ? "off" : "on" });
+		printJson({
+			target: getTarget(),
+			ask: off ? "off" : "on",
+			month_questions: month.questions,
+			month_spend_usd: spendUsd,
+		});
 		return;
 	}
 	info(`Explore ask on ${getTarget()}: ${off ? "OFF" : "on"}`);
+	info(
+		`This month (UTC): ${month.questions} questions, $${spendUsd.toFixed(2)} spent`,
+	);
 }
 
 async function runOff(opts: CommandOpts): Promise<void> {

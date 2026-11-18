@@ -34,6 +34,7 @@
 import "dotenv/config";
 
 import {
+	ASK_MODEL_PRICES,
 	ASK_MODELS,
 	ASK_SESSION_AFFINITY,
 	ASK_SYSTEM_PROMPT,
@@ -57,15 +58,6 @@ import { flagInt, flagString, parseFlags, printJson } from "./lib/cli";
 import { bold, dim, info, printTable, warn, type Column } from "./lib/format";
 
 type ModelName = keyof typeof ASK_MODELS;
-
-// USD per million tokens, from the model pages (issue #380 records them).
-const PRICES: Record<
-	ModelName,
-	{ input: number; output: number; cachedInput: number }
-> = {
-	flash: { input: 0.3, output: 1.2, cachedInput: 0.006 },
-	pro: { input: 1.32, output: 3.96, cachedInput: 0.044 },
-};
 
 // ─── The model call ─────────────────────────────────────────────────────────
 
@@ -199,7 +191,7 @@ function temperatureLabel(t: number | null): string {
 }
 
 function cost(model: ModelName, input: number, output: number): number {
-	const p = PRICES[model];
+	const p = ASK_MODEL_PRICES[model];
 	return (input * p.input + output * p.output) / 1e6;
 }
 

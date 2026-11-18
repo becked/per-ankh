@@ -54,12 +54,6 @@ export const RETENTION_BUCKETS: readonly RetentionBucket[] = [
 			// line as a shape (source, measure, grouping and filter keys), never
 			// as values, and never here.
 			"ad_hoc_query_view",
-			// Explore ask model calls (query/handlers.ts): one row per Workers AI
-			// call, inserted before the call runs, so the retry after a failed
-			// check is a second row. Read only by the three 1h limits (per
-			// account, per IP, global). Metadata-free: the question text is on
-			// the access-log line, not here.
-			"query_ask",
 			// Season leaderboard reads (stats/handlers.ts): its own budget for the
 			// same reason, and not a share of global_stats_view's either — /players
 			// is anonymous where /stats is session-gated, so pooling them would
@@ -276,6 +270,20 @@ export async function sweepSecurityEvents(db: D1Database): Promise<number> {
 	const result = await db
 		.prepare("DELETE FROM security_events WHERE ts < datetime('now', ?)")
 		.bind(SECURITY_EVENTS_RETENTION)
+		.run();
+	return result.meta.changes;
+}
+
+// The `query_asks` table (cloud/src/query/ask-usage.ts): one row per Explore
+// ask question, with the asker's IP. Its longest reader is the monthly budget,
+// which sums the current calendar month, at most 31 days back. 35 keeps a few
+// days of margin and no more, because of the IP addresses.
+export const QUERY_ASKS_RETENTION = "-35 days";
+
+export async function sweepQueryAsks(db: D1Database): Promise<number> {
+	const result = await db
+		.prepare("DELETE FROM query_asks WHERE created_at < datetime('now', ?)")
+		.bind(QUERY_ASKS_RETENTION)
 		.run();
 	return result.meta.changes;
 }

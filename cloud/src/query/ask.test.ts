@@ -232,19 +232,14 @@ describe("readAnswer and readModelReply", () => {
 describe("askQuestion", () => {
 	const deps = (replies: unknown[]) => {
 		const sent: unknown[] = [];
-		let charged = 0;
 		return {
 			sent,
-			charged: () => charged,
 			deps: {
 				callModel: async (inputs: unknown) => {
 					sent.push(inputs);
 					return replies.shift();
 				},
 				loadRoster: rosters,
-				beforeCall: async () => {
-					charged++;
-				},
 				today: "2026-11-17",
 			},
 		};
@@ -261,7 +256,7 @@ describe("askQuestion", () => {
 		const outcome = await askQuestion("Who built the pyramid?", run.deps);
 		expect(outcome.kind).toBe("failed");
 		expect(outcome.attempts).toBe(2);
-		expect(run.charged()).toBe(2);
+		expect(run.sent).toHaveLength(2);
 	});
 
 	it("asks again after a reply with no tool call", async () => {

@@ -342,31 +342,36 @@ GLOBAL_STATS_VIEW_PER_HOUR = "600"
 AD_HOC_QUERY_PER_HOUR = "300"
 
 # === Explore ask limits ===
-# Hourly ceilings on MODEL CALLS from POST /v1/query/ask (issue #380), on the
-# same lever and with the same override caveat as the ceilings above. Each
-# call is charged before it runs, so the retry after a failed check is a
-# second charge, and an unsupported reply costs what a success does — the
-# shape PER_USER_SCREENSHOTS_PER_HOUR charges in. A question answered from the
-# answer cache (cloud/src/query/ask-cache.ts) makes no call and is not
-# charged. None of the three is shared with AD_HOC_QUERY_PER_HOUR, so a spent
-# one stops the question input and leaves the builder working.
+# Limits on POST /v1/query/ask (issue #380), on the same lever and with the
+# same override caveat as the ceilings above. All of them count QUESTIONS that
+# reach the model, as rows in query_asks (cloud/src/query/ask-usage.ts): the
+# retry after a failed check is part of its question, and a question answered
+# from the answer cache (cloud/src/query/ask-cache.ts) makes no call and is not
+# counted. None is shared with AD_HOC_QUERY_PER_HOUR, so a spent one stops the
+# question input and leaves the builder working.
 #
-# Derived from the eval (npm run eval:ask) on the shipped model, effort and
-# temperature: Flash with no reasoning, at temperature 0. One call reads ~9,750 input tokens at $0.30/M and
-# writes ~120 output tokens at $1.20/M: ~$0.0031. At the 2,048-token output
-# cap (ASK_MAX_OUTPUT_TOKENS) the worst case is ~$0.0054. Every input token is
-# priced as uncached. The eval saw 96-99% of them cached, at 1/50 of the price,
-# but Workers AI documents no cache lifetime, so a ceiling sized on the cached
-# price could be off by that factor.
+# Costs, from the eval (npm run eval:ask) on the shipped model, effort and
+# temperature: Flash with no reasoning, at temperature 0. One call reads ~9,750
+# input tokens and writes ~120 output tokens: ~$0.0031 with every input token
+# priced as uncached ($0.30/M), ~$0.0003 at the 96-99% cached share the eval
+# saw ($0.006/M). Workers AI documents no cache lifetime, so the budget charges
+# what each reply reports instead of assuming either. Before it runs, a
+# question is reserved at its worst case, two calls at the 2,048-token output
+# cap with nothing cached: ~$0.012.
 #
-# Per account, 30: a question every two minutes for an hour, well past one
-# person exploring. Bounds an account at ~$0.09 an hour ($0.16 worst case).
-PER_USER_QUERY_ASKS_PER_HOUR = "30"
-# Per IP, twice the per-account ceiling, as for uploads, for shared IPs.
+# The monthly budget, in whole USD over the UTC calendar month. The only limit
+# that bounds total spend: Discord accounts are free and IPs rotate. $5 is
+# ~1,600 questions with nothing cached and 15,000-21,000 at the cached share
+# the eval saw.
+ASK_MONTHLY_BUDGET_USD = "5"
+# Per account, questions in the last 24 hours. Shares the budget between
+# accounts: at 10, one account spends at most ~$0.12 a day at worst case.
+PER_USER_QUERY_ASKS_PER_DAY = "10"
+# Per IP, questions in the last hour: one visitor holding several accounts.
 PER_IP_QUERY_ASKS_PER_HOUR = "60"
-# Global, and the only one that bounds total spend: Discord accounts are free
-# and IPs rotate. 300 calls bound the feature at ~$0.93 an hour ($1.62 worst
-# case), ~$22 a day if it were pinned at the ceiling around the clock.
+# Global, questions in the last hour. Bounds how fast the budget can be spent:
+# at the ceiling, $5 lasts ~5 hours with nothing cached, ~1.4 hours if every
+# question ran at worst case.
 GLOBAL_QUERY_ASKS_PER_HOUR = "300"
 
 # === Public /players read limit ===
@@ -617,7 +622,8 @@ TOURNAMENT_LIST_VIEW_PER_HOUR = "600"
 TOURNAMENT_LINK_VIEW_PER_HOUR = "600"
 GLOBAL_STATS_VIEW_PER_HOUR = "600"
 AD_HOC_QUERY_PER_HOUR = "300"
-PER_USER_QUERY_ASKS_PER_HOUR = "30"
+ASK_MONTHLY_BUDGET_USD = "5"
+PER_USER_QUERY_ASKS_PER_DAY = "10"
 PER_IP_QUERY_ASKS_PER_HOUR = "60"
 GLOBAL_QUERY_ASKS_PER_HOUR = "300"
 SEASON_VIEW_PER_HOUR = "600"

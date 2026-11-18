@@ -34,7 +34,12 @@ import {
 	runWithLogContext,
 	setRoute,
 } from "./log";
-import { RETENTION_CRON, sweepEvents, sweepSecurityEvents } from "./retention";
+import {
+	RETENTION_CRON,
+	sweepEvents,
+	sweepQueryAsks,
+	sweepSecurityEvents,
+} from "./retention";
 import { emitSecurityEvent } from "./security-events";
 import type { SecurityEventsEnv } from "./security-events";
 import {
@@ -1405,9 +1410,10 @@ const ROUTES: RouteSpec[] = [
 	// A question in plain language, translated into a selection by a Workers AI
 	// model (issue #380). Answers the canonical selection, which the client
 	// navigates to and GET /v1/query above answers. Session-gated, behind a KV
-	// off switch and three hourly limits on model calls (per account, per IP,
-	// global), none of them shared with the builder's budget: refusing here
-	// stops the ask input and leaves the builder working. Not shared-cacheable:
+	// off switch and the ask limits (questions per account per day, per IP and
+	// global per hour, and a monthly budget; query/handlers.ts), none of them
+	// shared with the builder's budget: refusing here stops the ask input and
+	// leaves the builder working. Not shared-cacheable:
 	// a POST. A question asked again the same day is answered from a KV cache
 	// in the handler (query/ask-cache.ts), with no model call.
 	{
@@ -1933,10 +1939,12 @@ export default {
 			const result = await sweepEvents(env.SHARE_DB);
 			// Safety-floor age-out for the Skiff drain table (separate DB).
 			const securityDeleted = await sweepSecurityEvents(env.SECURITY_DB);
+			const queryAsksDeleted = await sweepQueryAsks(env.SHARE_DB);
 			logEvent("info", "retention_sweep_completed", {
 				deleted: result.deleted,
 				unknown_types: result.unknownTypes,
 				security_events_deleted: securityDeleted,
+				query_asks_deleted: queryAsksDeleted,
 			});
 		} catch (err) {
 			logError("retention_sweep_failed", err);
