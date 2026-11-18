@@ -109,11 +109,7 @@ export async function run(argv: string[], _opts: CommandOpts): Promise<void> {
 		user_id: userId,
 		discord_username: normalized,
 	});
-	await kvPut(
-		`session:${sessionToken}`,
-		sessionPayload,
-		SESSION_TTL_SECONDS,
-	);
+	await kvPut(`session:${sessionToken}`, sessionPayload, SESSION_TTL_SECONDS);
 
 	info(`Created local dev user`);
 	info(`  user_id          ${userId}`);

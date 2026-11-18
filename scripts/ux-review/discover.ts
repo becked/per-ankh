@@ -13,13 +13,7 @@ import { join } from "node:path";
 import { VISIBLE_TO_VIEWER_WHERE } from "../../cloud/src/screenshots/scope";
 import { DEV_VARS_PATH, readDotVars } from "../lib/dotvars";
 import { info, warn } from "../lib/format";
-import {
-	d1Query,
-	kvBulkDelete,
-	kvPut,
-	r2Get,
-	sqlStr,
-} from "../admin/wrangler";
+import { d1Query, kvBulkDelete, kvPut, r2Get, sqlStr } from "../admin/wrangler";
 
 // Matches cloud/src/session.ts SESSION_TTL_SECONDS.
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30;
