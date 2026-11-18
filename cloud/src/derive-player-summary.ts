@@ -332,10 +332,17 @@ export function derivePlayerSummary(
 
 	// Laws — `laws_count` is the final law_count from law_adoption_history.
 	// The milestone turns are the first turn law_count reaches 4 or 7, not the
-	// 4th or 7th adoption event. law_count is the number of law classes adopted
-	// so far, which is what the game counts (Player.countActiveLaws). A switch
-	// within a class, such as Slavery to Freedom, is a LAW_ADOPTED event but
-	// not another law.
+	// 4th or 7th adoption event. A switch within a class, such as Slavery to
+	// Freedom, is a LAW_ADOPTED event but not another law. The game counts one
+	// law per non-succession class with an active law (Player.countActiveLaws,
+	// Player.cs:10710).
+	//
+	// law_count counts the classes ever adopted, so it matches the game's
+	// count only until a law ends. Player.endActiveLaw (Player.cs:10857) clears
+	// a class. It runs from Player.stopLaw (Player.cs:21622) and from an event
+	// bonus with bEndLaw (PlayerBonus.doBonus, PlayerBonus.cs:4924). Neither
+	// writes a log entry, so law_count never goes down. A seat that lost a law
+	// before it reached the count gets a milestone turn that is too early.
 	const lawHistory = blob.law_adoption_history as LawAdoptionEntry[];
 	const ownLaws = lawHistory.find((e) => e.player_id === idx);
 	let laws_count: number | null = null;

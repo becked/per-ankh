@@ -372,9 +372,9 @@ describe("derivePlayerSummary — final points", () => {
 	});
 });
 
-// The milestone turns count laws the way Player.countActiveLaws does: one per
-// law class. A switch within a class is a LAW_ADOPTED event, so it is a point
-// in the series, but law_count does not move.
+// The milestone turns count one law per law class, as Player.countActiveLaws
+// (Player.cs:10710) does. A switch within a class is a LAW_ADOPTED event, so
+// it is a point in the series, but law_count does not move.
 describe("derivePlayerSummary — law milestones", () => {
 	// Five adoption events and four laws: turn 15 switches Slavery to Freedom.
 	const series = [
