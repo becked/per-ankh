@@ -191,10 +191,7 @@ The leaderboard behind the yield bands: per yield series, the biggest numbers po
 
 ## Known limitations / caveats
 
-- **Opening-laws "sequence" is order-insensitive** — `openingLaws` groups the
-  first four enacted laws as a _sorted set_, so the "sequence" label is a
-  deliberate naming mismatch (the four track the in-game unit-unlock breakpoint,
-  not enactment order).
+- **Opening-laws "sequence" is order-insensitive** — `openingLaws` groups the first law enacted in each of the first four law classes as a _sorted set_, so the "sequence" label is a deliberate naming mismatch (the four track the in-game unit-unlock breakpoint, not enactment order). A switch within a class, such as Slavery to Freedom, takes no slot.
 - **Families "All nations" pick-rate is across-pool confounded** — aggregating
   pick rate across nations mixes different family pools; treat the all-nations
   view as approximate.

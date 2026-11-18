@@ -14,7 +14,7 @@
 // merge into a single aggregation; the order of merge doesn't matter
 // because all the aggregates are commutative.
 
-import { LAW_CLASSES } from "../generated/law-classes";
+import { LAW_CLASSES, LAW_TO_CLASS } from "../generated/law-classes";
 import { WONDER_CULTURE_PREREQ, cultureRank } from "../generated/wonders";
 import { buildFamilyKeeps } from "./family-keeps";
 import { buildLeaderArchetypes } from "./leader-reigns";
@@ -1154,6 +1154,31 @@ export function boundOpeningLaws(rows: OpeningLawRow[]): OpeningLawRow[] {
 	return rows.filter((row) => keep.has(rowKey(row)));
 }
 
+const OPENING_LAW_COUNT = 4;
+
+// A seat's opening: the first law it enacted in each of the first four law
+// classes it reached, sorted, or null when it reached fewer than four. A
+// switch within a class, such as Slavery to Freedom, is a LAW_ADOPTED event
+// but not another law, so it takes no slot. The game counts one law per class
+// (Player.countActiveLaws, Player.cs:10710), and so do the law milestones in
+// derive-player-summary.ts.
+//
+// Exported for unit tests.
+export function openingLawSet(
+	adoptions: ReadonlyArray<{ law: string; turn: number }>,
+): string[] | null {
+	const firstByClass = new Map<string, string>();
+	for (const a of [...adoptions].sort((x, y) => x.turn - y.turn)) {
+		const lawClass = LAW_TO_CLASS[a.law];
+		if (firstByClass.has(lawClass)) continue;
+		firstByClass.set(lawClass, a.law);
+		if (firstByClass.size === OPENING_LAW_COUNT) {
+			return [...firstByClass.values()].sort();
+		}
+	}
+	return null;
+}
+
 // focal "uploader" → the full user ChartBundle (core + Overview extension).
 // focal "humans" → the tournament ChartBundleCore, with the one-focal-per-game
 // Overview fields (win_rate/games_with_outcome, summary.top_nation/top_archetype)
@@ -1701,13 +1726,13 @@ export async function buildChartBundle(
 		};
 	});
 
-	// Opening laws: per player, the first 4 laws enacted as an
-	// order-insensitive set, grouped by nation. Excludes succession laws but
-	// (unlike the timing chart) keeps turn-1 laws — the four are meant to line
-	// up with the in-game 4-law unit-unlock breakpoint, so a turn-1 starting
-	// law counts. Order is dropped (sorted set) since the question is which
-	// four laws a nation opens with, not the sequence.
-	const OPENING_LAW_COUNT = 4;
+	// Opening laws: per player, the first law in each of the first four law
+	// classes (openingLawSet) as an order-insensitive set, grouped by nation.
+	// Excludes succession laws but (unlike the timing chart) keeps turn-1 laws
+	// — the four are meant to line up with the in-game 4-law unit-unlock
+	// breakpoint, so a turn-1 starting law counts. Order is dropped (sorted
+	// set) since the question is which four laws a nation opens with, not the
+	// sequence.
 	const openingLawEvents = lawEvents.filter((e) => !SUCCESSION_LAWS.has(e.law));
 	const openingByPlayer = new Map<
 		string,
@@ -1727,13 +1752,8 @@ export async function buildChartBundle(
 		if (!selfMembership.has(k)) continue;
 		const nation = nationByPlayer.get(k);
 		if (!nation) continue; // observer / unknown nation — skip
-		const first = arr
-			.sort((a, b) => a.turn - b.turn)
-			.slice(0, OPENING_LAW_COUNT);
-		if (first.length < OPENING_LAW_COUNT) continue;
-		// Order-insensitive: sort the law names so the same four collapse to one
-		// key regardless of adoption order.
-		const laws = first.map((e) => e.law).sort();
+		const laws = openingLawSet(arr);
+		if (laws === null) continue;
 		const key = `${nation}|${laws.join("|")}`;
 		const existing = openingMap.get(key) ?? { nation, laws, count: 0 };
 		existing.count += 1;

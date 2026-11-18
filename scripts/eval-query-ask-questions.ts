@@ -256,6 +256,13 @@ export const QUESTIONS: EvalQuestion[] = [
 		},
 	},
 	{
+		id: "seventh-law-turn",
+		question: "What turn do players, on average, achieve 7 laws?",
+		expected: {
+			selections: ["source=player_summaries&measure=avg_seventh_law_turn"],
+		},
+	},
+	{
 		id: "family-cities",
 		question: "On average, how many cities does each family class end up with?",
 		expected: {

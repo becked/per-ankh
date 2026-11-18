@@ -645,6 +645,25 @@ const PLAYER_MEASURES: CatalogMeasure[] = [
 		unit: "seat",
 		agg: { fn: "AVG", sql: "ps.final_military_power" },
 	},
+	// A seat stores NULL when it never held that many laws. It also stores NULL
+	// when its save lacks the LAW_ADOPTED events that would date the milestone.
+	// Builds from before that event type wrote none, and a few later saves are
+	// missing some. AVG skips NULL, so these average over the seats with a
+	// recorded milestone.
+	{
+		key: "avg_fourth_law_turn",
+		label: "Average turn reaching 4 laws",
+		reach: "player",
+		unit: "seat",
+		agg: { fn: "AVG", sql: "ps.fourth_law_turn" },
+	},
+	{
+		key: "avg_seventh_law_turn",
+		label: "Average turn reaching 7 laws",
+		reach: "player",
+		unit: "seat",
+		agg: { fn: "AVG", sql: "ps.seventh_law_turn" },
+	},
 ];
 
 const PLAYER_FILTERS: CatalogFilter[] = [
