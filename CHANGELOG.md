@@ -1,5 +1,37 @@
 # Changelog
 
+## [2026-11-18-d0e8d10] - 2026-11-18
+
+### Features
+
+- (admin) find and repair seats credited to the wrong account — [6b56138](https://github.com/becked/per-ankh/commit/6b561384ab88c68891ad0949154390893bf05aa5)
+- (cloud) project the blob's unit production into D1 — [9f12e30](https://github.com/becked/per-ankh/commit/9f12e30cf56119f439b79c10c9f89d662cf009a6)
+- (query) answer "who built the most ballistae" from the catalog — [2a91117](https://github.com/becked/per-ankh/commit/2a91117127c5b61f8512ff5ad4dd1c7ca2f0942b)
+- (query) translate a question into a selection with Workers AI — [f2b57ed](https://github.com/becked/per-ankh/commit/f2b57eda3c1687e97375e2cdfc38e6cd43eb53a2)
+- (query) POST /v1/query/ask — [7b1dc86](https://github.com/becked/per-ankh/commit/7b1dc86132d64ba15d9cf3b2996c514f1559abb8)
+- (admin) ./per-ankh admin ask status|off|on — [7b7d1db](https://github.com/becked/per-ankh/commit/7b7d1dbcc798639c582d325e56495dc420d71245)
+- (explore) ask a question in plain language — [f07390d](https://github.com/becked/per-ankh/commit/f07390dd518b10f2cdf6ada60a814645972dcb40)
+- (explore) put the question in its own panel — [7da5813](https://github.com/becked/per-ankh/commit/7da5813901241efa1512aa27895bde0af3d9f025)
+- (query) ask at temperature 0 and cache answers in KV — [2585311](https://github.com/becked/per-ankh/commit/258531131d4a9f7e1c0310ad138aadd059a84844)
+- (query) limit ask to 10 questions a day and a $5 monthly budget — [027c107](https://github.com/becked/per-ankh/commit/027c107c6da43727ff3cb27ab62fb150bf88c1e5)
+- (explore) describe a linked selection in the question input — [8284cf6](https://github.com/becked/per-ankh/commit/8284cf65687bc42b91900f8853ed25f9a57995bb)
+
+### Fixes
+
+- (admin) give the seat-attribution events a retention policy — [687534a](https://github.com/becked/per-ankh/commit/687534a86cc51b3f210fcfe3efd852f1780bbea1)
+- (query) name the units measure the way the game names it — [e4055c5](https://github.com/becked/per-ankh/commit/e4055c5d06fff01af34c6034676feb1d181939e4)
+- (query) address the review findings on the ask endpoint — [4747ed7](https://github.com/becked/per-ankh/commit/4747ed70a8ebff7c6c84ee4c16fa34c2add1fd8d)
+- (query) drop the last hourly-limits wording from the ask cache — [9cc32aa](https://github.com/becked/per-ankh/commit/9cc32aa9231eda92f32c8de3f57293a42ab77458)
+- (deps) take the in-range advisory fixes and allowlist GHSA-3r8g — [d0e8d10](https://github.com/becked/per-ankh/commit/d0e8d1075cbdb1338f2d533f196c7fa293f5cd46)
+
+### Other
+
+- (api) record the ninth projected table and the sum's narrowing — [9db5b21](https://github.com/becked/per-ankh/commit/9db5b218de09c33059ede24a9276e909174604b9)
+- (query) a unit off the roster is not typable either — [b8f5e84](https://github.com/becked/per-ankh/commit/b8f5e840baf9d02937ed743e770f3ab11863b8a5)
+- (query) share the Explore vocabulary rosters with the Worker — [1c9172d](https://github.com/becked/per-ankh/commit/1c9172dadc7ead4d22a03cb5a1f714881353d3d8)
+- explain how Explore's query builder and ask input work — [258440a](https://github.com/becked/per-ankh/commit/258440ae00eab34f651b9725842615a7914e80dc)
+- format two scripts after the kvPut rename — [bcce007](https://github.com/becked/per-ankh/commit/bcce007b7806f69c85b15542f681e0cf4b40c407)
+
 ## [2026-11-14-be01daa] - 2026-11-14
 
 ### Features
