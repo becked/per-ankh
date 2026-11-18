@@ -3,9 +3,11 @@
 	// over the catalog, and the rows it returns.
 	//
 	// The page is two panels side by side, each on its own half: the query on
-	// the left, the results on the right. Nothing is asked until "Ask" is
-	// pressed, so arriving here costs no read budget and the first thing on
-	// screen is an empty builder rather than a number nobody asked for.
+	// the left, the results on the right. The query panel takes a question two
+	// ways, typed in plain language at the top or composed in the builder under
+	// it, and the first becomes the second (AskQuestion). Nothing is asked until
+	// "Ask" is pressed, so arriving here costs no read budget and the first
+	// thing on screen is an empty builder rather than a number nobody asked for.
 	//
 	// Both panels render on arrival, and so does the frame the rows sit in —
 	// empty, at a height that reads as a waiting table rather than as a seam.
@@ -22,6 +24,8 @@
 	import { navigating } from "$app/state";
 	import StatsHeader from "$lib/stats/StatsHeader.svelte";
 	import Panel from "$lib/ui/Panel.svelte";
+	import PanelInset from "$lib/ui/PanelInset.svelte";
+	import AskQuestion from "$lib/query/AskQuestion.svelte";
 	import QueryBuilder from "$lib/query/QueryBuilder.svelte";
 	import QueryResults from "$lib/query/QueryResults.svelte";
 	import { TABLE_FRAME_INSET_CLASS } from "$lib/ui/classes";
@@ -65,7 +69,15 @@
 				class="mx-auto grid max-w-screen-2xl grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"
 			>
 				<Panel title="Query">
-					<QueryBuilder catalog={data.catalog} draft={data.draft} />
+					<!-- The question box sits above the builder it fills: a question
+					     asked here lands in the controls below as the model read it,
+					     where it can be checked and edited before asking again. -->
+					<div class="flex flex-col gap-3">
+						<PanelInset label="Question">
+							<AskQuestion />
+						</PanelInset>
+						<QueryBuilder catalog={data.catalog} draft={data.draft} />
+					</div>
 				</Panel>
 
 				<Panel title="Results" class="flex flex-col">
