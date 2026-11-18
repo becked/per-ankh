@@ -15,6 +15,7 @@ function blobWith(over: {
 	player_history?: Array<Record<string, unknown>>;
 	map_tiles?: Array<Record<string, unknown>>;
 	completed_techs?: Array<Record<string, unknown>>;
+	law_adoption_history?: Array<Record<string, unknown>>;
 	match_metadata?: Record<string, unknown>;
 }): FullGameData {
 	return {
@@ -368,5 +369,45 @@ describe("derivePlayerSummary — final points", () => {
 			}),
 		);
 		expect(summary.final_points).toBe(4);
+	});
+});
+
+// The milestone turns count one law per law class, as Player.countActiveLaws
+// (Player.cs:10710) does. A switch within a class is a LAW_ADOPTED event, so
+// it is a point in the series, but law_count does not move.
+describe("derivePlayerSummary — law milestones", () => {
+	// Five adoption events and four laws: turn 15 switches Slavery to Freedom.
+	const series = [
+		{ turn: 0, law_count: 0, law_name: null },
+		{ turn: 10, law_count: 1, law_name: "LAW_SLAVERY" },
+		{ turn: 15, law_count: 1, law_name: "LAW_FREEDOM" },
+		{ turn: 20, law_count: 2, law_name: "LAW_EPICS" },
+		{ turn: 30, law_count: 3, law_name: "LAW_CENTRALIZATION" },
+		{ turn: 40, law_count: 4, law_name: "LAW_DIVINE_RULE" },
+		{ turn: 60, law_count: 4, law_name: null },
+	];
+
+	it("dates the 4th law to the turn the count reaches 4", () => {
+		const summary = derive(
+			blobWith({ law_adoption_history: [{ player_id: 0, data: series }] }),
+		);
+		// The 4th adoption event is turn 30, which held only three laws.
+		expect(summary.fourth_law_turn).toBe(40);
+		expect(summary.laws_count).toBe(4);
+	});
+
+	it("is null when the count never reaches the threshold", () => {
+		const summary = derive(
+			blobWith({ law_adoption_history: [{ player_id: 0, data: series }] }),
+		);
+		expect(summary.seventh_law_turn).toBeNull();
+	});
+
+	it("reads only this player's series", () => {
+		const summary = derive(
+			blobWith({ law_adoption_history: [{ player_id: 1, data: series }] }),
+		);
+		expect(summary.fourth_law_turn).toBeNull();
+		expect(summary.laws_count).toBeNull();
 	});
 });
