@@ -330,10 +330,12 @@ export function derivePlayerSummary(
 		if (t.player_id === idx) techs_completed += 1;
 	}
 
-	// Laws — `laws_count` is the final law_count from law_adoption_history;
-	// `fourth_law_turn` / `seventh_law_turn` use the n-th adoption event
-	// (data points where law_name is non-null; synthetic start/end points
-	// have law_name === null).
+	// Laws — `laws_count` is the final law_count from law_adoption_history.
+	// The milestone turns are the first turn law_count reaches 4 or 7, not the
+	// 4th or 7th adoption event. law_count is the number of law classes adopted
+	// so far, which is what the game counts (Player.countActiveLaws). A switch
+	// within a class, such as Slavery to Freedom, is a LAW_ADOPTED event but
+	// not another law.
 	const lawHistory = blob.law_adoption_history as LawAdoptionEntry[];
 	const ownLaws = lawHistory.find((e) => e.player_id === idx);
 	let laws_count: number | null = null;
@@ -342,12 +344,8 @@ export function derivePlayerSummary(
 	if (ownLaws) {
 		const lastLawPoint = ownLaws.data[ownLaws.data.length - 1];
 		laws_count = lastLawPoint?.law_count ?? null;
-
-		const adoptions = ownLaws.data
-			.filter((d) => d.law_name !== null)
-			.sort((a, b) => a.turn - b.turn);
-		fourth_law_turn = adoptions[3]?.turn ?? null;
-		seventh_law_turn = adoptions[6]?.turn ?? null;
+		fourth_law_turn = turnReachingLawCount(ownLaws.data, 4);
+		seventh_law_turn = turnReachingLawCount(ownLaws.data, 7);
 	}
 
 	// vp_margin — winners get distance to second place (positive), everyone
@@ -388,4 +386,21 @@ export function derivePlayerSummary(
 		seventh_law_turn,
 		vp_margin,
 	};
+}
+
+// The earliest turn whose law_count is at least `count`, or null when the
+// player never held that many laws. Taking the minimum turn does not rely on
+// the series' order. The synthetic final-turn point repeats the last count, so
+// it never comes before the event that reached it.
+function turnReachingLawCount(
+	data: LawAdoptionEntry["data"],
+	count: number,
+): number | null {
+	let turn: number | null = null;
+	for (const d of data) {
+		if (d.law_count >= count && (turn === null || d.turn < turn)) {
+			turn = d.turn;
+		}
+	}
+	return turn;
 }
