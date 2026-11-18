@@ -2,12 +2,13 @@
 	// /stats/explore — Explore, the second view of Global Stats: the builder
 	// over the catalog, and the rows it returns.
 	//
-	// The page is two panels side by side, each on its own half: the query on
-	// the left, the results on the right. The query panel takes a question two
-	// ways, typed in plain language at the top or composed in the builder under
-	// it, and the first becomes the second (AskQuestion). Nothing is asked until
-	// "Ask" is pressed, so arriving here costs no read budget and the first
-	// thing on screen is an empty builder rather than a number nobody asked for.
+	// The page is two columns, each on its own half: the question on the left,
+	// the results on the right. The left column takes a question two ways, in
+	// two panels. The Question panel takes it typed in plain language, and the
+	// Query panel under it takes it composed in the builder. The first becomes
+	// the second (AskQuestion). Nothing is asked until "Ask" is pressed, so
+	// arriving here costs no read budget and the first thing on screen is an
+	// empty builder rather than a number nobody asked for.
 	//
 	// Both panels render on arrival, and so does the frame the rows sit in —
 	// empty, at a height that reads as a waiting table rather than as a seam.
@@ -47,15 +48,16 @@
 	// rows, so the constant is shared rather than restyled here.
 	//
 	// It grows to the panel's height so an empty one opens level with the
-	// builder's first and last subpanels rather than at a height of its own.
-	// The minimum is what the stacked single-column layout falls back on, where
-	// the panels are separate grid rows and there is no sibling height to fill.
+	// question box and ends level with the builder's last subpanel, rather than
+	// at a height of its own. The minimum is what the stacked single-column
+	// layout falls back on, where the panels are separate grid rows and there
+	// is no sibling height to fill.
 	const FRAME = `${TABLE_FRAME_INSET_CLASS} min-h-[16rem] flex-1`;
 
-	// The builder's Ask/Reset row, reserved. The two panels are grid siblings
-	// and stretch together, so a frame that simply filled this one would end
-	// level with those buttons — below the last subpanel, which is what the
-	// frame is being lined up with. `h-7` is the Ask button (text-xs on py-1.5)
+	// The builder's Ask/Reset row, reserved. The left column and this panel are
+	// grid siblings and stretch together, so a frame that simply filled this
+	// one would end level with those buttons — below the last subpanel, which
+	// is what the frame is being lined up with. `h-7` is the Ask button (text-xs on py-1.5)
 	// and `mt-3` is the gap the builder's column puts above its footer.
 	const FOOTER_RESERVE = "mt-3 h-7";
 </script>
@@ -68,17 +70,19 @@
 			<div
 				class="mx-auto grid max-w-screen-2xl grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"
 			>
-				<Panel title="Query">
-					<!-- The question box sits above the builder it fills: a question
-					     asked here lands in the controls below as the model read it,
-					     where it can be checked and edited before asking again. -->
-					<div class="flex flex-col gap-3">
-						<PanelInset label="Question">
+				<!-- The Question panel sits above the builder it fills: a question
+				     asked there lands in the builder's controls as the model read
+				     it, where it can be checked and edited before asking again. -->
+				<div class="flex flex-col gap-4">
+					<Panel title="Question">
+						<PanelInset>
 							<AskQuestion />
 						</PanelInset>
+					</Panel>
+					<Panel title="Query">
 						<QueryBuilder catalog={data.catalog} draft={data.draft} />
-					</div>
-				</Panel>
+					</Panel>
+				</div>
 
 				<Panel title="Results" class="flex flex-col">
 					{#if data.error}

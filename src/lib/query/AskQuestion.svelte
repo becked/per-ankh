@@ -13,7 +13,7 @@
 	import { goto } from "$app/navigation";
 	import { page } from "$app/state";
 	import { ApiError, cloudApi } from "$lib/api-cloud";
-	import { COMPACT_BTN, INPUT_CLASS } from "$lib/ui/classes";
+	import { ASK_BTN, INPUT_CLASS } from "$lib/ui/classes";
 	import { ASK_QUESTION_MAX } from "./limits";
 
 	let question = $state("");
@@ -83,11 +83,13 @@
 		/>
 		<button
 			type="submit"
-			class={COMPACT_BTN}
+			class={ASK_BTN}
 			disabled={asking || question.trim() === ""}>Ask</button
 		>
 	</div>
 	{#if refusal}
-		<p id="ask-refusal" class="text-xs text-orange" role="status">{refusal}</p>
+		<p id="ask-refusal" class="text-xs text-gray-400" role="status">
+			{refusal}
+		</p>
 	{/if}
 </form>

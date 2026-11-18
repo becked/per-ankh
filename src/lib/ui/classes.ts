@@ -25,6 +25,12 @@ export const INPUT_CLASS =
 export const COMPACT_BTN =
 	"rounded bg-surface-raised px-2 py-1 text-xs text-tan transition-colors hover:bg-surface-raised-hover disabled:opacity-40";
 
+// The button that runs a question on /stats/explore. The query builder's Ask
+// and the plain-language question's Ask both use it, so the two read as the
+// same action.
+export const ASK_BTN =
+	"rounded bg-orange px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-orange/80 disabled:opacity-40";
+
 // One item of a thumbless segmented group: off sits at the panel's surface, on
 // fills to the step above it. `SegmentedChips` ($lib/ui/SegmentedChips.svelte)
 // is the component form, and the two Yields mode toggles
