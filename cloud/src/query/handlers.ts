@@ -2,6 +2,7 @@
 //
 //   GET /v1/query/catalog — the vocabulary a question may be composed from
 //   GET /v1/query         — run one composed question
+//   POST /v1/query/ask    — translate a question in plain language into one
 //
 // The catalog is served rather than baked into the client for the reason the
 // Worker's own notes give about second implementations: a copy of the
@@ -13,13 +14,44 @@
 import { buildAvatarUrl } from "../auth";
 import { sessionFromRequest } from "../session";
 import type { SessionEnv } from "../session";
-import { cloudCorsHeaders, errorResponse } from "../util";
+import {
+	cloudCorsHeaders,
+	errorResponse,
+	getClientIp,
+	jsonResponse,
+	parseJsonBody,
+} from "../util";
 import { ceilingFrom, enforceReadRateLimit } from "../read-budget";
 import type { ReadBudget } from "../read-budget";
 import { logError, setLogField } from "../log";
 import type { EventsEnv, QueryableD1 } from "../d1";
+import { AskQuestionSchema } from "../schemas/query";
+import {
+	askCacheKey,
+	readCachedAnswer,
+	writeCachedAnswer,
+	type CachedAnswer,
+} from "./ask-cache";
+import {
+	countQuestionsSince,
+	monthToDateCostUsd,
+	reserveQuestion,
+	settledUsage,
+	settleQuestion,
+} from "./ask-usage";
+import {
+	ASK_DISABLED_KEY,
+	ASK_MODEL,
+	ASK_SESSION_AFFINITY,
+	askQuestion,
+	type AskOutcome,
+} from "./ask";
 import { compileQuery } from "./compile";
-import { canonicalSelection, parseSelection } from "./select";
+import {
+	canonicalSelection,
+	parseSelection,
+	type QuerySelection,
+} from "./select";
 import {
 	measureByKey,
 	PLAYER_ROSTER_SQL,
@@ -110,6 +142,49 @@ function queryResponse(
 	});
 }
 
+// The two served rosters. The catalog serves both to the builder's pickers,
+// and the ask endpoint matches typed names against them.
+async function loadTournamentRoster(
+	db: QueryableD1,
+): Promise<CatalogRosterOption[]> {
+	const { results } = await db.prepare(TOURNAMENT_ROSTER_SQL).all<{
+		tournament_id: string;
+		name: string;
+	}>();
+	return results.map((r) => ({ value: r.tournament_id, label: r.name }));
+}
+
+async function loadPlayerRoster(
+	db: QueryableD1,
+): Promise<CatalogRosterOption[]> {
+	const { results } = await db.prepare(PLAYER_ROSTER_SQL).all<{
+		user_id: string;
+		display_name: string;
+		discord_id: string;
+		avatar_hash: string | null;
+	}>();
+	return results.map((r) => ({
+		value: r.user_id,
+		label: r.display_name,
+		// The account's avatar, so a player reads here the way it reads on
+		// /players and in a game's seat list. Built from the two columns rather
+		// than stored: buildAvatarUrl is the one place that knows the CDN path
+		// and the default-avatar fallback for an account with no hash.
+		icon: buildAvatarUrl(r.discord_id, r.avatar_hash),
+	}));
+}
+
+// The question's *shape* on the access-log line, never its values: a filter on
+// `player_name` carries a player's name, and PII does not go in a log field.
+// The shape is what makes read cost per question measurable, which is the
+// number this surface was built to produce.
+function logSelectionShape(selection: QuerySelection): void {
+	setLogField("query_source", selection.source);
+	setLogField("query_measure", selection.measure);
+	setLogField("query_dimensions", selection.dimensions.join(","));
+	setLogField("query_filters", selection.filters.map((f) => f.key).join(","));
+}
+
 // GET /v1/query/catalog — the dimensions, measures and filters a selection may
 // name, per source, and the value rosters only this side knows.
 //
@@ -157,33 +232,12 @@ export async function handleQueryCatalog(
 	let tournaments: CatalogRosterOption[] = [];
 	let players: CatalogRosterOption[] = [];
 	try {
-		const { results } = await env.SHARE_DB.prepare(TOURNAMENT_ROSTER_SQL).all<{
-			tournament_id: string;
-			name: string;
-		}>();
-		tournaments = results.map((r) => ({
-			value: r.tournament_id,
-			label: r.name,
-		}));
+		tournaments = await loadTournamentRoster(env.SHARE_DB);
 	} catch (err) {
 		logError("query_catalog_roster_failed", err);
 	}
 	try {
-		const { results } = await env.SHARE_DB.prepare(PLAYER_ROSTER_SQL).all<{
-			user_id: string;
-			display_name: string;
-			discord_id: string;
-			avatar_hash: string | null;
-		}>();
-		players = results.map((r) => ({
-			value: r.user_id,
-			label: r.display_name,
-			// The account's avatar, so a player reads here the way it reads on
-			// /players and in a game's seat list. Built from the two columns rather
-			// than stored: buildAvatarUrl is the one place that knows the CDN path
-			// and the default-avatar fallback for an account with no hash.
-			icon: buildAvatarUrl(r.discord_id, r.avatar_hash),
-		}));
+		players = await loadPlayerRoster(env.SHARE_DB);
 	} catch (err) {
 		logError("query_catalog_player_roster_failed", err);
 	}
@@ -236,14 +290,7 @@ export async function handleQuery(
 		return errorResponse("Unknown measure", 400, cors, "INVALID_QUERY");
 	}
 
-	// The question's *shape* on the access-log line, never its values: a
-	// filter on `player_name` carries a player's name, and PII does not go in
-	// a log field. The shape is what makes read cost per question measurable,
-	// which is the number this surface was built to produce.
-	setLogField("query_source", selection.source);
-	setLogField("query_measure", selection.measure);
-	setLogField("query_dimensions", selection.dimensions.join(","));
-	setLogField("query_filters", selection.filters.map((f) => f.key).join(","));
+	logSelectionShape(selection);
 
 	const compiled = compileQuery(source, selection);
 
@@ -299,4 +346,273 @@ export async function handleQuery(
 		cors,
 		"public, max-age=0, s-maxage=60",
 	);
+}
+
+// ---------- POST /v1/query/ask ----------
+
+export interface QueryAskEnv extends QueryEnv {
+	// Workers AI, for the model call that translates the question.
+	AI: Ai;
+	// The ask limits. Optional: unset falls back to the constants below.
+	PER_USER_QUERY_ASKS_PER_DAY?: string;
+	PER_IP_QUERY_ASKS_PER_HOUR?: string;
+	GLOBAL_QUERY_ASKS_PER_HOUR?: string;
+	ASK_MONTHLY_BUDGET_USD?: string;
+}
+
+// The ask limits, all counted over `query_asks` rows (ask-usage.ts): one row
+// per question that reaches the model, so a retry is not a second question
+// and a question answered from the answer cache is not one at all.
+//
+//   * Per account, questions in the last 24 hours. Shares the month's budget
+//     between accounts.
+//   * Per IP and global, questions in the last hour. The per-IP one bounds one
+//     visitor holding several accounts. The global one bounds how fast the
+//     month's budget can be spent.
+//   * The monthly budget, in USD, over the current UTC calendar month. The
+//     only one that bounds total spend: Discord accounts are free and IPs
+//     rotate. Usage is priced at ASK_PRICES, and a question in flight counts
+//     at its reservation.
+//
+// When one refuses, only the ask input stops working; the builder does not
+// spend these. The derivation is in cloud/wrangler.toml above the vars.
+//
+// The defaults only — read the effective values with askLimits().
+export const PER_USER_QUERY_ASKS_PER_DAY = 10;
+export const PER_IP_QUERY_ASKS_PER_HOUR = 60;
+export const GLOBAL_QUERY_ASKS_PER_HOUR = 300;
+export const ASK_MONTHLY_BUDGET_USD = 5;
+
+function askLimits(env: QueryAskEnv): {
+	perUserPerDay: number;
+	perIpPerHour: number;
+	globalPerHour: number;
+	monthlyBudgetUsd: number;
+} {
+	return {
+		perUserPerDay: ceilingFrom(
+			env.PER_USER_QUERY_ASKS_PER_DAY,
+			PER_USER_QUERY_ASKS_PER_DAY,
+			"PER_USER_QUERY_ASKS_PER_DAY",
+		),
+		perIpPerHour: ceilingFrom(
+			env.PER_IP_QUERY_ASKS_PER_HOUR,
+			PER_IP_QUERY_ASKS_PER_HOUR,
+			"PER_IP_QUERY_ASKS_PER_HOUR",
+		),
+		globalPerHour: ceilingFrom(
+			env.GLOBAL_QUERY_ASKS_PER_HOUR,
+			GLOBAL_QUERY_ASKS_PER_HOUR,
+			"GLOBAL_QUERY_ASKS_PER_HOUR",
+		),
+		monthlyBudgetUsd: ceilingFrom(
+			env.ASK_MONTHLY_BUDGET_USD,
+			ASK_MONTHLY_BUDGET_USD,
+			"ASK_MONTHLY_BUDGET_USD",
+		),
+	};
+}
+
+const ASK_UNAVAILABLE_MESSAGE =
+	"Asking in plain language is unavailable right now";
+
+function logAskOutcome(outcome: AskOutcome): void {
+	setLogField("ask_outcome", outcome.kind);
+	setLogField("ask_attempts", outcome.attempts);
+	setLogField(
+		"ask_input_tokens",
+		outcome.usage.reduce((n, u) => n + u.inputTokens, 0),
+	);
+	setLogField(
+		"ask_cached_input_tokens",
+		outcome.usage.reduce((n, u) => n + u.cachedInputTokens, 0),
+	);
+	setLogField(
+		"ask_output_tokens",
+		outcome.usage.reduce((n, u) => n + u.outputTokens, 0),
+	);
+}
+
+// POST /v1/query/ask — translate a question in plain language into a selection
+// (issue #380). Answers `{ selection }`, the canonical query string the client
+// navigates to; GET /v1/query then answers it like any other question.
+//
+// Session required, as for GET /v1/query: the session gates who may spend a
+// model call. Then, cheapest refusal first and all of them before the model
+// runs: the body, the off switch, the limits (askLimits).
+//
+// The answer cache (ask-cache.ts) is read after the off switch and before the
+// limits. A hit makes no model call, so it is not charged and a spent limit
+// does not refuse it. The off switch still refuses a hit, because turning the
+// feature off covers the answers it gave earlier.
+//
+// A question that passes the limits is reserved in `query_asks` before its
+// first call and settled after its last (ask-usage.ts). A reservation that
+// cannot be written refuses the question: the row is what the monthly budget
+// counts, so a question without one would be spend the budget never sees.
+//
+// Every refusal carries its own code, so the page can show one line under the
+// input and leave the builder working. The off switch is a 503 with
+// ASK_DISABLED, and a model or store that is down is a 503 with
+// ASK_UNAVAILABLE. A spent limit is a 429 with RATE_LIMIT_ASK_*. An
+// unsupported question is a 422 with ASK_UNSUPPORTED, and a reply that failed
+// its checks twice is a 422 with ASK_UNMATCHED.
+export async function handleQueryAsk(
+	request: Request,
+	env: QueryAskEnv,
+): Promise<Response> {
+	const cors = cloudCorsHeaders(env, request);
+
+	const session = await sessionFromRequest(env, request);
+	if (!session) {
+		return errorResponse("Authentication required", 401, cors, "UNAUTHORIZED");
+	}
+
+	const body = await parseJsonBody(request, AskQuestionSchema, cors);
+	if (!body.ok) return body.response;
+	const { question } = body.body;
+
+	// The off switch. A read that throws refuses: a switch that fails open is
+	// on exactly when somebody may be trying to turn it off.
+	let switchedOff: boolean;
+	try {
+		switchedOff = (await env.SESSIONS_KV.get(ASK_DISABLED_KEY)) !== null;
+	} catch (e) {
+		logError("query_ask_switch_read_failed", e);
+		return errorResponse(ASK_UNAVAILABLE_MESSAGE, 503, cors, "ASK_UNAVAILABLE");
+	}
+	if (switchedOff) {
+		return errorResponse(
+			"Asking in plain language is switched off",
+			503,
+			cors,
+			"ASK_DISABLED",
+		);
+	}
+
+	const today = new Date().toISOString().slice(0, 10);
+	const cacheKey = await askCacheKey(question, today);
+	const cached = await readCachedAnswer(env.SESSIONS_KV, cacheKey);
+	setLogField("ask_cache", cached ? "hit" : "miss");
+	if (cached) {
+		setLogField("ask_question", question);
+		setLogField("ask_outcome", cached.kind);
+		return answeredResponse(cached, cors);
+	}
+
+	const userId = session.data.user_id;
+	const ip = getClientIp(request);
+	const limits = askLimits(env);
+	if (
+		(await countQuestionsSince(
+			env.EVENTS_DB,
+			{ column: "user_id", value: userId },
+			"-24 hours",
+		)) >= limits.perUserPerDay
+	) {
+		return errorResponse(
+			`You've asked ${limits.perUserPerDay} questions in the last 24 hours — try again later`,
+			429,
+			cors,
+			"RATE_LIMIT_ASK_USER",
+		);
+	}
+	if (
+		ip &&
+		(await countQuestionsSince(
+			env.EVENTS_DB,
+			{ column: "ip_address", value: ip },
+			"-1 hour",
+		)) >= limits.perIpPerHour
+	) {
+		return errorResponse(
+			"Too many questions from this network this hour — try again later",
+			429,
+			cors,
+			"RATE_LIMIT_ASK_IP",
+		);
+	}
+	if (
+		(await countQuestionsSince(env.EVENTS_DB, null, "-1 hour")) >=
+		limits.globalPerHour
+	) {
+		return errorResponse(
+			"Asking in plain language is busy this hour — try again later",
+			429,
+			cors,
+			"RATE_LIMIT_ASK_GLOBAL",
+		);
+	}
+	if ((await monthToDateCostUsd(env.EVENTS_DB)) >= limits.monthlyBudgetUsd) {
+		return errorResponse(
+			"Asking in plain language is paused until next month",
+			429,
+			cors,
+			"RATE_LIMIT_ASK_BUDGET",
+		);
+	}
+
+	let reservation: number;
+	try {
+		reservation = await reserveQuestion(env.EVENTS_DB, userId, ip);
+	} catch (e) {
+		logError("query_ask_reserve_failed", e);
+		return errorResponse(ASK_UNAVAILABLE_MESSAGE, 503, cors, "ASK_UNAVAILABLE");
+	}
+
+	// The question text, verbatim. A deliberate exception to the shape-only
+	// rule handleQuery follows (issue #380): real questions are what the eval's
+	// test set grows from, and the text can carry a player's name, so it goes
+	// on this route's line and on no other.
+	setLogField("ask_question", question);
+
+	let outcome: AskOutcome;
+	try {
+		outcome = await askQuestion(question, {
+			callModel: (inputs) =>
+				env.AI.run(ASK_MODEL, inputs, {
+					extraHeaders: { "x-session-affinity": ASK_SESSION_AFFINITY },
+				}),
+			loadRoster: (vocabulary) =>
+				vocabulary === "player"
+					? loadPlayerRoster(env.SHARE_DB)
+					: loadTournamentRoster(env.SHARE_DB),
+			today,
+		});
+	} catch (e) {
+		// The reservation stands: a call that threw may still have been billed,
+		// and its usage is not known.
+		logError("query_ask_failed", e);
+		return errorResponse(ASK_UNAVAILABLE_MESSAGE, 503, cors, "ASK_UNAVAILABLE");
+	}
+	logAskOutcome(outcome);
+	try {
+		await settleQuestion(
+			env.EVENTS_DB,
+			reservation,
+			settledUsage(outcome.usage),
+		);
+	} catch (e) {
+		// The reservation stands, which over-counts the question. The answer
+		// is still good, so it is still returned.
+		logError("query_ask_settle_failed", e);
+	}
+	await writeCachedAnswer(env.SESSIONS_KV, cacheKey, outcome);
+
+	if (outcome.kind === "failed") {
+		return errorResponse(outcome.message, 422, cors, "ASK_UNMATCHED");
+	}
+	return answeredResponse(outcome, cors);
+}
+
+// A selection or an "unsupported" reply, fresh or from the cache.
+function answeredResponse(
+	answer: CachedAnswer,
+	cors: Record<string, string>,
+): Response {
+	if (answer.kind === "selection") {
+		logSelectionShape(answer.selection);
+		return jsonResponse({ selection: answer.canonical }, 200, cors);
+	}
+	return errorResponse(answer.reason, 422, cors, "ASK_UNSUPPORTED");
 }

@@ -33,9 +33,8 @@ import {
 import { CREST_SPRITE_NAMES, TRIBE_CRESTS } from "$lib/generated/crest-sprites";
 import { SPRITE_MANIFEST } from "$lib/generated/sprite-manifest";
 import { UNIT_STATS } from "$lib/generated/unit-stats";
-import { TECH_NAMES } from "$lib/generated/tech-names";
-import { IMPROVEMENT_NAMES } from "$lib/generated/improvement-names";
-import { SHRINE_TYPE, IMPROVEMENT_ICON } from "$lib/generated/science-yields";
+import { IMPROVEMENT_ICON } from "$lib/generated/science-yields";
+import { improvementDisplayName, techName } from "$lib/utils/game-names";
 import { PROJECT_ICON } from "$lib/generated/project-icons";
 import { PROJECT_NAMES } from "$lib/generated/project-names";
 import {
@@ -502,10 +501,9 @@ const TECH_SPRITE_FIXES: Record<string, string> = {
 const unitSpriteName = (unitType: string): string =>
 	UNIT_STATS[unitType]?.icon ?? unitType;
 
-// Tech display name — the baked override, else the generic formatter. Shared by
-// the Military rail and the Techs tab (comparison table + science rail).
-export const techName = (tech: string): string =>
-	TECH_NAMES[tech] ?? formatEnum(tech, "TECH_");
+// Defined in $lib/utils/game-names, which the Worker can import. Re-exported
+// here so the game-detail call sites keep their import.
+export { techName };
 
 /**
  * Resolve a tech enum value to its (category, filename) in the sprite
@@ -1365,16 +1363,8 @@ export function buildOwttUrl(
 	return `${OWTT_BASE_URL}?${nationParam}o=${encs.join(",")}`;
 }
 
-/**
- * Display name for an improvement zType: the baked IMPROVEMENT_NAMES
- * override (tiers, monasteries, shrine-of-X) with formatEnum as fallback,
- * plus a pagan shrine's domain appended: "Shrine of Nabu (Wisdom)".
- */
-export function improvementDisplayName(zType: string): string {
-	const named = IMPROVEMENT_NAMES[zType] ?? formatEnum(zType, "IMPROVEMENT_");
-	const domain = SHRINE_TYPE[zType];
-	return domain ? `${named} (${domain})` : named;
-}
+// Defined in $lib/utils/game-names, beside techName, for the same reason.
+export { improvementDisplayName };
 
 /**
  * Display name for a project zType: the baked PROJECT_NAMES override with

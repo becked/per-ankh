@@ -9,8 +9,11 @@
 // controls would light a selection the payload isn't for — so the parse is
 // mirrored here, the way profileScope mirrors parseScopeParam.
 
-import { BASE_NATIONS } from "$lib/generated/civilization-colors";
-import { nationName } from "$lib/utils/formatting";
+// Relative imports rather than `$lib`, because the Worker imports the Game mode
+// labels below across the package boundary ($lib/query/vocabulary-rosters) and
+// has no `$lib` alias.
+import { BASE_NATIONS } from "../generated/civilization-colors";
+import { nationName } from "../utils/formatting";
 import type { GlobalPeriod, GlobalSlice } from "./types";
 
 // How each slice names itself. A total map rather than a lookup with a

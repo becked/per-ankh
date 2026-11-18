@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { KEEP_FOREVER, RETENTION_BUCKETS } from "./retention";
+import {
+	KEEP_FOREVER,
+	QUERY_ASKS_RETENTION,
+	RETENTION_BUCKETS,
+} from "./retention";
 
 // An event type appearing in two lists would make the policy ambiguous
 // (first-bucket-wins by iteration order, or deleted despite KEEP_FOREVER).
@@ -73,5 +77,11 @@ describe("retention windows", () => {
 		expect(
 			windowInHours(bucket("general_audit").olderThan),
 		).toBeGreaterThanOrEqual(30 * 24);
+	});
+
+	it("query_asks keeps the whole calendar month the budget sums", () => {
+		expect(QUERY_ASKS_RETENTION).toMatch(WINDOW_SHAPE);
+		// The monthly budget reads back to the 1st, at most 31 days.
+		expect(windowInHours(QUERY_ASKS_RETENTION)).toBeGreaterThan(31 * 24);
 	});
 });

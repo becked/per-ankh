@@ -1765,6 +1765,26 @@ export const cloudApi = {
 		return res.json() as Promise<QueryResult>;
 	},
 
+	// Translate a question in plain language into a selection (issue #380).
+	// Answers the canonical query string, which the page navigates to and
+	// runQuery then answers. A refusal is an `ApiError` whose code says which:
+	// ASK_DISABLED (the off switch), RATE_LIMIT_ASK_USER / _IP / _GLOBAL /
+	// _BUDGET, ASK_UNAVAILABLE, ASK_UNSUPPORTED (the question names something
+	// the catalog cannot express, and the message says what) or ASK_UNMATCHED
+	// (a name or value matched nothing, and the message names it).
+	askQuery: async (
+		question: string,
+		opts?: CallOpts,
+	): Promise<{ selection: string }> => {
+		const res = await request("/query/ask", {
+			...opts,
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ question }),
+		});
+		return res.json() as Promise<{ selection: string }>;
+	},
+
 	// The home page's stats panels, over the unfaceted `duel` slice — a public,
 	// trimmed projection of the same precomputed bundle getGlobalStats reads.
 	//

@@ -1,0 +1,580 @@
+// POST /v1/query/ask, against real D1 and KV with the model stubbed.
+//
+// env.AI is replaced in every test, as the screenshot tests do it: the test
+// isolate has no AI binding (vitest.config.mts). What is pinned here is what
+// the Worker does around the model — the gate, the off switch, the answer
+// cache, the limits, the checks and the retry — not what the model answers. The eval
+// (scripts/eval-query-ask.ts) is where the model's answers are measured.
+
+import { applyD1Migrations, env, SELF } from "cloudflare:test";
+import { beforeAll, beforeEach, describe, expect, it } from "vitest";
+import {
+	ASK_DISABLED_KEY,
+	ASK_TEMPERATURE,
+	ASK_TOOL_NAME,
+} from "../../../src/query/ask";
+import { ASK_CACHE_KEY_ROOT } from "../../../src/query/ask-cache";
+import { RESERVED_QUESTION_USAGE } from "../../../src/query/ask-usage";
+import { sweepQueryAsks } from "../../../src/retention";
+import { makeUser, type TestUser } from "../../helpers/builders";
+import { postMultipart, request } from "../../helpers/requests";
+import { buildUploadFormData } from "../../helpers/save-blob";
+
+interface ModelCall {
+	model: string;
+	inputs: {
+		messages: { role: string; content: string | null; tool_call_id?: string }[];
+		tool_choice: string;
+		store: boolean;
+		temperature?: number;
+	};
+	options: { extraHeaders?: Record<string, string> } | undefined;
+}
+
+let calls: ModelCall[] = [];
+let replies: (() => unknown)[] = [];
+
+// A chat-completions reply carrying one call of the answer tool.
+function toolReply(args: Record<string, unknown>): unknown {
+	return {
+		id: "chatcmpl-test",
+		object: "chat.completion",
+		created: 0,
+		model: "stub",
+		choices: [
+			{
+				index: 0,
+				finish_reason: "tool_calls",
+				message: {
+					role: "assistant",
+					content: null,
+					tool_calls: [
+						{
+							id: `call_${calls.length}`,
+							type: "function",
+							function: {
+								name: ASK_TOOL_NAME,
+								arguments: JSON.stringify(args),
+							},
+						},
+					],
+				},
+			},
+		],
+		usage: { prompt_tokens: 9000, completion_tokens: 120, total_tokens: 9120 },
+	};
+}
+
+let alice: TestUser;
+
+beforeAll(async () => {
+	await applyD1Migrations(env.SHARE_DB, env.TEST_MIGRATIONS);
+	// Alice claims seat 0 of a public game, which puts her account on the
+	// player roster the ask endpoint matches names against.
+	alice = await makeUser({ displayName: "Alice" });
+	const res = await postMultipart({
+		path: "/v1/games",
+		form: await buildUploadFormData({ uploaderIndex: 0, winnerIndex: 0 }),
+		as: alice,
+	});
+	expect(res.status).toBe(201);
+});
+
+beforeEach(async () => {
+	calls = [];
+	replies = [];
+	(env as unknown as { AI: unknown }).AI = {
+		run: async (
+			model: string,
+			inputs: ModelCall["inputs"],
+			options: ModelCall["options"],
+		) => {
+			calls.push({ model, inputs, options });
+			const next = replies.shift();
+			if (!next) throw new Error("no stubbed reply left");
+			return next();
+		},
+	};
+	await env.SESSIONS_KV.delete(ASK_DISABLED_KEY);
+	// Most tests ask the same question, and each expects the model to answer it.
+	const cached = await env.SESSIONS_KV.list({ prefix: ASK_CACHE_KEY_ROOT });
+	for (const k of cached.keys) await env.SESSIONS_KV.delete(k.name);
+	await env.SHARE_DB.prepare(`DELETE FROM query_asks`).run();
+});
+
+async function ask(
+	question: unknown,
+	as: TestUser | null = alice,
+): Promise<Response> {
+	return request.post({
+		path: "/v1/query/ask",
+		body: { question },
+		as: as ?? undefined,
+	});
+}
+
+// As ask(), from a given client IP. getClientIp trusts CF-Connecting-IP only
+// alongside CF-RAY.
+async function askFrom(
+	ip: string,
+	question: string,
+	as: TestUser,
+): Promise<Response> {
+	return SELF.fetch("http://test/v1/query/ask", {
+		method: "POST",
+		headers: {
+			Origin: "http://localhost:1420",
+			Cookie: `session=${as.sessionToken}`,
+			"Content-Type": "application/json",
+			"CF-Connecting-IP": ip,
+			"CF-RAY": "test-ray",
+		},
+		body: JSON.stringify({ question }),
+	});
+}
+
+interface QuestionRow {
+	input_tokens: number;
+	cached_input_tokens: number;
+	output_tokens: number;
+}
+
+// The query_asks rows, oldest first: one per question that reached the model.
+async function questionRows(): Promise<QuestionRow[]> {
+	const rows = await env.SHARE_DB.prepare(
+		`SELECT input_tokens, cached_input_tokens, output_tokens
+		 FROM query_asks ORDER BY id`,
+	).all<QuestionRow>();
+	return rows.results;
+}
+
+// A question asked earlier, written directly. `age` is a SQLite datetime()
+// modifier, applied to now.
+async function seedQuestion(
+	userId: string,
+	age: string,
+	inputTokens: number,
+): Promise<void> {
+	await env.SHARE_DB.prepare(
+		`INSERT INTO query_asks
+		   (user_id, ip_address, created_at, input_tokens, cached_input_tokens, output_tokens)
+		 VALUES (?, NULL, datetime('now', ?), ?, 0, 0)`,
+	)
+		.bind(userId, age, inputTokens)
+		.run();
+}
+
+// Sets one env var for the length of `body`, as the limit tests below need.
+async function withVar(
+	name: string,
+	value: string,
+	body: () => Promise<void>,
+): Promise<void> {
+	const vars = env as unknown as Record<string, string | undefined>;
+	const before = vars[name];
+	vars[name] = value;
+	try {
+		await body();
+	} finally {
+		vars[name] = before;
+	}
+}
+
+const WONDERS_BY_PLAYER = {
+	kind: "selection",
+	source: "wonder_events",
+	measure: "wonders_built",
+	dimensions: ["player"],
+	filters: [{ key: "wonder", op: "in", values: ["IMPROVEMENT_PYRAMIDS"] }],
+};
+
+describe("the gate", () => {
+	it("refuses an anonymous caller before calling the model", async () => {
+		const res = await ask("Who built the Pyramids?", null);
+		expect(res.status).toBe(401);
+		expect(calls).toHaveLength(0);
+	});
+
+	it("refuses an empty question", async () => {
+		const res = await ask("   ");
+		expect(res.status).toBe(400);
+		expect(calls).toHaveLength(0);
+	});
+});
+
+describe("the off switch", () => {
+	it("refuses while the key is set, before calling the model", async () => {
+		await env.SESSIONS_KV.put(ASK_DISABLED_KEY, "1");
+		const res = await ask("Who built the Pyramids?");
+		expect(res.status).toBe(503);
+		expect((await res.json<{ code: string }>()).code).toBe("ASK_DISABLED");
+		expect(calls).toHaveLength(0);
+		expect(await questionRows()).toHaveLength(0);
+	});
+
+	it("refuses when the switch cannot be read", async () => {
+		const kv = env.SESSIONS_KV;
+		// Throws for the switch key only, so the session read still works.
+		(env as unknown as { SESSIONS_KV: unknown }).SESSIONS_KV = {
+			...kv,
+			get: (key: string, ...rest: unknown[]) => {
+				if (key === ASK_DISABLED_KEY) throw new Error("kv down");
+				return (kv.get as (...a: unknown[]) => unknown)(key, ...rest);
+			},
+		};
+		try {
+			const res = await ask("Who built the Pyramids?");
+			expect(res.status).toBe(503);
+			expect((await res.json<{ code: string }>()).code).toBe("ASK_UNAVAILABLE");
+			expect(calls).toHaveLength(0);
+		} finally {
+			(env as unknown as { SESSIONS_KV: unknown }).SESSIONS_KV = kv;
+		}
+	});
+});
+
+describe("a question the model answers", () => {
+	it("returns the canonical selection and records the reported usage", async () => {
+		replies = [() => toolReply(WONDERS_BY_PLAYER)];
+		const res = await ask("Who built the Pyramids?");
+		expect(res.status).toBe(200);
+		expect(await res.json()).toEqual({
+			selection:
+				"source=wonder_events&dim=player&measure=wonders_built&f=wonder:in:IMPROVEMENT_PYRAMIDS",
+		});
+		expect(calls).toHaveLength(1);
+		expect(await questionRows()).toEqual([
+			{ input_tokens: 9000, cached_input_tokens: 0, output_tokens: 120 },
+		]);
+		expect(calls[0].inputs.tool_choice).toBe("required");
+		expect(calls[0].inputs.store).toBe(false);
+		expect(calls[0].inputs.temperature).toBe(ASK_TEMPERATURE);
+		expect(calls[0].options?.extraHeaders?.["x-session-affinity"]).toBeTruthy();
+		// The question travels in the user message, after the shared prefix.
+		expect(calls[0].inputs.messages[1].content).toContain(
+			"Who built the Pyramids?",
+		);
+	});
+
+	it("matches a player's name to their account", async () => {
+		replies = [
+			() =>
+				toolReply({
+					kind: "selection",
+					source: "player_summaries",
+					measure: "seats",
+					filters: [{ key: "player", op: "in", values: ["alice"] }],
+				}),
+		];
+		const res = await ask("How many games has Alice played?");
+		expect(res.status).toBe(200);
+		expect(await res.json()).toEqual({
+			selection: `source=player_summaries&measure=seats&f=player:in:${alice.userId}`,
+		});
+	});
+});
+
+describe("a reply that fails a check", () => {
+	it("retries once with the failure and returns the corrected answer", async () => {
+		replies = [
+			() =>
+				toolReply({
+					...WONDERS_BY_PLAYER,
+					filters: [
+						{ key: "wonder", op: "in", values: ["IMPROVEMENT_PYRAMID"] },
+					],
+				}),
+			() => toolReply(WONDERS_BY_PLAYER),
+		];
+		const res = await ask("Who built the Pyramids?");
+		expect(res.status).toBe(200);
+		expect(calls).toHaveLength(2);
+		// The retry is part of the same question, and its tokens are added.
+		expect(await questionRows()).toEqual([
+			{ input_tokens: 18000, cached_input_tokens: 0, output_tokens: 240 },
+		]);
+		const retry = calls[1].inputs.messages.at(-1);
+		expect(retry?.role).toBe("tool");
+		expect(retry?.content).toContain("IMPROVEMENT_PYRAMID");
+	});
+
+	it("refuses after a second failure, naming what did not match", async () => {
+		replies = [
+			() =>
+				toolReply({
+					kind: "selection",
+					source: "player_summaries",
+					measure: "seats",
+					filters: [{ key: "player", op: "in", values: ["Gilgamesh99"] }],
+				}),
+			() =>
+				toolReply({
+					kind: "selection",
+					source: "player_summaries",
+					measure: "seats",
+					filters: [{ key: "player", op: "in", values: ["Gilgamesh99"] }],
+				}),
+		];
+		const res = await ask("How many games has Gilgamesh99 played?");
+		expect(res.status).toBe(422);
+		const body = await res.json<{ code: string; error: string }>();
+		expect(body.code).toBe("ASK_UNMATCHED");
+		expect(JSON.stringify(body)).toContain("Gilgamesh99");
+		expect(calls).toHaveLength(2);
+	});
+});
+
+describe("a question the catalog cannot express", () => {
+	it("returns the model's reason", async () => {
+		replies = [
+			() =>
+				toolReply({
+					kind: "unsupported",
+					reason: "No source records religions.",
+				}),
+		];
+		const res = await ask("Which religion gets founded first?");
+		expect(res.status).toBe(422);
+		const body = await res.json<{ code: string }>();
+		expect(body.code).toBe("ASK_UNSUPPORTED");
+		expect(JSON.stringify(body)).toContain("No source records religions.");
+		expect(calls).toHaveLength(1);
+	});
+});
+
+describe("the limits", () => {
+	it("refuses once the account's questions for the day are spent", async () => {
+		await withVar("PER_USER_QUERY_ASKS_PER_DAY", "1", async () => {
+			replies = [() => toolReply(WONDERS_BY_PLAYER)];
+			expect((await ask("Who built the Pyramids?")).status).toBe(200);
+			// A different question, so the answer cache cannot answer it.
+			const res = await ask("Who built the Colossus?");
+			expect(res.status).toBe(429);
+			expect((await res.json<{ code: string }>()).code).toBe(
+				"RATE_LIMIT_ASK_USER",
+			);
+			expect(calls).toHaveLength(1);
+		});
+	});
+
+	it("counts the account's questions over the last 24 hours only", async () => {
+		await seedQuestion(alice.userId, "-25 hours", 9000);
+		await withVar("PER_USER_QUERY_ASKS_PER_DAY", "1", async () => {
+			replies = [() => toolReply(WONDERS_BY_PLAYER)];
+			expect((await ask("Who built the Pyramids?")).status).toBe(200);
+		});
+	});
+
+	it("counts a retry as part of its question", async () => {
+		await withVar("PER_USER_QUERY_ASKS_PER_DAY", "2", async () => {
+			replies = [
+				() =>
+					toolReply({
+						...WONDERS_BY_PLAYER,
+						filters: [
+							{ key: "wonder", op: "in", values: ["IMPROVEMENT_PYRAMID"] },
+						],
+					}),
+				() => toolReply(WONDERS_BY_PLAYER),
+				() => toolReply(WONDERS_BY_PLAYER),
+			];
+			expect((await ask("Who built the Pyramids?")).status).toBe(200);
+			expect((await ask("Who built the Colossus?")).status).toBe(200);
+			expect(calls).toHaveLength(3);
+		});
+	});
+
+	it("refuses once the network's hourly questions are spent", async () => {
+		await withVar("PER_IP_QUERY_ASKS_PER_HOUR", "1", async () => {
+			replies = [
+				() => toolReply(WONDERS_BY_PLAYER),
+				() => toolReply(WONDERS_BY_PLAYER),
+			];
+			expect(
+				(await askFrom("203.0.113.40", "Who built the Pyramids?", alice))
+					.status,
+			).toBe(200);
+			// Another account on the same network is refused.
+			const other = await makeUser();
+			const res = await askFrom(
+				"203.0.113.40",
+				"Who built the Colossus?",
+				other,
+			);
+			expect(res.status).toBe(429);
+			expect((await res.json<{ code: string }>()).code).toBe(
+				"RATE_LIMIT_ASK_IP",
+			);
+			// The same account on another network is not.
+			expect(
+				(await askFrom("203.0.113.41", "Who built the Colossus?", other))
+					.status,
+			).toBe(200);
+			expect(calls).toHaveLength(2);
+		});
+	});
+
+	it("refuses once the global hourly questions are spent", async () => {
+		await withVar("GLOBAL_QUERY_ASKS_PER_HOUR", "1", async () => {
+			replies = [() => toolReply(WONDERS_BY_PLAYER)];
+			expect((await ask("Who built the Pyramids?")).status).toBe(200);
+			const other = await makeUser();
+			const res = await ask("Who built the Colossus?", other);
+			expect(res.status).toBe(429);
+			expect((await res.json<{ code: string }>()).code).toBe(
+				"RATE_LIMIT_ASK_GLOBAL",
+			);
+		});
+	});
+
+	it("refuses once the month's budget is spent, before calling the model", async () => {
+		// 4M uncached input tokens at $0.30/M: $1.20 against a $1 budget.
+		// At the first second of the month, the earliest the budget counts.
+		await seedQuestion(alice.userId, "start of month", 4_000_000);
+		await withVar("ASK_MONTHLY_BUDGET_USD", "1", async () => {
+			const other = await makeUser();
+			const res = await ask("Who built the Pyramids?", other);
+			expect(res.status).toBe(429);
+			expect((await res.json<{ code: string }>()).code).toBe(
+				"RATE_LIMIT_ASK_BUDGET",
+			);
+			expect(calls).toHaveLength(0);
+		});
+	});
+
+	it("does not count last month's spend against this month", async () => {
+		await env.SHARE_DB.prepare(
+			`INSERT INTO query_asks
+			   (user_id, ip_address, created_at, input_tokens, cached_input_tokens, output_tokens)
+			 VALUES (?, NULL, datetime('now', 'start of month', '-1 day'), 4000000, 0, 0)`,
+		)
+			.bind(alice.userId)
+			.run();
+		await withVar("ASK_MONTHLY_BUDGET_USD", "1", async () => {
+			replies = [() => toolReply(WONDERS_BY_PLAYER)];
+			expect((await ask("Who built the Pyramids?")).status).toBe(200);
+		});
+	});
+});
+
+describe("the answer cache", () => {
+	const UNMATCHED_PLAYER = {
+		kind: "selection",
+		source: "player_summaries",
+		measure: "seats",
+		filters: [{ key: "player", op: "in", values: ["Gilgamesh99"] }],
+	};
+
+	it("answers a repeated question with no model call and no charge", async () => {
+		replies = [() => toolReply(WONDERS_BY_PLAYER)];
+		const first = await ask("Who built the Pyramids?");
+		expect(first.status).toBe(200);
+		const body = await first.json();
+		// Case and whitespace are folded.
+		const again = await ask("  who built the   PYRAMIDS? ");
+		expect(again.status).toBe(200);
+		expect(await again.json()).toEqual(body);
+		expect(calls).toHaveLength(1);
+		expect(await questionRows()).toHaveLength(1);
+	});
+
+	it("answers a hit after the account's questions for the day are spent", async () => {
+		await withVar("PER_USER_QUERY_ASKS_PER_DAY", "1", async () => {
+			replies = [() => toolReply(WONDERS_BY_PLAYER)];
+			expect((await ask("Who built the Pyramids?")).status).toBe(200);
+			expect((await ask("Who built the Pyramids?")).status).toBe(200);
+			expect(calls).toHaveLength(1);
+		});
+	});
+
+	it("refuses a hit while the off switch is set", async () => {
+		replies = [() => toolReply(WONDERS_BY_PLAYER)];
+		expect((await ask("Who built the Pyramids?")).status).toBe(200);
+		await env.SESSIONS_KV.put(ASK_DISABLED_KEY, "1");
+		const res = await ask("Who built the Pyramids?");
+		expect(res.status).toBe(503);
+		expect((await res.json<{ code: string }>()).code).toBe("ASK_DISABLED");
+	});
+
+	it("stores an unsupported reply to the first call", async () => {
+		replies = [
+			() =>
+				toolReply({
+					kind: "unsupported",
+					reason: "No source records religions.",
+				}),
+		];
+		expect((await ask("Which religion gets founded first?")).status).toBe(422);
+		const again = await ask("Which religion gets founded first?");
+		expect(again.status).toBe(422);
+		expect((await again.json<{ code: string }>()).code).toBe("ASK_UNSUPPORTED");
+		expect(calls).toHaveLength(1);
+	});
+
+	it("does not store a failure", async () => {
+		replies = [
+			() => toolReply(UNMATCHED_PLAYER),
+			() => toolReply(UNMATCHED_PLAYER),
+		];
+		const question = "How many games has Gilgamesh99 played?";
+		expect((await ask(question)).status).toBe(422);
+		replies = [
+			() => toolReply({ kind: "unsupported", reason: "No such player." }),
+		];
+		expect((await ask(question)).status).toBe(422);
+		expect(calls).toHaveLength(3);
+	});
+
+	it("does not store an unsupported reply after a retry", async () => {
+		replies = [
+			() => toolReply(UNMATCHED_PLAYER),
+			() => toolReply({ kind: "unsupported", reason: "No such player." }),
+		];
+		const question = "How many games has Gilgamesh99 played?";
+		expect((await ask(question)).status).toBe(422);
+		replies = [
+			() => toolReply({ kind: "unsupported", reason: "No such player." }),
+		];
+		expect((await ask(question)).status).toBe(422);
+		expect(calls).toHaveLength(3);
+	});
+});
+
+describe("a model that is down", () => {
+	it("answers unavailable", async () => {
+		replies = [
+			() => {
+				throw new Error("upstream 500");
+			},
+		];
+		const res = await ask("Who built the Pyramids?");
+		expect(res.status).toBe(503);
+		expect((await res.json<{ code: string }>()).code).toBe("ASK_UNAVAILABLE");
+	});
+
+	it("keeps the question's reservation, since its usage is unknown", async () => {
+		replies = [
+			() => {
+				throw new Error("upstream 500");
+			},
+		];
+		expect((await ask("Who built the Pyramids?")).status).toBe(503);
+		expect(await questionRows()).toEqual([
+			{
+				input_tokens: RESERVED_QUESTION_USAGE.inputTokens,
+				cached_input_tokens: 0,
+				output_tokens: RESERVED_QUESTION_USAGE.outputTokens,
+			},
+		]);
+	});
+});
+
+describe("retention", () => {
+	it("sweepQueryAsks deletes questions older than 35 days", async () => {
+		await seedQuestion(alice.userId, "-36 days", 1);
+		await seedQuestion(alice.userId, "-34 days", 2);
+		expect(await sweepQueryAsks(env.SHARE_DB)).toBe(1);
+		const rows = await questionRows();
+		expect(rows.map((r) => r.input_tokens)).toEqual([2]);
+	});
+});

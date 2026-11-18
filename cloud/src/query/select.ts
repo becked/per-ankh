@@ -41,7 +41,7 @@ import {
 
 export type QuerySort = "measure_desc" | "measure_asc" | "dimension_asc";
 
-const SORTS: readonly QuerySort[] = [
+export const SORTS: readonly QuerySort[] = [
 	"measure_desc",
 	"measure_asc",
 	"dimension_asc",

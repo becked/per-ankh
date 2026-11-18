@@ -16,7 +16,7 @@
 	import Combobox from "$lib/ui/Combobox.svelte";
 	import PanelInset from "$lib/ui/PanelInset.svelte";
 	import Select from "$lib/ui/Select.svelte";
-	import { COMPACT_BTN, INPUT_CLASS } from "$lib/ui/classes";
+	import { ASK_BTN, COMPACT_BTN, INPUT_CLASS } from "$lib/ui/classes";
 	import type { SelectGroup, SelectOption } from "$lib/ui/types";
 	import {
 		canonicalQuery,
@@ -402,8 +402,6 @@
 	// padding utilities in one class attribute are decided by Tailwind's
 	// emission order and not by the order they are written in (see Select).
 	const INPUT = `${INPUT_CLASS} text-xs text-tan disabled:opacity-50`;
-	const ASK =
-		"rounded bg-orange px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-orange/80 disabled:opacity-40";
 </script>
 
 <div class="flex flex-col gap-3">
@@ -645,7 +643,7 @@
 		>
 		<button
 			type="button"
-			class={ASK}
+			class={ASK_BTN}
 			disabled={incomplete || !dirty}
 			onclick={run}>Ask</button
 		>

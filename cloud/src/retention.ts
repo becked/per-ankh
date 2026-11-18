@@ -273,3 +273,17 @@ export async function sweepSecurityEvents(db: D1Database): Promise<number> {
 		.run();
 	return result.meta.changes;
 }
+
+// The `query_asks` table (cloud/src/query/ask-usage.ts): one row per Explore
+// ask question, with the asker's IP. Its longest reader is the monthly budget,
+// which sums the current calendar month, at most 31 days back. 35 keeps a few
+// days of margin and no more, because of the IP addresses.
+export const QUERY_ASKS_RETENTION = "-35 days";
+
+export async function sweepQueryAsks(db: D1Database): Promise<number> {
+	const result = await db
+		.prepare("DELETE FROM query_asks WHERE created_at < datetime('now', ?)")
+		.bind(QUERY_ASKS_RETENTION)
+		.run();
+	return result.meta.changes;
+}

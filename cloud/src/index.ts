@@ -34,7 +34,12 @@ import {
 	runWithLogContext,
 	setRoute,
 } from "./log";
-import { RETENTION_CRON, sweepEvents, sweepSecurityEvents } from "./retention";
+import {
+	RETENTION_CRON,
+	sweepEvents,
+	sweepQueryAsks,
+	sweepSecurityEvents,
+} from "./retention";
 import { emitSecurityEvent } from "./security-events";
 import type { SecurityEventsEnv } from "./security-events";
 import {
@@ -133,8 +138,12 @@ import type {
 	HomeSummaryEnv,
 	PlayerLeaderboardEnv,
 } from "./stats/handlers";
-import { handleQuery, handleQueryCatalog } from "./query/handlers";
-import type { QueryEnv } from "./query/handlers";
+import {
+	handleQuery,
+	handleQueryAsk,
+	handleQueryCatalog,
+} from "./query/handlers";
+import type { QueryAskEnv } from "./query/handlers";
 import {
 	STATS_PRECOMPUTE_CRONS,
 	STATS_WARM_CRON,
@@ -212,7 +221,7 @@ interface Env
 		ScreenshotsEnv,
 		ScreenshotModerationEnv,
 		GlobalStatsEnv,
-		QueryEnv,
+		QueryAskEnv,
 		HomeSummaryEnv,
 		OpponentsEnv,
 		PlayerLeaderboardEnv,
@@ -1398,6 +1407,21 @@ const ROUTES: RouteSpec[] = [
 		// hit spends none.
 		sharedCache: true,
 	},
+	// A question in plain language, translated into a selection by a Workers AI
+	// model (issue #380). Answers the canonical selection, which the client
+	// navigates to and GET /v1/query above answers. Session-gated, behind a KV
+	// off switch and the ask limits (questions per account per day, per IP and
+	// global per hour, and a monthly budget; query/handlers.ts), none of them
+	// shared with the builder's budget: refusing here stops the ask input and
+	// leaves the builder working. Not shared-cacheable: a POST. A question
+	// asked again the same day is answered from a KV cache in the handler
+	// (query/ask-cache.ts), with no model call.
+	{
+		method: "POST",
+		match: { kind: "path", path: "/v1/query/ask" },
+		route: "POST /v1/query/ask",
+		handler: (r, e) => handleQueryAsk(r, e),
+	},
 	// The home page's stats panels — the three bundle fields they draw, over the
 	// unfaceted `duel` slice. Public where /v1/stats is session-gated, because
 	// it can only *read* the precomputed entry: a miss answers
@@ -1915,10 +1939,12 @@ export default {
 			const result = await sweepEvents(env.SHARE_DB);
 			// Safety-floor age-out for the Skiff drain table (separate DB).
 			const securityDeleted = await sweepSecurityEvents(env.SECURITY_DB);
+			const queryAsksDeleted = await sweepQueryAsks(env.SHARE_DB);
 			logEvent("info", "retention_sweep_completed", {
 				deleted: result.deleted,
 				unknown_types: result.unknownTypes,
 				security_events_deleted: securityDeleted,
+				query_asks_deleted: queryAsksDeleted,
 			});
 		} catch (err) {
 			logError("retention_sweep_failed", err);

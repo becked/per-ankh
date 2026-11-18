@@ -14,6 +14,7 @@
 		"format": "prettier --write .",
 		"format:check": "prettier --check .",
 		"eval:screenshots": "tsx scripts/eval-screenshot-classifier.ts",
+		"eval:ask": "tsx scripts/eval-query-ask.ts",
 		"bake:terrain-3d": "tsx scripts/bake-terrain-3d.ts",
 		"bake:improvements": "tsx scripts/bake-improvements.ts",
 		"bake:resources": "tsx scripts/bake-resources.ts",

@@ -15,6 +15,7 @@ import * as onlineIds from "./commands/online-ids";
 import * as security from "./commands/security";
 import * as tournament from "./commands/tournament";
 import * as cache from "./commands/cache";
+import * as askSwitch from "./commands/ask";
 import * as duelEventTitles from "./commands/duel-event-titles";
 import * as reparse from "./commands/reparse";
 import * as saves from "./commands/saves";
@@ -105,9 +106,14 @@ function printHelp(): void {
 			"",
 			"Caches (KV):",
 			"  cache list [--kind K] [--match S] [--limit N]",
-			"                                   Show cached stats bundles / video feeds",
-			"  cache clear <stats|videos|all> [--match S]",
+			"                                   Show cached stats bundles / video feeds /",
+			"                                   ask answers",
+			"  cache clear <stats|videos|ask|all> [--match S]",
 			"                                   Delete cached entries (never session:/oauth:)",
+			"",
+			"Explore ask (the plain-language question input):",
+			"  ask status | off | on            Show or flip its off switch (one SESSIONS_KV",
+			"                                   key; reaches every location within a minute)",
 			"",
 			"Dev (local only):",
 			"  dev-login [--username NAME]      Provision a fake local user + session.",
@@ -208,6 +214,8 @@ export async function main(argv: string[]): Promise<void> {
 			return tournament.run(subArgs, opts);
 		case "cache":
 			return cache.run(subArgs, opts);
+		case "ask":
+			return askSwitch.run(subArgs, opts);
 		case "dev-login":
 			return devLogin.run(subArgs, opts);
 		case undefined:

@@ -89,7 +89,6 @@ import {
 	STATE,
 	type BandKind,
 	type ClefAnswers,
-	type ClefResult,
 	type GateVerdict,
 } from "../cloud/src/screenshots/clef";
 import {
@@ -109,6 +108,11 @@ import {
 	warn,
 	type Column,
 } from "./lib/format";
+import {
+	runWorkersAi,
+	workersAiCredentials,
+	type WorkersAiCredentials,
+} from "./lib/workers-ai";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const CORPUS_DIR = resolve(REPO_ROOT, "test-data/screenshots");
@@ -141,18 +145,6 @@ const PRICE_PER_M_INPUT: Record<Variant, number> = {
 	"clef-flash": 0.038,
 	clef: 0.24,
 };
-
-// ─── Response shapes ────────────────────────────────────────────────────────
-
-// The REST envelope around the ClefResult the Workers AI binding returns
-// directly. The result itself, and the narrowing of its answers, are shared
-// with the Worker (readClefAnswers) so the two cannot disagree about what a
-// malformed answer means.
-interface ApiEnvelope {
-	success: boolean;
-	errors?: { code?: number; message?: string }[];
-	result?: ClefResult;
-}
 
 // ─── Corpus ─────────────────────────────────────────────────────────────────
 
@@ -227,77 +219,22 @@ async function loadCorpus(limit: number | null): Promise<CorpusImage[]> {
 
 // ─── The Clef call ──────────────────────────────────────────────────────────
 
-function requireEnv(name: string): string {
-	const v = process.env[name];
-	if (v == null || v.trim() === "") {
-		throw new Error(
-			`${name} is not set. The eval needs CLOUDFLARE_ACCOUNT_ID and a ` +
-				`CLOUDFLARE_AI_TOKEN with Workers AI Read and Edit — in the environment or in ` +
-				`.env (gitignored). Use --dry-run to check the resize pipeline without ` +
-				`either.`,
-		);
-	}
-	return v.trim();
-}
-
 const RETRY_DELAYS_MS = [1000, 2000, 4000];
 
-async function classify(
+// The result is returned unread. readClefAnswers, which the Worker uses on the
+// binding's answer too, narrows it, so the two cannot disagree about what a
+// malformed answer means.
+function classify(
 	variant: Variant,
 	image: CorpusImage,
-	accountId: string,
-	token: string,
-): Promise<ClefResult> {
-	const body = buildClefRequest(image.webp.toString("base64"), variant);
-	const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/@cf/cloudflare/${variant}`;
-	let lastError = "";
-	for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
-		if (attempt > 0) {
-			await new Promise((r) => setTimeout(r, RETRY_DELAYS_MS[attempt - 1]));
-		}
-		let res: Response;
-		try {
-			res = await fetch(url, {
-				method: "POST",
-				headers: {
-					Authorization: `Bearer ${token}`,
-					"Content-Type": "application/json",
-				},
-				body: JSON.stringify(body),
-			});
-		} catch (e) {
-			lastError = e instanceof Error ? e.message : String(e);
-			continue;
-		}
-		const text = await res.text();
-		// 429 and 5xx are worth another attempt; a 400 or a 403 is the request
-		// or the token and will fail the same way every time.
-		if (res.status === 429 || res.status >= 500) {
-			lastError = `HTTP ${res.status}: ${text.slice(0, 300)}`;
-			continue;
-		}
-		if (!res.ok) {
-			throw new Error(`${variant} ${image.name}: HTTP ${res.status}: ${text}`);
-		}
-		let envelope: ApiEnvelope;
-		try {
-			envelope = JSON.parse(text) as ApiEnvelope;
-		} catch {
-			throw new Error(
-				`${variant} ${image.name}: response was not JSON: ${text.slice(0, 300)}`,
-			);
-		}
-		if (!envelope.success || envelope.result == null) {
-			const msg = (envelope.errors ?? [])
-				.map((e) => `${e.code ?? "?"} ${e.message ?? ""}`.trim())
-				.join("; ");
-			throw new Error(`${variant} ${image.name}: ${msg || text.slice(0, 300)}`);
-		}
-		return envelope.result;
-	}
-	throw new Error(
-		`${variant} ${image.name}: giving up after ${RETRY_DELAYS_MS.length + 1} attempts — ${lastError}`,
-	);
+	credentials: WorkersAiCredentials,
+): Promise<unknown> {
+	return runWorkersAi(credentials, {
+		model: `@cf/cloudflare/${variant}`,
+		body: buildClefRequest(image.webp.toString("base64"), variant),
+		label: `${variant} ${image.name}`,
+		retryDelaysMs: RETRY_DELAYS_MS,
+	});
 }
 
 // ─── Statistics ─────────────────────────────────────────────────────────────
@@ -879,8 +816,7 @@ async function main(): Promise<void> {
 		return;
 	}
 
-	const accountId = requireEnv("CLOUDFLARE_ACCOUNT_ID");
-	const token = requireEnv("CLOUDFLARE_AI_TOKEN");
+	const credentials = workersAiCredentials("check the resize pipeline");
 
 	const perVariant: {
 		variant: Variant;
@@ -894,7 +830,7 @@ async function main(): Promise<void> {
 			for (const [idx, image] of images.entries()) {
 				const of = repeats > 1 ? ` pass ${pass}/${repeats}` : "";
 				info(`${variant}${of} ${idx + 1}/${images.length} ${image.name}`);
-				const result = await classify(variant, image, accountId, token);
+				const result = await classify(variant, image, credentials);
 				const list = observations.get(image.name) ?? [];
 				list.push(readClefAnswers(result, `${variant} ${image.name}`));
 				observations.set(image.name, list);

@@ -2,11 +2,12 @@
 name: admin-cli
 description: >-
   Operate the live Per-Ankh app via `./per-ankh admin` — inspect or manage
-  users, games, events, security, and tournaments — or run the
-  local-only dev helpers (dev-login, tournament seed). Use when the user asks
-  to look up a user/game, check stats or events, moderate/block/nuke shares,
-  grant tournament beta/admin, seed a local fixture, or mint a local dev
-  session. NOT for writing app code.
+  users, games, events, security, tournaments, and the Explore ask off
+  switch — or run the local-only dev helpers (dev-login, tournament seed).
+  Use when the user asks to look up a user/game, check stats or events,
+  moderate/block/nuke shares, grant tournament beta/admin, switch the Explore
+  ask input off or on or check its month's spend, seed a local fixture, or
+  mint a local dev session. NOT for writing app code.
 metadata:
   type: project
   implementation: scripts/admin/
@@ -15,7 +16,7 @@ metadata:
 
 **Red line — read first.** `./per-ankh admin` defaults to **production**. Never run it against production or with `--staging`/`--remote` — including read-only reads — unless the user's current message explicitly asks for that exact command; ask first. It authenticates against the user's Cloudflare account (a 1Password prompt on this machine). Only the `--local` path (and the hard-local-only `dev-login` / `tournament seed`) is safe to run unprompted.
 
-`./per-ankh admin` is the operator CLI for the live app. Implementation lives under `scripts/admin/`. Calls `wrangler` directly (no API key — relies on `wrangler login`). Run `./per-ankh admin --help` for the full list. The list below is illustrative, not exhaustive — `--help` groups the full surface (Stats, Users, Creator channels, Games, Events, Corpus sweeps, Security, Tournaments, Caches, Dev).
+`./per-ankh admin` is the operator CLI for the live app. Implementation lives under `scripts/admin/`. Calls `wrangler` directly (no API key — relies on `wrangler login`). Run `./per-ankh admin --help` for the full list. The list below is illustrative, not exhaustive — `--help` groups the full surface (Stats, Users, Creator channels, Games, Events, Corpus sweeps, Security, Tournaments, Caches, Explore ask, Dev).
 
 ```bash
 ./per-ankh admin stats                       # Global counts + recent activity
@@ -102,17 +103,30 @@ Build a full local fixture (Swiss + championship via the real planner) with `./p
 
 ## Caches (KV)
 
-`./per-ankh admin cache list [--kind stats|videos] [--match S] [--limit N]` and `./per-ankh admin cache clear <stats|videos|all> [--match S]` inspect and drop the two KV caches — stats bundles (`cloud/src/stats/cache.ts`) and YouTube feeds (`cloud/src/video/cache.ts`). Both share the `SESSIONS_KV` namespace with `session:`/`oauth:` keys; the command's prefix allowlist is what keeps those unreachable, so no flag combination can sign users out.
+`./per-ankh admin cache list [--kind stats|videos|ask] [--match S] [--limit N]` and `./per-ankh admin cache clear <stats|videos|ask|all> [--match S]` inspect and drop the three KV caches: stats bundles (`cloud/src/stats/cache.ts`), YouTube feeds (`cloud/src/video/cache.ts`) and Explore ask answers (`cloud/src/query/ask-cache.ts`). All three share the `SESSIONS_KV` namespace with `session:`/`oauth:` keys and the ask off switch. The command's prefix allowlist is what keeps those unreachable, so no flag combination can sign users out or switch the ask input back on.
 
 ```bash
 ./per-ankh admin cache list --kind stats --match ':user:abc123:'   # One user's bundles
 ./per-ankh admin cache clear stats --match 'stats:v7-'             # Drop one schema version
 ./per-ankh admin cache clear videos                                # Force a YouTube refetch
+./per-ankh admin cache clear ask                                   # Drop every cached ask answer
 ```
 
 Unlike the Worker's `invalidateStatsCache` (which walks only the current `BUNDLE_SCHEMA_VERSION`), `clear` sweeps every schema version under the prefix — that's what reaches entries orphaned by a version bump. Clearing `videos` costs YouTube Data API quota on the next playlist view.
 
 **The parsed-game blob cache is a different layer and this command cannot reach it.** It caches R2 bytes for `games/{id}.json.gz` in each POP's Cache API storage (`cloud/src/blob-cache.ts`), which has no CLI surface — `wrangler` has no cache command, and zone purge can't address the keys because they're synthetic and belong to no zone. It also needs no operator action: the key carries the game's `parser_version`, so a reparse drifts the key and every POP misses at once. If a game somehow serves stale bytes anyway, that's the D1-batch-rollback path in `handleGameUpload` (the Worker evicts locally there) and the entry expires on its own within 24h. The `Cache-Control: s-maxage` directives on game responses are live at the edge as of `[cache]` (`cloud/wrangler.toml`, issue #291) — a public game-detail response is stored in front of the Worker for 60s, keyed on the URL and the verbatim `Cookie` string — and they are no more reachable from this CLI than the blob tier is, for the same reason: `wrangler` has no cache command. The 60s is short because a Make Private toggle has to propagate (`cloud/src/games.ts`), which is also why there is nothing here for an operator to clear by hand.
+
+## Explore ask
+
+`./per-ankh admin ask status|off|on` is the off switch for the plain-language question input on `/stats/explore` (`POST /v1/query/ask`). `off` makes the endpoint refuse every question before it calls the model, cached answers included. The Explore builder keeps working either way. The switch is the one `SESSIONS_KV` key `query_ask:disabled`, and the command writes no other key. A change reaches every location within about a minute. `status` also shows the current UTC month's questions and spend.
+
+```bash
+./per-ankh admin ask status    # On or off, and the month's questions and spend
+./per-ankh admin ask off       # Refuse every question before the model runs
+./per-ankh admin ask on        # Switch it back on
+```
+
+A question asked again on the same UTC day is answered from a KV cache. To drop a bad cached answer before the day ends, run `./per-ankh admin cache clear ask` (see [Caches](#caches-kv)).
 
 ## Dev (local only)
 
