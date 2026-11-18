@@ -1,7 +1,7 @@
 // The answer cache for POST /v1/query/ask, in SESSIONS_KV.
 //
 // A question asked again on the same day is answered from here, with no model
-// call and no charge against the hourly limits. The key is a hash of the
+// call, so it counts against none of the ask limits. The key is a hash of the
 // first request the question would send: the model, the prompt, the tool, the
 // effort, the temperature, today's date and the question. A deploy that
 // changes any of them, or the date changing, makes a new key, so every hit

@@ -13,6 +13,7 @@ import {
 	ASK_TEMPERATURE,
 	ASK_TOOL_NAME,
 } from "../../../src/query/ask";
+import { ASK_CACHE_KEY_ROOT } from "../../../src/query/ask-cache";
 import { RESERVED_QUESTION_USAGE } from "../../../src/query/ask-usage";
 import { sweepQueryAsks } from "../../../src/retention";
 import { makeUser, type TestUser } from "../../helpers/builders";
@@ -96,7 +97,7 @@ beforeEach(async () => {
 	};
 	await env.SESSIONS_KV.delete(ASK_DISABLED_KEY);
 	// Most tests ask the same question, and each expects the model to answer it.
-	const cached = await env.SESSIONS_KV.list({ prefix: "query_ask:answer:" });
+	const cached = await env.SESSIONS_KV.list({ prefix: ASK_CACHE_KEY_ROOT });
 	for (const k of cached.keys) await env.SESSIONS_KV.delete(k.name);
 	await env.SHARE_DB.prepare(`DELETE FROM query_asks`).run();
 });
