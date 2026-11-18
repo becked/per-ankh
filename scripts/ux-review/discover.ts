@@ -16,7 +16,7 @@ import { info, warn } from "../lib/format";
 import {
 	d1Query,
 	kvBulkDelete,
-	kvPutSession,
+	kvPut,
 	r2Get,
 	sqlStr,
 } from "../admin/wrangler";
@@ -229,7 +229,7 @@ export async function discoverTournamentSlug(): Promise<string | null> {
 }
 
 // Mint a session in local KV (the *preview* namespace `wrangler dev --local`
-// binds KV to — kvPutSession passes --preview for the local target) and
+// binds KV to — kvPut passes --preview for the local target) and
 // return the opaque token. The token value is arbitrary — readSession looks
 // it up by exact key — so a URL-safe random string is fine.
 export async function mintLocalSession(
@@ -237,7 +237,7 @@ export async function mintLocalSession(
 	discordUsername: string,
 ): Promise<string> {
 	const token = randomBytes(24).toString("base64url");
-	await kvPutSession(
+	await kvPut(
 		`session:${token}`,
 		JSON.stringify({ user_id: userId, discord_username: discordUsername }),
 		SESSION_TTL_SECONDS,

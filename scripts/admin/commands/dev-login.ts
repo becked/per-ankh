@@ -17,7 +17,7 @@
 import { randomBytes } from "node:crypto";
 import type { CommandOpts } from "../../lib/cli";
 import { info } from "../../lib/format";
-import { d1Exec, isLocal, kvPutSession, sqlStr } from "../wrangler";
+import { d1Exec, isLocal, kvPut, sqlStr } from "../wrangler";
 
 // nanoid alphabet; matches scripts/admin/commands/tournament.ts.
 const NANOID_ALPHABET =
@@ -109,7 +109,7 @@ export async function run(argv: string[], _opts: CommandOpts): Promise<void> {
 		user_id: userId,
 		discord_username: normalized,
 	});
-	await kvPutSession(
+	await kvPut(
 		`session:${sessionToken}`,
 		sessionPayload,
 		SESSION_TTL_SECONDS,

@@ -219,20 +219,20 @@ function kvFlags(): string[] {
 
 // Write a single key/value to the SESSIONS_KV namespace. Used by the
 // dev-login command to mint a local session without going through Discord
-// OAuth. ttl is in seconds; SESSIONS_KV's app-level TTL is 30d (see
-// cloud/src/session.ts SESSION_TTL_SECONDS), so the default matches.
-export async function kvPutSession(
+// OAuth, where the ttl matches SESSIONS_KV's app-level 30d (cloud/src/session.ts
+// SESSION_TTL_SECONDS), and by `admin ask off`, whose key has no ttl. ttl is in
+// seconds.
+export async function kvPut(
 	key: string,
 	value: string,
-	ttlSeconds: number,
+	ttlSeconds?: number,
 ): Promise<void> {
 	const { stdout, stderr, code } = await runWrangler([
 		"kv",
 		"key",
 		"put",
 		...kvFlags(),
-		"--ttl",
-		String(ttlSeconds),
+		...(ttlSeconds === undefined ? [] : ["--ttl", String(ttlSeconds)]),
 		key,
 		value,
 	]);
