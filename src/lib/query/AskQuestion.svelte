@@ -11,6 +11,7 @@
 	// so an on/off flag there would show the wrong state after a toggle. An
 	// expired session goes to sign-in and comes back to this page.
 
+	import { untrack } from "svelte";
 	import { goto } from "$app/navigation";
 	import { page } from "$app/state";
 	import { ApiError, cloudApi, UnauthorizedError } from "$lib/api-cloud";
@@ -18,7 +19,28 @@
 	import { loginBounce } from "$lib/utils/safe-next";
 	import { ASK_QUESTION_MAX } from "./limits";
 
-	let question = $state("");
+	// The selection on screen in words (describeDraft), or "" when nothing
+	// has been asked yet.
+	let { described }: { described: string } = $props();
+
+	// The input opens on that description. Without it, a page reached by a
+	// link would show an empty question box above an answered query.
+	//
+	// The description follows the selection as it changes (the builder, the
+	// back button, Reset), but only while it is still what the input holds.
+	// Text somebody typed stays in the input, whether or not it was asked.
+	// `placed` is the description last put there, so the effect can tell the
+	// two apart. untrack() marks both as initial values only.
+	let question = $state(untrack(() => described));
+	let placed = untrack(() => described);
+
+	// .pre, so the new description is in the input before the new rows paint.
+	$effect.pre(() => {
+		const next = described;
+		if (untrack(() => question) === placed) question = next;
+		placed = next;
+	});
+
 	let asking = $state(false);
 	let refusal = $state<string | null>(null);
 

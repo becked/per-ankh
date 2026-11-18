@@ -22,11 +22,12 @@
 	// empty answer that drew nothing at all would leave less on screen than
 	// arriving here does.
 
-	import { navigating } from "$app/state";
+	import { navigating, page } from "$app/state";
 	import StatsHeader from "$lib/stats/StatsHeader.svelte";
 	import Panel from "$lib/ui/Panel.svelte";
 	import PanelInset from "$lib/ui/PanelInset.svelte";
 	import AskQuestion from "$lib/query/AskQuestion.svelte";
+	import { describeDraft } from "$lib/query/describe";
 	import QueryBuilder from "$lib/query/QueryBuilder.svelte";
 	import QueryResults from "$lib/query/QueryResults.svelte";
 	import { TABLE_FRAME_INSET_CLASS } from "$lib/ui/classes";
@@ -36,6 +37,15 @@
 
 	const source = $derived(
 		data.catalog.sources.find((s) => s.key === data.result?.source) ?? null,
+	);
+
+	// The question box's text for a selection nobody typed a question for.
+	// No `source` means nothing has been asked, which is the same test the
+	// builder's `asked` makes, so the box stays empty on the bare page.
+	const described = $derived(
+		page.url.searchParams.get("source") === null
+			? ""
+			: describeDraft(data.draft, data.catalog),
 	);
 
 	// A new question re-runs the load, so the page keeps showing the outgoing
@@ -77,7 +87,7 @@
 				<div class="flex flex-col gap-4">
 					<Panel title="Question">
 						<PanelInset>
-							<AskQuestion />
+							<AskQuestion {described} />
 						</PanelInset>
 					</Panel>
 					<Panel title="Query">
