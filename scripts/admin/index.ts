@@ -18,6 +18,7 @@ import * as cache from "./commands/cache";
 import * as askSwitch from "./commands/ask";
 import * as duelEventTitles from "./commands/duel-event-titles";
 import * as reparse from "./commands/reparse";
+import * as reindex from "./commands/reindex";
 import * as saves from "./commands/saves";
 import * as devLogin from "./commands/dev-login";
 
@@ -64,7 +65,7 @@ function printHelp(): void {
 			"  remove-channel <user_id> <platform>   Unlink a user's channel for a platform",
 			"  list-channels [--limit N]             List all linked creator channels",
 			"",
-			"Corpus sweeps (one wrangler spawn per matching save, hundreds of them):",
+			"Corpus sweeps (remote calls for every matching game, hundreds of them):",
 			"  reparse-all [--dry-run] [--user U] [--limit N] [--from-version V]",
 			"              [--concurrency N] [--cache-dir DIR]",
 			"                                   Rewrite every game whose stored parser_version",
@@ -74,6 +75,13 @@ function printHelp(): void {
 			"                                   tournament links survive). The target is always this",
 			"                                   checkout's PARSER_VERSION; --from-version V narrows",
 			"                                   the sweep to the games stored at exactly V. Needs",
+			"                                   ADMIN_CLI_TOKEN exported (--dry-run doesn't).",
+			"  reindex-all [--dry-run] [--user U] [--limit N] [--concurrency N]",
+			"                                   Rebuild every game's derived D1 rows (summaries,",
+			"                                   turn series, events) from its stored blob, with no",
+			"                                   download or parse: one POST per game to the Worker's",
+			"                                   reindex endpoint. Backfills a column added to those",
+			"                                   tables after a game was uploaded. Needs",
 			"                                   ADMIN_CLI_TOKEN exported (--dry-run doesn't).",
 			"  duel-event-titles [--csv] [--out FILE] [--concurrency N] [--cache-dir DIR]",
 			"                                   Event stories that have fired in a two-player",
@@ -204,6 +212,8 @@ export async function main(argv: string[]): Promise<void> {
 			return onlineIds.run(subArgs, opts);
 		case "reparse-all":
 			return reparse.run(subArgs, opts);
+		case "reindex-all":
+			return reindex.run(subArgs, opts);
 		case "duel-event-titles":
 			return duelEventTitles.run(subArgs, opts);
 		case "saves":

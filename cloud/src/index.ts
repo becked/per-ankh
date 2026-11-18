@@ -655,7 +655,8 @@ const ROUTES: RouteSpec[] = [
 
 	// Site-admin: bulk reparse across all users. Gated by ADMIN_DISCORD_ID
 	// secret inside each handler; failures return 404 to avoid leaking the
-	// endpoints' existence.
+	// endpoints' existence. The reindex and reparse-upload POSTs also accept
+	// ADMIN_CLI_TOKEN (siteAdminActor, cloud/src/admin.ts).
 	{
 		method: "GET",
 		match: { kind: "path", path: "/v1/admin/games/out-of-date" },

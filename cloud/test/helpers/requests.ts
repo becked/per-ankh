@@ -25,8 +25,9 @@ export interface RequestOpts {
 	readonly origin?: string;
 	// `Authorization: Bearer <bearer>` — the headless admin credential
 	// (ADMIN_CLI_TOKEN, cloud/src/admin.ts). Here as well as on MultipartOpts
-	// because what the token must NOT do is reach the admin GETs, and proving
-	// that means sending it at one.
+	// because the token reaches one JSON endpoint (the reindex POST), and what
+	// it must NOT do is reach the admin GETs, and proving that means sending
+	// it at one.
 	readonly bearer?: string;
 }
 

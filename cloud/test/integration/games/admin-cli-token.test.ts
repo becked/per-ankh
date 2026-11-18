@@ -1,10 +1,10 @@
 // Integration tests for the headless admin credential — ADMIN_CLI_TOKEN on
-// POST /v1/admin/games/:user_id/reparse-upload (siteAdminFromCliToken in
-// cloud/src/admin.ts).
+// POST /v1/admin/games/:user_id/reparse-upload and POST
+// /v1/admin/games/:id/reindex (siteAdminActor in cloud/src/admin.ts).
 //
-// This is the one admin endpoint reachable without a session, so the tests
+// These are the two admin endpoints reachable without a session, so the tests
 // that matter are about the edges of that sentence: the token works with no
-// cookie and no Origin (the shape `./per-ankh admin reparse-all` sends), a
+// cookie (the shape `./per-ankh admin reparse-all` and `reindex-all` send), a
 // wrong token is indistinguishable from no credential, and the token does NOT
 // open any other /v1/admin/* endpoint. The audit assertions pin the
 // `acting_via` discriminator on both branches — a token sweep and a browser
@@ -38,16 +38,17 @@ interface UploadResponse {
 	to_version?: string;
 }
 
-// The newest admin_reimport row's metadata for a game, parsed.
+// The newest audit row of one type for a game, its metadata parsed.
 async function auditMetadata(
 	gameId: string,
+	eventType: "admin_reimport" | "admin_reindex" = "admin_reimport",
 ): Promise<Record<string, unknown> | null> {
 	const row = await env.SHARE_DB.prepare(
 		`SELECT metadata FROM events
-		 WHERE event_type = 'admin_reimport' AND game_id = ?
+		 WHERE event_type = ? AND game_id = ?
 		 ORDER BY id DESC LIMIT 1`,
 	)
-		.bind(gameId)
+		.bind(eventType, gameId)
 		.first<{ metadata: string }>();
 	return row ? (JSON.parse(row.metadata) as Record<string, unknown>) : null;
 }
@@ -149,9 +150,9 @@ describe("POST /v1/admin/games/:user_id/reparse-upload — CLI token", () => {
 	});
 
 	it("does not open any other admin endpoint", async () => {
-		// The sweep reads D1 and R2 through wrangler, so these stay
-		// session-only — the token is scoped to the one write the CLI cannot do
-		// for itself. A 404 here is what keeps it from being a standing
+		// The sweeps read D1 and R2 through wrangler, so these stay
+		// session-only — the token is scoped to the two writes the CLI cannot
+		// do for itself. A 404 here is what keeps it from being a standing
 		// credential for the whole admin surface.
 		for (const path of [
 			"/v1/admin/games/all",
@@ -162,5 +163,78 @@ describe("POST /v1/admin/games/:user_id/reparse-upload — CLI token", () => {
 			const res = await request.get({ path, bearer: ADMIN_CLI_TEST_TOKEN });
 			expect(res.status, `${path} accepted the CLI token`).toBe(404);
 		}
+	});
+});
+
+describe("POST /v1/admin/games/:id/reindex — CLI token", () => {
+	// An owner's own upload, so the game has a stored blob to rebuild from.
+	async function uploadGame(discordUsername: string): Promise<string> {
+		const owner = await makeUser({ discordUsername });
+		const res = await postMultipart({
+			path: "/v1/games",
+			form: await buildUploadFormData({ winnerIndex: 0 }),
+			as: owner,
+		});
+		await expectStatus(res, 201);
+		return (await expectOk<{ game_id: string }>(res)).game_id;
+	}
+
+	async function summaryRows(gameId: string): Promise<number> {
+		const row = await env.SHARE_DB.prepare(
+			"SELECT COUNT(*) AS n FROM player_summaries WHERE game_id = ?",
+		)
+			.bind(gameId)
+			.first<{ n: number }>();
+		return row?.n ?? 0;
+	}
+
+	it("accepts the token with no session, rebuilds, and audits as the CLI", async () => {
+		const gameId = await uploadGame("cli-reindex-owner");
+		// Model what a reindex exists to repair: derived rows that are missing
+		// from a game whose blob holds them.
+		await env.SHARE_DB.prepare("DELETE FROM player_summaries WHERE game_id = ?")
+			.bind(gameId)
+			.run();
+		expect(await summaryRows(gameId)).toBe(0);
+
+		const res = await request.post({
+			path: `/v1/admin/games/${gameId}/reindex`,
+			bearer: ADMIN_CLI_TEST_TOKEN,
+		});
+		const body = await expectOk<{ reindexed: boolean }>(res);
+		expect(body.reindexed).toBe(true);
+		expect(await summaryRows(gameId)).toBeGreaterThan(0);
+
+		const metadata = await auditMetadata(gameId, "admin_reindex");
+		expect(metadata?.acting_user_id).toBe(admin.userId);
+		expect(metadata?.acting_via).toBe("cli");
+	});
+
+	it("records acting_via=session when a logged-in admin reindexes", async () => {
+		const gameId = await uploadGame("cli-reindex-owner-2");
+
+		await expectOk(
+			await request.post({
+				path: `/v1/admin/games/${gameId}/reindex`,
+				as: admin,
+			}),
+		);
+
+		const metadata = await auditMetadata(gameId, "admin_reindex");
+		expect(metadata?.acting_user_id).toBe(admin.userId);
+		expect(metadata?.acting_via).toBe("session");
+	});
+
+	it("404s on a wrong token, a bare scheme, and no credential at all", async () => {
+		const gameId = await uploadGame("cli-reindex-owner-3");
+		const path = `/v1/admin/games/${gameId}/reindex`;
+
+		for (const bearer of ["not-the-token", "", undefined]) {
+			const res = await request.post({ path, bearer });
+			expect(res.status, `bearer ${JSON.stringify(bearer)}`).toBe(404);
+		}
+
+		// None of them reached the rebuild.
+		expect(await auditMetadata(gameId, "admin_reindex")).toBeNull();
 	});
 });

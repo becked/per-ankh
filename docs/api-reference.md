@@ -1144,9 +1144,10 @@ All game ids/names (drives the reindex sweep).
 Rebuild a game's D1 pivot tables from its stored blob.
 
 - **Path:** `id` (21-char).
+- **Auth:** a logged-in site admin, or `Authorization: Bearer <ADMIN_CLI_TOKEN>` with no session, which is how `./per-ankh admin reindex-all` sweeps the corpus headless. The token works the same way it does on [`reparse-upload`](#post-v1admingamesuser_idreparse-upload); the session path is tried first.
 - **Response 200:** `{ reindexed: true }`.
-- **Errors:** `404 NOT_FOUND` / `BLOB_MISSING`, `500 REINDEX_FAILED`.
-- **Notes:** Re-runs only the D1 pivot (no re-parse, no re-upload); the `games` row and R2 are untouched.
+- **Errors:** `404 NOT_FOUND` (neither credential satisfied, or no such game) / `BLOB_MISSING`, `500 REINDEX_FAILED`.
+- **Notes:** Re-runs only the D1 pivot (no re-parse, no re-upload); R2 is untouched, and the only write to the `games` row is `updated_at`. Clears every stats bundle. Audited as `admin_reindex`, with `acting_user_id` and `acting_via` (`"session"` or `"cli"`) in the metadata.
 
 ### `GET /v1/admin/games/:id/download`
 Download any game's raw ZIP (admin).
@@ -1160,7 +1161,7 @@ Download any game's raw ZIP (admin).
 Re-import a save into a target user's library (admin).
 
 - **Path:** `user_id` (21-char) — the library owner the upload runs as.
-- **Auth:** the **only** admin endpoint that accepts a credential other than a session. A logged-in site admin (`ADMIN_DISCORD_ID`) works as everywhere else; so does `Authorization: Bearer <ADMIN_CLI_TOKEN>` with no session at all, which is how `./per-ankh admin reparse-all` sweeps the corpus headless (it parses saves locally and posts each one here). The token is scoped to this endpoint — presenting it at any other `/v1/admin/*` route is a `404` — and is unset by default, in which case only the session path exists. The session path is tried first.
+- **Auth:** one of the two admin endpoints that accept a credential other than a session; the other is [`reindex`](#post-v1admingamesidreindex). A logged-in site admin (`ADMIN_DISCORD_ID`) works as everywhere else; so does `Authorization: Bearer <ADMIN_CLI_TOKEN>` with no session at all, which is how `./per-ankh admin reparse-all` sweeps the corpus headless (it parses saves locally and posts each one here). The token is scoped to these two endpoints — presenting it at any other `/v1/admin/*` route is a `404` — and is unset by default, in which case only the session path exists. The session path is tried first.
 - **Body:** same `multipart/form-data` as [`POST /v1/games`](#post-v1games); `tournament_match_id` is rejected here.
 - **Response:** `UploadGameResponse` — same shapes as `POST /v1/games`.
 - **Errors:** `404 NOT_FOUND` (neither credential satisfied), `400 INVALID_FORM` (`tournament_match_id` supplied), plus all `POST /v1/games` errors.
