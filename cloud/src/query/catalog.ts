@@ -645,6 +645,22 @@ const PLAYER_MEASURES: CatalogMeasure[] = [
 		unit: "seat",
 		agg: { fn: "AVG", sql: "ps.final_military_power" },
 	},
+	// A seat that never held that many laws stores NULL, and AVG skips it, so
+	// these average over the seats that got there.
+	{
+		key: "avg_fourth_law_turn",
+		label: "Average turn reaching 4 laws",
+		reach: "player",
+		unit: "seat",
+		agg: { fn: "AVG", sql: "ps.fourth_law_turn" },
+	},
+	{
+		key: "avg_seventh_law_turn",
+		label: "Average turn reaching 7 laws",
+		reach: "player",
+		unit: "seat",
+		agg: { fn: "AVG", sql: "ps.seventh_law_turn" },
+	},
 ];
 
 const PLAYER_FILTERS: CatalogFilter[] = [
