@@ -75,9 +75,9 @@ interface AuditException {
 }
 const AUDIT_EXCEPTIONS: AuditException[] = [
 	{
-		ghsa: "GHSA-vfj7-8cjw-p6xm",
+		ghsa: "GHSA-3r8g-jcqq-3p5j",
 		reason:
-			"braces <=3.0.3 — no patched release exists; 3.0.3 is the latest published version, so no override or bump clears it. Reached only through tailwindcss 3.4.19, via its chokidar 3.6.0 and micromatch 4.0.8. Dev tooling only: Tailwind's build-time file watcher and globber, never shipped to the browser bundle or the Worker — `npm audit --omit=dev` reports zero vulnerabilities. npm's only suggested fix is tailwindcss 4.3.3, a semver-major migration (v4 is CSS-first config and drops both deps). Retire when braces ships a patched release, or when the Tailwind 4 upgrade lands.",
+			"@sveltejs/kit form-data parsing DoS. The advisory affects only apps that enable the experimental remote functions flag and use `form`, `query` or `command`. svelte.config.js does not set `experimental.remoteFunctions`, and src/ has no `*.remote.*` file and no `$app/server` import. The only patched release is 3.1.1. The 2.x line took the other two fixes from the same batch in 2.70.4 but not this one, so no bump or override inside ^2 clears it. Retire when the SvelteKit 3 upgrade lands.",
 	},
 ];
 
