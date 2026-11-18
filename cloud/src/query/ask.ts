@@ -67,7 +67,8 @@ export const REASONING_EFFORTS: readonly ReasoningEffort[] = [
 ];
 
 // THE SHIPPED MODEL AND EFFORT, picked by the eval over the 32-question test
-// set, one pass per configuration on 2026-11-17:
+// set, one pass per configuration on 2026-11-17, at the model's default
+// temperature:
 //
 //   model/effort   pass    mean $/question   median latency
 //   flash/none     32/32   0.00307           2.0 s
@@ -89,6 +90,19 @@ export const REASONING_EFFORTS: readonly ReasoningEffort[] = [
 // model's input type and not the Flash one's.
 export const ASK_MODEL: string = ASK_MODELS.flash;
 export const ASK_REASONING_EFFORT: ReasoningEffort = "none";
+
+// THE SHIPPED TEMPERATURE, from a second eval on 2026-11-17: Flash/none, three
+// passes of the test set at the model's default temperature and three at 0.
+//
+//   temperature   pass    same selection on all three passes
+//   default       94/96   29/32
+//   0             95/96   31/32
+//
+// Cost and latency did not move. At 0, one question of 32 still gave a
+// different selection on one pass, so answers are more repeatable and still
+// not fixed. The answer cache (ask-cache.ts) relies on that repeatability: a
+// stored answer is the one a fresh call would most likely give.
+export const ASK_TEMPERATURE = 0;
 
 // The cap on one call's output, reasoning included. It bounds what one call
 // can cost, which the hourly ceilings' worst case is derived from. The eval's
@@ -356,15 +370,28 @@ export type AskModelInputs = {
 	// The model pages list `store` ("Whether to store the output for model
 	// distillation / evals") with no default, so it is sent explicitly.
 	store: false;
+	// ASK_TEMPERATURE, except where the eval leaves it out to compare against
+	// the model's default.
+	temperature?: number;
 };
 
 export function askUserMessage(question: string, today: string): string {
 	return `Today's date: ${today}\n\nQuestion: ${question}`;
 }
 
+// The conversation a question opens with. The answer cache hashes the request
+// built from it, so it is built in one place.
+export function askMessages(question: string, today: string): AskMessage[] {
+	return [
+		{ role: "system", content: ASK_SYSTEM_PROMPT },
+		{ role: "user", content: askUserMessage(question, today) },
+	];
+}
+
 export function buildAskInputs(
 	messages: AskMessage[],
 	effort: ReasoningEffort,
+	temperature: number | null,
 ): AskModelInputs {
 	return {
 		messages,
@@ -373,6 +400,7 @@ export function buildAskInputs(
 		reasoning_effort: effort,
 		max_tokens: ASK_MAX_OUTPUT_TOKENS,
 		store: false,
+		...(temperature != null ? { temperature } : {}),
 	};
 }
 
@@ -537,7 +565,9 @@ export function readAnswer(argumentsJson: string): Checked<AskAnswer> {
 
 // ---------- Name matching ----------
 
-const normalizeName = (s: string): string =>
+// Case and runs of whitespace folded. Names are matched on it, and the answer
+// cache keys a question on it.
+export const normalizeText = (s: string): string =>
 	s.trim().replace(/\s+/g, " ").toLocaleLowerCase();
 
 // How many candidate names an ambiguity message lists before it stops.
@@ -557,13 +587,13 @@ export function matchRosterName(
 	typed: string,
 	noun: "player" | "tournament",
 ): Checked<string> {
-	const want = normalizeName(typed);
+	const want = normalizeText(typed);
 	if (want === "") return { ok: false, message: `An empty ${noun} name` };
-	const exact = roster.filter((o) => normalizeName(o.label) === want);
+	const exact = roster.filter((o) => normalizeText(o.label) === want);
 	const hits =
 		exact.length > 0
 			? exact
-			: roster.filter((o) => normalizeName(o.label).includes(want));
+			: roster.filter((o) => normalizeText(o.label).includes(want));
 	if (hits.length === 1) return { ok: true, value: hits[0].value };
 	if (hits.length === 0) {
 		return { ok: false, message: `No ${noun} matches "${typed}"` };
@@ -692,6 +722,9 @@ export interface AskDeps {
 	// YYYY-MM-DD, for questions about recent games.
 	today: string;
 	effort?: ReasoningEffort;
+	// Unset means ASK_TEMPERATURE. null sends no temperature, so the model's
+	// default applies. The eval uses null to compare against the default.
+	temperature?: number | null;
 }
 
 export type AskOutcome = {
@@ -719,10 +752,9 @@ export async function askQuestion(
 	deps: AskDeps,
 ): Promise<AskOutcome> {
 	const effort = deps.effort ?? ASK_REASONING_EFFORT;
-	const messages: AskMessage[] = [
-		{ role: "system", content: ASK_SYSTEM_PROMPT },
-		{ role: "user", content: askUserMessage(question, deps.today) },
-	];
+	const temperature =
+		deps.temperature === undefined ? ASK_TEMPERATURE : deps.temperature;
+	const messages = askMessages(question, deps.today);
 	const usage: AskUsage[] = [];
 	let lastArguments: string | null = null;
 	let failure = "";
@@ -730,7 +762,7 @@ export async function askQuestion(
 	for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
 		await deps.beforeCall?.();
 		const reply = readModelReply(
-			await deps.callModel(buildAskInputs(messages, effort)),
+			await deps.callModel(buildAskInputs(messages, effort, temperature)),
 		);
 		usage.push(reply.usage);
 		lastArguments = reply.call?.function.arguments ?? null;

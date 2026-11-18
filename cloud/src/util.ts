@@ -493,9 +493,12 @@ export async function decompressWithLimit(
 	return result;
 }
 
-// Hex-encoded SHA-256 of an ArrayBuffer. Used for the games dedup key
-// (file_hash). Server-side authority — we never trust a client-supplied hash.
-export async function sha256Hex(buffer: ArrayBuffer): Promise<string> {
+// Hex-encoded SHA-256 of some bytes. Used for the games dedup key (file_hash)
+// and the ask answer cache's key. Server-side authority — we never trust a
+// client-supplied hash.
+export async function sha256Hex(
+	buffer: ArrayBuffer | ArrayBufferView,
+): Promise<string> {
 	const digest = await crypto.subtle.digest("SHA-256", buffer);
 	const bytes = new Uint8Array(digest);
 	let hex = "";

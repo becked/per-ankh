@@ -28,6 +28,12 @@ import { logError, setLogField } from "../log";
 import type { EventsEnv, QueryableD1 } from "../d1";
 import { AskQuestionSchema } from "../schemas/query";
 import {
+	askCacheKey,
+	readCachedAnswer,
+	writeCachedAnswer,
+	type CachedAnswer,
+} from "./ask-cache";
+import {
 	ASK_DISABLED_KEY,
 	ASK_MODEL,
 	ASK_SESSION_AFFINITY,
@@ -441,6 +447,11 @@ function logAskOutcome(outcome: AskOutcome): void {
 // model call. Then, cheapest refusal first and all of them before the model
 // runs: the body, the off switch, the three hourly limits.
 //
+// The answer cache (ask-cache.ts) is read after the off switch and before the
+// limits. A hit makes no model call, so it is not charged and a spent limit
+// does not refuse it. The off switch still refuses a hit, because turning the
+// feature off covers the answers it gave earlier.
+//
 // A refusal the reader can act on is a 4xx with its own code, so the page can
 // show one line under the input and leave the builder working: the switch is
 // ASK_DISABLED, a spent limit is RATE_LIMIT_ASK_*, an unsupported question is
@@ -476,6 +487,16 @@ export async function handleQueryAsk(
 			cors,
 			"ASK_DISABLED",
 		);
+	}
+
+	const today = new Date().toISOString().slice(0, 10);
+	const cacheKey = await askCacheKey(question, today);
+	const cached = await readCachedAnswer(env.SESSIONS_KV, cacheKey);
+	setLogField("ask_cache", cached ? "hit" : "miss");
+	if (cached) {
+		setLogField("ask_question", question);
+		setLogField("ask_outcome", cached.kind);
+		return answeredResponse(cached, cors);
 	}
 
 	const userId = session.data.user_id;
@@ -534,21 +555,29 @@ export async function handleQueryAsk(
 					? loadPlayerRoster(env.SHARE_DB)
 					: loadTournamentRoster(env.SHARE_DB),
 			beforeCall: () => chargeAskCall(env, userId, ip),
-			today: new Date().toISOString().slice(0, 10),
+			today,
 		});
 	} catch (e) {
 		logError("query_ask_failed", e);
 		return errorResponse(ASK_UNAVAILABLE_MESSAGE, 503, cors, "ASK_UNAVAILABLE");
 	}
 	logAskOutcome(outcome);
+	await writeCachedAnswer(env.SESSIONS_KV, cacheKey, outcome);
 
-	switch (outcome.kind) {
-		case "selection":
-			logSelectionShape(outcome.selection);
-			return jsonResponse({ selection: outcome.canonical }, 200, cors);
-		case "unsupported":
-			return errorResponse(outcome.reason, 422, cors, "ASK_UNSUPPORTED");
-		case "failed":
-			return errorResponse(outcome.message, 422, cors, "ASK_UNMATCHED");
+	if (outcome.kind === "failed") {
+		return errorResponse(outcome.message, 422, cors, "ASK_UNMATCHED");
 	}
+	return answeredResponse(outcome, cors);
+}
+
+// A selection or an "unsupported" reply, fresh or from the cache.
+function answeredResponse(
+	answer: CachedAnswer,
+	cors: Record<string, string>,
+): Response {
+	if (answer.kind === "selection") {
+		logSelectionShape(answer.selection);
+		return jsonResponse({ selection: answer.canonical }, 200, cors);
+	}
+	return errorResponse(answer.reason, 422, cors, "ASK_UNSUPPORTED");
 }

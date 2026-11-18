@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { VOCABULARY_ROSTERS } from "../../../src/lib/query/vocabulary-rosters";
 import {
 	ASK_SYSTEM_PROMPT,
+	ASK_TEMPERATURE,
 	ASK_TOOL_NAME,
 	askQuestion,
 	checkAnswer,
@@ -294,5 +295,16 @@ describe("askQuestion", () => {
 		expect(outcome.kind === "selection" && outcome.canonical).toBe(
 			"source=wonder_events&dim=player&measure=wonders_built&f=wonder:in:IMPROVEMENT_PYRAMIDS",
 		);
+	});
+
+	it("sends ASK_TEMPERATURE, and none when the caller passes null", async () => {
+		const unsupported = reply({ kind: "unsupported", reason: "No religions." });
+		const shipped = deps([unsupported]);
+		await askQuestion("Which religion?", shipped.deps);
+		expect(shipped.sent[0]).toMatchObject({ temperature: ASK_TEMPERATURE });
+
+		const unset = deps([unsupported]);
+		await askQuestion("Which religion?", { ...unset.deps, temperature: null });
+		expect(unset.sent[0]).not.toHaveProperty("temperature");
 	});
 });

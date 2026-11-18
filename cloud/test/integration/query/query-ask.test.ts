@@ -2,13 +2,17 @@
 //
 // env.AI is replaced in every test, as the screenshot tests do it: the test
 // isolate has no AI binding (vitest.config.mts). What is pinned here is what
-// the Worker does around the model — the gate, the off switch, the limits,
-// the checks and the retry — not what the model answers. The eval
+// the Worker does around the model — the gate, the off switch, the answer
+// cache, the limits, the checks and the retry — not what the model answers. The eval
 // (scripts/eval-query-ask.ts) is where the model's answers are measured.
 
 import { applyD1Migrations, env } from "cloudflare:test";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { ASK_DISABLED_KEY, ASK_TOOL_NAME } from "../../../src/query/ask";
+import {
+	ASK_DISABLED_KEY,
+	ASK_TEMPERATURE,
+	ASK_TOOL_NAME,
+} from "../../../src/query/ask";
 import { makeUser, type TestUser } from "../../helpers/builders";
 import { postMultipart, request } from "../../helpers/requests";
 import { buildUploadFormData } from "../../helpers/save-blob";
@@ -19,6 +23,7 @@ interface ModelCall {
 		messages: { role: string; content: string | null; tool_call_id?: string }[];
 		tool_choice: string;
 		store: boolean;
+		temperature?: number;
 	};
 	options: { extraHeaders?: Record<string, string> } | undefined;
 }
@@ -88,6 +93,9 @@ beforeEach(async () => {
 		},
 	};
 	await env.SESSIONS_KV.delete(ASK_DISABLED_KEY);
+	// Most tests ask the same question, and each expects the model to answer it.
+	const cached = await env.SESSIONS_KV.list({ prefix: "query_ask:answer:" });
+	for (const k of cached.keys) await env.SESSIONS_KV.delete(k.name);
 	await env.SHARE_DB.prepare(
 		`DELETE FROM events WHERE event_type = 'query_ask'`,
 	).run();
@@ -177,6 +185,7 @@ describe("a question the model answers", () => {
 		expect(await chargedCalls()).toBe(1);
 		expect(calls[0].inputs.tool_choice).toBe("required");
 		expect(calls[0].inputs.store).toBe(false);
+		expect(calls[0].inputs.temperature).toBe(ASK_TEMPERATURE);
 		expect(calls[0].options?.extraHeaders?.["x-session-affinity"]).toBeTruthy();
 		// The question travels in the user message, after the shared prefix.
 		expect(calls[0].inputs.messages[1].content).toContain(
@@ -276,7 +285,8 @@ describe("the limits", () => {
 		try {
 			replies = [() => toolReply(WONDERS_BY_PLAYER)];
 			expect((await ask("Who built the Pyramids?")).status).toBe(200);
-			const res = await ask("Who built the Pyramids?");
+			// A different question, so the answer cache cannot answer it.
+			const res = await ask("Who built the Colossus?");
 			expect(res.status).toBe(429);
 			expect((await res.json<{ code: string }>()).code).toBe(
 				"RATE_LIMIT_ASK_USER",
@@ -295,7 +305,7 @@ describe("the limits", () => {
 			replies = [() => toolReply(WONDERS_BY_PLAYER)];
 			expect((await ask("Who built the Pyramids?")).status).toBe(200);
 			const other = await makeUser();
-			const res = await ask("Who built the Pyramids?", other);
+			const res = await ask("Who built the Colossus?", other);
 			expect(res.status).toBe(429);
 			expect((await res.json<{ code: string }>()).code).toBe(
 				"RATE_LIMIT_ASK_GLOBAL",
@@ -303,6 +313,94 @@ describe("the limits", () => {
 		} finally {
 			vars.GLOBAL_QUERY_ASKS_PER_HOUR = before;
 		}
+	});
+});
+
+describe("the answer cache", () => {
+	const UNMATCHED_PLAYER = {
+		kind: "selection",
+		source: "player_summaries",
+		measure: "seats",
+		filters: [{ key: "player", op: "in", values: ["Gilgamesh99"] }],
+	};
+
+	it("answers a repeated question with no model call and no charge", async () => {
+		replies = [() => toolReply(WONDERS_BY_PLAYER)];
+		const first = await ask("Who built the Pyramids?");
+		expect(first.status).toBe(200);
+		const body = await first.json();
+		// Case and whitespace are folded.
+		const again = await ask("  who built the   PYRAMIDS? ");
+		expect(again.status).toBe(200);
+		expect(await again.json()).toEqual(body);
+		expect(calls).toHaveLength(1);
+		expect(await chargedCalls()).toBe(1);
+	});
+
+	it("answers a hit after the account's hourly calls are spent", async () => {
+		const vars = env as unknown as { PER_USER_QUERY_ASKS_PER_HOUR?: string };
+		const before = vars.PER_USER_QUERY_ASKS_PER_HOUR;
+		vars.PER_USER_QUERY_ASKS_PER_HOUR = "1";
+		try {
+			replies = [() => toolReply(WONDERS_BY_PLAYER)];
+			expect((await ask("Who built the Pyramids?")).status).toBe(200);
+			expect((await ask("Who built the Pyramids?")).status).toBe(200);
+			expect(calls).toHaveLength(1);
+		} finally {
+			vars.PER_USER_QUERY_ASKS_PER_HOUR = before;
+		}
+	});
+
+	it("refuses a hit while the off switch is set", async () => {
+		replies = [() => toolReply(WONDERS_BY_PLAYER)];
+		expect((await ask("Who built the Pyramids?")).status).toBe(200);
+		await env.SESSIONS_KV.put(ASK_DISABLED_KEY, "1");
+		const res = await ask("Who built the Pyramids?");
+		expect(res.status).toBe(503);
+		expect((await res.json<{ code: string }>()).code).toBe("ASK_DISABLED");
+	});
+
+	it("stores an unsupported reply to the first call", async () => {
+		replies = [
+			() =>
+				toolReply({
+					kind: "unsupported",
+					reason: "No source records religions.",
+				}),
+		];
+		expect((await ask("Which religion gets founded first?")).status).toBe(422);
+		const again = await ask("Which religion gets founded first?");
+		expect(again.status).toBe(422);
+		expect((await again.json<{ code: string }>()).code).toBe("ASK_UNSUPPORTED");
+		expect(calls).toHaveLength(1);
+	});
+
+	it("does not store a failure", async () => {
+		replies = [
+			() => toolReply(UNMATCHED_PLAYER),
+			() => toolReply(UNMATCHED_PLAYER),
+		];
+		const question = "How many games has Gilgamesh99 played?";
+		expect((await ask(question)).status).toBe(422);
+		replies = [
+			() => toolReply({ kind: "unsupported", reason: "No such player." }),
+		];
+		expect((await ask(question)).status).toBe(422);
+		expect(calls).toHaveLength(3);
+	});
+
+	it("does not store an unsupported reply after a retry", async () => {
+		replies = [
+			() => toolReply(UNMATCHED_PLAYER),
+			() => toolReply({ kind: "unsupported", reason: "No such player." }),
+		];
+		const question = "How many games has Gilgamesh99 played?";
+		expect((await ask(question)).status).toBe(422);
+		replies = [
+			() => toolReply({ kind: "unsupported", reason: "No such player." }),
+		];
+		expect((await ask(question)).status).toBe(422);
+		expect(calls).toHaveLength(3);
 	});
 });
 

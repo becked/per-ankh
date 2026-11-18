@@ -3,8 +3,9 @@
 // and reasoning effort, how many questions came back right and what each one
 // cost.
 //
-// The ask endpoint's model and effort (ASK_MODEL, ASK_REASONING_EFFORT) and
-// its three hourly ceilings come from this report. The request is not written
+// The ask endpoint's model, effort and temperature (ASK_MODEL,
+// ASK_REASONING_EFFORT, ASK_TEMPERATURE) and its three hourly ceilings come
+// from this report. The request is not written
 // here: the prompt, the tool, the retry and the checks are imported from
 // cloud/src/query/ask.ts, the module the endpoint calls the model through. An
 // edit to the prompt or the tool invalidates the numbers, and re-running this
@@ -27,7 +28,8 @@
 // neither and makes no call.
 //
 // Run: npm run eval:ask -- [--dry-run] [--model flash|pro] [--effort none,low]
-//                          [--repeat n] [--only id] [--concurrency n] [--json]
+//                          [--temperature unset,0] [--repeat n] [--only id]
+//                          [--concurrency n] [--json]
 
 import "dotenv/config";
 
@@ -35,6 +37,7 @@ import {
 	ASK_MODELS,
 	ASK_SESSION_AFFINITY,
 	ASK_SYSTEM_PROMPT,
+	ASK_TEMPERATURE,
 	ASK_TOOL,
 	REASONING_EFFORTS,
 	askQuestion,
@@ -176,6 +179,8 @@ function outcomeLabel(outcome: AskOutcome): string {
 interface QuestionRun {
 	model: ModelName;
 	effort: ReasoningEffort;
+	// null when no temperature was sent, so the model's default applied.
+	temperature: number | null;
 	id: string;
 	pass: boolean;
 	outcome: string;
@@ -189,6 +194,10 @@ interface QuestionRun {
 	error?: string;
 }
 
+function temperatureLabel(t: number | null): string {
+	return t == null ? "t=unset" : `t=${t}`;
+}
+
 function cost(model: ModelName, input: number, output: number): number {
 	const p = PRICES[model];
 	return (input * p.input + output * p.output) / 1e6;
@@ -197,6 +206,7 @@ function cost(model: ModelName, input: number, output: number): number {
 async function runOne(
 	model: ModelName,
 	effort: ReasoningEffort,
+	temperature: number | null,
 	q: EvalQuestion,
 	accountId: string,
 	token: string,
@@ -206,6 +216,7 @@ async function runOne(
 	const base = {
 		model,
 		effort,
+		temperature,
 		id: q.id,
 		expected: expectedLabel(q.expected),
 	};
@@ -217,6 +228,7 @@ async function runOne(
 				vocabulary === "player" ? FIXTURE_PLAYERS : FIXTURE_TOURNAMENTS,
 			today,
 			effort,
+			temperature,
 		});
 		const input = outcome.usage.reduce((n, u) => n + u.inputTokens, 0);
 		const cached = outcome.usage.reduce((n, u) => n + u.cachedInputTokens, 0);
@@ -307,11 +319,11 @@ function usd(n: number): string {
 function summarize(runs: QuestionRun[]): void {
 	const groups = new Map<string, QuestionRun[]>();
 	for (const r of runs) {
-		const key = `${r.model}/${r.effort}`;
+		const key = `${r.model}/${r.effort}/${temperatureLabel(r.temperature)}`;
 		groups.set(key, [...(groups.get(key) ?? []), r]);
 	}
 	const cols: Column[] = [
-		{ header: "MODEL/EFFORT", width: 14 },
+		{ header: "MODEL/EFFORT/TEMP", width: 22 },
 		{ header: "PASS", width: 7, align: "right" },
 		{ header: "SEL", width: 5, align: "right" },
 		{ header: "UNSUP", width: 5, align: "right" },
@@ -369,7 +381,7 @@ function printFailures(runs: QuestionRun[]): void {
 	process.stdout.write(`\n${bold("Misses")}\n`);
 	for (const r of failed) {
 		process.stdout.write(
-			`  ${r.model}/${r.effort} ${bold(r.id)} (${r.attempts} call${r.attempts === 1 ? "" : "s"})\n` +
+			`  ${r.model}/${r.effort}/${temperatureLabel(r.temperature)} ${bold(r.id)} (${r.attempts} call${r.attempts === 1 ? "" : "s"})\n` +
 				`    expected ${r.expected}\n` +
 				`    got      ${r.error ? `error: ${r.error}` : r.outcome}\n`,
 		);
@@ -386,6 +398,7 @@ function printHelp(): void {
 			"  --dry-run          Check the test set and print the prompt size; no API calls",
 			"  --model M          flash | pro (default: both)",
 			"  --effort E[,E]     Reasoning efforts to try: none, low, high, max (default: none,low)",
+			`  --temperature T[,T] Temperatures to try; unset sends none, so the model's default applies (default: ${ASK_TEMPERATURE})`,
 			"  --repeat N         Run each question N times (default 1)",
 			"  --only ID          Run one question",
 			"  --concurrency N    Calls in flight at once (default 1)",
@@ -435,6 +448,18 @@ async function main(): Promise<void> {
 			throw new Error(`Unknown effort: ${e}`);
 		}
 	}
+	const temperatures = (
+		flagString(flags, "temperature") ?? String(ASK_TEMPERATURE)
+	)
+		.split(",")
+		.map((v): number | null => {
+			if (v === "unset") return null;
+			const t = Number(v);
+			if (v.trim() === "" || !Number.isFinite(t) || t < 0) {
+				throw new Error(`Unknown temperature: ${v}`);
+			}
+			return t;
+		});
 	const repeats = flagInt(flags, "repeat", 1);
 	const only = flagString(flags, "only");
 	const questions = only ? QUESTIONS.filter((q) => q.id === only) : QUESTIONS;
@@ -444,23 +469,31 @@ async function main(): Promise<void> {
 	const token = requireEnv("CLOUDFLARE_AI_TOKEN");
 	const today = new Date().toISOString().slice(0, 10);
 
-	const plan: { model: ModelName; effort: ReasoningEffort; q: EvalQuestion }[] =
-		[];
+	const plan: {
+		model: ModelName;
+		effort: ReasoningEffort;
+		temperature: number | null;
+		q: EvalQuestion;
+	}[] = [];
 	for (const model of models) {
 		for (const effort of efforts) {
-			for (let i = 0; i < repeats; i++) {
-				for (const q of questions) plan.push({ model, effort, q });
+			for (const temperature of temperatures) {
+				for (let i = 0; i < repeats; i++) {
+					for (const q of questions) {
+						plan.push({ model, effort, temperature, q });
+					}
+				}
 			}
 		}
 	}
 	info(
-		`${plan.length} questions: ${models.join(", ")} × ${efforts.join(", ")} × ${repeats} × ${questions.length}. ` +
+		`${plan.length} questions: ${models.join(", ")} × ${efforts.join(", ")} × ${temperatures.map(temperatureLabel).join(", ")} × ${repeats} × ${questions.length}. ` +
 			`System prompt ${promptChars} characters.`,
 	);
 
 	const concurrency = flagInt(flags, "concurrency", DEFAULT_CONCURRENCY);
 	const runs = await pool(plan, concurrency, (p) =>
-		runOne(p.model, p.effort, p.q, accountId, token, today),
+		runOne(p.model, p.effort, p.temperature, p.q, accountId, token, today),
 	);
 
 	if (flags.json === true) {

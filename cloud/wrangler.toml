@@ -346,12 +346,13 @@ AD_HOC_QUERY_PER_HOUR = "300"
 # same lever and with the same override caveat as the ceilings above. Each
 # call is charged before it runs, so the retry after a failed check is a
 # second charge, and an unsupported reply costs what a success does — the
-# shape PER_USER_SCREENSHOTS_PER_HOUR charges in. None of the three is shared
-# with AD_HOC_QUERY_PER_HOUR, so a spent one stops the question input and
-# leaves the builder working.
+# shape PER_USER_SCREENSHOTS_PER_HOUR charges in. A question answered from the
+# answer cache (cloud/src/query/ask-cache.ts) makes no call and is not
+# charged. None of the three is shared with AD_HOC_QUERY_PER_HOUR, so a spent
+# one stops the question input and leaves the builder working.
 #
-# Derived from the eval (npm run eval:ask) on the shipped model and effort,
-# Flash with no reasoning. One call reads ~9,750 input tokens at $0.30/M and
+# Derived from the eval (npm run eval:ask) on the shipped model, effort and
+# temperature: Flash with no reasoning, at temperature 0. One call reads ~9,750 input tokens at $0.30/M and
 # writes ~120 output tokens at $1.20/M: ~$0.0031. At the 2,048-token output
 # cap (ASK_MAX_OUTPUT_TOKENS) the worst case is ~$0.0054. Every input token is
 # priced as uncached. The eval saw 96-99% of them cached, at 1/50 of the price,
