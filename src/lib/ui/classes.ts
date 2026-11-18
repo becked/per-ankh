@@ -1,8 +1,9 @@
-// The class strings the app's surfaces share — buttons and inputs in the dark
-// scheme the game-detail tabs use (tan text on dark surfaces, no bright
-// accents), and the two table families at the foot of the file. One place so
-// the create page, the challenge page, the upload modal and the tournament
-// settings popover can't drift.
+// The class strings the app's surfaces share: buttons and inputs in the dark
+// scheme the game-detail tabs use, and the two table families at the foot of
+// the file. The buttons are tan text on dark surfaces, with two exceptions:
+// DESTRUCTIVE_BTN is red, and ASK_BTN is filled orange with white text. Each
+// says why beside it. One place so the create page, the challenge page, the
+// upload modal and the tournament settings popover can't drift.
 
 export const PRIMARY_BTN =
 	"rounded bg-surface-raised px-4 py-2 text-sm font-bold text-tan transition-colors hover:bg-surface-raised-hover disabled:cursor-not-allowed disabled:opacity-50";

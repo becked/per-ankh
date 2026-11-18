@@ -1,8 +1,9 @@
 // `./per-ankh admin cache <subcommand>` — inspect and clear the KV-backed
-// caches. Both live in SESSIONS_KV alongside the `session:` and `oauth:` keys
-// (see cloud/src/stats/cache.ts and cloud/src/video/cache.ts), so KINDS below
+// caches. All three live in SESSIONS_KV alongside the `session:` and `oauth:`
+// keys and the Explore ask off switch (see cloud/src/stats/cache.ts,
+// cloud/src/video/cache.ts and cloud/src/query/ask-cache.ts), so KINDS below
 // is the safety boundary: no combination of flags can reach an auth key and
-// sign every user out.
+// sign every user out, or switch the ask input back on.
 //
 // This clears *every* schema version of a prefix, not just the current one —
 // invalidateStatsCache in the Worker walks only `stats:v{BUNDLE_SCHEMA_VERSION}`,
@@ -18,6 +19,7 @@
 // mean the D1-batch-rollback path in handleGameUpload, which the Worker evicts
 // locally, and which expires on its own inside 24h.
 
+import { ASK_CACHE_KEY_ROOT } from "../../../cloud/src/query/ask-cache";
 import { kvBulkDelete, kvList, type KvKey } from "../wrangler";
 import { confirmTyping } from "../../lib/confirm";
 import {
@@ -50,6 +52,11 @@ const KINDS = {
 		label: "video feeds",
 		note: "next profile/tournament view refetches from YouTube (spends Data API quota)",
 	},
+	ask: {
+		prefix: ASK_CACHE_KEY_ROOT,
+		label: "ask answers",
+		note: "a repeated question calls the model again (counts against the ask limits)",
+	},
 } as const;
 
 type CacheKind = keyof typeof KINDS;
@@ -80,15 +87,16 @@ function printHelp(): void {
 			"./per-ankh admin cache <subcommand>",
 			"",
 			"  list [--kind K] [--match S] [--limit N]   Show cached entries",
-			"  clear <stats|videos|all> [--match S]      Delete cached entries",
+			"  clear <stats|videos|ask|all> [--match S]  Delete cached entries",
 			"",
-			"  --kind   stats | videos  (default: both)",
+			"  --kind   stats | videos | ask  (default: all three)",
 			"  --match  Substring filter over key names, e.g.",
 			"             --match ':user:abc123:'   one user's stats bundles",
 			"             --match ':playlist:'      tournament video playlists",
 			"",
-			"Only the stats: and videos: prefixes are reachable — session: and",
-			"oauth: keys share the namespace and are never touched.",
+			"Only the stats:, videos: and query_ask:answer: prefixes are reachable.",
+			"The session: and oauth: keys and the ask off switch share the namespace",
+			"and are never touched.",
 			"",
 			"The parsed-game blob cache is a separate layer and is NOT reachable",
 			"here: it lives in each POP's Cache API storage, which has no CLI or",
@@ -210,7 +218,7 @@ async function runList(argv: string[], opts: CommandOpts): Promise<void> {
 async function runClear(argv: string[], opts: CommandOpts): Promise<void> {
 	const { positional, flags } = parseFlags(argv);
 	const usage =
-		"Usage: ./per-ankh admin cache clear <stats|videos|all> [--match S]";
+		"Usage: ./per-ankh admin cache clear <stats|videos|ask|all> [--match S]";
 	const target = positional[0];
 	if (!target) {
 		throw new Error(usage);

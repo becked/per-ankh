@@ -8,12 +8,14 @@
 	// A refusal is one line under the input, and the builder keeps working
 	// whatever the reason. The page learns that the feature is switched off
 	// only from a refused submit: the catalog is edge-cached for five minutes,
-	// so an on/off flag there would show the wrong state after a toggle.
+	// so an on/off flag there would show the wrong state after a toggle. An
+	// expired session goes to sign-in and comes back to this page.
 
 	import { goto } from "$app/navigation";
 	import { page } from "$app/state";
-	import { ApiError, cloudApi } from "$lib/api-cloud";
+	import { ApiError, cloudApi, UnauthorizedError } from "$lib/api-cloud";
 	import { ASK_BTN, INPUT_CLASS } from "$lib/ui/classes";
+	import { loginBounce } from "$lib/utils/safe-next";
 	import { ASK_QUESTION_MAX } from "./limits";
 
 	let question = $state("");
@@ -22,27 +24,24 @@
 
 	const BUILDER_WORKS = "The query builder below still works.";
 
-	// The line a refused submit shows. A limit or the switch is the feature
-	// declining, so the line says the builder is still there; a question the
-	// catalog cannot express, or a name that matched nothing, is the Worker's
-	// own message, which names what failed.
+	// The line a refused submit shows. The Worker's message is the text, so
+	// the wording lives in one place, and the per-account limit it names is
+	// the configured one. A limit or the switch is the feature declining, so
+	// the line adds that the builder is still there. A question the catalog
+	// cannot express, or a name that matched nothing, gets a lead-in before
+	// the message, which names what failed.
 	function refusalLine(err: unknown): string {
 		if (!(err instanceof ApiError)) {
 			return `Couldn't reach the server. ${BUILDER_WORKS}`;
 		}
 		switch (err.code) {
 			case "ASK_DISABLED":
-				return `Asking in plain language is switched off right now. ${BUILDER_WORKS}`;
 			case "ASK_UNAVAILABLE":
-				return `Asking in plain language is unavailable right now. ${BUILDER_WORKS}`;
 			case "RATE_LIMIT_ASK_USER":
-				return `You've reached the daily limit on questions. Try again later. ${BUILDER_WORKS}`;
 			case "RATE_LIMIT_ASK_IP":
-				return `Too many questions have come from this network this hour. Try again later. ${BUILDER_WORKS}`;
 			case "RATE_LIMIT_ASK_GLOBAL":
-				return `Asking in plain language is busy this hour. Try again later. ${BUILDER_WORKS}`;
 			case "RATE_LIMIT_ASK_BUDGET":
-				return `Asking in plain language is paused until next month. ${BUILDER_WORKS}`;
+				return `${err.message}. ${BUILDER_WORKS}`;
 			case "ASK_UNSUPPORTED":
 				return `Explore can't answer that. ${err.message}`;
 			case "ASK_UNMATCHED":
@@ -65,6 +64,13 @@
 			// eslint-disable-next-line svelte/no-navigation-without-resolve -- search-param-only update on the current route; URL objects are SvelteKit's documented dynamic-nav API
 			await goto(next, { keepFocus: true, noScroll: true });
 		} catch (err) {
+			if (err instanceof UnauthorizedError) {
+				// loginBounce carries pathname + search, so the selection on screen
+				// survives the round trip through OAuth.
+				// eslint-disable-next-line svelte/no-navigation-without-resolve -- dynamic next-query construction; resolve()'s branded types don't admit dynamic search strings
+				await goto(loginBounce(page.url));
+				return;
+			}
 			refusal = refusalLine(err);
 		} finally {
 			asking = false;

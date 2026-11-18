@@ -10,8 +10,11 @@
 // the Pyramids?" and "who built  the pyramids?" share an entry.
 //
 // What is stored:
-//   * A selection. It names accounts and tournaments by ID, so a roster that
-//     has grown since does not make it wrong.
+//   * A selection. It names accounts and tournaments by ID. A name can still
+//     resolve differently once the roster grows, when it matched only part of
+//     a roster name (matchRosterName). If "bob" matched only "Bobby" and an
+//     account named "Bob" joins later that day, a fresh call picks "Bob" and
+//     the cache keeps answering "Bobby" until the date changes.
 //   * An "unsupported" reply to the first call. No check had run, so no
 //     roster went into it.
 // What is not:
@@ -44,7 +47,9 @@ import { parseSelection, type QuerySelection } from "./select";
 const ASK_CACHE_VERSION = 1;
 
 // Beside ASK_DISABLED_KEY (`query_ask:disabled`) in the same namespace.
-const KEY_PREFIX = `query_ask:answer:v${ASK_CACHE_VERSION}:`;
+// `./per-ankh admin cache` lists and clears every version under the root.
+export const ASK_CACHE_KEY_ROOT = "query_ask:answer:";
+const KEY_PREFIX = `${ASK_CACHE_KEY_ROOT}v${ASK_CACHE_VERSION}:`;
 
 // One day, because the date is in the key: an entry gets no hits after the
 // date changes.

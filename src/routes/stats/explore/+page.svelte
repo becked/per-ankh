@@ -57,8 +57,9 @@
 	// The builder's Ask/Reset row, reserved. The left column and this panel are
 	// grid siblings and stretch together, so a frame that simply filled this
 	// one would end level with those buttons — below the last subpanel, which
-	// is what the frame is being lined up with. `h-7` is the Ask button (text-xs on py-1.5)
-	// and `mt-3` is the gap the builder's column puts above its footer.
+	// is what the frame is being lined up with. `h-7` is the Ask button
+	// (text-xs on py-1.5) and `mt-3` is the gap the builder's column puts above
+	// its footer.
 	const FOOTER_RESERVE = "mt-3 h-7";
 </script>
 

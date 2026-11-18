@@ -4,23 +4,25 @@
 // cost.
 //
 // The ask endpoint's model, effort and temperature (ASK_MODEL,
-// ASK_REASONING_EFFORT, ASK_TEMPERATURE) and its three hourly ceilings come
-// from this report. The request is not written
-// here: the prompt, the tool, the retry and the checks are imported from
-// cloud/src/query/ask.ts, the module the endpoint calls the model through. An
-// edit to the prompt or the tool invalidates the numbers, and re-running this
-// is how the new ones are found.
+// ASK_REASONING_EFFORT, ASK_TEMPERATURE) come from this report, and so does
+// the cost per call that cloud/wrangler.toml derives the ask limits from. The
+// request is not written here: the prompt, the tool, the retry and the checks
+// are imported from cloud/src/query/ask.ts, the module the endpoint calls the
+// model through. An edit to the prompt or the tool invalidates the numbers,
+// and re-running this is how the new ones are found.
 //
 // A question passes when the ask path's outcome is the expected one: one of
-// its canonical selections, an "unsupported" reply, or a refusal. Player and tournament names resolve against the fixture rosters in
-// the test set, not against D1.
+// its canonical selections, an "unsupported" reply, or a refusal. Player and
+// tournament names resolve against the fixture rosters in the test set, not
+// against D1.
 //
 // COST is computed from each response's `usage`, with every input token priced
 // as uncached. Cached input costs 1/50 of uncached on Flash and 1/30 on Pro,
-// and Workers AI documents no cache lifetime, so a ceiling sized on the cached
+// and Workers AI documents no cache lifetime, so a limit sized on the cached
 // price could be off by that factor. The cached-token count is reported beside
-// it. A retry is a second call and a second cost, which is what the endpoint
-// charges against the limits too.
+// it. A retry is a second call and a second cost. The endpoint's count limits
+// treat a retry as part of its question, and only the monthly budget adds its
+// tokens.
 //
 // AUTH: the Workers AI REST API with CLOUDFLARE_ACCOUNT_ID and
 // CLOUDFLARE_AI_TOKEN (Workers AI Read and Edit), from the environment or the
@@ -56,86 +58,33 @@ import {
 } from "./eval-query-ask-questions";
 import { flagInt, flagString, parseFlags, printJson } from "./lib/cli";
 import { bold, dim, info, printTable, warn, type Column } from "./lib/format";
+import {
+	runWorkersAi,
+	workersAiCredentials,
+	type WorkersAiCredentials,
+} from "./lib/workers-ai";
 
 type ModelName = keyof typeof ASK_MODELS;
 
 // ─── The model call ─────────────────────────────────────────────────────────
-
-function requireEnv(name: string): string {
-	const v = process.env[name];
-	if (v == null || v.trim() === "") {
-		throw new Error(
-			`${name} is not set. The eval needs CLOUDFLARE_ACCOUNT_ID and a ` +
-				`CLOUDFLARE_AI_TOKEN with Workers AI Read and Edit, in the environment or ` +
-				`in .env (gitignored). Use --dry-run to check the test set without either.`,
-		);
-	}
-	return v.trim();
-}
-
-interface ApiEnvelope {
-	success?: boolean;
-	result?: unknown;
-	errors?: { code?: number; message?: string }[];
-}
 
 // Workers AI answers 429 once the account's per-minute inference rate is
 // reached. Four calls in flight reached it, so the waits are long enough for a
 // minute's window to move.
 const RETRY_DELAYS_MS = [5000, 15000, 30000, 60000];
 
-async function runModel(
+function runModel(
 	model: string,
 	inputs: AskModelInputs,
-	accountId: string,
-	token: string,
+	credentials: WorkersAiCredentials,
 ): Promise<unknown> {
-	const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${model}`;
-	let lastError = "";
-	for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
-		if (attempt > 0) {
-			await new Promise((r) => setTimeout(r, RETRY_DELAYS_MS[attempt - 1]));
-		}
-		let res: Response;
-		try {
-			res = await fetch(url, {
-				method: "POST",
-				headers: {
-					Authorization: `Bearer ${token}`,
-					"Content-Type": "application/json",
-					"x-session-affinity": ASK_SESSION_AFFINITY,
-				},
-				body: JSON.stringify(inputs),
-			});
-		} catch (e) {
-			lastError = e instanceof Error ? e.message : String(e);
-			continue;
-		}
-		const text = await res.text();
-		// 429 and 5xx are worth another attempt. A 400 or a 403 is the request
-		// or the token, and fails the same way every time.
-		if (res.status === 429 || res.status >= 500) {
-			lastError = `HTTP ${res.status}: ${text.slice(0, 300)}`;
-			continue;
-		}
-		if (!res.ok) throw new Error(`${model}: HTTP ${res.status}: ${text}`);
-		let envelope: ApiEnvelope;
-		try {
-			envelope = JSON.parse(text) as ApiEnvelope;
-		} catch {
-			throw new Error(`${model}: response was not JSON: ${text.slice(0, 300)}`);
-		}
-		if (!envelope.success || envelope.result == null) {
-			const msg = (envelope.errors ?? [])
-				.map((e) => `${e.code ?? "?"} ${e.message ?? ""}`.trim())
-				.join("; ");
-			throw new Error(`${model}: ${msg || text.slice(0, 300)}`);
-		}
-		return envelope.result;
-	}
-	throw new Error(
-		`${model}: giving up after ${RETRY_DELAYS_MS.length + 1} attempts: ${lastError}`,
-	);
+	return runWorkersAi(credentials, {
+		model,
+		body: inputs,
+		label: model,
+		retryDelaysMs: RETRY_DELAYS_MS,
+		headers: { "x-session-affinity": ASK_SESSION_AFFINITY },
+	});
 }
 
 // ─── Scoring ────────────────────────────────────────────────────────────────
@@ -200,8 +149,7 @@ async function runOne(
 	effort: ReasoningEffort,
 	temperature: number | null,
 	q: EvalQuestion,
-	accountId: string,
-	token: string,
+	credentials: WorkersAiCredentials,
 	today: string,
 ): Promise<QuestionRun> {
 	const started = Date.now();
@@ -214,8 +162,7 @@ async function runOne(
 	};
 	try {
 		const outcome = await askQuestion(q.question, {
-			callModel: (inputs) =>
-				runModel(ASK_MODELS[model], inputs, accountId, token),
+			callModel: (inputs) => runModel(ASK_MODELS[model], inputs, credentials),
 			loadRoster: async (vocabulary) =>
 				vocabulary === "player" ? FIXTURE_PLAYERS : FIXTURE_TOURNAMENTS,
 			today,
@@ -457,8 +404,7 @@ async function main(): Promise<void> {
 	const questions = only ? QUESTIONS.filter((q) => q.id === only) : QUESTIONS;
 	if (questions.length === 0) throw new Error(`No question with id ${only}`);
 
-	const accountId = requireEnv("CLOUDFLARE_ACCOUNT_ID");
-	const token = requireEnv("CLOUDFLARE_AI_TOKEN");
+	const credentials = workersAiCredentials("check the test set");
 	const today = new Date().toISOString().slice(0, 10);
 
 	const plan: {
@@ -485,7 +431,7 @@ async function main(): Promise<void> {
 
 	const concurrency = flagInt(flags, "concurrency", DEFAULT_CONCURRENCY);
 	const runs = await pool(plan, concurrency, (p) =>
-		runOne(p.model, p.effort, p.temperature, p.q, accountId, token, today),
+		runOne(p.model, p.effort, p.temperature, p.q, credentials, today),
 	);
 
 	if (flags.json === true) {

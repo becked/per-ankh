@@ -6,7 +6,7 @@
 // cache, the limits, the checks and the retry — not what the model answers. The eval
 // (scripts/eval-query-ask.ts) is where the model's answers are measured.
 
-import { applyD1Migrations, env } from "cloudflare:test";
+import { applyD1Migrations, env, SELF } from "cloudflare:test";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
 	ASK_DISABLED_KEY,
@@ -14,6 +14,7 @@ import {
 	ASK_TOOL_NAME,
 } from "../../../src/query/ask";
 import { RESERVED_QUESTION_USAGE } from "../../../src/query/ask-usage";
+import { sweepQueryAsks } from "../../../src/retention";
 import { makeUser, type TestUser } from "../../helpers/builders";
 import { postMultipart, request } from "../../helpers/requests";
 import { buildUploadFormData } from "../../helpers/save-blob";
@@ -108,6 +109,26 @@ async function ask(
 		path: "/v1/query/ask",
 		body: { question },
 		as: as ?? undefined,
+	});
+}
+
+// As ask(), from a given client IP. getClientIp trusts CF-Connecting-IP only
+// alongside CF-RAY.
+async function askFrom(
+	ip: string,
+	question: string,
+	as: TestUser,
+): Promise<Response> {
+	return SELF.fetch("http://test/v1/query/ask", {
+		method: "POST",
+		headers: {
+			Origin: "http://localhost:1420",
+			Cookie: `session=${as.sessionToken}`,
+			"Content-Type": "application/json",
+			"CF-Connecting-IP": ip,
+			"CF-RAY": "test-ray",
+		},
+		body: JSON.stringify({ question }),
 	});
 }
 
@@ -362,6 +383,36 @@ describe("the limits", () => {
 		});
 	});
 
+	it("refuses once the network's hourly questions are spent", async () => {
+		await withVar("PER_IP_QUERY_ASKS_PER_HOUR", "1", async () => {
+			replies = [
+				() => toolReply(WONDERS_BY_PLAYER),
+				() => toolReply(WONDERS_BY_PLAYER),
+			];
+			expect(
+				(await askFrom("203.0.113.40", "Who built the Pyramids?", alice))
+					.status,
+			).toBe(200);
+			// Another account on the same network is refused.
+			const other = await makeUser();
+			const res = await askFrom(
+				"203.0.113.40",
+				"Who built the Colossus?",
+				other,
+			);
+			expect(res.status).toBe(429);
+			expect((await res.json<{ code: string }>()).code).toBe(
+				"RATE_LIMIT_ASK_IP",
+			);
+			// The same account on another network is not.
+			expect(
+				(await askFrom("203.0.113.41", "Who built the Colossus?", other))
+					.status,
+			).toBe(200);
+			expect(calls).toHaveLength(2);
+		});
+	});
+
 	it("refuses once the global hourly questions are spent", async () => {
 		await withVar("GLOBAL_QUERY_ASKS_PER_HOUR", "1", async () => {
 			replies = [() => toolReply(WONDERS_BY_PLAYER)];
@@ -514,5 +565,15 @@ describe("a model that is down", () => {
 				output_tokens: RESERVED_QUESTION_USAGE.outputTokens,
 			},
 		]);
+	});
+});
+
+describe("retention", () => {
+	it("sweepQueryAsks deletes questions older than 35 days", async () => {
+		await seedQuestion(alice.userId, "-36 days", 1);
+		await seedQuestion(alice.userId, "-34 days", 2);
+		expect(await sweepQueryAsks(env.SHARE_DB)).toBe(1);
+		const rows = await questionRows();
+		expect(rows.map((r) => r.input_tokens)).toEqual([2]);
 	});
 });

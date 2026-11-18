@@ -86,7 +86,7 @@ From there it's the user's: [`POST /v1/users/me/slug`](#post-v1usersmeslug) rena
 
 ### Rate limiting
 
-Counters live in the D1 `events` table and are keyed per-user, per-IP, or globally depending on the endpoint. Notable buckets:
+Counters live in the D1 `events` table and are keyed per-user, per-IP, or globally depending on the endpoint. The exception is `query_asks`, which counts rows in its own table of the same name. Notable buckets:
 
 Two things shape what "per IP" means for traffic that arrives through `per-ankh.app`'s server-side rendering, since those subrequests leave Cloudflare's SSR egress rather than the visitor's connection:
 

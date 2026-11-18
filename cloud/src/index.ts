@@ -1413,9 +1413,9 @@ const ROUTES: RouteSpec[] = [
 	// off switch and the ask limits (questions per account per day, per IP and
 	// global per hour, and a monthly budget; query/handlers.ts), none of them
 	// shared with the builder's budget: refusing here stops the ask input and
-	// leaves the builder working. Not shared-cacheable:
-	// a POST. A question asked again the same day is answered from a KV cache
-	// in the handler (query/ask-cache.ts), with no model call.
+	// leaves the builder working. Not shared-cacheable: a POST. A question
+	// asked again the same day is answered from a KV cache in the handler
+	// (query/ask-cache.ts), with no model call.
 	{
 		method: "POST",
 		match: { kind: "path", path: "/v1/query/ask" },

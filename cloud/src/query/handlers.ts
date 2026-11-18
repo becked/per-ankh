@@ -383,7 +383,7 @@ export const PER_IP_QUERY_ASKS_PER_HOUR = 60;
 export const GLOBAL_QUERY_ASKS_PER_HOUR = 300;
 export const ASK_MONTHLY_BUDGET_USD = 5;
 
-export function askLimits(env: QueryAskEnv): {
+function askLimits(env: QueryAskEnv): {
 	perUserPerDay: number;
 	perIpPerHour: number;
 	globalPerHour: number;
@@ -451,10 +451,12 @@ function logAskOutcome(outcome: AskOutcome): void {
 // cannot be written refuses the question: the row is what the monthly budget
 // counts, so a question without one would be spend the budget never sees.
 //
-// A refusal the reader can act on is a 4xx with its own code, so the page can
-// show one line under the input and leave the builder working: the switch is
-// ASK_DISABLED, a spent limit is RATE_LIMIT_ASK_*, an unsupported question is
-// ASK_UNSUPPORTED and a reply that failed its checks twice is ASK_UNMATCHED.
+// Every refusal carries its own code, so the page can show one line under the
+// input and leave the builder working. The off switch is a 503 with
+// ASK_DISABLED, and a model or store that is down is a 503 with
+// ASK_UNAVAILABLE. A spent limit is a 429 with RATE_LIMIT_ASK_*. An
+// unsupported question is a 422 with ASK_UNSUPPORTED, and a reply that failed
+// its checks twice is a 422 with ASK_UNMATCHED.
 export async function handleQueryAsk(
 	request: Request,
 	env: QueryAskEnv,

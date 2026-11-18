@@ -96,11 +96,10 @@ export const REASONING_EFFORTS: readonly ReasoningEffort[] = [
 // Cost prices every input token as uncached and includes the retry where one
 // ran. Flash at no reasoning was the only configuration to pass every
 // question, at a fifth of Pro's cost and under half its latency. Three more
-// passes of Flash/none passed 95 of 96; the miss added an is_winner filter to a
-// count of wins, which returns the same number. Reasoning
-// did not help either model: Flash/low's three misses were an extra filter
-// that changes nothing (is_winner on a count of wins) and a sort nobody asked
-// for.
+// passes of Flash/none passed 95 of 96; the miss added an is_winner filter to
+// a count of wins, which returns the same number. Reasoning did not help
+// either model: Flash/low's three misses were an extra filter that changes
+// nothing (is_winner on a count of wins) and a sort nobody asked for.
 //
 // Typed `string` rather than as one of ASK_MODELS' literals, so the AI binding
 // takes its unknown-model overload. The installed workers-types knows the Pro
@@ -125,9 +124,8 @@ export const ASK_TEMPERATURE = 0;
 
 // The cap on one call's output, reasoning included. It bounds what one call
 // can cost, which the monthly budget's reservation is derived from
-// (ask-usage.ts). The eval's
-// largest Flash/none output was 188 tokens, so the cap is never what ends a
-// reply; it is what stops a runaway one.
+// (ask-usage.ts). The eval's largest Flash/none output was 188 tokens, so the
+// cap is never what ends a reply; it is what stops a runaway one.
 export const ASK_MAX_OUTPUT_TOKENS = 2048;
 
 // Sent as `x-session-affinity`. Every request shares the system prompt, so one
@@ -395,7 +393,7 @@ export type AskModelInputs = {
 	temperature?: number;
 };
 
-export function askUserMessage(question: string, today: string): string {
+function askUserMessage(question: string, today: string): string {
 	return `Today's date: ${today}\n\nQuestion: ${question}`;
 }
 
