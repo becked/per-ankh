@@ -54,6 +54,12 @@ export const RETENTION_BUCKETS: readonly RetentionBucket[] = [
 			// line as a shape (source, measure, grouping and filter keys), never
 			// as values, and never here.
 			"ad_hoc_query_view",
+			// Explore ask model calls (query/handlers.ts): one row per Workers AI
+			// call, inserted before the call runs, so the retry after a failed
+			// check is a second row. Read only by the three 1h limits (per
+			// account, per IP, global). Metadata-free: the question text is on
+			// the access-log line, not here.
+			"query_ask",
 			// Season leaderboard reads (stats/handlers.ts): its own budget for the
 			// same reason, and not a share of global_stats_view's either — /players
 			// is anonymous where /stats is session-gated, so pooling them would

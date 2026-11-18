@@ -133,8 +133,12 @@ import type {
 	HomeSummaryEnv,
 	PlayerLeaderboardEnv,
 } from "./stats/handlers";
-import { handleQuery, handleQueryCatalog } from "./query/handlers";
-import type { QueryEnv } from "./query/handlers";
+import {
+	handleQuery,
+	handleQueryAsk,
+	handleQueryCatalog,
+} from "./query/handlers";
+import type { QueryAskEnv } from "./query/handlers";
 import {
 	STATS_PRECOMPUTE_CRONS,
 	STATS_WARM_CRON,
@@ -212,7 +216,7 @@ interface Env
 		ScreenshotsEnv,
 		ScreenshotModerationEnv,
 		GlobalStatsEnv,
-		QueryEnv,
+		QueryAskEnv,
 		HomeSummaryEnv,
 		OpponentsEnv,
 		PlayerLeaderboardEnv,
@@ -1397,6 +1401,19 @@ const ROUTES: RouteSpec[] = [
 		// `/v1/stats` accepts it: the gate is on spending an aggregation, and a
 		// hit spends none.
 		sharedCache: true,
+	},
+	// A question in plain language, translated into a selection by a Workers AI
+	// model (issue #380). Answers the canonical selection, which the client
+	// navigates to and GET /v1/query above answers. Session-gated, behind a KV
+	// off switch and three hourly limits on model calls (per account, per IP,
+	// global), none of them shared with the builder's budget: refusing here
+	// stops the ask input and leaves the builder working. Not shared-cacheable:
+	// a POST, and every answer is a model call charged to whoever asked.
+	{
+		method: "POST",
+		match: { kind: "path", path: "/v1/query/ask" },
+		route: "POST /v1/query/ask",
+		handler: (r, e) => handleQueryAsk(r, e),
 	},
 	// The home page's stats panels — the three bundle fields they draw, over the
 	// unfaceted `duel` slice. Public where /v1/stats is session-gated, because
