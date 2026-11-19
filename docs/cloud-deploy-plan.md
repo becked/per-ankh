@@ -98,7 +98,7 @@ openssl rand -base64 32
 npx wrangler secret put SSR_TRUSTED_KEY                 # frontend Worker (repo root)
 ```
 
-**`ADMIN_CLI_TOKEN`** is optional, and only `./per-ankh admin reparse-all` wants it. That sweep reparses the corpus headless — it parses each save locally and posts the result to `POST /v1/admin/games/:user_id/reparse-upload` — and it has no session to present, so that one endpoint also accepts this as a bearer token (`siteAdminFromCliToken`, `cloud/src/admin.ts`). It opens nothing else: every other `/v1/admin/*` route stays session-only and answers `404` to the token. No preflight requires it, because unset is a working state — the endpoint is then reachable only by a logged-in admin, which is how it worked before the sweep existed, and the symptom of a missing secret is the CLI refusing with a message rather than anything silent. It needs `ADMIN_DISCORD_ID` set in the same environment, and that Discord account to have signed in at least once: the admin's `user_id` is resolved from it for the `admin_reimport` audit row, and the request is refused if there is no such user.
+**`ADMIN_CLI_TOKEN`** is optional, and only the headless corpus sweeps want it: `./per-ankh admin reparse-all` and `./per-ankh admin reindex-all`. The first parses each save locally and posts the result to `POST /v1/admin/games/:user_id/reparse-upload`; the second posts each game id to `POST /v1/admin/games/:id/reindex`. Neither has a session to present, so those two endpoints also accept this as a bearer token (`siteAdminActor`, `cloud/src/admin.ts`). It opens nothing else: every other `/v1/admin/*` route stays session-only and answers `404` to the token. No preflight requires it, because unset is a working state — the two endpoints are then reachable only by a logged-in admin, which is how they worked before the sweeps existed, and the symptom of a missing secret is the CLI refusing with a message rather than anything silent. It needs `ADMIN_DISCORD_ID` set in the same environment, and that Discord account to have signed in at least once: the admin's `user_id` is resolved from it for the `admin_reimport` and `admin_reindex` audit rows, and the request is refused if there is no such user.
 
 ```bash
 openssl rand -base64 32
@@ -815,7 +815,7 @@ All commands from `cloud/` unless noted. Each authenticates via `wrangler login`
    npx wrangler secret put DISCORD_CLIENT_SECRET --env staging
    npx wrangler secret put CLOUDFLARE_PURGE_TOKEN --env staging  # the same zone token as prod
    npx wrangler secret put ADMIN_DISCORD_ID --env staging   # optional: staging site-admin
-   npx wrangler secret put ADMIN_CLI_TOKEN --env staging    # optional: reparse-all sweep (needs ADMIN_DISCORD_ID too)
+   npx wrangler secret put ADMIN_CLI_TOKEN --env staging    # optional: reparse-all / reindex-all sweeps (needs ADMIN_DISCORD_ID too)
    npx wrangler secret put SSR_TRUSTED_KEY --env staging    # same value on both staging Workers
    ```
 

@@ -29,15 +29,21 @@ export async function isSiteAdmin(
 // ---------- Headless admin (the CLI's credential) ----------
 //
 // The admin surface is otherwise session-only, which makes every admin sweep a
-// browser tab. `./per-ankh admin reparse-all` is the first sweep that runs
-// headless — it parses saves under tsx and needs the Worker to do the writes
-// — and the CLI has no session: it authenticates to Cloudflare, not to the
-// app. So one bearer token, scoped to the one endpoint that sweep posts to
-// (POST /v1/admin/games/:user_id/reparse-upload). Every other /v1/admin/*
-// handler stays session-only; a token that opens the whole admin surface
-// would be a standing credential for reads and deletes nothing asks for.
+// browser tab. The corpus sweeps in `./per-ankh admin` run headless and need
+// the Worker to do the writes, and the CLI has no session: it authenticates to
+// Cloudflare, not to the app. So one bearer token, scoped to the two endpoints
+// those sweeps post to:
 //
-// Unset means off, exactly as ADMIN_DISCORD_ID does: the endpoint is then
+//   - POST /v1/admin/games/:user_id/reparse-upload (`reparse-all`)
+//   - POST /v1/admin/games/:id/reindex (`reindex-all`)
+//
+// Both are writes the CLI cannot do for itself: each one runs the Worker's
+// own D1 pivot, and reimplementing that against D1 through wrangler would be
+// a second, diverging copy. Every other /v1/admin/* handler stays
+// session-only; a token that opens the whole admin surface would be a
+// standing credential for reads and deletes nothing asks for.
+//
+// Unset means off, exactly as ADMIN_DISCORD_ID does: those endpoints are then
 // reachable only by a logged-in admin, which is the state before this existed.
 export const ADMIN_CLI_TOKEN_SCHEME = "Bearer ";
 
@@ -108,4 +114,34 @@ export async function siteAdminFromCliToken(
 		return null;
 	}
 	return row.user_id;
+}
+
+// How the admin proved it. Both values name the same `user_id`, but not the
+// same claim: "session" is a logged-in admin in a browser, "cli" is a holder
+// of ADMIN_CLI_TOKEN with the id resolved from ADMIN_DISCORD_ID. Audit rows
+// record it because the two have different blast radii and different ways of
+// being revoked.
+export type AdminActingVia = "session" | "cli";
+
+export interface SiteAdminActor {
+	userId: string;
+	via: AdminActingVia;
+}
+
+/**
+ * The site admin behind a request to one of the token-scoped endpoints above,
+ * or null. The session path is tried first: it is what the browser sweeps
+ * use, and it costs one KV read. Every other admin handler calls isSiteAdmin
+ * directly, which is what keeps the token out of them.
+ */
+export async function siteAdminActor(
+	env: AdminCliAuthEnv,
+	request: Request,
+	session: { data: SessionData } | null,
+): Promise<SiteAdminActor | null> {
+	if (session && (await isSiteAdmin(env, session))) {
+		return { userId: session.data.user_id, via: "session" };
+	}
+	const cliUserId = await siteAdminFromCliToken(env, request);
+	return cliUserId ? { userId: cliUserId, via: "cli" } : null;
 }

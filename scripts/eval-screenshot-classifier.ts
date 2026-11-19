@@ -98,7 +98,13 @@ import {
 	STORED_WEBP_QUALITY,
 	storedDimensions,
 } from "../src/lib/screenshots/stored-variant";
-import { flagInt, flagString, parseFlags, printJson } from "./lib/cli";
+import {
+	flagInt,
+	flagPositiveInt,
+	flagString,
+	parseFlags,
+	printJson,
+} from "./lib/cli";
 import {
 	bold,
 	dim,
@@ -769,11 +775,7 @@ async function main(): Promise<void> {
 	}
 	const dryRun = flags["dry-run"] === true;
 	const asJson = flags.json === true;
-	let limit: number | null = null;
-	if (flags.limit !== undefined) {
-		limit = flagInt(flags, "limit", 0);
-		if (limit <= 0) throw new Error("--limit takes a positive integer");
-	}
+	const limit = flagPositiveInt(flags, "limit") ?? null;
 	let repeats = 1;
 	if (flags.repeat !== undefined) {
 		repeats = flagInt(flags, "repeat", 0);

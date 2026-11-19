@@ -26,9 +26,10 @@
 // makes the Worker recognize the game instead of creating a second one.
 //
 // Reads go through wrangler like every other admin command — D1 for the stale
-// list, R2 for `saves/<game_id>.zip` — so the token is scoped to the one write
-// the CLI cannot do for itself. Downloads are cached on disk and reused, so a
-// re-run after a failure costs no further remote reads.
+// list, R2 for `saves/<game_id>.zip` — so the token is scoped to the writes
+// the CLI cannot do for itself: this one and reindex-all's (worker-sweep.ts).
+// Downloads are cached on disk and reused, so a re-run after a failure costs
+// no further remote reads.
 //
 // One write is the command's own, and it is a cache clear rather than a
 // record: the stats bundles in KV, once at the end of a run that rewrote
@@ -39,12 +40,26 @@ import { mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 
-import { apiBase, d1Query, getTarget, isLocal, sqlStr } from "../wrangler";
+import { apiBase, d1Query, getTarget, sqlStr } from "../wrangler";
 import { clearStatsBundles } from "./cache";
 import { readCachedSave } from "../saves";
+import {
+	ADMIN_AUTH_REJECTED,
+	OUTCOME_COLUMNS,
+	gameLabel,
+	readWorkerError,
+	resolveAdminCliToken,
+	warnNoAdminCliToken,
+} from "../worker-sweep";
 import { uploaderPlayerIndexSql } from "../../../cloud/src/games-scope";
 import type { CommandOpts } from "../../lib/cli";
-import { flagInt, flagString, parseFlags, printJson } from "../../lib/cli";
+import {
+	flagInt,
+	flagPositiveInt,
+	flagString,
+	parseFlags,
+	printJson,
+} from "../../lib/cli";
 import { confirmTyping } from "../../lib/confirm";
 import {
 	bold,
@@ -55,9 +70,7 @@ import {
 	printTable,
 	trunc,
 	warn,
-	type Column,
 } from "../../lib/format";
-import { DEV_VARS_PATH, readDotVars } from "../../lib/dotvars";
 import { mapLimit } from "../../lib/map-limit";
 import { ParseError } from "../../../src/lib/parser/extract-zip";
 import {
@@ -68,13 +81,6 @@ import { extractAllGameData } from "../../../src/lib/parser/parsers/index";
 import { PARSER_VERSION } from "../../../src/lib/parser/types";
 import { gzipJson } from "../../../src/lib/parser/upload-helpers";
 import { validateCompletedGame } from "../../../src/lib/parser/validation";
-
-// The credential, by the same split purge.ts documents: committed config comes
-// from the environment table, a secret comes from the process environment,
-// because the CLI has no secret store of its own and the Worker holds its own
-// copy as a `wrangler secret`. Same name on both sides so there is no
-// translation to remember.
-const TOKEN_ENV = "ADMIN_CLI_TOKEN";
 
 // Each in-flight game holds a decompressed save and its parse tree in memory
 // (~20 MB of tree per file — docs/save-file-format.md, "DOM memory caution"),
@@ -115,25 +121,6 @@ interface Result {
 	outcome: Outcome;
 }
 
-const label = (g: StaleGame): string =>
-	g.display_name ?? g.game_name ?? g.game_id;
-
-function resolveToken(): string | null {
-	const fromEnv = process.env[TOKEN_ENV];
-	if (fromEnv !== undefined && fromEnv !== "") return fromEnv;
-	// Local only: `wrangler dev` loads cloud/.dev.vars, so the Worker's token
-	// is already written down there. Reading it is what keeps a local sweep
-	// from 401ing because the operator exported a different value than the
-	// Worker is running with — the same reason scripts/ux-review/discover.ts
-	// reads ADMIN_DISCORD_ID from that file. Never for a remote target: there
-	// the file has no authority over what the deployed Worker holds.
-	if (isLocal()) {
-		const fromDotVars = readDotVars(DEV_VARS_PATH)[TOKEN_ENV];
-		if (fromDotVars) return fromDotVars;
-	}
-	return null;
-}
-
 // The stale set. The destination is never a choice — the blob this sweep posts
 // is whatever the local parse produces, so it carries THIS checkout's
 // PARSER_VERSION — which is why the predicate is pinned to that version. It is
@@ -169,11 +156,6 @@ async function loadStale(
 	);
 }
 
-interface ApiError {
-	error?: string;
-	code?: string;
-}
-
 async function postReparse(
 	game: StaleGame,
 	zip: Buffer,
@@ -206,13 +188,7 @@ async function postReparse(
 			? { kind: "reimported", from: game.parser_version }
 			: { kind: "created" };
 	}
-	let body: ApiError = {};
-	try {
-		body = (await res.json()) as ApiError;
-	} catch {
-		// Non-JSON error (a proxy, or a 404 from the route table) — the status
-		// is all there is to report.
-	}
+	const body = await readWorkerError(res);
 	const detail = `${res.status} ${body.code ?? ""}`.trim();
 	// A same-or-older parse is the Worker refusing to downgrade a blob, which
 	// is correct and not a sweep failure: it happens when this checkout is
@@ -230,8 +206,7 @@ async function postReparse(
 		return {
 			kind: "failed",
 			why:
-				`404 — admin auth rejected (is ${TOKEN_ENV} the value the Worker ` +
-				`holds, and has that Discord account signed in?), or user_id ` +
+				`404 — ${ADMIN_AUTH_REJECTED}, or user_id ` +
 				`${game.user_id} is not a 21-char id`,
 		};
 	}
@@ -272,12 +247,6 @@ async function processOne(
 	}
 }
 
-const OUTCOME_COLUMNS: Column[] = [
-	{ header: "Game", width: 34 },
-	{ header: "Owner", width: 22 },
-	{ header: "Result", width: 44 },
-];
-
 function describe(outcome: Outcome): string {
 	switch (outcome.kind) {
 		case "reimported":
@@ -306,14 +275,7 @@ export async function run(args: string[], opts: CommandOpts): Promise<void> {
 		);
 	}
 	const userId = flagString(flags, "user");
-	let limit: number | undefined;
-	if (flags.limit !== undefined) {
-		// flagInt falls back for a bare `--limit`, `--limit 0` and `--limit abc`,
-		// and a LIMIT 0 sweep would report "nothing to do" the way a corpus
-		// already at PARSER_VERSION does.
-		limit = flagInt(flags, "limit", 0);
-		if (limit <= 0) throw new Error("--limit takes a positive integer");
-	}
+	const limit = flagPositiveInt(flags, "limit");
 	const concurrency = flagInt(flags, "concurrency", DEFAULT_CONCURRENCY);
 	const dryRun = flags["dry-run"] !== undefined;
 	const cacheDir = resolve(
@@ -360,7 +322,7 @@ export async function run(args: string[], opts: CommandOpts): Promise<void> {
 				{ header: "Stored", width: 10 },
 			],
 			games.map((g) => [
-				trunc(label(g), 34),
+				trunc(gameLabel(g), 34),
 				trunc(emdash(g.owner_name), 22),
 				g.parser_version,
 			]),
@@ -368,18 +330,9 @@ export async function run(args: string[], opts: CommandOpts): Promise<void> {
 		return;
 	}
 
-	const token = resolveToken();
+	const token = resolveAdminCliToken();
 	if (!token) {
-		warn(
-			`${TOKEN_ENV} is not set. The sweep posts each reparse to the Worker, ` +
-				`which accepts a sessionless admin only with this token:\n` +
-				`  export ${TOKEN_ENV}=…   (the value set via ` +
-				`\`wrangler secret put ${TOKEN_ENV}\`)\n` +
-				(isLocal()
-					? `  or put it in cloud/.dev.vars, which \`./per-ankh dev\` loads.\n`
-					: "") +
-				`Re-run with --dry-run to see what it would touch without it.`,
-		);
+		warnNoAdminCliToken();
 		process.exitCode = 1;
 		return;
 	}
@@ -457,7 +410,7 @@ export async function run(args: string[], opts: CommandOpts): Promise<void> {
 		printTable(
 			OUTCOME_COLUMNS,
 			notable.map((r) => [
-				trunc(label(r.game), 34),
+				trunc(gameLabel(r.game), 34),
 				trunc(emdash(r.game.owner_name), 22),
 				trunc(describe(r.outcome), 44),
 			]),
