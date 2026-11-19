@@ -1,5 +1,23 @@
 # Changelog
 
+## [2026-11-19-2602a4b] - 2026-11-19
+
+### Features
+
+- (explore) add average turn reaching 4 and 7 laws — [5da65cc](https://github.com/becked/per-ankh/commit/5da65cc23c9d74ed6464e135145b25051899f9dc)
+- (admin) add reindex-all CLI sweep — [954ddfb](https://github.com/becked/per-ankh/commit/954ddfb67b2894ddb560ca535dd2c33da6e28117)
+
+### Fixes
+
+- (cloud) date law milestones by law count, not adoption events — [019e28d](https://github.com/becked/per-ankh/commit/019e28dbe8d72b0df036dbc1eb9dfa5fde9623ee)
+- (stats) count opening laws by law class — [34750f6](https://github.com/becked/per-ankh/commit/34750f6895e86c76da1381dd9807b2715d7c4f95)
+
+### Other
+
+- (cloud) say what a NULL law milestone stores — [e1d0109](https://github.com/becked/per-ankh/commit/e1d01092fc4d81e87c0af80de7d6d55a695a837b)
+- (explore) add the 7-laws question to the ask eval — [de8b6ee](https://github.com/becked/per-ankh/commit/de8b6ee9a58bfd6dc1b41e3d16e7e9c589484f48)
+- (admin) share sweep helpers and pin the reindex CLI shape — [2497142](https://github.com/becked/per-ankh/commit/249714276151e6252cf58ed3e511bea621d39363)
+
 ## [2026-11-18-d0e8d10] - 2026-11-18
 
 ### Features
