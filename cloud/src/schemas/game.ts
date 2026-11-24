@@ -432,13 +432,14 @@ export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.28.0",
 	"2.29.0",
 	"2.30.0",
+	"2.31.0",
 ]);
 
 // The latest accepted version. Echoed back on stats responses and
 // embedded in stats cache keys so a parser bump (after the matching
 // extraction code lands) naturally orphans every old entry. Bump in
 // lockstep with the `KNOWN_PARSER_VERSIONS` addition above.
-export const CURRENT_PARSER_VERSION = "2.30.0";
+export const CURRENT_PARSER_VERSION = "2.31.0";
 
 // ----- Reusable atoms -----
 
@@ -472,6 +473,12 @@ const PlayerRosterEntrySchema = v.object({
 	// the deploy gap where the Worker is updated but the frontend still emits
 	// ≤2.26.0 blobs, and keeps older R2 blobs passing if they're re-validated.
 	is_save_owner: v.optional(v.boolean()),
+	// The seat's team, from the save's `<Team><PlayerTeam>` list (2.31.0+) —
+	// the team space `Game.isWinnerTeam` tests, and so what decides whether a
+	// seat won. `v.optional` for the same deploy-gap reason as the field
+	// above, and because every blob below 2.31.0 lacks it; `winningSeats`
+	// ($lib/winning-team) falls such a blob back to the single resolved seat.
+	team_id: v.optional(v.nullable(v.number())),
 });
 
 const PlayerInfoSchema = v.object({
@@ -565,6 +572,10 @@ const GameDetailsSchema = v.object({
 });
 
 const WinnerInfoSchema = v.object({
+	// The lowest seat on the winning team, the representative every
+	// single-valued winner column is built from — not the only winner. The
+	// team id beside it is what decides an outcome; see `winningSeats`
+	// ($lib/winning-team).
 	winner_player_xml_id: v.number(),
 	winner_team_id: v.nullable(v.number()),
 	victory_type: v.string(),

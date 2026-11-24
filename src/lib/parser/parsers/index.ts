@@ -171,9 +171,18 @@ export function extractAllGameData(
 	const unitFamilies = parseUnitFamilies(root);
 	const playerUnitsProduced = parsePlayerUnitsProduced(root);
 	const pings = parsePings(root);
+	// Each seat's team, indexed by player xml id. Three consumers — winner
+	// resolution, the free-specialist adjacency walk, and the roster's
+	// `team_id` — so it is parsed once here and handed to each.
+	const teamAssignments = parseTeamAssignments(root);
 
 	// 2. Match metadata (depends on parsed players for winner resolution).
-	const matchMetadata = parseMatchMetadata(root, players, entryName);
+	const matchMetadata = parseMatchMetadata(
+		root,
+		players,
+		teamAssignments,
+		entryName,
+	);
 
 	// 3. Derivations — view-ready aggregates that consumers (game-detail
 	//    tabs) read directly.
@@ -215,10 +224,7 @@ export function extractAllGameData(
 	);
 	// The adjacency walk runs once; both tile projections below read its
 	// result rather than repeating it.
-	const freeSpecialists = deriveFreeSpecialists(
-		tiles,
-		parseTeamAssignments(root),
-	);
+	const freeSpecialists = deriveFreeSpecialists(tiles, teamAssignments);
 	const improvementData = deriveImprovementData(
 		tiles,
 		cities,
@@ -322,6 +328,7 @@ export function extractAllGameData(
 		is_human: p.isHuman,
 		online_id: p.onlineId,
 		is_save_owner: p.isSaveOwner,
+		team_id: teamAssignments[p.xmlId] ?? null,
 	}));
 
 	return {

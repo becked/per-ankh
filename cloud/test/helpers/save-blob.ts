@@ -221,6 +221,14 @@ export interface UploadFixtureOpts {
 	// build has to be visible to the eligibility gate — a wonder it finished is
 	// off the board for the humans in that game.
 	readonly aiPlayer?: boolean;
+	// Team id per seat index, as the save's `<Team><PlayerTeam>` list gives it
+	// (PlayerRosterEntry.team_id, 2.31.0+). Omit it to model a blob below that
+	// version, which carries no team at all and so resolves a win to the one
+	// seat `winnerIndex` names. Supply it — `[0, 0, 1, 1]` is a 2v2 — and the
+	// winner's team becomes `winner_team_id`, which is what makes every seat
+	// on it a winner. One entry per seat; a shorter list is a fixture-authoring
+	// error.
+	readonly teams?: readonly number[];
 	// The save's identity and progress, for challenge-map tests: a map is a
 	// turn-1 save that isn't over, and a run of it carries the map's
 	// xml_game_id at a later turn. Defaults model a finished 100-turn match
@@ -289,6 +297,17 @@ function buildMinimalGameBlob(
 	const emptyOnlineId = new Set(opts.emptyOnlineIdSeats ?? []);
 	const nationOf = (index: number): string | null =>
 		nationless.has(index) ? null : NATIONS[index];
+	const teams = opts.teams;
+	if (teams && teams.length !== seats.length) {
+		throw new Error(
+			`save-blob fixture: teams has ${teams.length} entries for ${seats.length} seats`,
+		);
+	}
+	const teamOf = (index: number): number | null => teams?.[index] ?? null;
+	// A win is per team. With no `teams` the blob carries no team id and
+	// `winningSeats` falls back to the single resolved seat, which is what
+	// every fixture predating this option relies on.
+	const winnerTeamId = winnerIndex === null ? null : teamOf(winnerIndex);
 	const players = seats.map((s) => ({
 		player_name: `Player ${s.index}`,
 		nation: nationOf(s.index),
@@ -308,6 +327,7 @@ function buildMinimalGameBlob(
 			: emptyOnlineId.has(s.index)
 				? ""
 				: `steam:${String(s.index + 1).padStart(15, "0")}`,
+		...(teams ? { team_id: teamOf(s.index) } : {}),
 	}));
 	// yield_history / player_history — the indexer pivots these back into one
 	// game_player_turn row per (player, turn).
@@ -387,7 +407,7 @@ function buildMinimalGameBlob(
 					? null
 					: {
 							winner_player_xml_id: winnerIndex,
-							winner_team_id: null,
+							winner_team_id: winnerTeamId,
 							victory_type: "VICTORY_AMBITION",
 						},
 		},

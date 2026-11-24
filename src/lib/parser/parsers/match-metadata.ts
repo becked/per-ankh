@@ -24,6 +24,10 @@ import type { Player } from "./players.js";
 export function parseMatchMetadata(
 	root: Record<string, unknown>,
 	players: Player[],
+	// Each seat's team, indexed by player xml id (`parseTeamAssignments`).
+	// Passed in rather than parsed here because the roster and the
+	// free-specialist walk read the same list — see extractAllGameData.
+	teamAssignments: number[],
 	entryName: string | null,
 ): MatchMetadata {
 	const xmlGameId = requireStr(root["@_GameId"], "Root.GameId");
@@ -65,7 +69,6 @@ export function parseMatchMetadata(
 	const victoryEnabled = parseVictoryEnabledList(root);
 	const victoryConditions =
 		victoryEnabled.length > 0 ? victoryEnabled.join("+") : null;
-	const teamAssignments = parseTeamAssignments(root);
 
 	const gameOver = "GameOver" in gameNode;
 
@@ -583,6 +586,12 @@ function detectRawWinner(
  *
  * If the raw winner already carries a player_xml_id (Victory-element form),
  * returns it as-is.
+ *
+ * The player id is the LOWEST seat on the winning team, not the only winner:
+ * `indexOf` takes the first match and a team can hold several players. It is
+ * the representative seat every single-valued winner column and label is
+ * built from; `winner_team_id` beside it is what decides an outcome, via
+ * `winningSeats` ($lib/winning-team).
  */
 function resolveWinner(
 	raw: RawWinnerInfo | { player_xml_id: number; victory_type: string },

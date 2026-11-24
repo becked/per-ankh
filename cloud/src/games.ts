@@ -37,6 +37,7 @@ import {
 	pricesByTurn,
 } from "../../src/lib/game-detail/gdp-basket";
 import { compareSemver } from "../../src/lib/utils/semver";
+import { winningSeats, type WinnerRecord } from "../../src/lib/winning-team";
 import { NATION_NAMES } from "./generated/nation-names";
 import { WONDER_CULTURE_PREREQ } from "./generated/wonders";
 import { sessionFromRequest } from "./session";
@@ -458,14 +459,17 @@ interface GameRowInputs {
 // callers live here, so it stays module-private.
 function deriveUploaderColumns(
 	roster: PlayerRosterEntry[],
-	winner: { winner_player_xml_id: number } | null | undefined,
+	winner: WinnerRecord | null | undefined,
 	uploaderIndex: number | null,
 ): { userNation: string | null; userWon: boolean | null } {
 	if (uploaderIndex === null) return { userNation: null, userWon: null };
 	const uploader = roster.find((p) => p.player_index === uploaderIndex);
 	return {
 		userNation: uploader?.nation ?? null,
-		userWon: winner ? winner.winner_player_xml_id === uploaderIndex : null,
+		// A win is per team, so the uploader won if any seat on the winning
+		// team is theirs — not only if they are the representative seat the
+		// blob resolved (#384).
+		userWon: winner ? winningSeats(winner, roster).has(uploaderIndex) : null,
 	};
 }
 
@@ -604,7 +608,6 @@ interface SummaryRowInputs {
 	gameId: string;
 	blob: FullGameData;
 	uploaderIndex: number | null;
-	winnerIndex: number | null;
 }
 
 // Insert one row per roster entry. 24 columns × 1 row = 24 binds per stmt,
@@ -614,8 +617,12 @@ function buildSummaryStatements(
 	db: QueryableD1,
 	inp: SummaryRowInputs,
 ): D1PreparedStatement[] {
-	const { gameId, blob, uploaderIndex, winnerIndex } = inp;
+	const { gameId, blob, uploaderIndex } = inp;
 	const roster = blob.player_roster as PlayerRosterEntry[];
+	// Every seat on the winning team, not just the one the blob resolved — a
+	// 2v2's other winner is a winner (#384). Derived here rather than passed
+	// in so the upload path and the reindex path cannot disagree.
+	const winners = winningSeats(blob.match_metadata.winner, roster);
 	const ctx = buildSummaryGameContext(blob);
 
 	const stmt = db.prepare(
@@ -660,7 +667,7 @@ function buildSummaryStatements(
 			s.tenth_city_turn,
 			s.fourth_law_turn,
 			s.seventh_law_turn,
-			winnerIndex !== null && p.player_index === winnerIndex ? 1 : 0,
+			winners.has(p.player_index) ? 1 : 0,
 			s.vp_margin,
 			// The seat's multiplayer online id — linking data for the
 			// played-games leaderboard (matched against user_online_ids),
@@ -2268,7 +2275,6 @@ export async function handleGameUpload(
 	// and is_public are preserved from the existing row; a first upload
 	// instead seeds is_public from the uploader's default-visibility
 	// preference (see isPublicForUpload).
-	const winnerIndex = blob.match_metadata.winner?.winner_player_xml_id ?? null;
 	const gameRow = buildGameRow({
 		gameId,
 		userId,
@@ -2285,7 +2291,6 @@ export async function handleGameUpload(
 		gameId,
 		blob,
 		uploaderIndex,
-		winnerIndex,
 	});
 	const gptStmts = buildGamePlayerTurnStatements(env.SHARE_DB, gameId, blob);
 	const familyCityStmts = buildFamilyCityStatements(env.SHARE_DB, gameId, blob);
@@ -4321,8 +4326,6 @@ export async function handleAdminReindex(
 		new TextDecoder().decode(decompressed),
 	) as FullGameData;
 
-	const winnerIndex = blob.match_metadata.winner?.winner_player_xml_id ?? null;
-
 	// Delete-then-rebuild all derived child tables in a single batch. The
 	// games row is never INSERT OR REPLACEd, so its ON DELETE CASCADE doesn't
 	// fire — these explicit DELETEs are what clear the prior child rows.
@@ -4369,7 +4372,6 @@ export async function handleAdminReindex(
 			gameId,
 			blob,
 			uploaderIndex,
-			winnerIndex,
 		}),
 		...buildGamePlayerTurnStatements(env.SHARE_DB, gameId, blob),
 		...buildFamilyCityStatements(env.SHARE_DB, gameId, blob),
