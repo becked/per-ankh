@@ -72,6 +72,7 @@ interface ListedPlayer {
 	player_name: string;
 	nation: string | null;
 	is_human: boolean;
+	is_winner: boolean;
 	user_id: string | null;
 	slug: string | null;
 	avatar_url: string | null;
@@ -95,6 +96,7 @@ interface SeedSeat {
 	readonly human?: boolean;
 	readonly uploader?: boolean;
 	readonly onlineId?: string | null;
+	readonly winner?: boolean;
 }
 
 async function seedSeats(gameId: string, seats: SeedSeat[]): Promise<void> {
@@ -102,8 +104,8 @@ async function seedSeats(gameId: string, seats: SeedSeat[]): Promise<void> {
 		await env.SHARE_DB.prepare(
 			`INSERT INTO player_summaries (
 				game_id, player_index, player_name, nation, is_human, is_uploader,
-				online_id
-			) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+				online_id, is_winner
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 		)
 			.bind(
 				gameId,
@@ -113,6 +115,7 @@ async function seedSeats(gameId: string, seats: SeedSeat[]): Promise<void> {
 				(seat.human ?? true) ? 1 : 0,
 				(seat.uploader ?? false) ? 1 : 0,
 				seat.onlineId ?? null,
+				(seat.winner ?? false) ? 1 : 0,
 			)
 			.run();
 	}
@@ -394,6 +397,24 @@ describe("GET /v1/games", () => {
 		expect(players[2].nation).toBe("NATION_GREECE");
 		expect(players[2].user_id).toBeNull();
 		expect(players[2].avatar_url).toBeNull();
+	});
+
+	it("?players=1 flags every seat on the winning team", async () => {
+		const user = await makeUser({ discordUsername: "list-team-win" });
+		const gameId = await seedGame(user, { gameName: "team-win" });
+		// A 2v2 the uploader lost: seats 1 and 3 won together.
+		await seedSeats(gameId, [
+			{ index: 0, name: "Uploader", nation: "NATION_ASSYRIA", uploader: true },
+			{ index: 1, name: "Rival A", nation: "NATION_AKSUM", winner: true },
+			{ index: 2, name: "Ally", nation: "NATION_EGYPT" },
+			{ index: 3, name: "Rival B", nation: "NATION_BABYLONIA", winner: true },
+		]);
+
+		const body = await expectOk<GamesListResponse>(
+			await request.get({ path: "/v1/games?players=1", as: user }),
+		);
+		const players = body.games[0].players ?? [];
+		expect(players.map((p) => p.is_winner)).toEqual([false, true, false, true]);
 	});
 
 	it("resolves a human seat to the account its online_id names, and nobody else", async () => {

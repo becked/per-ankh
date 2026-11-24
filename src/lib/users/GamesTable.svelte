@@ -42,6 +42,7 @@
 		seatLabel,
 	} from "$lib/utils/formatting";
 	import { mapScriptLabel, mapSizeLabel } from "$lib/map-settings";
+	import { teamWinNations } from "$lib/winning-team";
 	import {
 		GAMES_COLUMNS,
 		gameOpponents,
@@ -373,14 +374,17 @@
 						     nation is the row's own. Both parts are missing often
 						     enough (a game that ended with no recorded winner, an
 						     observer upload) that they join rather than print a dash
-						     apiece under a badge that is already one. -->
+						     apiece under a badge that is already one. A team win names
+						     every winning nation, from the roster's is_winner seats;
+						     the row's winner_nation names only one of them (#384). -->
+						{@const winners =
+							teamWinNations((game.players ?? []).filter((p) => p.is_winner)) ??
+							(game.winner_nation ? nationName(game.winner_nation) : null)}
 						{@const decided = [
 							game.victory_type
 								? formatEnum(game.victory_type, "VICTORY_")
 								: null,
-							game.user_won !== true && game.winner_nation
-								? `${nationName(game.winner_nation)} won`
-								: null,
+							game.user_won !== true && winners ? `${winners} won` : null,
 						]
 							.filter((part) => part !== null)
 							.join(" · ")}

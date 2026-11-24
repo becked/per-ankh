@@ -235,6 +235,10 @@ export interface GameListPlayer {
 	player_name: string;
 	nation: string | null;
 	is_human: boolean;
+	// Whether this seat is on the winning team. A team game has more than one,
+	// so the Games table names every winning nation from these rather than
+	// from the row's single `winner_nation`.
+	is_winner: boolean;
 	// The account whose online_id claims this seat, when exactly one does;
 	// null otherwise, including for every AI seat. Hand it to ProfileLink,
 	// which renders its children bare on a null id.

@@ -9,6 +9,7 @@
 	import ChunkFallback from "$lib/ui/ChunkFallback.svelte";
 	import { leadPlayerId, resolveGamePlayers, uploaderPlayer } from "./helpers";
 	import { hasVictoryPoints, victoryPointsByPlayer } from "./victory-points";
+	import { winningSeats } from "$lib/winning-team";
 	import { getGameTabState, type GameTabId } from "./game-tabs.svelte";
 	import { LAZY_TABS, lazyTab } from "./tab-components.svelte";
 	import OverviewTab from "./OverviewTab.svelte";
@@ -105,6 +106,15 @@
 		leadPlayerId(resolvedPlayers, uploaderPlayerId, saveOwnerPlayerId),
 	);
 
+	// Every seat on the winning team. Old World decides a win per team
+	// (`Game.isWinnerTeam`), and the blob resolves it to the lowest seat on
+	// that team, so the Nations cards would badge one of a 2v2's two winners
+	// (#384). Here rather than in the tab because the roster the team ids live
+	// on is the blob's, which only this component holds.
+	const winningPlayerIds = $derived(
+		winningSeats(game.match_metadata.winner, game.player_roster),
+	);
+
 	const victoryPointsEnabled = $derived(
 		hasVictoryPoints(game.game_details.victory_conditions),
 	);
@@ -131,6 +141,7 @@
 
 {#if tab === "overview"}
 	<OverviewTab
+		{winningPlayerIds}
 		gameDetails={game.game_details}
 		eventLogs={game.event_logs}
 		players={resolvedPlayers}

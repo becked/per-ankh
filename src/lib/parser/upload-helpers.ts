@@ -2,6 +2,7 @@
 // BulkReparseModal for re-uploading an existing game's save). Extracted to
 // avoid divergence between the two modals.
 
+import { winningSeats } from "../winning-team";
 import type { FullGameData, PlayerRosterEntry } from "./types";
 import type { WorkerMessage } from "./worker";
 
@@ -80,8 +81,8 @@ export interface PlayerChoice {
 // Build the human-player choices for a parsed save: roster fields plus the
 // per-player city count and winner flag the picker renders. City counts come
 // from city_statistics (owner_nation match, the same derivation the game-detail
-// Overview uses); the winner is resolved from match_metadata.winner against the
-// roster's player_index (both are XML player-id space — see PlayerRosterEntry).
+// Overview uses); the winner is every seat on the winning team, since Old World
+// decides a win per team and a 2v2 has two of them (winningSeats, #384).
 export function playerChoices(data: FullGameData): PlayerChoice[] {
 	const cityCountByNation = new Map<string, number>();
 	for (const c of data.city_statistics.cities) {
@@ -91,7 +92,7 @@ export function playerChoices(data: FullGameData): PlayerChoice[] {
 			(cityCountByNation.get(c.owner_nation) ?? 0) + 1,
 		);
 	}
-	const winnerIndex = data.match_metadata.winner?.winner_player_xml_id ?? null;
+	const winners = winningSeats(data.match_metadata.winner, data.player_roster);
 	return data.player_roster
 		.filter((p) => p.is_human)
 		.map((p) => ({
@@ -101,7 +102,7 @@ export function playerChoices(data: FullGameData): PlayerChoice[] {
 			online_id: p.online_id,
 			is_save_owner: p.is_save_owner,
 			city_count: p.nation ? (cityCountByNation.get(p.nation) ?? 0) : 0,
-			is_winner: winnerIndex !== null && p.player_index === winnerIndex,
+			is_winner: winners.has(p.player_index),
 		}));
 }
 

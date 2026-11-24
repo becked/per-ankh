@@ -79,6 +79,11 @@ interface CountRow {
 	cnt: number;
 }
 
+interface WinnerSeatRow {
+	player_name: string;
+	nation: string | null;
+}
+
 export async function runList(
 	argv: string[],
 	opts: CommandOpts,
@@ -155,15 +160,24 @@ export async function runDetail(
 		`SELECT COUNT(*) AS cnt FROM player_summaries WHERE game_id = ${idStr}`,
 		`SELECT COUNT(*) AS cnt FROM game_player_turn WHERE game_id = ${idStr}`,
 		`SELECT COUNT(*) AS cnt FROM game_screenshots WHERE game_id = ${idStr}`,
+		`SELECT player_name, nation FROM player_summaries
+		 WHERE game_id = ${idStr} AND is_winner = 1 ORDER BY player_index`,
 	]);
-	const [gameRows, ownerRows, summaryCountRows, turnCountRows, shotCountRows] =
-		[
-			batch[0] as GameRow[],
-			batch[1] as OwnerRow[],
-			batch[2] as CountRow[],
-			batch[3] as CountRow[],
-			batch[4] as CountRow[],
-		];
+	const [
+		gameRows,
+		ownerRows,
+		summaryCountRows,
+		turnCountRows,
+		shotCountRows,
+		winnerSeatRows,
+	] = [
+		batch[0] as GameRow[],
+		batch[1] as OwnerRow[],
+		batch[2] as CountRow[],
+		batch[3] as CountRow[],
+		batch[4] as CountRow[],
+		batch[5] as WinnerSeatRow[],
+	];
 	const game = gameRows[0];
 	if (!game) {
 		throw new Error(`Game not found: ${gameId}`);
@@ -171,6 +185,14 @@ export async function runDetail(
 	const owner = ownerRows[0];
 
 	const screenshotCount = shotCountRows[0]?.cnt ?? 0;
+
+	// A team win has more than one winning seat, and `games.winner_name` /
+	// `winner_nation` name only the lowest of them (#384). Name each seat the
+	// way the single-winner form does: leader name, else nation.
+	const winner =
+		winnerSeatRows.length > 1
+			? winnerSeatRows.map((r) => r.player_name || emdash(r.nation)).join(" + ")
+			: emdash(game.winner_name ?? game.winner_nation);
 
 	if (opts.json) {
 		printJson({
@@ -199,7 +221,7 @@ export async function runDetail(
 		["AI Aggression", emdash(game.opponent_level)],
 		["User nation", emdash(game.user_nation)],
 		["User won", game.user_won == null ? "—" : game.user_won ? "yes" : "no"],
-		["Winner", emdash(game.winner_name ?? game.winner_nation)],
+		["Winner", winner],
 		["Victory type", emdash(game.victory_type)],
 		["Is public", game.is_public ? "yes" : "no"],
 		["Blob version", String(game.blob_version)],

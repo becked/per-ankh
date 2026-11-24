@@ -44,6 +44,7 @@
 		leadPlayerId = null,
 		uploaderPlayerId = null,
 		userDisplayName = null,
+		winningPlayerIds,
 	}: {
 		gameDetails: GameDetails;
 		players: DetailPlayer[];
@@ -75,6 +76,10 @@
 		// label for the uploader's nation card when the save itself has no
 		// leader name — Old World writes "" for unnamed solo games.
 		userDisplayName?: string | null;
+		// Every seat on the winning team, which is more than one in a team
+		// game — a win is per team in Old World (#384). Resolved by GameTab,
+		// which holds the roster the team ids live on.
+		winningPlayerIds: ReadonlySet<number>;
 	} = $props();
 
 	const UNIT_CLASS_ABBREV: Record<UnitClass, string> = {
@@ -168,9 +173,7 @@
 					nation: p.nation,
 					isHuman: p.is_human,
 					isUploader,
-					isWinner:
-						gameDetails.winner_player_id != null &&
-						p.playerId === gameDetails.winner_player_id,
+					isWinner: winningPlayerIds.has(p.playerId),
 					finalMilitary: lastPoint?.military_power ?? null,
 					cityCount: ownedByPlayer(
 						cityStatistics.cities,

@@ -21,7 +21,7 @@
 // have to agree on it and only this direction is importable — cloud/ already
 // imports src/lib/* modules (card-svg.ts does), while the browser bundle
 // cannot reach a Worker module.
-export const OG_CARD_VERSION = 1;
+export const OG_CARD_VERSION = 2;
 
 // ── Pixel size ──
 //
