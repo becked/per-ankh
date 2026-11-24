@@ -36,6 +36,7 @@ import {
 	prosperityName,
 } from "../../../src/lib/map-settings";
 import { CARD_HEIGHT, CARD_WIDTH } from "../../../src/lib/og-card";
+import { winnerTileLabel } from "../../../src/lib/winning-team";
 import { getNationChartColor } from "../../../src/lib/config/nations";
 import { CHART_REFERENCE_LINE_COLOR } from "../../../src/lib/config/charts";
 import { withEndStateTotal } from "../../../src/lib/utils/victory-point-series";
@@ -161,7 +162,9 @@ function round(n: number): number {
 
 // The component's derivations, in its order. Each mirrors a `$derived` in
 // RecentSaveCard.svelte and carries the same fallbacks — see there for why
-// each one is what it is.
+// each one is what it is. The Winner tile's label is the exception: both
+// cards call `winnerTileLabel` ($lib/winning-team), because a team win makes
+// it more than a format and two renderings of it would drift.
 function orderPlayers(game: PublicGameCard): PublicGameCardPlayer[] {
 	// Uploader first, then by player_index — anchors sparkline colours.
 	return [...game.players].sort((a, b) => {
@@ -182,18 +185,6 @@ function featuredPlayer(
 	);
 }
 
-function winnerLabel(game: PublicGameCard): string {
-	const winning = game.players.find(
-		(p) => p.is_winner || p.nation === game.winner_nation,
-	);
-	const name = game.winner_name ?? winning?.player_name ?? null;
-	if (name && game.winner_nation) {
-		return `${name} (${nationName(game.winner_nation)})`;
-	}
-	if (game.winner_nation) return nationName(game.winner_nation);
-	return "—";
-}
-
 interface Tile {
 	label: string;
 	value: string;
@@ -209,7 +200,7 @@ function headerTiles(game: PublicGameCard): Tile[] {
 	const isMultiplayer = game.players.filter((p) => p.is_human).length > 1;
 	return [
 		{ label: "Player", value: humanNation ? nationName(humanNation) : "—" },
-		{ label: "Winner", value: winnerLabel(game) },
+		{ label: "Winner", value: winnerTileLabel(game) },
 		{
 			label: "Victory Type",
 			value: game.victory_type

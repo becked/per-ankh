@@ -1,4 +1,4 @@
-// Who won a game — the one answer every outcome test reads.
+// Who won a game — the one answer every outcome test and winner label reads.
 //
 // Old World decides a win per TEAM, not per player. `Game.isWinnerTeam`
 // (`Game.cs:4541`) tests a `TeamType` against `mdTeamVictory`,
@@ -12,6 +12,8 @@
 // `MatchMetadata.winner` collapses that team to one seat — the lowest player
 // index on it — so comparing a seat against `winner_player_xml_id` alone marks
 // every other teammate a loser (#384). Compare against this module instead.
+
+import { nationName } from "./utils/formatting";
 
 /** The blob's resolved winner, as `MatchMetadata.winner` carries it. */
 export interface WinnerRecord {
@@ -53,4 +55,47 @@ export function winningSeats(
 	return mates.length > 0
 		? new Set(mates)
 		: new Set([winner.winner_player_xml_id]);
+}
+
+/** A game row + roster as the two link-preview card surfaces read it. */
+export interface WinnerTileGame {
+	winner_name: string | null;
+	winner_nation: string | null;
+	players: readonly {
+		player_name: string;
+		nation: string | null;
+		is_winner: boolean;
+	}[];
+}
+
+/**
+ * The "Winner" stat-tile value, shared by the home feed's card
+ * (`RecentSaveCard.svelte`) and the Worker's rendering of the same card
+ * (`cloud/src/og-card/card-svg.ts`) so the two cannot drift.
+ *
+ * One winner reads "<leader name> (<Nation>)", falling back to the nation
+ * alone and then a dash. A team win names the nations and nothing else: the
+ * tile is hard-clipped by a `clipPath` with no ellipsis, so two leader names
+ * do not fit, and which nations won is what the tile is there to carry.
+ * `games.winner_name` / `winner_nation` stay single-valued — they name the
+ * representative seat — so the team form reads the roster's `is_winner` rows,
+ * which the Worker sets for every seat on the winning team.
+ */
+export function winnerTileLabel(game: WinnerTileGame): string {
+	const winners = game.players.filter((p) => p.is_winner);
+	if (winners.length > 1) {
+		const nations = winners
+			.map((p) => p.nation)
+			.filter((n): n is string => n !== null);
+		if (nations.length > 0) return nations.map(nationName).join(" + ");
+	}
+	const winning = game.players.find(
+		(p) => p.is_winner || p.nation === game.winner_nation,
+	);
+	const name = game.winner_name ?? winning?.player_name ?? null;
+	if (name && game.winner_nation) {
+		return `${name} (${nationName(game.winner_nation)})`;
+	}
+	if (game.winner_nation) return nationName(game.winner_nation);
+	return "—";
 }

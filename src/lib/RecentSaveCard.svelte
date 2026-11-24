@@ -14,6 +14,7 @@
 		nationName,
 	} from "$lib/utils/formatting";
 	import { withEndStateTotal } from "$lib/utils/victory-point-series";
+	import { winnerTileLabel } from "$lib/winning-team";
 	import {
 		mapScriptLabel,
 		mapSizeLabel,
@@ -58,19 +59,10 @@
 			null,
 	);
 
-	// Winner stat box label: "<player_name> (<Nation>)" mirroring
-	// GameDetailView. Falls back to nation alone, then a dash.
-	const winnerLabel = $derived.by(() => {
-		const winningPlayer = game.players.find(
-			(p) => p.is_winner || p.nation === game.winner_nation,
-		);
-		const winnerName = game.winner_name ?? winningPlayer?.player_name ?? null;
-		if (winnerName && game.winner_nation) {
-			return `${winnerName} (${nationName(game.winner_nation)})`;
-		}
-		if (game.winner_nation) return nationName(game.winner_nation);
-		return "—";
-	});
+	// Winner stat box label — shared with the Worker's rendering of this same
+	// card (cloud/src/og-card/card-svg.ts) rather than written twice, because
+	// a team win makes it more than a format.
+	const winnerLabel = $derived(winnerTileLabel(game));
 
 	// Momentum takes over for duels: both humans carry a fitted per-turn win
 	// probability, so the sparkline shows who was winning rather than raw VP.

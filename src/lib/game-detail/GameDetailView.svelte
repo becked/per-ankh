@@ -3,6 +3,7 @@
 	import { Tabs } from "bits-ui";
 	import { formatEnum, nationName } from "$lib/utils/formatting";
 	import { mapScriptLabel } from "$lib/map-settings";
+	import { winningSeats } from "$lib/winning-team";
 	import SpriteIcon from "./SpriteIcon.svelte";
 	import GameTab from "./GameTab.svelte";
 	import {
@@ -62,6 +63,36 @@
 	const userDisplayName = $derived(game.user_display_name ?? null);
 	const userWon = $derived(game.user_won ?? null);
 
+	// The Winner card's text. A win is per team in Old World, so a team game
+	// names every seat on the winning team — "Juljette (Aksum) + Larrrik
+	// (Babylonia)" — rather than the one seat the blob resolved it to (#384).
+	// The single-seat wording below is unchanged; `games.winner_name` /
+	// `winner_nation` stay single-valued and keep naming that seat.
+	const winnerLabel = $derived.by(() => {
+		const seats = winningSeats(game.match_metadata.winner, game.player_roster);
+		if (seats.size > 1) {
+			const label = [...seats]
+				.map((id) => {
+					const p = gameDetails.players.find((x) => x.player_id === id);
+					const nation = p?.nation ? nationName(p.nation) : null;
+					if (p?.player_name && nation) return `${p.player_name} (${nation})`;
+					return nation ?? p?.player_name ?? null;
+				})
+				.filter((part) => part !== null)
+				.join(" + ");
+			if (label) return label;
+		}
+		if (!gameDetails.winner_civilization) return "-";
+		const nation = nationName(gameDetails.winner_civilization);
+		// Prefer the save's in-game leader name. Only when it's empty (Old
+		// World writes "" for solo saves whose player never set a custom name)
+		// do we fall back to the uploader's account name, and only if they won.
+		if (gameDetails.winner_name)
+			return `${gameDetails.winner_name} (${nation})`;
+		if (userWon && userDisplayName) return `${userDisplayName} (${nation})`;
+		return nation;
+	});
+
 	// Tab triggers styled as chip-bar pills, matching the aggregate-stats
 	// subtabs (src/lib/stats/StatsView.svelte): borderless, fill-based state
 	// (active = surface-raised, inactive = surface) inside a floating tray.
@@ -111,23 +142,7 @@
 				Winner
 			</p>
 			<p class="text-lg font-bold" style="color: rgb(var(--color-bright));">
-				{#if gameDetails.winner_civilization}
-					{#if gameDetails.winner_name}
-						<!-- Prefer the save's in-game leader name. Only when it's
-						     empty (Old World writes "" for solo saves whose player
-						     never set a custom name) do we fall back to the
-						     uploader's account name, and only if they won. -->
-						{gameDetails.winner_name} ({nationName(
-							gameDetails.winner_civilization,
-						)})
-					{:else if userWon && userDisplayName}
-						{userDisplayName} ({nationName(gameDetails.winner_civilization)})
-					{:else}
-						{nationName(gameDetails.winner_civilization)}
-					{/if}
-				{:else}
-					-
-				{/if}
+				{winnerLabel}
 			</p>
 		</div>
 
