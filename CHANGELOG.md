@@ -1,5 +1,17 @@
 # Changelog
 
+## [2026-11-24-5b068e6] - 2026-11-24
+
+### Fixes
+
+- credit a team game's win to every seat on the winning team — [c7e1f51](https://github.com/becked/per-ankh/commit/c7e1f51f66bd3ba42b84ed0b1fad19e8b6cf12d3)
+- name the whole winning team on the four surfaces that name a winner — [399ffe2](https://github.com/becked/per-ankh/commit/399ffe23dd43e3d45501b36a69fcff19ef7f09aa)
+- name every winning seat on the remaining winner surfaces — [96369cb](https://github.com/becked/per-ankh/commit/96369cbe108f3cc5232345657071c1645097e674)
+
+### Other
+
+- use placeholder names in the team-win fixtures and comment — [526c4ad](https://github.com/becked/per-ankh/commit/526c4adf6ef40d87b5192a4f3e579d0fdbed4d26)
+
 ## [2026-11-24-5e37641] - 2026-11-24
 
 ### Features
