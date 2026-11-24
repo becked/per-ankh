@@ -75,7 +75,7 @@ async function loadIsWinner(gameId: string): Promise<number[]> {
 
 describe("POST /v1/games for a team game", () => {
 	it("flags every seat on the winning team, not just the resolved one", async () => {
-		const owner = await makeUser({ discordUsername: "larrrik" });
+		const owner = await makeUser({ discordUsername: "team-winner" });
 		// Seat 1 — a winner the blob does not name.
 		const gameId = await uploadTeamGame({
 			as: owner,
@@ -88,7 +88,7 @@ describe("POST /v1/games for a team game", () => {
 	});
 
 	it("leaves the losing team's seats alone", async () => {
-		const owner = await makeUser({ discordUsername: "shaun" });
+		const owner = await makeUser({ discordUsername: "team-loser" });
 		const gameId = await uploadTeamGame({
 			as: owner,
 			uploaderIndex: 2,

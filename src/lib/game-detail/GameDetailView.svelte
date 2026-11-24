@@ -64,7 +64,7 @@
 	const userWon = $derived(game.user_won ?? null);
 
 	// The Winner card's text. A win is per team in Old World, so a team game
-	// names every seat on the winning team — "Juljette (Aksum) + Larrrik
+	// names every seat on the winning team — "Ezana (Aksum) + Hammurabi
 	// (Babylonia)" — rather than the one seat the blob resolved it to (#384).
 	// The single-seat wording below is unchanged; `games.winner_name` /
 	// `winner_nation` stay single-valued and keep naming that seat.

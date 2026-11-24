@@ -18,7 +18,7 @@
 import { describe, expect, it } from "vitest";
 import { winnerTileLabel, winningSeats } from "../../src/lib/winning-team";
 
-// The issue's worked case: a 2v2 where Juljette (seat 0) and Larrrik (seat 1)
+// The issue's worked case: a 2v2 where Ezana (seat 0) and Hammurabi (seat 1)
 // share team 0, and `resolveWinner`'s `indexOf` picks seat 0.
 const TEAM_2V2 = [
 	{ player_index: 0, team_id: 0 },
@@ -111,13 +111,13 @@ describe("winnerTileLabel", () => {
 		// representative seat and are ignored here.
 		expect(
 			winnerTileLabel({
-				winner_name: "Juljette",
+				winner_name: "Ezana",
 				winner_nation: "NATION_AKSUM",
 				players: [
-					seat("Juljette", "NATION_AKSUM", true),
-					seat("Larrrik", "NATION_BABYLONIA", true),
-					seat("ShaunMcNamee", "NATION_HITTITE", false),
-					seat("professorcurly", "NATION_KUSH", false),
+					seat("Ezana", "NATION_AKSUM", true),
+					seat("Hammurabi", "NATION_BABYLONIA", true),
+					seat("Mursili", "NATION_HITTITE", false),
+					seat("Piye", "NATION_KUSH", false),
 				],
 			}),
 		).toBe("Aksum + Babylonia");
@@ -150,11 +150,11 @@ describe("winnerTileLabel", () => {
 		// the team form has nothing to join and the representative seat stands.
 		expect(
 			winnerTileLabel({
-				winner_name: "Juljette",
+				winner_name: "Ezana",
 				winner_nation: null,
 				players: [
-					{ player_name: "Juljette", nation: null, is_winner: true },
-					{ player_name: "Larrrik", nation: null, is_winner: true },
+					{ player_name: "Ezana", nation: null, is_winner: true },
+					{ player_name: "Hammurabi", nation: null, is_winner: true },
 				],
 			}),
 		).toBe("—");
