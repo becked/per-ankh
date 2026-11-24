@@ -2545,6 +2545,11 @@ interface GameListPlayer {
 	player_name: string;
 	nation: string | null;
 	is_human: boolean;
+	// Whether this seat is on the winning team (`player_summaries.is_winner`,
+	// set from `winningSeats`). A team game has more than one, so the Games
+	// tab names every winning nation from these rather than from
+	// `games.winner_nation`, which names one seat (#384).
+	is_winner: boolean;
 	// The account this seat belongs to, when its online_id names exactly one
 	// — the rule the played-games board and the duel extractor already credit
 	// seats by. null for an unlinked, ambiguous or absent id (so for every AI
@@ -2579,7 +2584,8 @@ async function loadGameListPlayers(
 		const rows = await db
 			.prepare(
 				`SELECT ps.game_id, ps.player_index, ps.player_name, ps.nation,
-				        ps.is_human, uo.user_id, u.slug, u.discord_id, u.avatar_hash
+				        ps.is_human, ps.is_winner, uo.user_id, u.slug, u.discord_id,
+				        u.avatar_hash
 				 FROM player_summaries ps
 				 LEFT JOIN (${UNAMBIGUOUS_ONLINE_ID_OWNERS_SQL}) uo
 				   ON ps.is_human = 1 AND ps.online_id IS NOT NULL
@@ -2595,6 +2601,7 @@ async function loadGameListPlayers(
 				player_name: string;
 				nation: string | null;
 				is_human: number;
+				is_winner: number;
 				user_id: string | null;
 				slug: string | null;
 				discord_id: string | null;
@@ -2611,6 +2618,7 @@ async function loadGameListPlayers(
 				player_name: r.player_name,
 				nation: r.nation,
 				is_human: coerceD1Bool(r.is_human) ?? false,
+				is_winner: coerceD1Bool(r.is_winner) ?? false,
 				user_id: r.user_id,
 				slug: r.slug,
 				// discord_id comes from the same users row as user_id, so it is

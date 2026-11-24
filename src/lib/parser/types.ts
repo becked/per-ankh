@@ -58,7 +58,7 @@ import type { StoryEvent } from "../types/StoryEvent.js";
 
 /**
  * Resolved winner. `winner_team_id` is what the game actually decided — a win
- * is per team (`Game.isWinnerTeam`, `Game.cs:4541`) — and
+ * is per team (`Game.isWinnerTeam`, `Game.cs:4611`) — and
  * `winner_player_xml_id` is the lowest seat on it, kept because every
  * single-valued winner column and label is derived from one seat. Read the
  * pair through `winningSeats` ($lib/winning-team) rather than comparing a seat
@@ -540,8 +540,8 @@ export interface PlayerRosterEntry {
 	is_save_owner: boolean;
 	// The seat's team, from the save's `<Team><PlayerTeam>` list
 	// (`GameParameters.cs:666`) — the same value `Player.getTeam()`
-	// (`Player.cs:7386`) reads, and so the team space `Game.isWinnerTeam`
-	// (`Game.cs:4541`) tests. It is what lets a win be read per team rather
+	// (`Player.cs:7431`) reads, and so the team space `Game.isWinnerTeam`
+	// (`Game.cs:4611`) tests. It is what lets a win be read per team rather
 	// than per seat; see `winningSeats` ($lib/winning-team). Null only when
 	// the save wrote no `<Team>` block — all 116 saves in test-data/saves/
 	// write one `<PlayerTeam>` per `<Player>`. PARSER_VERSION 2.31.0+.

@@ -11,6 +11,12 @@ import type { PageMeta } from "$lib/page-meta";
 import { formatEnum, formatGameTitle, nationName } from "$lib/utils/formatting";
 import { rethrowRateLimit } from "$lib/utils/load-errors";
 import { loginBounce } from "$lib/utils/safe-next";
+import {
+	teamWinNations,
+	winningSeats,
+	type RosterSeat,
+	type WinnerRecord,
+} from "$lib/winning-team";
 import type { LayoutLoad } from "./$types";
 
 // The game's effective title, and the only place it is derived. Hoisted out
@@ -49,6 +55,10 @@ function gameTitle(game: {
 // used to live inline in +page.svelte's <svelte:head>; moved here so
 // social-link unfurls work without the page mounting.
 //
+// A team win names every winning nation, as the card image above it does.
+// `winner_civilization` names only the lowest seat on the winning team
+// (#384), so the team form reads the roster through `winningSeats`.
+//
 // The image is this game's own card — the Worker's render of the home feed's
 // RecentSaveCard (cloud/src/og-card/), versioned on `updated_at` so a reindex
 // or a rename is a new URL, and on the renderer's own version so a redraw is
@@ -64,6 +74,8 @@ function buildMeta(
 		user_nation?: string | null;
 		is_public?: boolean;
 		updated_at?: string | null;
+		match_metadata: { winner: WinnerRecord | null };
+		player_roster: readonly (RosterSeat & { nation: string | null })[];
 	},
 ): PageMeta {
 	const gd = game.game_details as {
@@ -73,7 +85,13 @@ function buildMeta(
 		total_turns?: number;
 	};
 	const parts: string[] = [];
-	if (gd.winner_civilization) {
+	const seats = winningSeats(game.match_metadata.winner, game.player_roster);
+	const team = teamWinNations(
+		game.player_roster.filter((p) => seats.has(p.player_index)),
+	);
+	if (team) {
+		parts.push(team);
+	} else if (gd.winner_civilization) {
 		parts.push(nationName(gd.winner_civilization));
 	} else if (gd.winner_name) {
 		parts.push(gd.winner_name);

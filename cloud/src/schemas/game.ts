@@ -394,6 +394,20 @@ export const MAX_PINGS = 50_000;
 //         of the 116 saves in `test-data/saves/`) are different claims. Note
 //         text is player-authored free text, so it is capped at 500
 //         characters at parse time and the array at MAX_PINGS here.
+// 2.31.0 — player_roster[].team_id: each seat's team, from the save's
+//         `<Team><PlayerTeam>` list (GameParameters.cs:666). The parser
+//         already read that list for the free-specialist walk and dropped it.
+//         It is the value `Player.getTeam()` (Player.cs:7431) reads, so it is
+//         the team `Game.isWinnerTeam` (Game.cs:4611) tests. `winningSeats`
+//         ($lib/winning-team) reads it to credit every seat on the winning
+//         team, where the single resolved seat credited only the lowest one
+//         (#384). Across test-data/saves/: all 116 saves write one
+//         `<PlayerTeam>` per `<Player>`, 0 parse a null team_id, and 0 put
+//         two players on one team. Additive and OPTIONAL: a blob below 2.31.0
+//         has no team_id, and winningSeats falls it back to the single
+//         resolved seat, which is the answer it had before. A stored team
+//         game needs a reparse, not a reindex, because a blob below 2.31.0
+//         kept no team membership to rebuild from.
 export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.0.0",
 	"2.1.0",

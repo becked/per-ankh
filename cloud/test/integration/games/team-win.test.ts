@@ -1,8 +1,8 @@
 // A team game's win reaches every seat on the winning team.
 //
 // Old World decides a win per team: `Game.isWinnerTeam(TeamType)`
-// (`Game.cs:4541`) is the predicate and `writeGameXML` persists a team id
-// (`Game.cs:1298`). The blob resolves that team to the LOWEST seat on it, so
+// (`Game.cs:4611`) is the predicate and `writeGameXML` persists a team id
+// (`Game.cs:1314`). The blob resolves that team to the LOWEST seat on it, so
 // `games.user_won` and `player_summaries.is_winner` used to be set on that one
 // seat and every teammate was recorded as a loss (#384). The uploader of
 // `UZo0UBaq0k61mVD8gVBtq` reported it: a 2v2 he won, shown as a loss with his

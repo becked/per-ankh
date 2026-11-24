@@ -75,8 +75,14 @@
 				.map((id) => {
 					const p = gameDetails.players.find((x) => x.player_id === id);
 					const nation = p?.nation ? nationName(p.nation) : null;
-					if (p?.player_name && nation) return `${p.player_name} (${nation})`;
-					return nation ?? p?.player_name ?? null;
+					// The uploader's own seat falls back to their account name
+					// when the save wrote no leader name, as the single-seat
+					// form below and OverviewTab's nation cards do.
+					const name =
+						p?.player_name ||
+						(id === game.uploader_player_index ? userDisplayName : null);
+					if (name && nation) return `${name} (${nation})`;
+					return nation ?? name ?? null;
 				})
 				.filter((part) => part !== null)
 				.join(" + ");

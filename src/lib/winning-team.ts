@@ -1,11 +1,11 @@
 // Who won a game — the one answer every outcome test and winner label reads.
 //
 // Old World decides a win per TEAM, not per player. `Game.isWinnerTeam`
-// (`Game.cs:4541`) tests a `TeamType` against `mdTeamVictory`,
-// `Player.updatePlayerDead` asks it as `game().isWinnerTeam(getTeam())`
-// (`Player.cs:6695`), and `Game.writeGameXML` persists the winning *team* id
-// (`Game.cs:1298`) — no player id is written. `Player.getTeam()`
-// (`Player.cs:7386`) reads `lPlayerParameters[player].Team`, which is the
+// (`Game.cs:4611`) tests a `TeamType` against `mdTeamVictory`,
+// `Player.makeDead` asks it as `game().isWinnerTeam(getTeam())`
+// (`Player.cs:6740`), and `Game.writeGameXML` persists the winning *team* id
+// (`Game.cs:1314`) — no player id is written. `Player.getTeam()`
+// (`Player.cs:7431`) reads `lPlayerParameters[player].Team`, which is the
 // `<Team><PlayerTeam>` setup list (`GameParameters.cs:666`) the parser keeps as
 // `PlayerRosterEntry.team_id`.
 //
@@ -57,6 +57,23 @@ export function winningSeats(
 		: new Set([winner.winner_player_xml_id]);
 }
 
+/**
+ * A team win's nations, "Aksum + Babylonia", for the surfaces that name a
+ * winner by nation: the link-preview card's Winner tile, the profile Games
+ * table, and the game page's meta description. Null when fewer than two seats
+ * won or no winning seat carries a nation, so each caller keeps its own
+ * single-winner wording.
+ */
+export function teamWinNations(
+	winners: readonly { nation: string | null }[],
+): string | null {
+	if (winners.length < 2) return null;
+	const nations = winners
+		.map((p) => p.nation)
+		.filter((n): n is string => n !== null);
+	return nations.length > 0 ? nations.map(nationName).join(" + ") : null;
+}
+
 /** A game row + roster as the two link-preview card surfaces read it. */
 export interface WinnerTileGame {
 	winner_name: string | null;
@@ -82,13 +99,8 @@ export interface WinnerTileGame {
  * which the Worker sets for every seat on the winning team.
  */
 export function winnerTileLabel(game: WinnerTileGame): string {
-	const winners = game.players.filter((p) => p.is_winner);
-	if (winners.length > 1) {
-		const nations = winners
-			.map((p) => p.nation)
-			.filter((n): n is string => n !== null);
-		if (nations.length > 0) return nations.map(nationName).join(" + ");
-	}
+	const team = teamWinNations(game.players.filter((p) => p.is_winner));
+	if (team) return team;
 	const winning = game.players.find(
 		(p) => p.is_winner || p.nation === game.winner_nation,
 	);
