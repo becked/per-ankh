@@ -93,6 +93,10 @@ const config = {
 				// because one CSP is built for both deploys. The thumbnail
 				// transformations are /cdn-cgi/image/… paths on the same hosts,
 				// so they need no entry of their own.
+				//
+				// cdn.akamai.steamstatic.com: the Steam Awards image in
+				// SteamAwardsStrip. Remove it together with the strip after
+				// nominations close on 2026-11-30.
 				"img-src": [
 					"self",
 					"data:",
@@ -100,6 +104,7 @@ const config = {
 					"https://*.ytimg.com",
 					"https://img.per-ankh.app",
 					"https://img.staging.per-ankh.app",
+					"https://cdn.akamai.steamstatic.com",
 				],
 				"connect-src": [
 					"self",

@@ -14,6 +14,7 @@
 		type PageMeta,
 	} from "$lib/page-meta";
 	import { markScrolling } from "$lib/scroll-activity";
+	import SteamAwardsStrip from "$lib/SteamAwardsStrip.svelte";
 	import type { LayoutData } from "./$types";
 
 	let { data, children }: { data: LayoutData; children: Snippet } = $props();
@@ -119,6 +120,7 @@
 	-->
 	<div class="flex h-screen flex-col overflow-hidden bg-blue-gray">
 		<CloudHeader user={data.user} />
+		<SteamAwardsStrip />
 		{@render children()}
 	</div>
 {:else}
