@@ -1,5 +1,11 @@
 # Changelog
 
+## [2026-11-24-5e37641] - 2026-11-24
+
+### Features
+
+- add Steam Awards nomination strip under the header — [5e37641](https://github.com/becked/per-ankh/commit/5e376418eeb33b9dedd66fe2f2b05b3814ab64d3)
+
 ## [2026-11-19-2602a4b] - 2026-11-19
 
 ### Features
