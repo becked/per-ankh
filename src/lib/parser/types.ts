@@ -596,10 +596,10 @@ export interface FullGameData {
 	// Declared optional for a reason the required arrays don't have (`pings`
 	// below is the third): an ABSENT array and an EMPTY one are different
 	// claims for these, and both are reachable. A blob from before 2.25.0
-	// carries neither array — most stored blobs are of that vintage — while a
-	// freshly parsed save can carry an empty one, as a turn-1 save with no
-	// families founded and no bonus effects granted does. The unit card reads
-	// the difference (see `combatGaps`), so the compiler has to keep it.
+	// carries neither array, while a freshly parsed save can carry an empty
+	// one, as a turn-1 save with no families founded and no bonus effects
+	// granted does. The unit card reads the difference (see `combatGaps`), so
+	// the compiler has to keep it.
 	unit_effects?: UnitEffectInfo[];
 	unit_families?: UnitFamilyInfo[];
 	player_resources: PlayerResourceInfo[];

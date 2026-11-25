@@ -531,9 +531,7 @@ export function unitEffectPlayers(
  * nothing here and may have resolved to something in the save.
  *
  * All five are blob-vintage gaps: a freshly parsed save answers every channel,
- * and these say which ones a stored blob is too old to answer. Most stored
- * blobs are, because a `PARSER_VERSION` bump leaves them on the old shape
- * until their owner re-uploads.
+ * and these say which ones a stored blob is too old to answer.
  */
 export type CombatGap =
 	"units" | "advantage" | "general" | "rating-curve" | "traits";

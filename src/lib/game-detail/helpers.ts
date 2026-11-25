@@ -1524,9 +1524,8 @@ export interface CityOwner {
  * none omits a tribe. So that case is a player-less city whose tribe went
  * unrecorded, and it resolves to `ANARCHY_TRIBE` — the state 81 of those 82
  * are in. Resolving it HERE is what keeps the card, the Cities tab and the
- * map saying the same thing: a `PARSER_VERSION` bump leaves most stored blobs
- * on the old shape, so this is the common path, and three callers wording it
- * for themselves is three readings that disagree.
+ * map saying the same thing: three callers wording it for themselves is
+ * three readings that disagree.
  *
  * `crestKey`'s nation arm is the nation's own crest, the key the Cities tab
  * has always passed. The hex map resolves that arm further, through the

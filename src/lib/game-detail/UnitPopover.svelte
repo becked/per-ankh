@@ -82,9 +82,7 @@
 	// (`Unit.writeGameXML`, Unit.cs:972) and the parser reads its absence as 0,
 	// so every unit on a blob from PARSER_VERSION 2.22.0+ carries a number.
 	// `undefined` means the blob was parsed before the field was read — health
-	// is UNKNOWN rather than full — and most stored blobs are of that vintage,
-	// so this is the common case rather than an edge. A re-upload turns one
-	// into a number.
+	// is UNKNOWN rather than full. A re-upload turns one into a number.
 	const HEALTH_UNKNOWN_NOTE =
 		"This game was parsed before unit damage was read, so the save's health is not in the stored data. Re-uploading the save fills it in.";
 	const health = $derived(
